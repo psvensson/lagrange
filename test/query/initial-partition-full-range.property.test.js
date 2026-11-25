@@ -46,6 +46,10 @@ class MockCDCIntegrationService {
     this.insertedRows.push({tableName, row});
   }
 
+  async executeAuthoritativeSystemTableRead() {
+    return {success: true, rows: []};
+  }
+
   async updateSystemTableRow() {
     return {success: true};
   }

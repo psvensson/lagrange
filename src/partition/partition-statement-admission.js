@@ -71,6 +71,7 @@ import {
 } from './partition-statement-admission-names.js';
 import {committedStatementResult} from
   './partition-committed-statement-outcome-constants.js';
+import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 
 const ALLOCATING_HEADS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE,
   KEYWORD.WITH]);
@@ -83,6 +84,9 @@ const PROTECTED_FORMATION_SELECT_SQL =
   'SELECT * FROM control_plane_publications ' +
   'WHERE publication_id = ? OR publication_kind = ? ' +
   'ORDER BY publication_id';
+const RETURNING_ALL_SUFFIX = '\nRETURNING *';
+const WRITE_EXECUTION_META_SQL =
+  'SELECT changes() AS changes, last_insert_rowid() AS lastInsertRowid';
 
 function mentionsProtectedFormationKey(lexed, params) {
   const tokenMatches = Array.isArray(lexed?.tokens) &&
@@ -352,7 +356,46 @@ function checksCeilingBeforeRun(service, path) {
   return path !== PATH.SESSIONLESS || !service.db.inTransaction;
 }
 
-function admitWrite(service, lexed, params, statement, path) {
+function hasTopLevelReturning(lexed) {
+  return Array.isArray(lexed?.tokens) &&
+    lexed.tokens.some((token) => token.depth === 0 && token.upper === KEYWORD.RETURNING);
+}
+
+function partitionCapturesCommittedWriteRows(service, path, tableName) {
+  if (path !== PATH.COMMITTED || !service?.db) {
+    return false;
+  }
+  return (tableName !== null && isTableCdcObligationRecorded(tableName)) ||
+    (service.cdcSubscribers?.size ?? 0) > 0;
+}
+
+function returningSqlOf(sql, lexed) {
+  const tokens = lexed?.tokens;
+  if (!Array.isArray(tokens) || tokens.length === 0) {
+    return null;
+  }
+  let endIndex = tokens.length - 1;
+  while (endIndex >= 0 && tokens[endIndex].text === CHAR.SEMICOLON) {
+    endIndex -= 1;
+  }
+  if (endIndex < 0) {
+    return null;
+  }
+  const lastToken = tokens[endIndex];
+  return `${sql.slice(0, lastToken.start + lastToken.text.length)}${RETURNING_ALL_SUFFIX}`;
+}
+
+function prepareReturningWrite(service, lexed, sql, path, tableName) {
+  if (!partitionCapturesCommittedWriteRows(service, path, tableName) ||
+      hasTopLevelReturning(lexed)) {
+    return null;
+  }
+  const returningSql = returningSqlOf(sql, lexed);
+  return returningSql === null ? null :
+    prepareByKind(service.db, returningSql, KIND.WRITE);
+}
+
+function admitWrite(service, lexed, params, statement, path, sql) {
   if (hasUnadmittedRowidAlias(lexed)) {
     return refusal(LAYER.ROWID_ALIAS);
   }
@@ -374,7 +417,11 @@ function admitWrite(service, lexed, params, statement, path) {
       isAtRowidCeiling(ownShape)) {
     return refusal(LAYER.ROWID_CEILING);
   }
-  return {admitted: true, kind: KIND.WRITE, statement, ceilingChecked: allocating,
+  const returningPrepared = prepareReturningWrite(
+    service, lexed, sql, path, tableName,
+  );
+  return {admitted: true, kind: KIND.WRITE, statement, returningPrepared,
+    ceilingChecked: allocating,
     protectFormationRow, ownShape,
     retainsInsertRowid: INSERTING_VERBS.has(mainVerb(lexed)) &&
       !hasDoUpdateClause(lexed.tokens)};
@@ -437,7 +484,7 @@ function admitPartitionStatement(
   if (resolved !== KIND.WRITE) {
     return {admitted: true, kind: resolved, statement};
   }
-  return admitWrite(service, lexed, params, statement, path);
+  return admitWrite(service, lexed, params, statement, path, sql);
 }
 
 
@@ -449,10 +496,23 @@ function statementRefusalError(refused) {
   return error;
 }
 
+function executeAdmittedWriteStatement(service, admission, params) {
+  if (!admission.returningPrepared) {
+    return admission.statement.run(...params);
+  }
+  const affectedRows = admission.returningPrepared.all(...params);
+  const meta = prepareByKind(service.db, WRITE_EXECUTION_META_SQL, KIND.READ).get();
+  return {
+    changes: affectedRows.length,
+    lastInsertRowid: meta.lastInsertRowid,
+    affectedRows: Object.freeze(affectedRows.map((row) => ({...row}))),
+  };
+}
+
 function runBelowCeiling(service, admission, params) {
   const beforeFormation = admission.protectFormationRow === true ?
     readProtectedFormationSnapshotJson(service.db) : null;
-  const info = admission.statement.run(...params);
+  const info = executeAdmittedWriteStatement(service, admission, params);
   if (beforeFormation !== null &&
       readProtectedFormationSnapshotJson(service.db) !== beforeFormation) {
     throw statementRefusalError(refusal(LAYER.FORMATION_RECORD_PROTECTED));
@@ -475,7 +535,7 @@ function runBelowCeiling(service, admission, params) {
  */
 function runAdmittedPartitionStatement(service, admission, params = []) {
   if (admission.ceilingChecked !== true && admission.protectFormationRow !== true) {
-    return {admitted: true, info: admission.statement.run(...params)};
+    return {admitted: true, info: executeAdmittedWriteStatement(service, admission, params)};
   }
   try {
     return {admitted: true, info: service.db.transaction(() =>
@@ -499,7 +559,8 @@ function runAdmittedPartitionStatement(service, admission, params = []) {
  * an INSERT or REPLACE without a DO UPDATE clause and changed rows.
  * @param {Object} service - The partition.
  * @param {Object} command - The committed command ({type, sql, params}).
- * @return {{changes: number, lastInsertRowid: *}} The statement's result.
+ * @return {{changes: number, lastInsertRowid: *, affectedRows?: Array<Object>}}
+ *   The statement's result.
  */
 function runCommittedPartitionStatement(service, command) {
   assertTransactionSchemaWriteEnforced(service.db, service.tableName,
@@ -515,8 +576,11 @@ function runCommittedPartitionStatement(service, command) {
   if (!outcome.admitted) {
     throw statementRefusalError(outcome);
   }
-  return committedStatementResult(outcome.info,
+  const result = committedStatementResult(outcome.info,
     {retainsInsertRowid: admission.retainsInsertRowid === true});
+  return Array.isArray(outcome.info?.affectedRows) ?
+    {...result, affectedRows: outcome.info.affectedRows} :
+    result;
 }
 
 /**

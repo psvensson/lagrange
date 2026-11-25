@@ -5,6 +5,10 @@ import {
 } from '../../scenarios/seven-node-read-write-load-transaction-recovery.js';
 import {registerSevenNodeTransactionRecoveryTailTests} from './seven-node-read-write-load-transaction-recovery-tail-test-cases.js';
 
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+
 const SQL_INSERT_TRANSACTION = 'INSERT INTO sql_transactions';
 const SQL_CONTROL_SNAPSHOT = 'SELECT * FROM control_snapshot_local()';
 const SQL_SELECT_TRANSACTION_STATUSES =
@@ -30,6 +34,71 @@ const RECOVERY_READY_PARTITIONS = Object.freeze([
   'sql_transaction_participants-p1',
   'sql_write_operations-p1',
 ]);
+
+function matchStaticBenchmarkMetadataQuery(sql) {
+  if (stringIncludes(sql, SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
+    return {rows: []};
+  }
+  if (stringIncludes(sql, SQL_FROM_TABLES)) {
+    return {
+      rows: [{
+        table_id: 'tbl-benchmark-events-1',
+        table_policies: TABLE_POLICIES_JSON,
+      }],
+    };
+  }
+  if (stringIncludes(sql, SQL_FROM_PARTITIONS)) {
+    return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
+  }
+  if (stringIncludes(sql, SQL_FROM_SERVICES)) {
+    return {
+      rows: [
+        {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+        {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+        {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+        {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
+        {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
+        {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
+      ],
+    };
+  }
+  return null;
+}
+
+function selectSeededTransactionStatusRows(params, transactionStatusById) {
+  return arrayFilter(
+    arrayMap(params, (transactionId) => {
+      const status = transactionStatusById.get(transactionId);
+      if (!status) {
+        return null;
+      }
+      return {
+        transaction_id: transactionId,
+        status,
+      };
+    }),
+    Boolean,
+  );
+}
+
+function advanceSeededTransactionsToTerminalIfReady({
+  restarted,
+  replayPollCount,
+  minPollCount = 2,
+  activeTransactionId,
+  preparedTransactionId,
+  transactionStatusById,
+}) {
+  if (
+    restarted &&
+    replayPollCount >= minPollCount &&
+    activeTransactionId &&
+    preparedTransactionId
+  ) {
+    transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
+    transactionStatusById.set(preparedTransactionId, 'COMMITTED');
+  }
+}
 
 describe('seven-node-read-write-load-transaction-recovery scenario', () => {
   it('replays seeded in-flight transaction rows to terminal states after restart',
@@ -80,31 +149,9 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           return {success: true, outcome: 'applied'};
         },
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
+          const metadataResponse = matchStaticBenchmarkMetadataQuery(sql);
+          if (metadataResponse) {
+            return metadataResponse;
           }
           if (sql.includes(SQL_INSERT_TRANSACTION)) {
             const [transactionId, _sessionId, status] = params;
@@ -121,26 +168,20 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
             if (restarted) {
               replayPollCount += 1;
-              if (replayPollCount >= 2 &&
-                activeTransactionId &&
-                preparedTransactionId) {
-                transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
-                transactionStatusById.set(preparedTransactionId, 'COMMITTED');
-              }
             }
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
+            advanceSeededTransactionsToTerminalIfReady({
+              restarted,
+              replayPollCount,
+              activeTransactionId,
+              preparedTransactionId,
+              transactionStatusById,
+            });
+            return {
+              rows: selectSeededTransactionStatusRows(
+                params,
+                transactionStatusById,
+              ),
+            };
           }
           if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
             return {
@@ -361,31 +402,9 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           return {success: true, outcome: 'applied'};
         },
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
+          const metadataResponse = matchStaticBenchmarkMetadataQuery(sql);
+          if (metadataResponse) {
+            return metadataResponse;
           }
           if (sql.includes(SQL_INSERT_TRANSACTION)) {
             const [transactionId, _sessionId, status] = params;
@@ -409,26 +428,21 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
                   'connect ECONNREFUSED 172.19.0.2:8081',
                 );
               }
-              if (replayPollCount >= 3 &&
-                activeTransactionId &&
-                preparedTransactionId) {
-                transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
-                transactionStatusById.set(preparedTransactionId, 'COMMITTED');
-              }
             }
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
+            advanceSeededTransactionsToTerminalIfReady({
+              restarted,
+              replayPollCount,
+              minPollCount: 3,
+              activeTransactionId,
+              preparedTransactionId,
+              transactionStatusById,
+            });
+            return {
+              rows: selectSeededTransactionStatusRows(
+                params,
+                transactionStatusById,
+              ),
+            };
           }
           if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
             return {
@@ -556,31 +570,9 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           return {success: true, outcome: 'applied'};
         },
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
+          const metadataResponse = matchStaticBenchmarkMetadataQuery(sql);
+          if (metadataResponse) {
+            return metadataResponse;
           }
           if (sql.includes(SQL_INSERT_TRANSACTION)) {
             const [transactionId, _sessionId, status] = params;
@@ -597,26 +589,20 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
             if (restarted) {
               replayPollCount += 1;
-              if (replayPollCount >= 2 &&
-                activeTransactionId &&
-                preparedTransactionId) {
-                transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
-                transactionStatusById.set(preparedTransactionId, 'COMMITTED');
-              }
             }
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
+            advanceSeededTransactionsToTerminalIfReady({
+              restarted,
+              replayPollCount,
+              activeTransactionId,
+              preparedTransactionId,
+              transactionStatusById,
+            });
+            return {
+              rows: selectSeededTransactionStatusRows(
+                params,
+                transactionStatusById,
+              ),
+            };
           }
 
           if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
@@ -734,31 +720,9 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           return {success: true, outcome: 'applied'};
         },
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
+          const metadataResponse = matchStaticBenchmarkMetadataQuery(sql);
+          if (metadataResponse) {
+            return metadataResponse;
           }
           if (sql.includes(SQL_INSERT_TRANSACTION)) {
             const [transactionId, _sessionId, status] = params;
@@ -774,26 +738,20 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
             if (restarted) {
               replayPollCount += 1;
-              if (replayPollCount >= 2 &&
-                activeTransactionId &&
-                preparedTransactionId) {
-                transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
-                transactionStatusById.set(preparedTransactionId, 'COMMITTED');
-              }
             }
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
+            advanceSeededTransactionsToTerminalIfReady({
+              restarted,
+              replayPollCount,
+              activeTransactionId,
+              preparedTransactionId,
+              transactionStatusById,
+            });
+            return {
+              rows: selectSeededTransactionStatusRows(
+                params,
+                transactionStatusById,
+              ),
+            };
           }
           if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
             return {
@@ -907,31 +865,9 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           return {success: true, outcome: 'applied'};
         },
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
+          const metadataResponse = matchStaticBenchmarkMetadataQuery(sql);
+          if (metadataResponse) {
+            return metadataResponse;
           }
           if (sql.includes(SQL_INSERT_TRANSACTION)) {
             const [transactionId, _sessionId, status] = params;
@@ -949,19 +885,12 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
               transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
               transactionStatusById.set(preparedTransactionId, 'COMMITTED');
             }
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
+            return {
+              rows: selectSeededTransactionStatusRows(
+                params,
+                transactionStatusById,
+              ),
+            };
           }
           if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
             return {
@@ -1271,31 +1200,9 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           return {success: true, outcome: 'applied'};
         },
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
+          const metadataResponse = matchStaticBenchmarkMetadataQuery(sql);
+          if (metadataResponse) {
+            return metadataResponse;
           }
           if (sql.includes(SQL_INSERT_TRANSACTION)) {
             const [transactionId, _sessionId, status] = params;
@@ -1313,19 +1220,12 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
               transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
               transactionStatusById.set(preparedTransactionId, 'COMMITTED');
             }
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
+            return {
+              rows: selectSeededTransactionStatusRows(
+                params,
+                transactionStatusById,
+              ),
+            };
           }
           if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
             return {

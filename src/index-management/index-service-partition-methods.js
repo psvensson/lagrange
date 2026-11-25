@@ -16,7 +16,7 @@ const PARTITION_SQL_EXECUTION_FAILED_MESSAGE =
 
 function isUniqueRequested(options) {
   if (!options || typeof options !== 'object') return false;
-  return Boolean(options.unique || options.is_unique || options.isUnique);
+  return Boolean(options.unique || options.is_unique);
 }
 
 function buildIndexDdl(options, indexName, tableName, columnNames) {
@@ -25,26 +25,31 @@ function buildIndexDdl(options, indexName, tableName, columnNames) {
   return `CREATE ${uniquePrefix}INDEX IF NOT EXISTS ${indexName} ON ${tableName}(${columns})`;
 }
 
-function normalizeSQLiteIndexArgs(arg1, arg2, arg3, ...rest) {
-  const isFive = Array.isArray(rest[0]);
+function normalizeSQLiteIndexArgs(
+  tableId,
+  tableName,
+  indexName,
+  columnNames,
+  options = {},
+) {
   return {
-    tableId: isFive ? arg1 : (Array.isArray(arg3) ? arg2 : arg1),
-    tableName: isFive ? (arg2 || arg1) : (Array.isArray(arg3) ? arg2 : arg1),
-    indexName: isFive ? arg3 : (Array.isArray(arg3) ? arg1 : arg2),
-    columnNames: isFive ? rest[0] : arg3,
-    options: (isFive ? rest[1] : rest[0]) || {},
+    tableId,
+    tableName: tableName || tableId,
+    indexName,
+    columnNames,
+    options: options || {},
   };
 }
 
-function normalizePartitionIndexArgs(partitionId, indexMetadataOrName, ...rest) {
-  const isPositional = typeof indexMetadataOrName === 'string';
+function normalizePartitionIndexArgs(partitionId, indexMetadata = {}) {
+  const metadata =
+    indexMetadata && typeof indexMetadata === 'object' ? indexMetadata : {};
   return {
     partitionId,
-    indexName: isPositional ? indexMetadataOrName : indexMetadataOrName?.indexName,
-    tableId: isPositional ? rest[0] :
-      (indexMetadataOrName?.tableId || indexMetadataOrName?.tableName),
-    columnNames: isPositional ? rest[1] : indexMetadataOrName?.columnNames,
-    options: isPositional ? (rest[2] || {}) : (indexMetadataOrName || {}),
+    indexName: metadata.indexName,
+    tableId: metadata.tableId || metadata.tableName,
+    columnNames: metadata.columnNames,
+    options: metadata,
   };
 }
 
@@ -144,33 +149,68 @@ const indexServicePartitionMethods = {
   /**
    * Create SQLite index on all partitions for a table.
    * Requirements: 12.5
-   * @param {string} arg1 - Table ID or index name.
-   * @param {string} arg2 - Table name or table ID.
-   * @param {string|Array<string>} arg3 - Index name or column names.
+   * @param {string} tableId - Table ID.
+   * @param {string} tableName - Table name.
+   * @param {string} indexName - Index name.
+   * @param {Array<string>} columnNames - Column names.
+   * @param {Object} [options] - Index creation options.
    * @return {Promise<void>}
    */
-  async createSQLiteIndex(arg1, arg2, arg3, ...rest) {
-    const parsed = normalizeSQLiteIndexArgs(arg1, arg2, arg3, ...rest);
-    const {tableId, tableName, indexName, columnNames, options} = parsed;
-    const partitions = await this.getPartitionsForTable(tableId);
+  async createSQLiteIndex(
+    tableId,
+    tableName,
+    indexName,
+    columnNames,
+    options = {},
+  ) {
+    const parsed = normalizeSQLiteIndexArgs(
+      tableId,
+      tableName,
+      indexName,
+      columnNames,
+      options,
+    );
+    const resolvedTableId = parsed.tableId;
+    const resolvedTableName = parsed.tableName;
+    const resolvedIndexName = parsed.indexName;
+    const resolvedColumns = parsed.columnNames;
+    const resolvedOptions = parsed.options;
+    const partitions = await this.getPartitionsForTable(resolvedTableId);
 
-    if (!this.assertPartitionsExist(partitions, tableId, tableName, indexName)) {
+    if (
+      !this.assertPartitionsExist(
+        partitions,
+        resolvedTableId,
+        resolvedTableName,
+        resolvedIndexName,
+      )
+    ) {
       return;
     }
 
-    const sql = buildIndexDdl(options, indexName, tableName, columnNames);
+    const sql = buildIndexDdl(
+      resolvedOptions,
+      resolvedIndexName,
+      resolvedTableName,
+      resolvedColumns,
+    );
     try {
       for (const partition of partitions) {
         await this.executePartitionSql(partition, sql, []);
       }
     } catch (error) {
-      this.logger.error(INDEX_LOG_MSG.PARTITION_INDEX_FAILED, {indexName, error: error.message});
-      await this.dropSQLiteIndex(tableId, indexName).catch(() => {});
+      this.logger.error(INDEX_LOG_MSG.PARTITION_INDEX_FAILED, {
+        indexName: resolvedIndexName,
+        error: error.message,
+      });
+      await this.dropSQLiteIndex(resolvedTableId, resolvedIndexName).catch(
+        () => {},
+      );
       throw error;
     }
 
     this.logger.debug(INDEX_LOG_MSG.SQLITE_INDEX_COMPLETED, {
-      indexName,
+      indexName: resolvedIndexName,
       successCount: partitions.length,
       totalPartitions: partitions.length,
     });
@@ -204,11 +244,11 @@ const indexServicePartitionMethods = {
    * Create an index on a specific partition.
    * Requirements: 12.3, 12.5
    * @param {string} partitionId - Partition ID.
-   * @param {Object|string} indexMetadataOrName - Index metadata or index name.
+   * @param {Object} indexMetadata - Index metadata.
    * @return {Promise<boolean>} True if successful.
    */
-  async createIndexOnPartition(partitionId, indexMetadataOrName, ...rest) {
-    const parsed = normalizePartitionIndexArgs(partitionId, indexMetadataOrName, ...rest);
+  async createIndexOnPartition(partitionId, indexMetadata) {
+    const parsed = normalizePartitionIndexArgs(partitionId, indexMetadata);
     const {indexName, tableId, columnNames, options} = parsed;
     const partition = await this.getPartition(partitionId);
 

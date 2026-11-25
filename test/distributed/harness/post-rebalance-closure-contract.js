@@ -4,32 +4,26 @@ import {
   normalizeReplicaOperationRecord,
 } from '../../../src/rebalancer/replica-operation-liveness.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+
 const POST_REBALANCE_CLOSURE_STATE = Object.freeze({
-  CLOSED: 'closed',
-  OPEN: 'open',
-  SOFT_CLOSED: 'soft_closed',
-  UNAVAILABLE: 'unavailable',
+  CLOSED: 'closed', OPEN: 'open', SOFT_CLOSED: 'soft_closed', UNAVAILABLE: 'unavailable',
 });
 
 const POST_REBALANCE_CLOSURE_DIMENSION = Object.freeze({
-  OPERATION_DRAIN: 'operation_drain',
-  MEMBERSHIP_TRIM: 'membership_trim',
-  PUBLICATION_VISIBLE: 'publication_visible',
-  CDC_PROJECTION_VISIBLE: 'cdc_projection_visible',
+  OPERATION_DRAIN: 'operation_drain', MEMBERSHIP_TRIM: 'membership_trim',
+  PUBLICATION_VISIBLE: 'publication_visible', CDC_PROJECTION_VISIBLE: 'cdc_projection_visible',
   NO_OVER_TARGET: 'no_over_target',
 });
 
 const POST_REBALANCE_CLOSURE_REASON = Object.freeze({
   CDC_PROJECTION_UNAVAILABLE: 'cdc_projection_unavailable',
   CURRENT_OVERTARGET_VOTERS: 'current_overtarget_voters',
-  EFFECTIVE_PUBLISHED_MEMBERSHIP_DURING_FREEZE:
-    'effective_published_membership_during_freeze',
-  IGNORED_POST_PUBLICATION_REPLICA_OPERATIONS:
-    'ignored_post_publication_replica_operations',
+  EFFECTIVE_PUBLISHED_MEMBERSHIP_DURING_FREEZE: 'effective_published_membership_during_freeze',
+  IGNORED_POST_PUBLICATION_REPLICA_OPERATIONS: 'ignored_post_publication_replica_operations',
   IGNORED_STALE_REPLICA_OPERATIONS: 'ignored_stale_replica_operations',
   IN_FLIGHT_REPLICA_OPERATIONS: 'in_flight_replica_operations',
-  MEMBERSHIP_TRIM_BLOCKED_BY_OPERATION_DRAIN:
-    'membership_trim_blocked_by_operation_drain',
+  MEMBERSHIP_TRIM_BLOCKED_BY_OPERATION_DRAIN: 'membership_trim_blocked_by_operation_drain',
   MISSING_PARTITION_LEADERS: 'missing_partition_leaders',
   OVERTARGET_BUDGET_EXCEEDED: 'overtarget_budget_exceeded',
   PUBLICATION_PENDING: 'publication_pending',
@@ -37,14 +31,10 @@ const POST_REBALANCE_CLOSURE_REASON = Object.freeze({
   PUBLISHED_MEMBERSHIP_TRIM_DEBT: 'published_membership_trim_debt',
 });
 
-const CONTROL_PLANE_PUBLICATION_STATUS = Object.freeze({
-  PUBLISHED: 'PUBLISHED',
-});
-
+const CONTROL_PLANE_PUBLICATION_STATUS = Object.freeze({PUBLISHED: 'PUBLISHED'});
 const CONTROL_PLANE_ACTIVE_NODE_SOURCE = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published_membership',
 });
-
 const POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE = Object.freeze({
   PUBLICATION_CONVERGENCE: 'publication_convergence',
   PUBLISHED_MEMBERSHIP_OBSERVATION: 'published_membership_observation',
@@ -95,19 +85,12 @@ const REPLICA_OPERATION_DRAIN_DISCOUNT_REASON = Object.freeze({
   STALE_IN_FLIGHT: 'stale_in_flight',
 });
 const POST_PUBLICATION_TOPOLOGY_PARTITION_IDS = Object.freeze(new Set([
-  'message_groups-p1',
-  'node_endpoints-p1',
-  'nodes-p1',
-  'partitions-p1',
-  'service_endpoints-p1',
-  'services-p1',
+  'message_groups-p1', 'node_endpoints-p1', 'nodes-p1',
+  'partitions-p1', 'service_endpoints-p1', 'services-p1',
 ]));
 const PRIORITY_RECOVERY_PARTITION_IDS = Object.freeze(new Set([
-  'control_plane_publications-p1',
-  'replica_operations-p1',
-  'sql_transaction_participants-p1',
-  'sql_transactions-p1',
-  'sql_write_operations-p1',
+  'control_plane_publications-p1', 'replica_operations-p1',
+  'sql_transaction_participants-p1', 'sql_transactions-p1', 'sql_write_operations-p1',
 ]));
 const POST_REBALANCE_PUBLICATION_VISIBILITY_DECISION_TABLE = Object.freeze([
   Object.freeze({
@@ -119,21 +102,16 @@ const POST_REBALANCE_PUBLICATION_VISIBILITY_DECISION_TABLE = Object.freeze([
       evidence.publishedMembershipObservationStatus ===
         CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
     state: POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
-    source:
-      POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE
-        .PUBLISHED_MEMBERSHIP_OBSERVATION,
+    source: POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE.PUBLISHED_MEMBERSHIP_OBSERVATION,
     reasonCodes: Object.freeze([
-      POST_REBALANCE_CLOSURE_REASON
-        .EFFECTIVE_PUBLISHED_MEMBERSHIP_DURING_FREEZE,
+      POST_REBALANCE_CLOSURE_REASON.EFFECTIVE_PUBLISHED_MEMBERSHIP_DURING_FREEZE,
     ]),
   }),
   Object.freeze({
     matches: (evidence) => evidence.publicationAvailable !== true,
     state: POST_REBALANCE_CLOSURE_STATE.UNAVAILABLE,
     source: POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE.PUBLICATION_CONVERGENCE,
-    reasonCodes: Object.freeze([
-      POST_REBALANCE_CLOSURE_REASON.PUBLICATION_UNAVAILABLE,
-    ]),
+    reasonCodes: Object.freeze([POST_REBALANCE_CLOSURE_REASON.PUBLICATION_UNAVAILABLE]),
   }),
   Object.freeze({
     matches: (evidence) =>
@@ -146,18 +124,14 @@ const POST_REBALANCE_PUBLICATION_VISIBILITY_DECISION_TABLE = Object.freeze([
     matches: () => true,
     state: POST_REBALANCE_CLOSURE_STATE.OPEN,
     source: POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE.PUBLICATION_CONVERGENCE,
-    reasonCodes: Object.freeze([
-      POST_REBALANCE_CLOSURE_REASON.PUBLICATION_PENDING,
-    ]),
+    reasonCodes: Object.freeze([POST_REBALANCE_CLOSURE_REASON.PUBLICATION_PENDING]),
   }),
 ]);
 const POST_REBALANCE_CDC_PROJECTION_VISIBILITY_DECISION_TABLE = Object.freeze([
   Object.freeze({
     matches: (evidence) => evidence.expectedPartitionIds.length === 0,
     state: POST_REBALANCE_CLOSURE_STATE.UNAVAILABLE,
-    reasonCodes: Object.freeze([
-      POST_REBALANCE_CLOSURE_REASON.CDC_PROJECTION_UNAVAILABLE,
-    ]),
+    reasonCodes: Object.freeze([POST_REBALANCE_CLOSURE_REASON.CDC_PROJECTION_UNAVAILABLE]),
   }),
   Object.freeze({
     matches: (evidence) => evidence.missingLeaderPartitionIds.length === 0,
@@ -170,16 +144,12 @@ const POST_REBALANCE_CDC_PROJECTION_VISIBILITY_DECISION_TABLE = Object.freeze([
       evidence.staleDiscountCount > 0 &&
       evidence.uncoveredMissingLeaderPartitionIds.length === 0,
     state: POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
-    reasonCodes: Object.freeze([
-      POST_REBALANCE_CLOSURE_REASON.IGNORED_STALE_REPLICA_OPERATIONS,
-    ]),
+    reasonCodes: Object.freeze([POST_REBALANCE_CLOSURE_REASON.IGNORED_STALE_REPLICA_OPERATIONS]),
   }),
   Object.freeze({
     matches: () => true,
     state: POST_REBALANCE_CLOSURE_STATE.OPEN,
-    reasonCodes: Object.freeze([
-      POST_REBALANCE_CLOSURE_REASON.MISSING_PARTITION_LEADERS,
-    ]),
+    reasonCodes: Object.freeze([POST_REBALANCE_CLOSURE_REASON.MISSING_PARTITION_LEADERS]),
   }),
 ]);
 
@@ -478,6 +448,59 @@ function collectPriorityRecoveryWitnessEvidence(
   return evidence;
 }
 
+function resolveSourcePartitionIdsBySemanticState(source) {
+  if (
+    source?.priorityRecoveryPartitionIdsBySemanticState &&
+    typeof source.priorityRecoveryPartitionIdsBySemanticState === 'object'
+  ) {
+    return source.priorityRecoveryPartitionIdsBySemanticState;
+  }
+  if (
+    source?.partitionIdsBySemanticState &&
+    typeof source.partitionIdsBySemanticState === 'object'
+  ) {
+    return source.partitionIdsBySemanticState;
+  }
+  return POST_REBALANCE_CLOSURE_EMPTY_RECORD;
+}
+
+function filterSpreadSatisfiedSummaryPartitionIds({
+  candidatePartitionIds,
+  allowSummaryPartitionEvidence,
+  requireSatisfiedClosureForSummaryEvidence,
+  hasSatisfiedClosurePartitionEvidence,
+  allowOpenSatisfiedWorkflow,
+  openWorkflowPartitionIds,
+  satisfiedClosurePartitionIds,
+}) {
+  if (
+    !Array.isArray(candidatePartitionIds) ||
+    allowSummaryPartitionEvidence !== true
+  ) {
+    return POST_REBALANCE_CLOSURE_EMPTY_LIST;
+  }
+  return arrayFilter(candidatePartitionIds, (partitionId) => {
+    const partitionCoveredByClosure =
+      isPriorityRecoveryPartitionCoveredBySatisfiedClosure(
+        partitionId,
+        satisfiedClosurePartitionIds,
+      );
+    if (
+      requireSatisfiedClosureForSummaryEvidence &&
+      hasSatisfiedClosurePartitionEvidence
+    ) {
+      return partitionCoveredByClosure;
+    }
+    return (
+      allowOpenSatisfiedWorkflow === true ||
+      partitionCoveredByClosure ||
+      !openWorkflowPartitionIds.has(
+        String(partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY).trim(),
+      )
+    );
+  });
+}
+
 function collectPriorityRecoverySummaryEvidence(
   source,
   openWorkflowPartitionIds = new Set(),
@@ -496,43 +519,21 @@ function collectPriorityRecoverySummaryEvidence(
     allowOpenSatisfiedWorkflow === true ||
     hasSatisfiedClosurePartitionEvidence === true;
   const partitionIdsBySemanticState =
-    source?.priorityRecoveryPartitionIdsBySemanticState &&
-    typeof source.priorityRecoveryPartitionIdsBySemanticState === 'object' ?
-      source.priorityRecoveryPartitionIdsBySemanticState :
-      source?.partitionIdsBySemanticState &&
-          typeof source.partitionIdsBySemanticState === 'object' ?
-        source.partitionIdsBySemanticState :
-        POST_REBALANCE_CLOSURE_EMPTY_RECORD;
+    resolveSourcePartitionIdsBySemanticState(source);
   evidence.push({
     operationIds: POST_REBALANCE_CLOSURE_EMPTY_LIST,
-    partitionIds: Array.isArray(
-      partitionIdsBySemanticState[
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
-      ],
-    ) && allowSummaryPartitionEvidence === true ?
-      partitionIdsBySemanticState[
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
-      ].filter((partitionId) => {
-        const partitionCoveredByClosure =
-          isPriorityRecoveryPartitionCoveredBySatisfiedClosure(
-            partitionId,
-            satisfiedClosurePartitionIds,
-          );
-        if (
-          requireSatisfiedClosureForSummaryEvidence &&
-          hasSatisfiedClosurePartitionEvidence
-        ) {
-          return partitionCoveredByClosure;
-        }
-        return (
-          allowOpenSatisfiedWorkflow === true ||
-          partitionCoveredByClosure ||
-          !openWorkflowPartitionIds.has(String(
-            partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
-          ).trim())
-        );
-      }) :
-      POST_REBALANCE_CLOSURE_EMPTY_LIST,
+    partitionIds: filterSpreadSatisfiedSummaryPartitionIds({
+      candidatePartitionIds:
+        partitionIdsBySemanticState[
+          PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+        ],
+      allowSummaryPartitionEvidence,
+      requireSatisfiedClosureForSummaryEvidence,
+      hasSatisfiedClosurePartitionEvidence,
+      allowOpenSatisfiedWorkflow,
+      openWorkflowPartitionIds,
+      satisfiedClosurePartitionIds,
+    }),
   });
 
   for (const partitionSnapshot of collectPriorityRecoveryPartitionSnapshots(
@@ -892,27 +893,26 @@ function isPriorityRecoveryWorkflowTerminal(snapshot) {
   );
 }
 
-function isPriorityRecoveryWorkflowFailure(snapshot) {
+function collectPriorityRecoverySnapshotFailureStates(snapshot) {
+  const source = snapshot ?? {};
+  const conditions = source.conditions ?? {};
+  const observation = source.observation ?? {};
+  const coordinatorOperation = source.coordinator?.operation ?? {};
+  const operatorWitness = source.topologyOperatorWitness ?? {};
   return [
-    snapshot?.latestOperationStatus,
-    snapshot?.conditions?.latestOperationStatus,
-    snapshot?.conditions?.operationStatus,
-    snapshot?.observation?.latestOperationStatus,
-    snapshot?.coordinator?.operation?.status,
-    snapshot?.coordinator?.operation?.latestTimelineStatus,
-    snapshot?.latestOperationWorkflowStep,
-    snapshot?.observation?.latestOperationWorkflowStep,
-    snapshot?.workflowState,
-    snapshot?.observation?.workflowState,
-    snapshot?.actuationState,
-    snapshot?.conditions?.actuationState,
-    snapshot?.observation?.actuationState,
-    snapshot?.currentStepState,
-    snapshot?.conditions?.currentStepState,
-    snapshot?.topologyOperatorWitness?.currentStepState,
-    snapshot?.terminalState,
-    snapshot?.recoverability,
-  ].some((value) =>
+    source.latestOperationStatus, conditions.latestOperationStatus,
+    conditions.operationStatus, observation.latestOperationStatus,
+    coordinatorOperation.status, coordinatorOperation.latestTimelineStatus,
+    source.latestOperationWorkflowStep, observation.latestOperationWorkflowStep,
+    source.workflowState, observation.workflowState,
+    source.actuationState, conditions.actuationState, observation.actuationState,
+    source.currentStepState, conditions.currentStepState, operatorWitness.currentStepState,
+    source.terminalState, source.recoverability,
+  ];
+}
+
+function isPriorityRecoveryWorkflowFailure(snapshot) {
+  return collectPriorityRecoverySnapshotFailureStates(snapshot).some((value) =>
     PRIORITY_RECOVERY_FAILURE_STATES.has(
       normalizePriorityRecoverySnapshotState(value),
     ),
@@ -1015,25 +1015,21 @@ function countCacheVisibleSatisfiedPriorityRecoveryOperations(
   if (operationIds.size === 0 && partitionIds.size === 0) {
     return 0;
   }
-  let matchingOperationCount = 0;
-  for (const operationRow of Array.isArray(operationRows) ?
+  const rows = Array.isArray(operationRows) ?
     operationRows :
-    POST_REBALANCE_CLOSURE_EMPTY_LIST) {
+    POST_REBALANCE_CLOSURE_EMPTY_LIST;
+  let matchingOperationCount = 0;
+  for (const operationRow of rows) {
     const normalizedOperation = normalizeReplicaOperationRecord(operationRow);
-    const operationId = String(
-      normalizedOperation.operationId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
-    ).trim();
-    const partitionId = String(
-      normalizedOperation.partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
-    ).trim();
-    const matchesByOperationId =
-      operationId.length > 0 && operationIds.has(operationId);
-    const matchesByPartitionId =
-      partitionId.length > 0 && partitionIds.has(partitionId);
-    if (!matchesByOperationId && !matchesByPartitionId) {
-      continue;
+    if (
+      isCacheVisibleSatisfiedPriorityRecoveryOperation(
+        normalizedOperation,
+        operationIds,
+        partitionIds,
+      )
+    ) {
+      matchingOperationCount += 1;
     }
-    matchingOperationCount += 1;
   }
   return matchingOperationCount > 0 ?
     matchingOperationCount :
@@ -1148,20 +1144,8 @@ function resolveAdditionalReplicaOperationDiscountReason(
   return null;
 }
 
-function buildReplicaOperationDrainDiagnosticRow(
-  normalizedOperation,
-  options,
-) {
-  const inFlight = options.inFlight === true;
-  const stale = options.stale === true;
-  const additionalDiscountReason = options.additionalDiscountReason || null;
-  const additionalInFlightDiscountEligible =
-    inFlight && stale !== true && additionalDiscountReason !== null;
-  const additionalInFlightDiscountApplied =
-    additionalInFlightDiscountEligible &&
-    options.criticalSystemTopologyReady === true;
-
-  return Object.freeze({
+function buildReplicaOperationDrainIdentityFields(normalizedOperation) {
+  return {
     operationId:
       normalizedOperation.operationId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
     partitionId:
@@ -1177,6 +1161,24 @@ function buildReplicaOperationDrainDiagnosticRow(
     updatedAt: Number.isFinite(normalizedOperation.updatedAt) ?
       normalizedOperation.updatedAt :
       null,
+  };
+}
+
+function buildReplicaOperationDrainDiagnosticRow(
+  normalizedOperation,
+  options,
+) {
+  const inFlight = options.inFlight === true;
+  const stale = options.stale === true;
+  const additionalDiscountReason = options.additionalDiscountReason || null;
+  const additionalInFlightDiscountEligible =
+    inFlight && stale !== true && additionalDiscountReason !== null;
+  const additionalInFlightDiscountApplied =
+    additionalInFlightDiscountEligible &&
+    options.criticalSystemTopologyReady === true;
+
+  return Object.freeze({
+    ...buildReplicaOperationDrainIdentityFields(normalizedOperation),
     inFlight,
     stale,
     staleDiscountApplied: inFlight && stale,
@@ -1271,104 +1273,67 @@ function countAdditionalPostRebalanceReplicaOperationDiscounts(
 }
 
 function buildDimension(dimension, state, reasonCodes, evidence) {
-  return {
-    dimension,
-    state,
-    reasonCodes,
-    evidence,
-  };
+  return {dimension, state, reasonCodes, evidence};
 }
 
 function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
-  const controlPlaneDiagnostics = getDiagnosticsObject(
-    options.controlPlaneDiagnostics,
-  );
+  const controlPlaneDiagnostics = getDiagnosticsObject(options.controlPlaneDiagnostics);
   const activeNodeViews = getActiveNodeViews(controlPlaneDiagnostics);
   const membershipFreeze = getDiagnosticsObject(activeNodeViews.membershipFreeze);
   const voterCounts = normalizeCountMap(options.voterCounts);
-  const targetVoterCount = normalizeNonNegativeInteger(
-    options.targetVoterCount,
-    0,
-  );
-  const overTargetDurations = normalizeDurationRecord(
-    options.overTargetDurations,
-  );
+  const targetVoterCount = normalizeNonNegativeInteger(options.targetVoterCount, 0);
+  const overTargetDurations = normalizeDurationRecord(options.overTargetDurations);
   const overTargetPartitionIds = collectOverTargetPartitionIds(
-    voterCounts,
-    targetVoterCount,
-    overTargetDurations,
+    voterCounts, targetVoterCount, overTargetDurations,
   );
-  const expectedPartitionIdsFromOptions = normalizeStringList(
-    options.expectedPartitionIds,
-  );
-  const expectedPartitionIds =
-    expectedPartitionIdsFromOptions.length > 0 ?
-      expectedPartitionIdsFromOptions :
-      normalizeStringList(Array.from(voterCounts.keys()));
+  const expectedPartitionIdsFromOptions = normalizeStringList(options.expectedPartitionIds);
+  const expectedPartitionIds = expectedPartitionIdsFromOptions.length > 0 ?
+    expectedPartitionIdsFromOptions :
+    normalizeStringList(Array.from(voterCounts.keys()));
   const leaderPartitionIds = normalizeLeaderPartitionIds(options.leaders);
   const missingLeaderPartitionIds = expectedPartitionIds.filter(
     (partitionId) => !leaderPartitionIds.has(partitionId),
   );
-  const cacheVisibleSatisfiedPriorityRecoveryPartitionIds =
-    normalizeStringList(
-      options.cacheVisibleSatisfiedPriorityRecoveryPartitionIds,
-    );
+  const cacheVisibleSatisfiedPriorityRecoveryPartitionIds = normalizeStringList(
+    options.cacheVisibleSatisfiedPriorityRecoveryPartitionIds,
+  );
   const priorityRecoveryPartitionIds =
     cacheVisibleSatisfiedPriorityRecoveryPartitionIds.length > 0 ?
       cacheVisibleSatisfiedPriorityRecoveryPartitionIds :
       normalizeStringList(
-        buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
-          controlPlaneDiagnostics,
-        ),
+        buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(controlPlaneDiagnostics),
       );
   const priorityRecoveryPartitionIdSet = new Set(priorityRecoveryPartitionIds);
-  const coveredMissingLeaderPartitionIds =
-    missingLeaderPartitionIds.filter((partitionId) =>
-      priorityRecoveryPartitionIdSet.has(partitionId),
-    );
-  const uncoveredMissingLeaderPartitionIds =
-    missingLeaderPartitionIds.filter((partitionId) =>
-      !priorityRecoveryPartitionIdSet.has(partitionId),
-    );
-  const publishedActiveNodeIds = resolvePublishedActiveNodeIds(
-    options,
-    controlPlaneDiagnostics,
+  const coveredMissingLeaderPartitionIds = missingLeaderPartitionIds.filter((partitionId) =>
+    priorityRecoveryPartitionIdSet.has(partitionId),
   );
-  const projectedActiveNodeIds = resolveProjectedActiveNodeIds(
-    options,
-    controlPlaneDiagnostics,
+  const uncoveredMissingLeaderPartitionIds = missingLeaderPartitionIds.filter((partitionId) =>
+    !priorityRecoveryPartitionIdSet.has(partitionId),
   );
+  const publishedActiveNodeIds = resolvePublishedActiveNodeIds(options, controlPlaneDiagnostics);
+  const projectedActiveNodeIds = resolveProjectedActiveNodeIds(options, controlPlaneDiagnostics);
   const projectedActiveNodeIdSet = new Set(projectedActiveNodeIds);
-  const stalePublishedNodeIds =
-    projectedActiveNodeIds.length > 0 ?
-      publishedActiveNodeIds.filter(
-        (nodeId) => !projectedActiveNodeIdSet.has(nodeId),
-      ) :
-      POST_REBALANCE_CLOSURE_EMPTY_LIST;
+  const stalePublishedNodeIds = projectedActiveNodeIds.length > 0 ?
+    publishedActiveNodeIds.filter((nodeId) => !projectedActiveNodeIdSet.has(nodeId)) :
+    POST_REBALANCE_CLOSURE_EMPTY_LIST;
   const publicationVisibility = resolvePublicationVisibility(
-    controlPlaneDiagnostics,
-    publishedActiveNodeIds.length > 0,
+    controlPlaneDiagnostics, publishedActiveNodeIds.length > 0,
   );
   const inFlightReplicaOperationCount = normalizeNonNegativeInteger(
-    options.inFlightReplicaOperationCount,
-    0,
+    options.inFlightReplicaOperationCount, 0,
   );
   const effectiveInFlightReplicaOperationCount = normalizeNonNegativeInteger(
-    options.effectiveInFlightReplicaOperationCount,
-    inFlightReplicaOperationCount,
+    options.effectiveInFlightReplicaOperationCount, inFlightReplicaOperationCount,
   );
   const staleInFlightReplicaOperationCount = normalizeNonNegativeInteger(
-    options.staleInFlightReplicaOperationCount,
-    0,
+    options.staleInFlightReplicaOperationCount, 0,
   );
-  const cacheVisibleSatisfiedPriorityRecoveryOperationCount =
-    normalizeNonNegativeInteger(
-      options.cacheVisibleSatisfiedPriorityRecoveryOperationCount,
-      priorityRecoveryPartitionIds.length,
-    );
+  const cacheVisibleSatisfiedPriorityRecoveryOperationCount = normalizeNonNegativeInteger(
+    options.cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    priorityRecoveryPartitionIds.length,
+  );
   const additionalInFlightDiscountCount = normalizeNonNegativeInteger(
-    options.additionalInFlightDiscountCount,
-    0,
+    options.additionalInFlightDiscountCount, 0,
   );
   const staleDiscountCount = Math.min(
     inFlightReplicaOperationCount,
@@ -1376,34 +1341,20 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   );
 
   return {
-    controlPlaneDiagnostics,
-    expectedPartitionIds,
+    controlPlaneDiagnostics, expectedPartitionIds,
     leaderPartitionIds: Array.from(leaderPartitionIds).sort(),
-    missingLeaderPartitionIds,
-    targetVoterCount,
+    missingLeaderPartitionIds, targetVoterCount,
     voterCounts: Object.fromEntries(voterCounts.entries()),
-    overTargetDurations,
-    overTargetPartitionIds,
-    maxOverTargetMs: normalizeNonNegativeInteger(
-      options.maxOverTargetMs,
-      0,
-    ),
-    maxSustainedOverTargetMs: normalizeNonNegativeInteger(
-      options.maxSustainedOverTargetMs,
-      0,
-    ),
-    inFlightReplicaOperationCount,
-    effectiveInFlightReplicaOperationCount,
-    staleInFlightReplicaOperationCount,
-    cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    overTargetDurations, overTargetPartitionIds,
+    maxOverTargetMs: normalizeNonNegativeInteger(options.maxOverTargetMs, 0),
+    maxSustainedOverTargetMs: normalizeNonNegativeInteger(options.maxSustainedOverTargetMs, 0),
+    inFlightReplicaOperationCount, effectiveInFlightReplicaOperationCount,
+    staleInFlightReplicaOperationCount, cacheVisibleSatisfiedPriorityRecoveryOperationCount,
     additionalInFlightDiscountCount,
-    cacheVisibleSatisfiedPriorityRecoveryPartitionIds:
-      priorityRecoveryPartitionIds,
-    coveredMissingLeaderPartitionIds,
-    uncoveredMissingLeaderPartitionIds,
+    cacheVisibleSatisfiedPriorityRecoveryPartitionIds: priorityRecoveryPartitionIds,
+    coveredMissingLeaderPartitionIds, uncoveredMissingLeaderPartitionIds,
     staleDiscountCount,
-    ignoreStaleInFlightReplicaOperations:
-      options.ignoreStaleInFlightReplicaOperations === true,
+    ignoreStaleInFlightReplicaOperations: options.ignoreStaleInFlightReplicaOperations === true,
     inFlightReplicaOperationStatuses: getDiagnosticsObject(
       options.inFlightReplicaOperationStatuses,
     ),
@@ -1415,9 +1366,7 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
     publicationVisibilityState: publicationVisibility.state,
     publicationVisibilityReasonCodes: publicationVisibility.reasonCodes,
     publicationAvailable: publicationVisibility.publicationAvailable,
-    publishedActiveNodeIds,
-    projectedActiveNodeIds,
-    stalePublishedNodeIds,
+    publishedActiveNodeIds, projectedActiveNodeIds, stalePublishedNodeIds,
     membershipFreezeActive: membershipFreeze.active === true,
   };
 }

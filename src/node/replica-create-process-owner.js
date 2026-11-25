@@ -165,7 +165,6 @@ async function claimReplicaCreateDurablePhysicalWorker(owner, evidence) {
   const claim = claimReplicaCreatePhysicalWorker(owner, evidence);
   if (!claim) return false;
   try {
-    await owner.requireCurrentBootIncarnation();
     const row = await owner.readOperation(evidence.operationId);
     await owner.requireCurrentBootIncarnation();
     const currentEvidence = replicaCreatePhysicalWorkerEvidence(claim);

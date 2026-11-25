@@ -9,13 +9,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
+import {STATIC_AUDIT_SCRIPTS} from '../../scripts/checks/run-static-audits.js';
 
 const ROOT = process.cwd();
 const UTF8 = 'utf8';
 const BASELINE_PATTERN = /^const BASELINE_COUNT = (\d+);$/mu;
-const STATIC_AUDITS = 'scripts/checks/run-static-audits.js';
-const STATIC_AUDIT_LIST_PATTERN =
-  /STATIC_AUDIT_SCRIPTS = Object\.freeze\(\[([\s\S]*?)\]\)/u;
 const PROOF_OBLIGATIONS = 'test/manifests/proof-obligations.json';
 const OWED_INPUTS = Object.freeze(['scripts/**', 'src/**', 'test/**']);
 const RATCHETS = Object.freeze([
@@ -48,9 +46,9 @@ for (const ratchet of RATCHETS) {
   });
 
   test(`${ratchet.key} whole-repo sweep stays owed by the push gate`, () => {
-    const list = STATIC_AUDIT_LIST_PATTERN.exec(readText(STATIC_AUDITS));
-    assert.ok(list, `${STATIC_AUDITS} declares STATIC_AUDIT_SCRIPTS`);
-    assert.ok(list[1].includes(`'${ratchet.npmScript}'`),
+    assert.ok(Array.isArray(STATIC_AUDIT_SCRIPTS),
+      'scripts/checks/run-static-audits.js exports STATIC_AUDIT_SCRIPTS');
+    assert.ok(STATIC_AUDIT_SCRIPTS.includes(ratchet.npmScript),
       `${ratchet.npmScript} is one of the gate's static audits`);
     const scripts = JSON.parse(readText('package.json')).scripts;
     assert.equal(scripts[ratchet.npmScript], `node ${ratchet.checker}`,

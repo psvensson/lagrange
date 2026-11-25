@@ -11,25 +11,33 @@ const EXPLICIT_CREATION_BINDINGS = Object.freeze([
   'copySourceNodeId',
 ]);
 
+const TARGET_CLAIM_KEY_FIELD = 'targetClaimKey';
 const TEXT_CREATION_IDENTITIES = Object.freeze([
   'entryId', 'operationIntentId', 'replicaIntentId', 'operationId',
   'partitionId', 'entityType', 'entityId', 'nodeId', 'sourceNodeId',
-  'replicaId', 'sourceReplicaId', 'copySourceNodeId', 'targetClaimKey',
+  'replicaId', 'sourceReplicaId', 'copySourceNodeId', TARGET_CLAIM_KEY_FIELD,
 ]);
 const INCARNATION_CREATION_IDENTITIES = Object.freeze([
   'targetNodeBootIncarnation', 'targetNodeStorageIncarnation',
 ]);
+const INVALID_REPLICA_CREATION_REQUEST_IDENTITY_CODE =
+  'INVALID_REPLICA_CREATION_REQUEST_IDENTITY';
+const REQUEST_IDENTITY_FIELD = 'request';
+const PLACEMENT_OPERATION_SUPERSEDED_CODE = 'PLACEMENT_OPERATION_SUPERSEDED';
+const PLACEMENT_OPERATION_SUPERSEDED_REASON_CODE = 'placement_operation_superseded';
+const REPLICA_CREATION_FAILED_CODE = 'REPLICA_CREATION_FAILED';
+const REPLICA_CREATION_FAILED_REASON_CODE = 'replica_creation_failed';
 
 function invalidCreationIdentity(field) {
   const error = new TypeError(`Invalid replica creation request identity: ${field}`);
-  error.code = 'INVALID_REPLICA_CREATION_REQUEST_IDENTITY';
+  error.code = INVALID_REPLICA_CREATION_REQUEST_IDENTITY_CODE;
   error.field = field;
   return error;
 }
 
 function readCreationRequestIdentity(request) {
   const move = copyStrictOwnDataRecord(request);
-  if (move === null) throw invalidCreationIdentity('request');
+  if (move === null) throw invalidCreationIdentity(REQUEST_IDENTITY_FIELD);
   for (const field of TEXT_CREATION_IDENTITIES) {
     const value = move[field];
     if (value != null && (typeof value !== 'string' || value.length === 0)) {
@@ -76,7 +84,7 @@ function operationMatchesCreationRequest(owner, operation, move, placementIntent
     (!nativePartitionAssignment || !move.replicaIntentId || exactPlacementIntent) &&
     (!explicitTargetReplicaId || operation.replicaId === explicitTargetReplicaId) &&
     matchesExplicitCreationBindings(operation, move) &&
-    (!Object.hasOwn(move, 'targetClaimKey') ||
+    (!Object.hasOwn(move, TARGET_CLAIM_KEY_FIELD) ||
       operation.targetClaimKey === move.targetClaimKey) &&
     (epoch.state === MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.UNBOUND ||
       operation.membershipPublicationEpoch === epoch.epoch) &&
@@ -131,8 +139,8 @@ function requireCreationReplayOutcome(operation) {
   if (!isTerminalReplicaOperationRecord(operation)) return false;
   if (WORKFLOW_STEP.SUPERSEDED && operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
     throw Object.assign(new Error(`Placement operation ${operation.operationId} was superseded`), {
-      code: 'PLACEMENT_OPERATION_SUPERSEDED',
-      reasonCode: 'placement_operation_superseded',
+      code: PLACEMENT_OPERATION_SUPERSEDED_CODE,
+      reasonCode: PLACEMENT_OPERATION_SUPERSEDED_REASON_CODE,
       operationId: operation.operationId,
     });
   }
@@ -140,8 +148,8 @@ function requireCreationReplayOutcome(operation) {
     throw Object.assign(new Error(
       `Replica creation ${operation.operationId} is durably terminal: ${operation.status}`,
     ), {
-      code: 'REPLICA_CREATION_FAILED',
-      reasonCode: 'replica_creation_failed',
+      code: REPLICA_CREATION_FAILED_CODE,
+      reasonCode: REPLICA_CREATION_FAILED_REASON_CODE,
       operationId: operation.operationId,
     });
   }

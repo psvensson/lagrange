@@ -159,6 +159,8 @@ function dedupe(records) {
     (record) => record.path || record.oldPath);
 }
 
+const NO_PUBLICATION_BASE = null;
+
 /**
  * The merge base with the publication remote, or null when its ref is absent.
  * This is what a push would be measured against, so it is
@@ -170,7 +172,7 @@ export function publicationBase(root) {
   try {
     readGitFields(root, [SHOW_REF, VERIFY, QUIET, PUBLICATION_REMOTE]);
   } catch (error) {
-    if (error?.status === SHOW_REF_ABSENT) return null;
+    if (error?.status === SHOW_REF_ABSENT) return NO_PUBLICATION_BASE;
     throw error;
   }
   const lines = readGitFields(root, [MERGE_BASE, PUBLICATION_REMOTE, DEFAULT_HEAD]);

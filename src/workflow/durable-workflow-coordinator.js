@@ -126,44 +126,28 @@ class DurableWorkflowCoordinator {
    * Record a durable monotonic step transition on a workflow.
    *
    * Each transition persists previousStep, nextStep, reason, timestamp,
-   * and ownerKey as required by the durable workflow contract.
+   * ownerKey, and fenceToken as required by the durable workflow contract.
+   *
+   * When a fence token is provided in the transition, it is validated
+   * against the workflow's current fence token. If the workflow already
+   * has a fence token that is strictly greater than the provided one,
+   * the transition is rejected as stale.
    *
    * @param {string} workflowId - Workflow ID.
    * @param {Object} transition - Transition descriptor.
    * @param {string} transition.nextStep - Target step.
    * @param {string} transition.reason - Human/machine-readable reason.
+   * @param {number} [transition.fenceToken] - Owner epoch / lease token.
+   * @param {string} [transition.ownerId] - Storage-backed lease owner.
    * @param {Object} [transition.metadata] - Extra fields merged into the
    *   transition history entry.
    * @param {Object} [updates] - Additional workflow field updates applied
    *   alongside the transition.
+   * @param {Object} [options] - Transition behavior options.
+   * @param {boolean} [options.markCommitted=true] - Whether to mark the
+   *   transition idempotency key as committed after persistence.
    * @return {Promise<Object>} Updated workflow state.
    */
-  /**
-     * Record a durable monotonic step transition on a workflow.
-     *
-     * Each transition persists previousStep, nextStep, reason, timestamp,
-     * ownerKey, and fenceToken as required by the durable workflow contract.
-     *
-     * When a fence token is provided in the transition, it is validated
-     * against the workflow's current fence token. If the workflow already
-     * has a fence token that is strictly greater than the provided one,
-     * the transition is rejected as stale.
-     *
-     * @param {string} workflowId - Workflow ID.
-     * @param {Object} transition - Transition descriptor.
-     * @param {string} transition.nextStep - Target step.
-     * @param {string} transition.reason - Human/machine-readable reason.
-     * @param {number} [transition.fenceToken] - Owner epoch / lease token.
-     * @param {string} [transition.ownerId] - Storage-backed lease owner.
-     * @param {Object} [transition.metadata] - Extra fields merged into the
-     *   transition history entry.
-     * @param {Object} [updates] - Additional workflow field updates applied
-     *   alongside the transition.
-     * @param {Object} [options] - Transition behavior options.
-     * @param {boolean} [options.markCommitted=true] - Whether to mark the
-     *   transition idempotency key as committed after persistence.
-     * @return {Promise<Object>} Updated workflow state.
-     */
   async transitionStep(workflowId, transition, updates = {}, options = {}) {
     const nextStep = transition?.nextStep;
     if (!nextStep) {
@@ -272,6 +256,7 @@ class DurableWorkflowCoordinator {
     const existingKey = this.resolveParticipantKey(record);
     const existing = existingKey ? workflow.participants.get(existingKey) : null;
     const participant = this.createParticipantRecord(workflowId, record, existing);
+    const attemptedStatus = participant.status;
     workflow.participants.set(participant.participantKey, participant);
     if (!existing) {
       // Monotonic enlistment witness: a workflow that ever enlisted a
@@ -283,14 +268,19 @@ class DurableWorkflowCoordinator {
     try {
       await this.persistParticipant(participant);
     } catch (error) {
-      if (existing) {
-        workflow.participants.set(participant.participantKey, existing);
-      } else {
-        workflow.participants.delete(participant.participantKey);
-        workflow.enlistedParticipantCount = Math.max(
-          0,
-          (workflow.enlistedParticipantCount || 1) - 1,
-        );
+      if (
+        workflow.participants.get(participant.participantKey) === participant &&
+        participant.status === attemptedStatus
+      ) {
+        if (existing) {
+          workflow.participants.set(participant.participantKey, existing);
+        } else {
+          workflow.participants.delete(participant.participantKey);
+          workflow.enlistedParticipantCount = Math.max(
+            0,
+            (workflow.enlistedParticipantCount || 1) - 1,
+          );
+        }
       }
       throw error;
     }
@@ -368,8 +358,8 @@ class DurableWorkflowCoordinator {
     }
 
     for (const participantKey of participantKeys) {
-      const participant = workflow.participants.get(participantKey);
-      if (!participant) {
+      const currentParticipant = workflow.participants.get(participantKey);
+      if (!currentParticipant) {
         // A REQUESTED key missing from the registry is lost enlistment
         // state, not a skippable no-op.
         failedParticipants.push({
@@ -380,6 +370,8 @@ class DurableWorkflowCoordinator {
         continue;
       }
 
+      const participant = {...currentParticipant};
+      workflow.participants.set(participantKey, participant);
       participant.status = transientStatus;
       participant.updatedAt = this.now();
       participant.lastError = null;

@@ -9,6 +9,10 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
+  CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE,
+  evaluateControlPlaneWriteRetryDecision,
+} from '../../src/query/query-executor-write-retry-routing.js';
+import {
   createMockMessageRouter,
 } from './query-executor-test-support.js';
 import {
@@ -1051,5 +1055,35 @@ test('QueryExecutor - executeOnPartition widens user-table and system-table ' +
     [fencedAddress, activeAddress],
     'system-table write should widen immediately instead of deferring partition retry on the fenced replica',
   );
+  t.end();
+});
+
+test('evaluateControlPlaneWriteRetryDecision covers all boolean fact combinations via frozen decision table', (t) => {
+  t.ok(Object.isFrozen(CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE));
+  t.equal(CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE.length, 4);
+  for (let mask = 0; mask < 32; mask += 1) {
+    const facts = {
+      isSystemTableWrite: Boolean(mask & 1),
+      isPriorityControlPlaneWrite: Boolean(mask & 2),
+      isRetryable: Boolean(mask & 4),
+      isDeferredFailure: Boolean(mask & 8),
+      isRemovalFencedFailure: Boolean(mask & 16),
+    };
+    const decision = evaluateControlPlaneWriteRetryDecision(facts);
+    let expectedState = 'widen_to_recovery_candidate';
+    if (
+      facts.isSystemTableWrite &&
+      facts.isDeferredFailure &&
+      !facts.isRemovalFencedFailure
+    ) {
+      expectedState =
+        facts.isPriorityControlPlaneWrite && facts.isRetryable ?
+          'widen_to_recovery_candidate' :
+          'defer_partition_retry';
+    } else if (!facts.isRetryable) {
+      expectedState = 'none';
+    }
+    t.equal(decision.state, expectedState, `mask ${mask}`);
+  }
   t.end();
 });

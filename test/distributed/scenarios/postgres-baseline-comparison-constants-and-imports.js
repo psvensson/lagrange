@@ -802,80 +802,84 @@ function summarizeBenchmarkMetadataPartitionRows(rows) {
   };
 }
 
+function recordBenchmarkMetadataServiceRow(row, sets) {
+  if (!row || typeof row !== 'object') {
+    return;
+  }
+  const partitionId = firstStringField(
+    [row],
+    BENCHMARK_METADATA_PARTITION_ID_FIELD,
+    'partitionId',
+    'id',
+  );
+  if (!partitionId) {
+    return;
+  }
+  sets.partitionIds.add(partitionId);
+  const serviceType = String(
+    firstStringField(
+      [row],
+      BENCHMARK_METADATA_SERVICE_TYPE_FIELD,
+      'serviceType',
+      'type',
+    ) || '',
+  ).toLowerCase();
+  if (serviceType !== BENCHMARK_METADATA_SERVICE_TYPE_PARTITION) {
+    return;
+  }
+  const status = String(
+    firstStringField([row], BENCHMARK_METADATA_STATUS_FIELD, 'status') || '',
+  ).toLowerCase();
+  if (status !== BENCHMARK_METADATA_STATUS_ACTIVE) {
+    return;
+  }
+  const nodeId = firstStringField(
+    [row],
+    BENCHMARK_METADATA_NODE_ID_FIELD,
+    'nodeId',
+  );
+  sets.activePartitionIds.add(partitionId);
+  if (nodeId) {
+    sets.activeNodeIds.add(nodeId);
+  }
+  const raftRole = String(
+    firstStringField([row], BENCHMARK_METADATA_RAFT_ROLE_FIELD, 'raftRole') ||
+      '',
+  ).toLowerCase();
+  if (raftRole === BENCHMARK_METADATA_RAFT_ROLE_LEADER) {
+    sets.leaderPartitionIds.add(partitionId);
+    if (nodeId) {
+      sets.leaderNodeIds.add(nodeId);
+    }
+  }
+}
+
 function summarizeBenchmarkMetadataServiceRows(rows, expectedPartitionIds) {
-  const partitionIds = new Set();
-  const activePartitionIds = new Set();
-  const leaderPartitionIds = new Set();
-  const activeNodeIds = new Set();
-  const leaderNodeIds = new Set();
+  const sets = {
+    partitionIds: new Set(),
+    activePartitionIds: new Set(),
+    leaderPartitionIds: new Set(),
+    activeNodeIds: new Set(),
+    leaderNodeIds: new Set(),
+  };
   for (const row of rows) {
-    if (!row || typeof row !== 'object') {
-      continue;
-    }
-    const partitionId = firstStringField(
-      [row],
-      BENCHMARK_METADATA_PARTITION_ID_FIELD,
-      'partitionId',
-      'id',
-    );
-    if (!partitionId) {
-      continue;
-    }
-    partitionIds.add(partitionId);
-    const serviceType = String(
-      firstStringField(
-        [row],
-        BENCHMARK_METADATA_SERVICE_TYPE_FIELD,
-        'serviceType',
-        'type',
-      ) || '',
-    ).toLowerCase();
-    if (serviceType !== BENCHMARK_METADATA_SERVICE_TYPE_PARTITION) {
-      continue;
-    }
-    const status = String(
-      firstStringField([row], BENCHMARK_METADATA_STATUS_FIELD, 'status') || '',
-    ).toLowerCase();
-    const nodeId = firstStringField(
-      [row],
-      BENCHMARK_METADATA_NODE_ID_FIELD,
-      'nodeId',
-    );
-    if (status === BENCHMARK_METADATA_STATUS_ACTIVE) {
-      activePartitionIds.add(partitionId);
-      if (nodeId) {
-        activeNodeIds.add(nodeId);
-      }
-    }
-    const raftRole = String(
-      firstStringField([row], BENCHMARK_METADATA_RAFT_ROLE_FIELD, 'raftRole') ||
-        '',
-    ).toLowerCase();
-    if (
-      status === BENCHMARK_METADATA_STATUS_ACTIVE &&
-      raftRole === BENCHMARK_METADATA_RAFT_ROLE_LEADER
-    ) {
-      leaderPartitionIds.add(partitionId);
-      if (nodeId) {
-        leaderNodeIds.add(nodeId);
-      }
-    }
+    recordBenchmarkMetadataServiceRow(row, sets);
   }
   const normalizedExpectedPartitionIds = Array.isArray(expectedPartitionIds) ?
     [...expectedPartitionIds] :
     [];
   return {
     rowCount: rows.length,
-    partitionIds: [...partitionIds].sort(),
-    activePartitionIds: [...activePartitionIds].sort(),
-    leaderPartitionIds: [...leaderPartitionIds].sort(),
-    activeNodeIds: [...activeNodeIds].sort(),
-    leaderNodeIds: [...leaderNodeIds].sort(),
+    partitionIds: [...sets.partitionIds].sort(),
+    activePartitionIds: [...sets.activePartitionIds].sort(),
+    leaderPartitionIds: [...sets.leaderPartitionIds].sort(),
+    activeNodeIds: [...sets.activeNodeIds].sort(),
+    leaderNodeIds: [...sets.leaderNodeIds].sort(),
     missingActivePartitionIds: normalizedExpectedPartitionIds.filter(
-      (partitionId) => !activePartitionIds.has(partitionId),
+      (partitionId) => !sets.activePartitionIds.has(partitionId),
     ),
     missingLeaderPartitionIds: normalizedExpectedPartitionIds.filter(
-      (partitionId) => !leaderPartitionIds.has(partitionId),
+      (partitionId) => !sets.leaderPartitionIds.has(partitionId),
     ),
   };
 }

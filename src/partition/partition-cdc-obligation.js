@@ -146,7 +146,15 @@ function operationEntryOf(command, operation, result) {
     proposedBy: command.proposedBy,
     proposedAt: command.proposedAt,
     changes: result?.changes,
+    ...(Array.isArray(result?.affectedRows) ? {affectedRows: result.affectedRows} : {}),
   };
+}
+
+function builtEventsOf(built) {
+  if (Array.isArray(built?.cdcEvents) && built.cdcEvents.length > 0) {
+    return built.cdcEvents;
+  }
+  return built?.cdcEvent ? [built.cdcEvent] : [];
 }
 
 function assertBuiltCdcObligationValid(service, built) {
@@ -161,15 +169,63 @@ function assertBuiltCdcObligationValid(service, built) {
   if (built.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
     return false;
   }
-  if (!hasValidPartitionCdcRowPayload(
-    built.cdcEvent?.tableName,
-    built.cdcEvent?.data,
-  )) {
+  const events = builtEventsOf(built);
+  if (events.length === 0 || events.some((event) =>
+    !hasValidPartitionCdcRowPayload(event?.tableName, event?.data))) {
     throw new Error(
       `Committed CDC obligation for table ${service.tableName} is missing required row payload identity`,
     );
   }
   return true;
+}
+
+function obligationEventRowOf({eventKey, logIndex, term, ordinal, entryId, cdcEvent, sourceScope}) {
+  return Object.freeze({
+    eventKey,
+    logIndex,
+    term,
+    ordinal,
+    entryId,
+    cdcEvent,
+    eventJson: JSON.stringify({
+      ...cdcEvent,
+      ...(sourceScope === null ? {} : {sourceScope}),
+    }),
+  });
+}
+
+function flattenCapturedObligationEvents(events) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return [];
+  }
+  if (!events.some((event) => Array.isArray(event?.additionalEvents) &&
+      event.additionalEvents.length > 0)) {
+    return events;
+  }
+  const flattened = [];
+  let minNextOrdinal = 0;
+  for (const event of events) {
+    const {additionalEvents, ...primary} = event;
+    const primaryOrdinal = Number.isInteger(primary.ordinal) ?
+      Math.max(primary.ordinal, minNextOrdinal) :
+      minNextOrdinal;
+    flattened.push(primaryOrdinal === primary.ordinal ?
+      Object.freeze(primary) :
+      Object.freeze({...primary, ordinal: primaryOrdinal}));
+    minNextOrdinal = primaryOrdinal + 1;
+    if (Array.isArray(additionalEvents)) {
+      for (const extra of additionalEvents) {
+        const extraOrdinal = Number.isInteger(extra.ordinal) ?
+          Math.max(extra.ordinal, minNextOrdinal) :
+          minNextOrdinal;
+        flattened.push(extraOrdinal === extra.ordinal ?
+          extra :
+          Object.freeze({...extra, ordinal: extraOrdinal}));
+        minNextOrdinal = extraOrdinal + 1;
+      }
+    }
+  }
+  return flattened;
 }
 
 /**
@@ -193,23 +249,38 @@ function captureCommittedOperationCdc(service, committed, {operation, result, or
     });
   }
   const {command, index, term} = committed;
-  const built = service.syncCDCGeneratorDependencies().buildEvent(
+  const built = service.syncCDCGeneratorDependencies().buildEvents(
     operationEntryOf(command, operation, result),
     {suppressNoOpWrite: true, sourceReplica: command.proposedBy});
   if (!assertBuiltCdcObligationValid(service, built)) {
     return null;
   }
   const sourceScope = eventCdcSourceScope(service);
-  return Object.freeze({
-    eventKey: operationOutcomeKeyOf(command.participantId, ordinal),
+  const baseEventKey = operationOutcomeKeyOf(command.participantId, ordinal);
+  const events = builtEventsOf(built);
+  const primary = obligationEventRowOf({
+    eventKey: baseEventKey,
     logIndex: index,
     term,
     ordinal,
     entryId: command.entryId,
-    cdcEvent: built.cdcEvent,
-    eventJson: JSON.stringify({...built.cdcEvent,
-      ...(sourceScope === null ? {} : {sourceScope})}),
+    cdcEvent: events[0],
+    sourceScope,
   });
+  if (events.length === 1) {
+    return primary;
+  }
+  const additionalEvents = Object.freeze(events.slice(1).map((cdcEvent, idx) =>
+    obligationEventRowOf({
+      eventKey: `${baseEventKey}:${idx + 1}`,
+      logIndex: index,
+      term,
+      ordinal: ordinal + idx + 1,
+      entryId: command.entryId,
+      cdcEvent,
+      sourceScope,
+    })));
+  return Object.freeze({...primary, additionalEvents});
 }
 
 /**
@@ -231,6 +302,7 @@ function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
             service.generateCDCEvent({
               ...command,
               changes: result.changes,
+              ...(Array.isArray(result?.affectedRows) ? {affectedRows: result.affectedRows} : {}),
               logIndex: index,
               term,
             }).catch(() => {}));
@@ -239,16 +311,26 @@ function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
     }
     return 0;
   }
-  const built = service.syncCDCGeneratorDependencies().buildEvent(
-    {...command, changes: result.changes},
+  const built = service.syncCDCGeneratorDependencies().buildEvents(
+    {
+      ...command,
+      changes: result.changes,
+      ...(Array.isArray(result?.affectedRows) ? {affectedRows: result.affectedRows} : {}),
+    },
     {suppressNoOpWrite: true, sourceReplica: command.proposedBy});
   if (!assertBuiltCdcObligationValid(service, built)) return 0;
   const sourceScope = eventCdcSourceScope(service);
-  return recordCommittedOperationCdc(service, committed, [{eventKey: entryKey,
-    logIndex: index, term, ordinal: 0, entryId: command.entryId,
-    cdcEvent: built.cdcEvent,
-    eventJson: JSON.stringify({...built.cdcEvent,
-      ...(sourceScope === null ? {} : {sourceScope})})}]);
+  const obligationEvents = builtEventsOf(built).map((cdcEvent, ordinal) =>
+    obligationEventRowOf({
+      eventKey: ordinal === 0 ? entryKey : `${entryKey}:${ordinal}`,
+      logIndex: index,
+      term,
+      ordinal,
+      entryId: command.entryId,
+      cdcEvent,
+      sourceScope,
+    }));
+  return recordCommittedOperationCdc(service, committed, obligationEvents);
 }
 
 /**
@@ -262,13 +344,14 @@ function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
  */
 function recordCommittedOperationCdc(service, committed, events) {
   const {command, index} = committed;
+  const resolvedEvents = flattenCapturedObligationEvents(events);
   if (!partitionOwesCdc(service)) {
-    if (events.length > 0) {
+    if (resolvedEvents.length > 0) {
       committed.afterCommit(() => {
         if (service.isShutdown || (service.cdcSubscribers?.size ?? 0) === 0) {
           return;
         }
-        for (const event of events) {
+        for (const event of resolvedEvents) {
           const entry = event.transientEntry ?? event;
           service.trackPendingCDCEvent(
             service.generateCDCEvent(entry).catch(() => {}));
@@ -277,14 +360,14 @@ function recordCommittedOperationCdc(service, committed, events) {
     }
     return 0;
   }
-  const recorded = events.length;
+  const recorded = resolvedEvents.length;
   if (recorded === 0) {
     return recorded;
   }
   ensureCdcObligationLedger(service.db);
-  for (const event of events) insertCdcObligation(service.db, event);
+  for (const event of resolvedEvents) insertCdcObligation(service.db, event);
   committed.afterCommit(() => {
-    applyCommittedEventsToPartitionState(service, events);
+    applyCommittedEventsToPartitionState(service, resolvedEvents);
     for (let ordinal = 0; ordinal < recorded; ordinal += 1) {
       service.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_GENERATED);
     }

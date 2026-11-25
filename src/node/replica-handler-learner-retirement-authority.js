@@ -27,6 +27,10 @@ const SELECT_OPERATION = 'SELECT * FROM replica_operations WHERE operation_id = 
 const ADMITTED_SCOPE = Object.freeze([
   'nodeBootIncarnation', 'replicaCreatedAt', 'lifecycleVersion', 'lifecycleVersionColumn',
 ]);
+const SOURCE_AUTHORITY_UNAVAILABLE_LOG =
+  'learner retirement source authority unavailable';
+const CLEANUP_TAKEOVER_UNAVAILABLE_LOG =
+  'offline learner cleanup takeover unavailable';
 
 async function readOne(handler, table, sql, key) {
   try {
@@ -39,20 +43,24 @@ async function readOne(handler, table, sql, key) {
       return result.rows[0];
     }
   } catch (error) {
-    handler.logger.debug('learner retirement source authority unavailable',
+    handler.logger.debug(SOURCE_AUTHORITY_UNAVAILABLE_LOG,
       {table, key, error: error.message});
   }
   return null;
 }
 
+const NO_ADMITTED_REMOVAL = null;
+
 function admittedRemoval(operation, scope) {
   if (operation?.operation_id !== scope.operationId || operation.type !== OperationType.REMOVE ||
       operation.completed_at !== null || operation.partition_id !== scope.partitionId ||
       operation.replica_id !== scope.replicaId || operation.target_node_id !== scope.targetNodeId ||
-      typeof operation.steps_history !== 'string') return null;
+      typeof operation.steps_history !== 'string') return NO_ADMITTED_REMOVAL;
   const history = memoizedParseStepsHistoryString(operation.steps_history);
   const admission = history[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
-  return admission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT ? admission : null;
+  return admission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT ?
+    admission :
+    NO_ADMITTED_REMOVAL;
 }
 
 async function observesCurrentRisk(handler, scope, row) {
@@ -125,7 +133,7 @@ async function handOffAbsentLearnerCleanup(handler, scope) {
     const adopted = await handler.getReplicaCleanupTombstoneOwner().takeOverAbsentLearner(scope);
     return adopted?.ownerToken ?? null;
   } catch (error) {
-    handler.logger.debug('offline learner cleanup takeover unavailable',
+    handler.logger.debug(CLEANUP_TAKEOVER_UNAVAILABLE_LOG,
       {operationId: scope.operationId, error: error.message});
     return null;
   }

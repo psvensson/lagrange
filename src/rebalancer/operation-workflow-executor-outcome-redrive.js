@@ -22,6 +22,73 @@ const EXECUTOR_OUTCOME_REDRIVE_MAX_LANE_WAITS = 50;
  * @param {string} operationId
  * @return {Promise<void>}
  */
+async function runSingleExecutorOutcomeRedriveAttempt(
+  owner,
+  operationId,
+  payload,
+) {
+  let factoryRan = false;
+  let caughtError = null;
+  let hasError = false;
+  try {
+    await owner.operationWorkflowRunExclusive(
+      owner.getOperationOwnerSingleFlightKey(operationId),
+      () => {
+        factoryRan = true;
+        return owner.reconcileExecutorOutcome(payload);
+      },
+    );
+  } catch (error) {
+    caughtError = error;
+    hasError = true;
+  }
+  return {factoryRan, caughtError, hasError};
+}
+
+async function stepExecutorOutcomeRedrive(owner, operationId, laneWait = 0) {
+  if (owner.isShuttingDown || !owner.isInitialized) {
+    return;
+  }
+  if (laneWait >= EXECUTOR_OUTCOME_REDRIVE_MAX_LANE_WAITS) {
+    const retained =
+      owner.executorOutcomeRetryPayloadByOperationId.get(operationId);
+    if (retained) {
+      owner.scheduleRetainedExecutorOutcomeRetry(retained, null);
+    }
+    return;
+  }
+  const payload =
+    owner.executorOutcomeRetryPayloadByOperationId.get(operationId);
+  if (!payload || owner.executorOutcomeRetryTimerByOperationId.has(operationId)) {
+    return;
+  }
+  const {factoryRan, caughtError, hasError} =
+    await runSingleExecutorOutcomeRedriveAttempt(owner, operationId, payload);
+  if (hasError) {
+    if (
+      !factoryRan ||
+      owner.supersedesExecutorStepRetry(
+        payload,
+        owner.executorOutcomeRetryPayloadByOperationId.get(operationId),
+      )
+    ) {
+      return stepExecutorOutcomeRedrive(owner, operationId, laneWait + 1);
+    }
+    owner.handleDeferredExecutorOutcomeRetryFailure(payload, caughtError, null);
+    return;
+  }
+  if (!factoryRan) {
+    return stepExecutorOutcomeRedrive(owner, operationId, laneWait + 1);
+  }
+  const retainedAfterRun =
+    owner.executorOutcomeRetryPayloadByOperationId.get(operationId);
+  if (retainedAfterRun === payload) {
+    owner.scheduleRetainedExecutorOutcomeRetry(payload, null);
+    return;
+  }
+  return stepExecutorOutcomeRedrive(owner, operationId, laneWait + 1);
+}
+
 async function redriveExecutorOutcomeReconcile(owner, operationId) {
   if (
     !operationId ||
@@ -31,73 +98,7 @@ async function redriveExecutorOutcomeReconcile(owner, operationId) {
   }
   owner.executorOutcomeRedriveInFlightByOperationId.add(operationId);
   try {
-    for (
-      let laneWait = 0;
-      laneWait < EXECUTOR_OUTCOME_REDRIVE_MAX_LANE_WAITS;
-      laneWait++
-    ) {
-      if (owner.isShuttingDown || !owner.isInitialized) {
-        return;
-      }
-      const payload =
-        owner.executorOutcomeRetryPayloadByOperationId.get(operationId);
-      if (!payload) {
-        return;
-      }
-      if (owner.executorOutcomeRetryTimerByOperationId.has(operationId)) {
-        return;
-      }
-      let factoryRan = false;
-      try {
-        await owner.operationWorkflowRunExclusive(
-          owner.getOperationOwnerSingleFlightKey(operationId),
-          () => {
-            factoryRan = true;
-            return owner.reconcileExecutorOutcome(payload);
-          },
-        );
-      } catch (error) {
-        if (!factoryRan || owner.supersedesExecutorStepRetry(payload,
-          owner.executorOutcomeRetryPayloadByOperationId.get(operationId))) {
-          continue;
-        }
-        // Retryable reconcile failures re-arm the OUTCOME retry (with
-        // the deferred completion context preserved); non-retryable
-        // failures log OUTCOME_TRANSITION_FAILED. Either way the error
-        // belongs to the outcome, never to the coalesced lane holder.
-        owner.handleDeferredExecutorOutcomeRetryFailure(
-          payload,
-          error,
-          null,
-        );
-        return;
-      }
-      if (!factoryRan) {
-        continue;
-      }
-      const retainedAfterRun =
-        owner.executorOutcomeRetryPayloadByOperationId.get(operationId);
-      if (retainedAfterRun === payload) {
-        // CL-029 backstop: a reconcile that ran but left the evidence
-        // untouched must not strand the payload owner-less. Every real
-        // reconcile path at HEAD clears or replaces the entry, so this
-        // exit guards the CLASS (a future path that forgets to clear or
-        // schedule, or the unmapped-action fallthrough) rather than a
-        // demonstrated live path — the previously silent orphan becomes
-        // a bounded 30s-cadence retry with a warn per arm. Consumption
-        // clears the timer and resets the backoff.
-        owner.scheduleRetainedExecutorOutcomeRetry(payload, null);
-        return;
-      }
-    }
-    if (owner.isShuttingDown || !owner.isInitialized) {
-      return;
-    }
-    const retained =
-      owner.executorOutcomeRetryPayloadByOperationId.get(operationId);
-    if (retained) {
-      owner.scheduleRetainedExecutorOutcomeRetry(retained, null);
-    }
+    await stepExecutorOutcomeRedrive(owner, operationId, 0);
   } finally {
     owner.executorOutcomeRedriveInFlightByOperationId.delete(operationId);
   }

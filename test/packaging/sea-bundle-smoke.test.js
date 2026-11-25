@@ -20,6 +20,7 @@ import {
   RAFT_RS_BINDING_LAYOUT,
   RAFT_RS_BINDING_STATE,
 } from '../../src/raft/raft-rs-core-constants.js';
+import {measureRuntimeContent} from '../../src/diagnostics/runtime-content-fingerprint.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -286,9 +287,32 @@ test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) 
 });
 
 const MERGE_WITNESS_TIMEOUT_MS = 30000;
+const MERGE_WORKER_RUNTIME_PACKAGES = Object.freeze([
+  'better-sqlite3',
+  'bindings',
+  'file-uri-to-path',
+  'piscina',
+]);
 const coordinatorMergeProcessPath =
   join(projectRoot, 'src/query/distributed/coordinator-merge-process.js');
 const sqlValueCodecPath = join(projectRoot, 'src/query/sql-value-codec.js');
+
+function layOutIsolatedMergeBundle(root, {omitPackages = []} = {}) {
+  const omitted = new Set(omitPackages);
+  const bundle = join(root, basename(mainBundle));
+  fs.copyFileSync(mainBundle, bundle);
+  const targetNodeModules = join(root, 'node_modules');
+  fs.mkdirSync(targetNodeModules, {recursive: true});
+  for (const packageName of MERGE_WORKER_RUNTIME_PACKAGES) {
+    if (omitted.has(packageName)) continue;
+    fs.cpSync(
+      join(distNodeModules, packageName),
+      join(targetNodeModules, packageName),
+      {recursive: true, dereference: true},
+    );
+  }
+  return bundle;
+}
 
 function runNodeScript(args, {cwd = projectRoot, env = {}, timeoutMs = 15000} = {}) {
   return new Promise((resolve, reject) => {
@@ -336,7 +360,12 @@ test(
 
     const tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'lagrange-sea-merge-worker-'));
     t.teardown(() => fs.rmSync(tmpDir, {recursive: true, force: true}));
-    const isolatedBundle = layOutBundleWithoutBinding(tmpDir);
+    const isolatedBundle = layOutIsolatedMergeBundle(tmpDir);
+    t.equal(
+      fs.lstatSync(join(tmpDir, 'node_modules')).isSymbolicLink(),
+      false,
+      'isolated merge bundle node_modules is a real directory, not a symlink',
+    );
 
     const req = createRequire(isolatedBundle);
     const Database = req('better-sqlite3');
@@ -360,7 +389,7 @@ test(
       'globalThis.__dirname = workDir;',
       'const {CoordinatorMergeProcessPool} = await import(poolUrl);',
       'const {encodeTypedRowSet} = await import(codecUrl);',
-      'const Database = createRequire(bundlePath)("better-sqlite3");',
+      'const Database = createRequire(poolUrl)("better-sqlite3");',
       'const fragments = fragPaths.map((fragPath) => {',
       '  const db = new Database(fragPath, {readonly: true});',
       '  const rows = db.prepare("SELECT id, name FROM items ORDER BY id")',
@@ -426,6 +455,85 @@ test(
         {id: '2', name: 'beta'},
       ],
       'isolated SEA merge worker returns merged rows from real SQLite fragments',
+    );
+
+    // Negative control: omit `bindings` from the isolated directory while it remains
+    // present in <projectRoot>/node_modules and <projectRoot>/dist/node_modules.
+    // Because node_modules is copied rather than symlinked, the isolated merge worker
+    // must fail closed rather than borrowing `bindings` from the checkout.
+    const negDir = fs.mkdtempSync(join(os.tmpdir(), 'lagrange-sea-merge-neg-'));
+    t.teardown(() => fs.rmSync(negDir, {recursive: true, force: true}));
+    const negBundle = layOutIsolatedMergeBundle(negDir, {omitPackages: ['bindings']});
+    const negWitnessPath = join(negDir, 'witness.mjs');
+    fs.writeFileSync(negWitnessPath, witnessScript, 'utf8');
+
+    const negResult = await runNodeScript(
+      [
+        negWitnessPath,
+        negBundle,
+        negDir,
+        pathToFileURL(coordinatorMergeProcessPath).href,
+        pathToFileURL(sqlValueCodecPath).href,
+        ...fragmentFixtures.map((fixture) => fixture.file),
+      ],
+      {
+        cwd: negDir,
+        env: {SEA_BUILD: 'true'},
+        timeoutMs: MERGE_WITNESS_TIMEOUT_MS,
+      },
+    );
+    t.not(
+      negResult.exitCode,
+      0,
+      'isolated merge worker fails closed when a required staged package is omitted',
+    );
+    t.match(
+      negResult.stderr,
+      /Cannot find module 'bindings'/u,
+      'isolated merge worker does not borrow bindings from checkout node_modules',
+    );
+  },
+);
+
+test(
+  'measureRuntimeContent measures installed-package layout without package-lock.json',
+  async (t) => {
+    const installedRoot = fs.mkdtempSync(join(os.tmpdir(), 'lagrange-installed-pkg-'));
+    t.teardown(() => fs.rmSync(installedRoot, {recursive: true, force: true}));
+    fs.mkdirSync(join(installedRoot, 'src'), {recursive: true});
+    fs.mkdirSync(join(installedRoot, 'node_modules', 'dep-a'), {recursive: true});
+    fs.writeFileSync(
+      join(installedRoot, 'package.json'),
+      JSON.stringify({
+        name: 'lagrange-server',
+        version: '0.4.2',
+        dependencies: {'dep-a': '1.0.0'},
+      }),
+      'utf8',
+    );
+    fs.writeFileSync(join(installedRoot, 'src', 'index.js'), 'export const ok = 1;\n', 'utf8');
+    fs.writeFileSync(
+      join(installedRoot, 'node_modules', 'dep-a', 'package.json'),
+      JSON.stringify({name: 'dep-a', version: '1.0.0'}),
+      'utf8',
+    );
+    const depFile = join(installedRoot, 'node_modules', 'dep-a', 'index.js');
+    fs.writeFileSync(depFile, 'module.exports = 1;\n', 'utf8');
+
+    const first = await measureRuntimeContent(installedRoot);
+    t.match(first.sourceDigest, /^[a-f0-9]{64}$/u, 'computes sourceDigest');
+    t.match(first.dependencyDigest, /^[a-f0-9]{64}$/u, 'computes dependencyDigest without lockfile');
+    t.match(first.manifestDigest, /^[a-f0-9]{64}$/u, 'computes manifestDigest from package.json');
+    t.ok(first.dependencyFileCount >= 2, 'counts installed node_modules package files and edges');
+
+    fs.writeFileSync(depFile, 'module.exports = 2;\n', 'utf8');
+    const second = await measureRuntimeContent(installedRoot);
+    t.equal(second.sourceDigest, first.sourceDigest, 'sourceDigest unchanged');
+    t.equal(second.manifestDigest, first.manifestDigest, 'manifestDigest unchanged');
+    t.not(
+      second.dependencyDigest,
+      first.dependencyDigest,
+      'dependencyDigest changes when installed node_modules file changes',
     );
   },
 );

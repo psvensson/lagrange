@@ -246,6 +246,45 @@ async function collectPartitionLeaderEvidence(nodes, groupA, groupB) {
   });
 }
 
+function collectCompetingLeaderPartitions(leadersByPartition) {
+  const competingLeaderPartitions = [];
+  for (const [partitionId, partitionLeaders] of leadersByPartition.entries()) {
+    if (partitionLeaders.size > ONE) {
+      competingLeaderPartitions.push({
+        partitionId,
+        leaderNodeIds: [...partitionLeaders.keys()].sort(),
+      });
+    }
+  }
+  return competingLeaderPartitions;
+}
+
+function buildPartitionSafetyReasons({
+  leaderEvidence,
+  unknownLeaderObservations,
+  competingLeaderPartitions,
+  minorityLeaderObservations,
+  majorityLeaderObservation,
+}) {
+  const reasons = [];
+  if (leaderEvidence.queryErrors.length > ZERO) {
+    reasons.push(PARTITION_SAFETY_REASON.LOCAL_QUERY_FAILED);
+  }
+  if (unknownLeaderObservations.length > ZERO) {
+    reasons.push(PARTITION_SAFETY_REASON.LEADER_IDENTITY_UNKNOWN);
+  }
+  if (competingLeaderPartitions.length > ZERO) {
+    reasons.push(PARTITION_SAFETY_REASON.COMPETING_LEADERS);
+  }
+  if (minorityLeaderObservations.length > ZERO) {
+    reasons.push(PARTITION_SAFETY_REASON.MINORITY_LEADER_PRESENT);
+  }
+  if (!majorityLeaderObservation) {
+    reasons.push(PARTITION_SAFETY_REASON.MAJORITY_LEADER_MISSING);
+  }
+  return reasons;
+}
+
 function buildPartitionSafetySnapshot(leaderEvidence, groupA, groupB) {
   const majorityNodeIds = new Set(groupA);
   const minorityNodeIds = new Set(groupB);
@@ -273,36 +312,18 @@ function buildPartitionSafetySnapshot(leaderEvidence, groupA, groupB) {
     }
   }
 
-  const competingLeaderPartitions = [];
-  for (const [partitionId, partitionLeaders] of leadersByPartition.entries()) {
-    if (partitionLeaders.size > ONE) {
-      competingLeaderPartitions.push({
-        partitionId,
-        leaderNodeIds: [...partitionLeaders.keys()].sort(),
-      });
-    }
-  }
-
+  const competingLeaderPartitions =
+    collectCompetingLeaderPartitions(leadersByPartition);
   const majorityLeaderObservation = leaderEvidence.observations.find(
     (observation) => majorityNodeIds.has(observation.leaderNodeId),
   );
-
-  const reasons = [];
-  if (leaderEvidence.queryErrors.length > ZERO) {
-    reasons.push(PARTITION_SAFETY_REASON.LOCAL_QUERY_FAILED);
-  }
-  if (unknownLeaderObservations.length > ZERO) {
-    reasons.push(PARTITION_SAFETY_REASON.LEADER_IDENTITY_UNKNOWN);
-  }
-  if (competingLeaderPartitions.length > ZERO) {
-    reasons.push(PARTITION_SAFETY_REASON.COMPETING_LEADERS);
-  }
-  if (minorityLeaderObservations.length > ZERO) {
-    reasons.push(PARTITION_SAFETY_REASON.MINORITY_LEADER_PRESENT);
-  }
-  if (!majorityLeaderObservation) {
-    reasons.push(PARTITION_SAFETY_REASON.MAJORITY_LEADER_MISSING);
-  }
+  const reasons = buildPartitionSafetyReasons({
+    leaderEvidence,
+    unknownLeaderObservations,
+    competingLeaderPartitions,
+    minorityLeaderObservations,
+    majorityLeaderObservation,
+  });
 
   return Object.freeze({
     status: reasons.length === ZERO ?

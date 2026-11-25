@@ -28,6 +28,8 @@ function matchesRemoteReentryOperation(expected, operation) {
   }
 }
 
+const NO_DEFERRED_OUTCOME = null;
+
 async function observeRemoteReentryAuthority(repository, expected) {
   const observation = await repository.queryAuthoritativeOperationVisibilityObservation(
     expected.operationId,
@@ -40,7 +42,7 @@ async function observeRemoteReentryAuthority(repository, expected) {
   return {
     operation: matchesRemoteReentryOperation(expected, observation.operation) ?
       observation.operation : null,
-    deferredOutcome: null,
+    deferredOutcome: NO_DEFERRED_OUTCOME,
   };
 }
 

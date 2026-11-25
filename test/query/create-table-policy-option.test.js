@@ -30,6 +30,9 @@ function createService(submittedMutations) {
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
+      async readRows() {
+        return {success: true, rows: []};
+      },
       async submitMutation(mutation, options) {
         submittedMutations.push({mutation, options});
         return {

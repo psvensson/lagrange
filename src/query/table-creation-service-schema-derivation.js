@@ -42,28 +42,23 @@ const SQL_TYPE_MAP = Object.freeze(Object.assign(Object.create(null), {
   TIME: 'NUMERIC',
 }));
 
-
 /**
  * Derive partition key from PRIMARY KEY columns.
  * Requirement 20.1: Automatically use PRIMARY KEY as partition key.
  * @param {Array<string>} primaryKey - PRIMARY KEY column names.
  * @return {string} Partition key (comma-separated for composite keys).
- * @private
  */
 function derivePartitionKey(primaryKey) {
   if (!primaryKey || primaryKey.length === 0) {
     throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL);
   }
-
-  // For composite PRIMARY KEY, use all columns as partition key
   return primaryKey.join(TABLE_CREATION_SERVICE_LITERAL.EMPTY);
 }
 
 /**
  * Normalize data type to SQLite-compatible type.
- * @param {Object} dataType - Data type AST.
+ * @param {Object|string|null} dataType - Data type AST or name.
  * @return {string} Normalized type name.
- * @private
  */
 function normalizeDataType(dataType) {
   const rawName = typeof dataType === TYPEOF_STRING ? dataType : dataType?.name;
@@ -92,7 +87,7 @@ function resolveDerivationColumns(columnsOrAst) {
   return Array.isArray(columnsOrAst?.columns) ? columnsOrAst.columns : [];
 }
 
-function resolveDerivationConstraints(columnsOrAst, tableConstraints) {
+function extractTableConstraints(columnsOrAst, tableConstraints = []) {
   if (Array.isArray(tableConstraints) && tableConstraints.length > 0) {
     return tableConstraints;
   }
@@ -102,7 +97,7 @@ function resolveDerivationConstraints(columnsOrAst, tableConstraints) {
 }
 
 function unpackSchemaDerivationArgs(columnsOrAst, tableConstraints, primaryKey) {
-  const constraints = resolveDerivationConstraints(
+  const constraints = extractTableConstraints(
     columnsOrAst,
     Array.isArray(tableConstraints) ?
       tableConstraints :
@@ -133,10 +128,10 @@ function normalizeColumnCollation(collation) {
   return upper;
 }
 
-function formatDerivedColumn(service, col) {
+function buildColumnMetadata(col) {
   return {
     name: col.name,
-    type: service.normalizeDataType(col.dataType ?? col.type ?? null),
+    type: normalizeDataType(col.dataType ?? col.type ?? null),
     collation: normalizeColumnCollation(col.collation),
     primaryKey: Boolean(col.primaryKey),
     notNull: col.notNull === true || col.nullable === false,
@@ -144,6 +139,64 @@ function formatDerivedColumn(service, col) {
     checkSql: col.checkSql || null,
     defaultValue: deriveDefaultSqlLiteral(col.defaultValue),
   };
+}
+
+function extractColumnNames(columnsOrAst) {
+  return resolveDerivationColumns(columnsOrAst).map((col) => col.name);
+}
+
+function findPrimaryKeyColumn(columnsOrAst, primaryKey = null) {
+  if (Array.isArray(primaryKey) && primaryKey.length > 0) {
+    return primaryKey[0];
+  }
+  const columns = resolveDerivationColumns(columnsOrAst);
+  const pkColumn = columns.find((col) => col.primaryKey);
+  return pkColumn ? pkColumn.name : null;
+}
+
+function extractNotNullColumns(columnsOrAst) {
+  return resolveDerivationColumns(columnsOrAst)
+    .filter((col) => col.notNull === true || col.nullable === false)
+    .map((col) => col.name);
+}
+
+function extractColumnTypes(columnsOrAst) {
+  return Object.fromEntries(
+    resolveDerivationColumns(columnsOrAst).map((col) => [
+      col.name,
+      normalizeDataType(col.dataType ?? col.type ?? null),
+    ]),
+  );
+}
+
+function extractColumnDefaults(columnsOrAst) {
+  return Object.fromEntries(
+    resolveDerivationColumns(columnsOrAst).map((col) => [
+      col.name,
+      deriveDefaultSqlLiteral(col.defaultValue),
+    ]),
+  );
+}
+
+function extractColumnCollations(columnsOrAst) {
+  return Object.fromEntries(
+    resolveDerivationColumns(columnsOrAst).map((col) => [
+      col.name,
+      normalizeColumnCollation(col.collation),
+    ]),
+  );
+}
+
+function extractUniqueColumns(columnsOrAst) {
+  return resolveDerivationColumns(columnsOrAst)
+    .filter((col) => Boolean(col.unique))
+    .map((col) => col.name);
+}
+
+function extractColumnCheckConstraints(columnsOrAst) {
+  return resolveDerivationColumns(columnsOrAst)
+    .filter((col) => Boolean(col.checkSql))
+    .map((col) => ({name: col.name, checkSql: col.checkSql}));
 }
 
 /**
@@ -163,48 +216,43 @@ function requireBinaryKeyColumns(columns, primaryKey) {
   }
 }
 
-const SCHEMA_DERIVATION_METHODS = Object.freeze({
-  derivePartitionKey,
-
-  /**
-   * Build schema definition from column AST.
-   * @param {Array<Object>|Object} columnsOrAst - Column definitions or AST.
-   * @param {Array<Object>} [tableConstraints=[]] - Table constraints.
-   * @param {Array<string>|null} [primaryKey=null] - Table primary key columns.
-   * @return {Object} Schema definition.
-   * @private
-   */
-  buildSchemaDefinition(columnsOrAst, tableConstraints = [], primaryKey = null) {
-    const {columns, constraints, pk} = unpackSchemaDerivationArgs(
-      columnsOrAst,
-      tableConstraints,
-      primaryKey,
-    );
-    const derivedPk = Array.isArray(pk) && pk.length > 0 ?
-      pk :
-      columns.filter((col) => col.primaryKey).map((col) => col.name);
-    const derivedColumns = columns.map((col) => formatDerivedColumn(this, col));
-    requireBinaryKeyColumns(derivedColumns, derivedPk);
-    return {
-      columns: derivedColumns,
-      primaryKey: derivedPk.length > 0 ? derivedPk : (pk || null),
-      tableConstraints: Array.isArray(constraints) ? constraints : [],
-    };
-  },
-
-  normalizeDataType,
-});
-
-function defineTableCreationSchemaDerivation(serviceClass) {
-  for (const [methodName, methodImpl] of Object.entries(
-    SCHEMA_DERIVATION_METHODS,
-  )) {
-    Object.defineProperty(serviceClass.prototype, methodName, {
-      configurable: true,
-      value: methodImpl,
-      writable: true,
-    });
-  }
+/**
+ * Build schema definition from column AST.
+ * @param {Array<Object>|Object} columnsOrAst - Column definitions or AST.
+ * @param {Array<Object>|Object} [tableConstraints=[]] - Table constraints or AST.
+ * @param {Array<string>|null} [primaryKey=null] - Table primary key columns.
+ * @return {Object} Schema definition.
+ */
+function buildSchemaDefinition(columnsOrAst, tableConstraints = [], primaryKey = null) {
+  const {columns, constraints, pk} = unpackSchemaDerivationArgs(
+    columnsOrAst,
+    tableConstraints,
+    primaryKey,
+  );
+  const derivedPk = Array.isArray(pk) && pk.length > 0 ?
+    pk :
+    columns.filter((col) => col.primaryKey).map((col) => col.name);
+  const derivedColumns = columns.map(buildColumnMetadata);
+  requireBinaryKeyColumns(derivedColumns, derivedPk);
+  return {
+    columns: derivedColumns,
+    primaryKey: derivedPk.length > 0 ? derivedPk : (pk || null),
+    tableConstraints: Array.isArray(constraints) ? constraints : [],
+  };
 }
 
-export {defineTableCreationSchemaDerivation};
+export {
+  buildColumnMetadata,
+  buildSchemaDefinition,
+  derivePartitionKey,
+  extractColumnCheckConstraints,
+  extractColumnCollations,
+  extractColumnDefaults,
+  extractColumnNames,
+  extractColumnTypes,
+  extractNotNullColumns,
+  extractTableConstraints,
+  extractUniqueColumns,
+  findPrimaryKeyColumn,
+  normalizeDataType,
+};

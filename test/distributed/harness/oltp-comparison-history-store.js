@@ -1407,9 +1407,9 @@ function buildLab3NodeProgressionEntryFromReceipt(receipt, metadata = {}) {
 
 function validateVersionedProgressionRecord(progression) {
   if (!isPlainObject(progression)) throw new Error('Versioned progression must be an object');
-  const entries = progression.lab3NodeProgression ?? progression.lab3NodeRuns;
+  const entries = progression.lab3NodeRuns;
   if (!Array.isArray(entries) || entries.length === 0) {
-    throw new Error('Versioned progression missing non-empty lab3NodeRuns/lab3NodeProgression');
+    throw new Error('Versioned progression missing non-empty lab3NodeRuns');
   }
   for (const entry of entries) validateLab3NodeProgressionEntry(entry);
   return progression;

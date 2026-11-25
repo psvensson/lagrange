@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T19:11:15.860Z",
-  "rawViolationCount": 929,
+  "generatedAt": "2026-11-25T10:44:29.748Z",
+  "rawViolationCount": 923,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -3596,7 +3596,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 258,
+      "line": 294,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "typeof_dual_paths",
@@ -3605,7 +3605,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 288,
+      "line": 328,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "typeof_dual_paths",
@@ -3614,7 +3614,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 359,
+      "line": 399,
       "column": 6,
       "functionName": "getControlPlaneWriteRetryOptions",
       "kind": "typeof_dual_paths",
@@ -3623,7 +3623,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 366,
+      "line": 406,
       "column": 6,
       "functionName": "getControlPlaneWriteRetryOptions",
       "kind": "typeof_dual_paths",
@@ -4172,7 +4172,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 37,
+      "line": 43,
       "column": 2,
       "functionName": "resolvePartitionServiceInstance",
       "kind": "typeof_dual_paths",
@@ -4181,7 +4181,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 45,
+      "line": 51,
       "column": 14,
       "functionName": "resolveEnginePartitionInstance",
       "kind": "typeof_dual_paths",
@@ -4190,7 +4190,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 246,
+      "line": 252,
       "column": 4,
       "functionName": "_hasEngineTableInfo",
       "kind": "typeof_dual_paths",
@@ -4199,7 +4199,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 253,
+      "line": 259,
       "column": 4,
       "functionName": "_hasCachedTableConfig",
       "kind": "typeof_dual_paths",
@@ -4640,7 +4640,7 @@
     },
     {
       "filePath": "src/node/replica-cleanup-tombstone-owner.js",
-      "line": 147,
+      "line": 153,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -4649,7 +4649,7 @@
     },
     {
       "filePath": "src/node/replica-cleanup-tombstone-owner.js",
-      "line": 153,
+      "line": 159,
       "column": 4,
       "functionName": "observeReplica",
       "kind": "typeof_dual_paths",
@@ -5018,7 +5018,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-generator.js",
-      "line": 480,
+      "line": 567,
       "column": 8,
       "functionName": "deliverEvent",
       "kind": "typeof_dual_paths",
@@ -5099,7 +5099,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 109,
+      "line": 110,
       "column": 4,
       "functionName": "resolvePromotionReplicationTarget",
       "kind": "typeof_dual_paths",
@@ -5234,7 +5234,7 @@
     },
     {
       "filePath": "src/partition/partition-split-routing.js",
-      "line": 278,
+      "line": 279,
       "column": 8,
       "functionName": "routeSplitSnapshotBatch",
       "kind": "typeof_dual_paths",
@@ -5971,81 +5971,27 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/query/table-creation-service-class.js",
-      "line": 76,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-class.js",
-      "line": 81,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-class.js",
-      "line": 137,
-      "column": 6,
-      "functionName": "setPartitionProvisioner",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-create-table.js",
-      "line": 96,
-      "column": 2,
-      "functionName": "requireDurableMetadataGateway",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 103,
-      "column": 6,
-      "functionName": "getTableRecord",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 146,
-      "column": 6,
-      "functionName": "getPartitionRecord",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/query/table-creation-service-partition-provisioning.js",
-      "line": 41,
+      "line": 31,
       "column": 4,
-      "functionName": "provisionInitialPartition",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-partition-provisioning.js",
-      "line": 109,
-      "column": 6,
       "functionName": "resolveDefaultMinimumRoutableReplicaCount",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/query/table-creation-service-partition-provisioning.js",
+      "line": 120,
+      "column": 2,
+      "functionName": "provisionInitialPartition",
+      "kind": "typeof_dual_paths",
+      "reason": "typeof dual path; keep one path and delete the other",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 334,
-      "column": 4,
+      "line": 162,
+      "column": 2,
       "functionName": "requestSplitMergeEvaluation",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
@@ -8204,7 +8150,7 @@
     },
     {
       "filePath": "src/workflow/durable-workflow-coordinator.js",
-      "line": 459,
+      "line": 451,
       "column": 30,
       "functionName": "restoreRecoveredParticipantRow",
       "kind": "typeof_dual_paths",
@@ -8213,7 +8159,7 @@
     },
     {
       "filePath": "src/workflow/durable-workflow-coordinator.js",
-      "line": 614,
+      "line": 606,
       "column": 27,
       "functionName": "restoreRecoveredWorkflowRow",
       "kind": "typeof_dual_paths",
@@ -8222,7 +8168,7 @@
     },
     {
       "filePath": "src/workflow/durable-workflow-coordinator.js",
-      "line": 620,
+      "line": 612,
       "column": 4,
       "functionName": "restoreRecoveredWorkflowRow",
       "kind": "typeof_dual_paths",

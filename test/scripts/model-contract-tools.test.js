@@ -12,8 +12,16 @@ import {
   verifyAlloyArchive,
   verifyAlloyBinary,
 } from '../../scripts/check-alloy-models.js';
-import {validateDecisionTables} from '../../scripts/check-decision-tables.js';
-import {validateStatecharts} from '../../scripts/check-statecharts.js';
+import {
+  DECISION_TABLE_JSON_SCHEMA,
+  validateDecisionTableSchema,
+  validateDecisionTables,
+} from '../../scripts/check-decision-tables.js';
+import {
+  STATECHART_JSON_SCHEMA,
+  validateStatechartSchema,
+  validateStatecharts,
+} from '../../scripts/check-statecharts.js';
 import {validateSystemContracts} from '../../scripts/check-system-contracts.js';
 
 const CONTRACT_FILES = [
@@ -237,5 +245,92 @@ tap.test('decision-rule validation retains refusal order and complete coverage',
     t.same(validateDecisionTables([file]).errors,
       control.errors.map((message) => prefix + message));
   }
+  t.end();
+});
+
+tap.test('compiled Ajv schemas enforce strict additionalProperties on statecharts and decision tables', (t) => {
+  const root = tmpDir();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  t.equal(STATECHART_JSON_SCHEMA.additionalProperties, false);
+  t.equal(DECISION_TABLE_JSON_SCHEMA.additionalProperties, false);
+
+  const validRule = {
+    id: 'ready',
+    reason: 'Ready input permits work.',
+    invariantRefs: ['only-ready'],
+    when: {signal: 'ready'},
+    outcome: {result: 'allow'},
+  };
+  const validTable = decisionTableControl(validRule);
+  t.equal(validateDecisionTableSchema(validTable), true);
+  t.equal(validateDecisionTableSchema({...validTable, unexpectedTopLevel: true}), false);
+  t.equal(
+    validateDecisionTableSchema({
+      ...validTable,
+      rules: [{...validRule, unexpectedRuleField: 'x'}],
+    }),
+    false,
+  );
+
+  const tableFile = path.join(root, 'bad-decision-table.json');
+  fs.writeFileSync(
+    tableFile,
+    JSON.stringify({
+      ...validTable,
+      unexpectedTopLevel: true,
+      rules: [{...validRule, unexpectedRuleField: 'x'}],
+    }),
+  );
+  const tableErrors = validateDecisionTables([tableFile]).errors;
+  t.ok(tableErrors.some((err) => err.includes('unsupported property unexpectedTopLevel')));
+  t.ok(tableErrors.some((err) => err.includes('rules[0] contains unsupported property unexpectedRuleField')));
+
+  const validStatechart = {
+    schema: 'statechart-v1',
+    id: 'validator-statechart',
+    initial: 'idle',
+    states: [
+      {id: 'idle', description: 'Waiting for work.'},
+      {id: 'done', description: 'Work finished.'},
+    ],
+    terminalStates: ['done'],
+    transitions: [
+      {from: 'idle', event: 'finish', to: 'done', evidence: 'Measured green.'},
+    ],
+    forbiddenTransitions: [
+      {from: 'done', event: 'reopen', to: 'idle', reason: 'Terminal state is immutable.'},
+    ],
+    invariants: [
+      {id: 'terminal-stays-done', statement: 'Done never reopens.'},
+    ],
+  };
+  t.equal(validateStatechartSchema(validStatechart), true);
+  t.equal(validateStatechartSchema({...validStatechart, extraRootField: true}), false);
+  t.equal(
+    validateStatechartSchema({
+      ...validStatechart,
+      states: [
+        {id: 'idle', description: 'Waiting for work.', extraStateField: true},
+        {id: 'done', description: 'Work finished.'},
+      ],
+    }),
+    false,
+  );
+
+  const statechartFile = path.join(root, 'bad-statechart.json');
+  fs.writeFileSync(
+    statechartFile,
+    JSON.stringify({
+      ...validStatechart,
+      extraRootField: true,
+      states: [
+        {id: 'idle', description: 'Waiting for work.', extraStateField: true},
+        {id: 'done', description: 'Work finished.'},
+      ],
+    }),
+  );
+  const statechartErrors = validateStatecharts([statechartFile]).errors;
+  t.ok(statechartErrors.some((err) => err.includes('unsupported property extraRootField')));
+  t.ok(statechartErrors.some((err) => err.includes('states[0] contains unsupported property extraStateField')));
   t.end();
 });

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T19:11:15.804Z",
-  "rawViolationCount": 1867,
+  "generatedAt": "2026-11-25T10:44:29.735Z",
+  "rawViolationCount": 1856,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -1175,7 +1175,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-seed-workflow.js",
-      "line": 496,
+      "line": 484,
       "column": 14,
       "functionName": "run",
       "kind": "owner_port_feature_detection",
@@ -1184,7 +1184,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-seed-workflow.js",
-      "line": 657,
+      "line": 645,
       "column": 9,
       "functionName": "isExternalAdmissionOpen",
       "kind": "owner_port_feature_detection",
@@ -5459,7 +5459,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
-      "line": 393,
+      "line": 408,
       "column": 6,
       "functionName": "assertSqlQueryEngine",
       "kind": "owner_port_feature_detection",
@@ -5486,7 +5486,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
-      "line": 46,
+      "line": 53,
       "column": 6,
       "functionName": "readRows",
       "kind": "owner_port_feature_detection",
@@ -6674,7 +6674,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 258,
+      "line": 294,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -6683,7 +6683,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 262,
+      "line": 298,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -6692,7 +6692,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 275,
+      "line": 315,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -6701,7 +6701,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 288,
+      "line": 328,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -6710,7 +6710,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 291,
+      "line": 331,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -6719,7 +6719,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 359,
+      "line": 399,
       "column": 6,
       "functionName": "getControlPlaneWriteRetryOptions",
       "kind": "owner_port_feature_detection",
@@ -6728,7 +6728,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 366,
+      "line": 406,
       "column": 6,
       "functionName": "getControlPlaneWriteRetryOptions",
       "kind": "owner_port_feature_detection",
@@ -6737,7 +6737,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 372,
+      "line": 412,
       "column": 8,
       "functionName": "getControlPlaneWriteRetryOptions",
       "kind": "owner_port_feature_detection",
@@ -8033,7 +8033,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 37,
+      "line": 43,
       "column": 6,
       "functionName": "resolvePartitionServiceInstance",
       "kind": "owner_port_feature_detection",
@@ -8042,7 +8042,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 43,
+      "line": 49,
       "column": 6,
       "functionName": "resolveEnginePartitionInstance",
       "kind": "owner_port_feature_detection",
@@ -8051,7 +8051,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 45,
+      "line": 51,
       "column": 42,
       "functionName": "resolveEnginePartitionInstance",
       "kind": "owner_port_feature_detection",
@@ -8060,7 +8060,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 246,
+      "line": 252,
       "column": 8,
       "functionName": "_hasEngineTableInfo",
       "kind": "owner_port_feature_detection",
@@ -8069,7 +8069,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 253,
+      "line": 259,
       "column": 8,
       "functionName": "_hasCachedTableConfig",
       "kind": "owner_port_feature_detection",
@@ -8078,7 +8078,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 314,
+      "line": 313,
       "column": 33,
       "functionName": "validateIndexCreation",
       "kind": "owner_port_feature_detection",
@@ -8969,7 +8969,7 @@
     },
     {
       "filePath": "src/node/replica-cleanup-tombstone-owner.js",
-      "line": 147,
+      "line": 153,
       "column": 15,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -8978,7 +8978,7 @@
     },
     {
       "filePath": "src/node/replica-cleanup-tombstone-owner.js",
-      "line": 153,
+      "line": 159,
       "column": 8,
       "functionName": "observeReplica",
       "kind": "owner_port_feature_detection",
@@ -9968,7 +9968,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 110,
+      "line": 111,
       "column": 4,
       "functionName": "resolvePromotionReplicationTarget",
       "kind": "owner_port_feature_detection",
@@ -9977,7 +9977,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 197,
+      "line": 198,
       "column": 6,
       "functionName": "getPriorityRecoveryOperationContextsForLearnerPromotion",
       "kind": "owner_port_feature_detection",
@@ -9986,7 +9986,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 548,
+      "line": 549,
       "column": 6,
       "functionName": "readInFlightAddLikeOperationRowsForPromotion",
       "kind": "owner_port_feature_detection",
@@ -10409,7 +10409,7 @@
     },
     {
       "filePath": "src/partition/partition-split-routing.js",
-      "line": 209,
+      "line": 210,
       "column": 4,
       "functionName": "routeSplitMirroredWrite",
       "kind": "owner_port_feature_detection",
@@ -10418,7 +10418,7 @@
     },
     {
       "filePath": "src/partition/partition-split-routing.js",
-      "line": 278,
+      "line": 279,
       "column": 8,
       "functionName": "routeSplitSnapshotBatch",
       "kind": "owner_port_feature_detection",
@@ -11111,7 +11111,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 241,
+      "line": 303,
       "column": 6,
       "functionName": "maybeAwaitRuntimeRoutingRepair",
       "kind": "owner_port_feature_detection",
@@ -11120,7 +11120,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 274,
+      "line": 336,
       "column": 6,
       "functionName": "maybeAwaitRuntimeRoutingRepair",
       "kind": "owner_port_feature_detection",
@@ -11129,7 +11129,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 304,
+      "line": 366,
       "column": 6,
       "functionName": "refreshRoutingMetadataOverlay",
       "kind": "owner_port_feature_detection",
@@ -11912,7 +11912,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-persistence-methods.js",
-      "line": 548,
+      "line": 553,
       "column": 8,
       "functionName": "readDistributedTransactionRow",
       "kind": "owner_port_feature_detection",
@@ -11965,125 +11965,53 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/query/table-creation-service-class.js",
-      "line": 76,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-class.js",
-      "line": 81,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-create-table.js",
-      "line": 96,
-      "column": 6,
-      "functionName": "requireDurableMetadataGateway",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 41,
-      "column": 6,
-      "functionName": "findExistingTableRecord",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 74,
-      "column": 6,
-      "functionName": "findExistingPartitionRecord",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 104,
-      "column": 8,
-      "functionName": "getTableRecord",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 117,
-      "column": 8,
-      "functionName": "getTableRecord",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 147,
-      "column": 8,
-      "functionName": "getPartitionRecord",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 160,
-      "column": 8,
-      "functionName": "getPartitionRecord",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 189,
-      "column": 8,
-      "functionName": "getPartitionKey",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 215,
-      "column": 8,
-      "functionName": "getTableSchema",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/query/table-creation-service-partition-provisioning.js",
-      "line": 42,
-      "column": 6,
-      "functionName": "provisionInitialPartition",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-partition-provisioning.js",
-      "line": 109,
-      "column": 6,
+      "line": 31,
+      "column": 4,
       "functionName": "resolveDefaultMinimumRoutableReplicaCount",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/query/table-creation-service-partition-provisioning.js",
+      "line": 121,
+      "column": 4,
+      "functionName": "provisionInitialPartition",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 123,
+      "line": 137,
+      "column": 4,
+      "functionName": "attachCachePolicyListener",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
+      "line": 138,
+      "column": 4,
+      "functionName": "attachCachePolicyListener",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
+      "line": 140,
+      "column": 5,
+      "functionName": "attachCachePolicyListener",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
+      "line": 142,
       "column": 6,
       "functionName": "attachCachePolicyListener",
       "kind": "owner_port_feature_detection",
@@ -12092,34 +12020,25 @@
     },
     {
       "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 124,
-      "column": 6,
-      "functionName": "attachCachePolicyListener",
+      "line": 163,
+      "column": 4,
+      "functionName": "requestSplitMergeEvaluation",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
       "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 126,
-      "column": 7,
-      "functionName": "attachCachePolicyListener",
+      "line": 244,
+      "column": 4,
+      "functionName": "startPeriodicSplitMergeEvaluation",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
       "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 128,
-      "column": 8,
-      "functionName": "attachCachePolicyListener",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 151,
+      "line": 290,
       "column": 6,
       "functionName": "detachCachePolicyListener",
       "kind": "owner_port_feature_detection",
@@ -12128,16 +12047,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 335,
-      "column": 6,
-      "functionName": "requestSplitMergeEvaluation",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 354,
+      "line": 338,
       "column": 6,
       "functionName": "evaluateSplitMergeLifecycle",
       "kind": "owner_port_feature_detection",
@@ -12146,16 +12056,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 376,
-      "column": 6,
-      "functionName": "startPeriodicSplitMergeEvaluation",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 392,
+      "line": 359,
       "column": 6,
       "functionName": "stopPeriodicSplitMergeEvaluation",
       "kind": "owner_port_feature_detection",
@@ -12794,7 +12695,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
-      "line": 503,
+      "line": 465,
       "column": 10,
       "functionName": "executeOperationInternal",
       "kind": "owner_port_feature_detection",
@@ -12803,7 +12704,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
-      "line": 1147,
+      "line": 1115,
       "column": 6,
       "functionName": "reconcileCreateInProgressDispatchResponse",
       "kind": "owner_port_feature_detection",
@@ -12812,7 +12713,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
-      "line": 1149,
+      "line": 1117,
       "column": 6,
       "functionName": "reconcileCreateInProgressDispatchResponse",
       "kind": "owner_port_feature_detection",
@@ -13559,7 +13460,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-observation.js",
-      "line": 512,
+      "line": 514,
       "column": 6,
       "functionName": "getPriorityRecoveryDecisionSnapshotForPartitionOperations",
       "kind": "owner_port_feature_detection",

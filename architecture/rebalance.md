@@ -76,7 +76,7 @@ validation (`src/raft/snapshot-checkpoint-constants.js`,
 `src/raft/snapshot-checkpoint-store.js`,
 `src/raft/snapshot-application-content.js`), atomic install at the
 closed-handle boot boundary (`src/raft/snapshot-install.js`,
-`src/raft/snapshot-install-constants.js`, `src/raft/snapshot-boundary.js`),
+`src/raft/snapshot-install-constants.js`),
 bulk transfer over a dedicated byte-bounded per-peer channel
 (`src/raft/snapshot-transfer.js`, `src/raft/snapshot-transfer-constants.js`,
 `src/raft/snapshot-transfer-receiver.js`,

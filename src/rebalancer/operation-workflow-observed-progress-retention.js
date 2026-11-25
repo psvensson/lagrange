@@ -1,4 +1,6 @@
 import {clearTerminalTransitionRepair} from './operation-workflow-terminal-transition-repair.js';
+import {operationCarriesReplicaCreateAdmission} from
+  './replica-operation-create-admission-fields.js';
 import {assertOperationUpdateRecord, assertOperationUpdateSubject} from
   './replica-operation-update-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -70,6 +72,35 @@ function reportDeliveredCreateProgressSpent(owner, retryEntry, now) {
       operationId: operation.operationId || null,
     },
   });
+}
+
+function isCreateProgressRetentionScope(operation, partitionClassification) {
+  if (operationCarriesReplicaCreateAdmission(operation)) {
+    return true;
+  }
+  return operation?.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+    partitionClassification.systemTable !== true;
+}
+
+function shouldCompleteDeliveredCreateProgress(owner, operation) {
+  if (!operation) {
+    return false;
+  }
+  if (
+    owner.repository.isOperationTerminal(operation) ||
+    !owner.repository.isOperationLocallyOwned(operation)
+  ) {
+    return true;
+  }
+  if (
+    operationCarriesReplicaCreateAdmission(operation) &&
+    !owner.repository.isReplaceRemovePhase(operation)
+  ) {
+    return false;
+  }
+  return !RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS.has(
+    operation.workflowStep,
+  );
 }
 
 function withObservedProgressRetention(Base) {
@@ -227,13 +258,12 @@ function withObservedProgressRetention(Base) {
       });
       return [
         replaceRemovePhase !== true,
-        operation?.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        isCreateProgressRetentionScope(operation, partitionClassification),
         operation?.type === OperationType.ADD ||
           operation?.type === OperationType.REPLACE,
         RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS.has(
           operation?.workflowStep,
         ),
-        partitionClassification.systemTable !== true,
         DELIVERED_CREATE_PROGRESS_RESPONSE_STATUSES.has(response?.status),
       ].every(Boolean);
     }
@@ -311,16 +341,7 @@ function withObservedProgressRetention(Base) {
           },
         );
       const operation = visibilityObservation?.operation || null;
-      if (
-        operation &&
-        (
-          this.repository.isOperationTerminal(operation) ||
-          !this.repository.isOperationLocallyOwned(operation) ||
-          !RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS.has(
-            operation.workflowStep,
-          )
-        )
-      ) {
+      if (shouldCompleteDeliveredCreateProgress(this, operation)) {
         return true;
       }
       return this.rearmDeliveredCreateProgress({

@@ -133,6 +133,9 @@ function createDeadlineFixture(options = {}) {
   }));
   const services = [];
   const systemCache = {
+    find(tableName, predicate) {
+      return this.getAll(tableName).find(predicate) || null;
+    },
     getAll(tableName) {
       if (tableName === TABLES.NODES) return nodes;
       if (tableName === TABLES.SERVICES) return services;
@@ -270,6 +273,9 @@ function createDeadlineFixture(options = {}) {
   engine.tableCreationService.setControlPlaneSystemTableGateway({
     async readRows() {
       return {success: true, rows: []};
+    },
+    async submitMutation() {
+      return {success: true};
     },
   });
   // This fixture attacks the inner provisioning deadline. Durable schema-job

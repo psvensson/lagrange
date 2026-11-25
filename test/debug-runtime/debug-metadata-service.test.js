@@ -144,6 +144,7 @@ describe('DebugMetadataStore gateway ownership and authz', () => {
     assert.equal(updated.nodeId, 'node-b');
     assert.equal(updated.stageId, 2);
     assert.equal(updated.lineageId, 'lineage-3b');
+    assert.equal('updateSessionEndpoint' in store, false);
 
     const detached = await store.detachSession({
       securityContext: SECURITY_ADMIN,

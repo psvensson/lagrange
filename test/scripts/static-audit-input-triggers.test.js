@@ -8,10 +8,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {test} from 'node:test';
 import {
+  COMPOSITE_SUBTASKS,
+  PRIORITY_AUDIT_SCRIPTS,
+  PROOF_OBLIGATIONS_JSON_SCHEMA,
+  SERIAL_FIRST_AUDIT_SCRIPTS,
+  STATIC_AUDIT_SCRIPTS,
   auditIsOwed,
   inputMatches,
+  loadProofObligationsRegistry,
   skippingIsAdmissible,
+  validateProofObligationsSchema,
 } from '../../scripts/checks/run-static-audits.js';
+import {
+  logicalOwnerAndAmbiguitySummary,
+} from '../../scripts/generate-global-owner-debt-inventory.js';
 
 const REGISTRY_PATH = 'test/manifests/proof-obligations.json';
 const UTF8 = 'utf8';
@@ -124,4 +134,94 @@ test('every obligation declares the checkers directory, because a checker decide
     assert.ok(obligation.inputs.includes('scripts/**'),
       `${obligation.command} must re-run when its own implementation changes`);
   }
+});
+
+test('proof-obligations.json validates against PROOF_OBLIGATIONS_JSON_SCHEMA and drives static audit configuration', () => {
+  const data = registry();
+  assert.equal(PROOF_OBLIGATIONS_JSON_SCHEMA.additionalProperties, false);
+  assert.equal(validateProofObligationsSchema(data), true);
+  assert.equal(validateProofObligationsSchema({...data, extraTopField: true}), false);
+  const loaded = loadProofObligationsRegistry();
+  assert.equal(STATIC_AUDIT_SCRIPTS.length, 23);
+  assert.deepEqual(loaded.staticAuditScripts, STATIC_AUDIT_SCRIPTS);
+  assert.deepEqual(SERIAL_FIRST_AUDIT_SCRIPTS, ['steering:check']);
+  assert.ok(PRIORITY_AUDIT_SCRIPTS.includes('test:unused:prod'));
+  assert.ok(PRIORITY_AUDIT_SCRIPTS.includes('test:deps'));
+  assert.ok(PRIORITY_AUDIT_SCRIPTS.includes('test:complexity'));
+  assert.ok(PRIORITY_AUDIT_SCRIPTS.includes('test:complexity:cognitive'));
+  assert.equal(COMPOSITE_SUBTASKS['audit:guidelines'].length, 9);
+  assert.equal(COMPOSITE_SUBTASKS['test:metrics'].length, 4);
+});
+
+test('logicalOwnerAndAmbiguitySummary aggregates logical-owner footprint and unowned source fallbacks', () => {
+  const summary = logicalOwnerAndAmbiguitySummary([
+    {
+      key: 'semantic:priority_recovery_owner/priority_recovery_snapshot_projection',
+      owner: 'priority_recovery_owner',
+      boundary: 'priority_recovery_snapshot_projection',
+      classification: 'declared-owner-rule',
+      ownerAreas: ['src/control-plane'],
+      fileCount: 2,
+      signalCount: 4,
+      complexity: 2,
+      cognitive: 1,
+      oversizedFiles: 1,
+      duplicatedLines: 0,
+      cycleGroups: 0,
+      lintExclusions: 0,
+      importIn: 5,
+      importOut: 3,
+      score: 28,
+      topPaths: ['src/control-plane/priority-recovery-snapshot.js'],
+    },
+    {
+      key: 'semantic:priority_recovery_owner/priority_recovery_observation_snapshot',
+      owner: 'priority_recovery_owner',
+      boundary: 'priority_recovery_observation_snapshot',
+      classification: 'declared-owner-rule',
+      ownerAreas: ['src/control-plane'],
+      fileCount: 1,
+      signalCount: 1,
+      complexity: 1,
+      cognitive: 0,
+      oversizedFiles: 0,
+      duplicatedLines: 0,
+      cycleGroups: 0,
+      lintExclusions: 0,
+      importIn: 2,
+      importOut: 1,
+      score: 4,
+      topPaths: ['src/control-plane/priority-recovery-observation-snapshot.js'],
+    },
+    {
+      key: 'area:src/raft',
+      owner: null,
+      boundary: 'src/raft',
+      classification: 'owner-area-fallback',
+      ownerAreas: ['src/raft'],
+      fileCount: 3,
+      signalCount: 5,
+      complexity: 3,
+      cognitive: 2,
+      oversizedFiles: 0,
+      duplicatedLines: 10,
+      cycleGroups: 0,
+      lintExclusions: 0,
+      importIn: 8,
+      importOut: 4,
+      score: 29,
+      topPaths: ['src/raft/log.js'],
+    },
+  ]);
+  assert.equal(summary.declaredLogicalOwnerCount, 1);
+  assert.equal(summary.multiBoundaryLogicalOwnerCount, 1);
+  assert.equal(summary.declaredOwnerFileCount, 3);
+  assert.equal(summary.declaredOwnerSignalCount, 5);
+  assert.equal(summary.declaredOwnerScore, 32);
+  assert.equal(summary.logicalOwners[0].owner, 'priority_recovery_owner');
+  assert.equal(summary.logicalOwners[0].boundaryCount, 2);
+  assert.equal(summary.contractAmbiguity.unownedSourceBoundaryCount, 1);
+  assert.equal(summary.contractAmbiguity.unownedSourceFileCount, 3);
+  assert.equal(summary.contractAmbiguity.unownedSourceSignalCount, 5);
+  assert.equal(summary.contractAmbiguity.unownedSourceScore, 29);
 });

@@ -43,7 +43,6 @@ const {
   STRICT_PRELOAD_READINESS_NODE_REASONS_PREFIX,
   ZERO,
   buildBaselineCacheIdentity,
-  buildBaselineCacheMetadata,
   buildReplicaBootstrapCommand,
   configurePrimaryReplication,
   ensurePostgresBenchmarkTable,
@@ -56,6 +55,142 @@ const {
   waitForStreamingReplicas,
 } = POSTGRES_BASELINE_COMPARISON_ROUTING_ADMISSION_AND_REBALANCING_BUNDLE;
 
+function resolveEffectiveBaselineBenchmarkConfig(
+  benchmarkConfig,
+  baselineLoadNodeCountOverride,
+) {
+  const effectiveBaselineLoadNodeCount =
+    Number.isInteger(baselineLoadNodeCountOverride) &&
+    baselineLoadNodeCountOverride > ZERO ?
+      baselineLoadNodeCountOverride :
+      benchmarkConfig.baselineLoadNodeCount;
+  return effectiveBaselineLoadNodeCount === benchmarkConfig.baselineLoadNodeCount ?
+    benchmarkConfig :
+    {
+      ...benchmarkConfig,
+      baselineLoadNodeCount: effectiveBaselineLoadNodeCount,
+    };
+}
+
+function buildPostgresContainerEnv(baselineBenchmarkConfig) {
+  return {
+    [POSTGRES_ENV_USER_KEY]: baselineBenchmarkConfig.user,
+    [POSTGRES_ENV_PASSWORD_KEY]: baselineBenchmarkConfig.password,
+    [POSTGRES_ENV_DB_KEY]: baselineBenchmarkConfig.database,
+    [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
+  };
+}
+
+async function cleanupBaselineEnvironment(
+  provider,
+  baselinePool,
+  baselineContainers,
+) {
+  if (baselinePool && typeof baselinePool.end === 'function') {
+    try {
+      await baselinePool.end();
+    } catch (_poolEndErr) {
+      // Best-effort cleanup.
+    }
+  }
+  for (
+    let index = baselineContainers.length - ONE;
+    index >= ZERO;
+    index--
+  ) {
+    const containerId = baselineContainers[index]?.containerId;
+    if (!containerId) {
+      continue;
+    }
+    try {
+      await provider.stopContainer(containerId);
+    } catch (_stopErr) {
+      // Best-effort cleanup.
+    }
+    try {
+      await provider.removeContainer(containerId);
+    } catch (_removeErr) {
+      // Best-effort cleanup.
+    }
+  }
+}
+
+async function createBaselineReplicas({
+  provider,
+  cluster,
+  networkName,
+  benchmarkRunId,
+  primaryContainerName,
+  baselineBenchmarkConfig,
+  baselineContainers,
+  baselineReplicaContainerIps,
+}) {
+  const resourceLimits = cluster?._config?.resourceLimits || {};
+  const startTimeout = cluster?._config?.timeouts?.nodeStartup;
+  const env = buildPostgresContainerEnv(baselineBenchmarkConfig);
+  for (
+    let replicaIndex = ONE;
+    replicaIndex < baselineBenchmarkConfig.replicationFactor;
+    replicaIndex += ONE
+  ) {
+    const replicaName =
+      BENCHMARK_CONTAINER_NAME_PREFIX +
+      benchmarkRunId +
+      BENCHMARK_REPLICA_SUFFIX_PREFIX +
+      replicaIndex;
+    const replicaBootstrapCommand = buildReplicaBootstrapCommand(
+      primaryContainerName,
+      replicaName,
+      baselineBenchmarkConfig,
+    );
+    const replicaContainer = await provider.createContainer({
+      name: replicaName,
+      image: baselineBenchmarkConfig.baselineImage,
+      network: networkName,
+      env,
+      command: [SHELL_COMMAND, SHELL_LOGIN_ARG, replicaBootstrapCommand],
+      resourceLimits,
+      startTimeout,
+    });
+    baselineContainers.push(replicaContainer);
+    baselineReplicaContainerIps.push(replicaContainer.ip);
+
+    await waitForPostgresReady(provider, replicaContainer.containerId, {
+      host: LOCALHOST,
+      port: baselineBenchmarkConfig.port,
+      user: baselineBenchmarkConfig.user,
+      database: baselineBenchmarkConfig.database,
+      timeoutMs: baselineBenchmarkConfig.readyTimeoutMs,
+      pollIntervalMs: baselineBenchmarkConfig.readyPollIntervalMs,
+    });
+  }
+}
+
+async function storeBaselineMetricsBestEffort(
+  baselineCacheIdentity,
+  baselineBenchmarkConfig,
+  baselineMetrics,
+  currentMetadata,
+) {
+  try {
+    return await storeBaselineMetricsInCache(
+      baselineCacheIdentity,
+      baselineBenchmarkConfig,
+      baselineMetrics,
+    );
+  } catch (_cacheStoreErr) {
+    currentMetadata.reason = BASELINE_CACHE_INVALID_REASON;
+    return currentMetadata;
+  }
+}
+
+function resolveContainerStartupOptions(cluster) {
+  return {
+    resourceLimits: cluster?._config?.resourceLimits || {},
+    startTimeout: cluster?._config?.timeouts?.nodeStartup,
+  };
+}
+
 async function resolveBaselineMetrics({
   cluster,
   benchmarkConfig,
@@ -67,227 +202,153 @@ async function resolveBaselineMetrics({
   onProgress,
   progressHeartbeatIntervalMs,
 }) {
-  const effectiveBaselineLoadNodeCount =
-    Number.isInteger(baselineLoadNodeCountOverride) &&
-    baselineLoadNodeCountOverride > ZERO ?
-      baselineLoadNodeCountOverride :
-      benchmarkConfig.baselineLoadNodeCount;
-  const baselineBenchmarkConfig =
-    effectiveBaselineLoadNodeCount === benchmarkConfig.baselineLoadNodeCount ?
-      benchmarkConfig :
-      {
-        ...benchmarkConfig,
-        baselineLoadNodeCount: effectiveBaselineLoadNodeCount,
-      };
-  const cacheBaseDir = resolveCacheBaseDir(cluster);
+  const baselineBenchmarkConfig = resolveEffectiveBaselineBenchmarkConfig(
+    benchmarkConfig,
+    baselineLoadNodeCountOverride,
+  );
   const baselineCacheIdentity = buildBaselineCacheIdentity(
     baselineBenchmarkConfig,
-    cacheBaseDir,
+    resolveCacheBaseDir(cluster),
   );
-  let cacheMetadata = buildBaselineCacheMetadata(baselineCacheIdentity, {
-    enabled: baselineBenchmarkConfig.cacheBaselineMetrics === true,
-  });
   const cachedBaseline = await loadBaselineMetricsFromCache(
     baselineCacheIdentity,
     baselineBenchmarkConfig,
   );
-  cacheMetadata = cachedBaseline.metadata;
+  let cacheMetadata = cachedBaseline.metadata;
+
+  if (cachedBaseline.metrics) {
+    onProgress?.('reusing cached baseline metrics', {
+      cacheHit: true,
+      cacheReason: cacheMetadata.reason || BASELINE_CACHE_HIT_REASON,
+    });
+    return {
+      baselineMetrics: cachedBaseline.metrics,
+      baselineCacheMetadata: cacheMetadata,
+      baselinePrimaryContainerIp: null,
+      baselineReplicaContainerIps: [],
+      baselineLoadNodeCount: baselineBenchmarkConfig.baselineLoadNodeCount,
+      baselinePoolMaxConnections: baselineBenchmarkConfig.loadMaxInFlight,
+    };
+  }
 
   const baselineContainers = [];
   let baselinePrimaryContainerId = null;
   let baselinePrimaryContainerIp = null;
   const baselineReplicaContainerIps = [];
-  let baselineMetrics = cachedBaseline.metrics || null;
-  let baselineLoadNodeCount = baselineBenchmarkConfig.baselineLoadNodeCount;
-  let baselinePoolMaxConnections = baselineBenchmarkConfig.loadMaxInFlight;
-
-  if (baselineMetrics) {
-    onProgress?.('reusing cached baseline metrics', {
-      cacheHit: true,
-      cacheReason: cacheMetadata.reason || BASELINE_CACHE_HIT_REASON,
+  let baselineMetrics = null;
+  const baselineLoadNodeCount = Math.max(
+    ONE,
+    baselineBenchmarkConfig.baselineLoadNodeCount,
+  );
+  const baselinePoolMaxConnections = Math.max(
+    ONE,
+    baselineBenchmarkConfig.loadMaxInFlight,
+  );
+  let baselinePool = null;
+  try {
+    onProgress?.('preparing baseline comparison environment', {
+      cacheHit: false,
+      replicationFactor: baselineBenchmarkConfig.replicationFactor,
     });
-  }
+    const benchmarkRunId = Date.now();
+    const primaryContainerName =
+      BENCHMARK_CONTAINER_NAME_PREFIX +
+      benchmarkRunId +
+      BENCHMARK_PRIMARY_SUFFIX;
+    const primaryContainer = await provider.createContainer({
+      name: primaryContainerName,
+      image: baselineBenchmarkConfig.baselineImage,
+      network: networkName,
+      env: buildPostgresContainerEnv(baselineBenchmarkConfig),
+      ...resolveContainerStartupOptions(cluster),
+    });
+    baselineContainers.push(primaryContainer);
+    baselinePrimaryContainerId = primaryContainer.containerId;
+    baselinePrimaryContainerIp = primaryContainer.ip;
 
-  if (!baselineMetrics) {
-    let baselinePool = null;
-    try {
-      onProgress?.('preparing baseline comparison environment', {
-        cacheHit: false,
-        replicationFactor: baselineBenchmarkConfig.replicationFactor,
-      });
-      const benchmarkRunId = Date.now();
-      const primaryContainerName =
-        BENCHMARK_CONTAINER_NAME_PREFIX +
-        benchmarkRunId +
-        BENCHMARK_PRIMARY_SUFFIX;
-      const primaryContainer = await provider.createContainer({
-        name: primaryContainerName,
-        image: baselineBenchmarkConfig.baselineImage,
-        network: networkName,
-        env: {
-          [POSTGRES_ENV_USER_KEY]: baselineBenchmarkConfig.user,
-          [POSTGRES_ENV_PASSWORD_KEY]: baselineBenchmarkConfig.password,
-          [POSTGRES_ENV_DB_KEY]: baselineBenchmarkConfig.database,
-          [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
-        },
-        resourceLimits: cluster?._config?.resourceLimits || {},
-        startTimeout: cluster?._config?.timeouts?.nodeStartup,
-      });
-      baselineContainers.push(primaryContainer);
-      baselinePrimaryContainerId = primaryContainer.containerId;
-      baselinePrimaryContainerIp = primaryContainer.ip;
+    await waitForPostgresReady(provider, baselinePrimaryContainerId, {
+      host: LOCALHOST,
+      port: baselineBenchmarkConfig.port,
+      user: baselineBenchmarkConfig.user,
+      database: baselineBenchmarkConfig.database,
+      timeoutMs: baselineBenchmarkConfig.readyTimeoutMs,
+      pollIntervalMs: baselineBenchmarkConfig.readyPollIntervalMs,
+    });
+    onProgress?.('baseline primary ready', {
+      replicationFactor: baselineBenchmarkConfig.replicationFactor,
+    });
+    await configurePrimaryReplication(
+      provider,
+      baselinePrimaryContainerId,
+      baselineBenchmarkConfig,
+    );
+    await createBaselineReplicas({
+      provider,
+      cluster,
+      networkName,
+      benchmarkRunId,
+      primaryContainerName,
+      baselineBenchmarkConfig,
+      baselineContainers,
+      baselineReplicaContainerIps,
+    });
 
-      await waitForPostgresReady(provider, baselinePrimaryContainerId, {
-        host: LOCALHOST,
-        port: baselineBenchmarkConfig.port,
-        user: baselineBenchmarkConfig.user,
-        database: baselineBenchmarkConfig.database,
-        timeoutMs: baselineBenchmarkConfig.readyTimeoutMs,
-        pollIntervalMs: baselineBenchmarkConfig.readyPollIntervalMs,
-      });
-      onProgress?.('baseline primary ready', {
-        replicationFactor: baselineBenchmarkConfig.replicationFactor,
-      });
-      await configurePrimaryReplication(
-        provider,
-        baselinePrimaryContainerId,
-        baselineBenchmarkConfig,
-      );
+    await waitForStreamingReplicas(
+      provider,
+      baselinePrimaryContainerId,
+      baselineBenchmarkConfig,
+    );
+    onProgress?.('baseline replicas synchronized', {
+      replicaCount: Math.max(
+        ZERO,
+        baselineBenchmarkConfig.replicationFactor - ONE,
+      ),
+    });
+    baselinePool = scenarioOverrides.createPostgresPool({
+      host: baselinePrimaryContainerIp,
+      port: baselineBenchmarkConfig.port,
+      user: baselineBenchmarkConfig.user,
+      password: baselineBenchmarkConfig.password,
+      database: baselineBenchmarkConfig.database,
+      max: baselinePoolMaxConnections,
+      idleTimeoutMillis: BENCHMARK_POOL_IDLE_TIMEOUT_MS,
+      connectionTimeoutMillis: BENCHMARK_POOL_CONNECTION_TIMEOUT_MS,
+    });
 
-      for (
-        let replicaIndex = ONE;
-        replicaIndex < baselineBenchmarkConfig.replicationFactor;
-        replicaIndex += ONE
-      ) {
-        const replicaName =
-          BENCHMARK_CONTAINER_NAME_PREFIX +
-          benchmarkRunId +
-          BENCHMARK_REPLICA_SUFFIX_PREFIX +
-          replicaIndex;
-        const replicaBootstrapCommand = buildReplicaBootstrapCommand(
-          primaryContainerName,
-          replicaName,
-          baselineBenchmarkConfig,
-        );
-        const replicaContainer = await provider.createContainer({
-          name: replicaName,
-          image: baselineBenchmarkConfig.baselineImage,
-          network: networkName,
-          env: {
-            [POSTGRES_ENV_USER_KEY]: baselineBenchmarkConfig.user,
-            [POSTGRES_ENV_PASSWORD_KEY]: baselineBenchmarkConfig.password,
-            [POSTGRES_ENV_DB_KEY]: baselineBenchmarkConfig.database,
-            [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
-          },
-          command: [SHELL_COMMAND, SHELL_LOGIN_ARG, replicaBootstrapCommand],
-          resourceLimits: cluster?._config?.resourceLimits || {},
-          startTimeout: cluster?._config?.timeouts?.nodeStartup,
-        });
-        baselineContainers.push(replicaContainer);
-        baselineReplicaContainerIps.push(replicaContainer.ip);
-
-        await waitForPostgresReady(provider, replicaContainer.containerId, {
-          host: LOCALHOST,
-          port: baselineBenchmarkConfig.port,
-          user: baselineBenchmarkConfig.user,
-          database: baselineBenchmarkConfig.database,
-          timeoutMs: baselineBenchmarkConfig.readyTimeoutMs,
-          pollIntervalMs: baselineBenchmarkConfig.readyPollIntervalMs,
-        });
-      }
-
-      await waitForStreamingReplicas(
-        provider,
-        baselinePrimaryContainerId,
-        baselineBenchmarkConfig,
-      );
-      onProgress?.('baseline replicas synchronized', {
-        replicaCount: Math.max(
-          ZERO,
-          baselineBenchmarkConfig.replicationFactor - ONE,
-        ),
-      });
-      const loadNodeCount = Math.max(
-        ONE,
-        baselineBenchmarkConfig.baselineLoadNodeCount,
-      );
-      const poolMaxConnections = Math.max(
-        ONE,
-        baselineBenchmarkConfig.loadMaxInFlight,
-      );
-      baselineLoadNodeCount = loadNodeCount;
-      baselinePoolMaxConnections = poolMaxConnections;
-      baselinePool = scenarioOverrides.createPostgresPool({
-        host: baselinePrimaryContainerIp,
-        port: baselineBenchmarkConfig.port,
-        user: baselineBenchmarkConfig.user,
-        password: baselineBenchmarkConfig.password,
-        database: baselineBenchmarkConfig.database,
-        max: poolMaxConnections,
-        idleTimeoutMillis: BENCHMARK_POOL_IDLE_TIMEOUT_MS,
-        connectionTimeoutMillis: BENCHMARK_POOL_CONNECTION_TIMEOUT_MS,
-      });
-
-      await ensurePostgresBenchmarkTable(baselinePool, benchmarkTableName);
-      onProgress?.('starting baseline load run', {
-        baselineLoadNodeCount: loadNodeCount,
-        loadOpsPerSec: baselineBenchmarkConfig.loadOpsPerSec,
-      });
-      baselineMetrics = await runBaselineSharedLoad({
-        pool: baselinePool,
-        createLoadGenerator: scenarioOverrides.createLoadGenerator,
-        loadNodeCount,
-        loadOpsPerSec: baselineBenchmarkConfig.loadOpsPerSec,
-        loadDuration: baselineBenchmarkConfig.loadDuration,
-        loadMaxInFlight: baselineBenchmarkConfig.loadMaxInFlight,
-        loadNodeMaxInFlight: baselineBenchmarkConfig.loadNodeMaxInFlight,
-        maxPendingQueueDepth: baselineBenchmarkConfig.maxPendingQueueDepth,
-        earlyRejectOnQueueFull: baselineBenchmarkConfig.earlyRejectOnQueueFull,
-        nodeFailureThreshold: baselineBenchmarkConfig.nodeFailureThreshold,
-        nodeFailureCooldownMs: baselineBenchmarkConfig.nodeFailureCooldownMs,
-        tableName: benchmarkTableName,
-        onProgress,
-        progressHeartbeatIntervalMs,
-        semanticParityEnabled: scenarioOverrides.semanticParityEnabled,
-      });
-      try {
-        cacheMetadata = await storeBaselineMetricsInCache(
-          baselineCacheIdentity,
-          baselineBenchmarkConfig,
-          baselineMetrics,
-        );
-      } catch (_cacheStoreErr) {
-        cacheMetadata.reason = BASELINE_CACHE_INVALID_REASON;
-      }
-    } finally {
-      if (baselinePool && typeof baselinePool.end === 'function') {
-        try {
-          await baselinePool.end();
-        } catch (_poolEndErr) {
-          // Best-effort cleanup.
-        }
-      }
-      for (
-        let index = baselineContainers.length - ONE;
-        index >= ZERO;
-        index--
-      ) {
-        const containerId = baselineContainers[index]?.containerId;
-        if (!containerId) {
-          continue;
-        }
-        try {
-          await provider.stopContainer(containerId);
-        } catch (_stopErr) {
-          // Best-effort cleanup.
-        }
-        try {
-          await provider.removeContainer(containerId);
-        } catch (_removeErr) {
-          // Best-effort cleanup.
-        }
-      }
-    }
+    await ensurePostgresBenchmarkTable(baselinePool, benchmarkTableName);
+    onProgress?.('starting baseline load run', {
+      baselineLoadNodeCount,
+      loadOpsPerSec: baselineBenchmarkConfig.loadOpsPerSec,
+    });
+    baselineMetrics = await runBaselineSharedLoad({
+      pool: baselinePool,
+      createLoadGenerator: scenarioOverrides.createLoadGenerator,
+      loadNodeCount: baselineLoadNodeCount,
+      loadOpsPerSec: baselineBenchmarkConfig.loadOpsPerSec,
+      loadDuration: baselineBenchmarkConfig.loadDuration,
+      loadMaxInFlight: baselineBenchmarkConfig.loadMaxInFlight,
+      loadNodeMaxInFlight: baselineBenchmarkConfig.loadNodeMaxInFlight,
+      maxPendingQueueDepth: baselineBenchmarkConfig.maxPendingQueueDepth,
+      earlyRejectOnQueueFull: baselineBenchmarkConfig.earlyRejectOnQueueFull,
+      nodeFailureThreshold: baselineBenchmarkConfig.nodeFailureThreshold,
+      nodeFailureCooldownMs: baselineBenchmarkConfig.nodeFailureCooldownMs,
+      tableName: benchmarkTableName,
+      onProgress,
+      progressHeartbeatIntervalMs,
+      semanticParityEnabled: scenarioOverrides.semanticParityEnabled,
+    });
+    cacheMetadata = await storeBaselineMetricsBestEffort(
+      baselineCacheIdentity,
+      baselineBenchmarkConfig,
+      baselineMetrics,
+      cacheMetadata,
+    );
+  } finally {
+    await cleanupBaselineEnvironment(
+      provider,
+      baselinePool,
+      baselineContainers,
+    );
   }
 
   return {
@@ -366,31 +427,38 @@ function emitPhaseNoProgressFailure(phaseContext, message, details = null) {
   });
 }
 
-function buildNoProgressDiagnostics(phaseResult) {
-  const phaseProgress = phaseResult?.artifacts?.[PHASE_PROGRESS_ARTIFACT_KEY];
-  if (!phaseProgress || typeof phaseProgress !== 'object') {
+function findStalledReasonInHistogram(reasonHistogram) {
+  if (!reasonHistogram || typeof reasonHistogram !== 'object') {
     return null;
   }
-  const failedNoProgress =
-    phaseProgress.failedNoProgress &&
-    typeof phaseProgress.failedNoProgress === 'object' ?
-      phaseProgress.failedNoProgress :
-      null;
-  const reasonHistogram =
-    phaseResult?.artifacts?.reasonHistogram &&
-    typeof phaseResult.artifacts.reasonHistogram === 'object' ?
-      phaseResult.artifacts.reasonHistogram :
-      {};
-  const stalledReason =
+  return (
     Object.keys(reasonHistogram).find((reason) =>
       String(reason || '').includes(NO_PROGRESS_REASON_CODE),
-    ) || null;
+    ) || null
+  );
+}
+
+function asObjectOrNull(value) {
+  return value && typeof value === 'object' ? value : null;
+}
+
+function buildNoProgressDiagnostics(phaseResult) {
+  const result = asObjectOrNull(phaseResult);
+  const artifacts = asObjectOrNull(result ? result.artifacts : null);
+  const phaseProgress = asObjectOrNull(
+    artifacts ? artifacts[PHASE_PROGRESS_ARTIFACT_KEY] : null,
+  );
+  if (!phaseProgress) {
+    return null;
+  }
+  const failedNoProgress = asObjectOrNull(phaseProgress.failedNoProgress);
+  const stalledReason = findStalledReasonInHistogram(artifacts.reasonHistogram);
   if (!failedNoProgress && !stalledReason) {
     return null;
   }
   return {
     reasonCode: NO_PROGRESS_REASON_CODE,
-    phase: String(phaseResult?.phase || 'unknown'),
+    phase: String(result.phase || 'unknown'),
     stalledReason,
     lastProgressEvent: phaseProgress.lastProgressEvent || null,
     lastMeaningfulChange: phaseProgress.lastMeaningfulChange || null,
@@ -508,45 +576,41 @@ function resolvePhaseClass(phase) {
   }
 }
 
+const REASON_CLASS_RULES = Object.freeze([
+  {
+    reasonClass: REASON_CLASS_STARTUP,
+    fragments: ['bootstrap', 'startup', 'active state'],
+  },
+  {
+    reasonClass: REASON_CLASS_DISCOVERY,
+    fragments: ['discovery', 'schema', 'readiness'],
+  },
+  {
+    reasonClass: REASON_CLASS_TOPOLOGY,
+    fragments: ['in_flight', 'leadership', 'topology', 'stalled_no_progress'],
+  },
+  {
+    reasonClass: REASON_CLASS_LOAD,
+    fragments: [
+      'load',
+      'circuit',
+      'budget_exhausted',
+      'operation',
+      'write_pressure',
+    ],
+  },
+  {
+    reasonClass: REASON_CLASS_VERIFY,
+    fragments: ['consistency', 'fallback', 'verification'],
+  },
+]);
+
 function classifyReason(reason) {
   const normalizedReason = String(reason || '').toLowerCase();
-  if (
-    normalizedReason.includes('bootstrap') ||
-    normalizedReason.includes('startup') ||
-    normalizedReason.includes('active state')
-  ) {
-    return REASON_CLASS_STARTUP;
-  }
-  if (
-    normalizedReason.includes('discovery') ||
-    normalizedReason.includes('schema') ||
-    normalizedReason.includes('readiness')
-  ) {
-    return REASON_CLASS_DISCOVERY;
-  }
-  if (
-    normalizedReason.includes('in_flight') ||
-    normalizedReason.includes('leadership') ||
-    normalizedReason.includes('topology') ||
-    normalizedReason.includes('stalled_no_progress')
-  ) {
-    return REASON_CLASS_TOPOLOGY;
-  }
-  if (
-    normalizedReason.includes('load') ||
-    normalizedReason.includes('circuit') ||
-    normalizedReason.includes('budget_exhausted') ||
-    normalizedReason.includes('operation') ||
-    normalizedReason.includes('write_pressure')
-  ) {
-    return REASON_CLASS_LOAD;
-  }
-  if (
-    normalizedReason.includes('consistency') ||
-    normalizedReason.includes('fallback') ||
-    normalizedReason.includes('verification')
-  ) {
-    return REASON_CLASS_VERIFY;
+  for (const rule of REASON_CLASS_RULES) {
+    if (rule.fragments.some((fragment) => normalizedReason.includes(fragment))) {
+      return rule.reasonClass;
+    }
   }
   return REASON_CLASS_UNKNOWN;
 }
@@ -734,34 +798,34 @@ function resolveReasonClassFromPhaseClass(phaseClass) {
   }
 }
 
-function buildFailureReasonCounts(phaseResult) {
+function collectPositiveArtifactReasonCounts(artifactReasonHistogram) {
   const reasonCounts = {};
-  const artifactReasonHistogram = phaseResult?.artifacts?.reasonHistogram;
-  if (artifactReasonHistogram && typeof artifactReasonHistogram === 'object') {
-    for (const [reason, count] of Object.entries(artifactReasonHistogram)) {
-      const normalizedReason = String(reason || '');
-      const normalizedCount = Number(count);
-      if (
-        !normalizedReason ||
-        !Number.isFinite(normalizedCount) ||
-        normalizedCount <= ZERO
-      ) {
-        continue;
-      }
-      reasonCounts[normalizedReason] = Math.max(
-        ZERO,
-        Math.floor(normalizedCount),
-      );
+  if (!artifactReasonHistogram || typeof artifactReasonHistogram !== 'object') {
+    return reasonCounts;
+  }
+  for (const [reason, count] of Object.entries(artifactReasonHistogram)) {
+    const normalizedReason = String(reason || '');
+    const normalizedCount = Number(count);
+    if (
+      normalizedReason &&
+      Number.isFinite(normalizedCount) &&
+      normalizedCount > ZERO
+    ) {
+      reasonCounts[normalizedReason] = Math.floor(normalizedCount);
     }
   }
+  return reasonCounts;
+}
+
+function buildFailureReasonCounts(phaseResult) {
+  const reasonCounts = collectPositiveArtifactReasonCounts(
+    phaseResult?.artifacts?.reasonHistogram,
+  );
   if (Object.keys(reasonCounts).length > ZERO) {
     return reasonCounts;
   }
   for (const reason of collectPhaseReasons(phaseResult)) {
-    if (!reasonCounts[reason]) {
-      reasonCounts[reason] = ZERO;
-    }
-    reasonCounts[reason] += ONE;
+    reasonCounts[reason] = (reasonCounts[reason] || ZERO) + ONE;
   }
   return reasonCounts;
 }
@@ -780,6 +844,19 @@ function collectCanonicalStrictReasonsFromText(reasonText) {
   return canonicalReasons;
 }
 
+function deriveNodeReasonsFromVersionConvergenceNodes(versionNodes) {
+  const derived = {};
+  for (const [nodeId, snapshot] of Object.entries(versionNodes)) {
+    const unmetReasons = Array.isArray(snapshot?.unmetReasons) ?
+      [...snapshot.unmetReasons] :
+      [];
+    if (unmetReasons.length > ZERO) {
+      derived[String(nodeId)] = unmetReasons;
+    }
+  }
+  return derived;
+}
+
 function resolveFailureNodeReasonsByNodeId(phaseResult) {
   const artifactNodeReasons = phaseResult?.artifacts?.nodeReasonsByNodeId;
   if (artifactNodeReasons && typeof artifactNodeReasons === 'object') {
@@ -787,16 +864,7 @@ function resolveFailureNodeReasonsByNodeId(phaseResult) {
   }
   const versionNodes = phaseResult?.artifacts?.versionConvergence?.nodes;
   if (versionNodes && typeof versionNodes === 'object') {
-    const derived = {};
-    for (const [nodeId, snapshot] of Object.entries(versionNodes)) {
-      const unmetReasons = Array.isArray(snapshot?.unmetReasons) ?
-        [...snapshot.unmetReasons] :
-        [];
-      if (unmetReasons.length > ZERO) {
-        derived[String(nodeId)] = unmetReasons;
-      }
-    }
-    return derived;
+    return deriveNodeReasonsFromVersionConvergenceNodes(versionNodes);
   }
   return {};
 }
@@ -883,19 +951,33 @@ function parseNodeIdFromNodeProbeReason(reason) {
   return nodeId.length > ZERO ? nodeId : null;
 }
 
+function pushUniqueNodeId(nodeId, seenNodeIds, nodeIds) {
+  if (nodeId && nodeId.length > ZERO && !seenNodeIds.has(nodeId)) {
+    seenNodeIds.add(nodeId);
+    nodeIds.push(nodeId);
+  }
+}
+
+function extractNodeIdFromPreloadReasonEntry(entry) {
+  const trimmedEntry = String(entry || '').trim();
+  if (!trimmedEntry || trimmedEntry === 'none') {
+    return '';
+  }
+  const separatorIndex = trimmedEntry.indexOf(
+    STRICT_PRELOAD_NODE_REASON_VALUE_SEPARATOR,
+  );
+  return separatorIndex >= ZERO ?
+    trimmedEntry.slice(ZERO, separatorIndex) :
+    trimmedEntry;
+}
+
 function extractNodeIdsFromFailureErrorMessage(errorMessage) {
   const nodeIds = [];
   const seenNodeIds = new Set();
   const text = String(errorMessage || '');
   FAILURE_NODE_ID_PATTERN.lastIndex = ZERO;
-  const discoveredNodeIdMatches = text.matchAll(FAILURE_NODE_ID_PATTERN);
-  for (const nodeIdMatch of discoveredNodeIdMatches) {
-    const nodeId = String(nodeIdMatch?.[1] || '');
-    if (!nodeId || seenNodeIds.has(nodeId)) {
-      continue;
-    }
-    seenNodeIds.add(nodeId);
-    nodeIds.push(nodeId);
+  for (const nodeIdMatch of text.matchAll(FAILURE_NODE_ID_PATTERN)) {
+    pushUniqueNodeId(String(nodeIdMatch?.[1] || ''), seenNodeIds, nodeIds);
   }
   if (!text.includes(STRICT_PRELOAD_READINESS_NODE_REASONS_PREFIX)) {
     return nodeIds;
@@ -908,23 +990,21 @@ function extractNodeIdsFromFailureErrorMessage(errorMessage) {
     STRICT_PRELOAD_NODE_REASON_ENTRY_SEPARATOR,
   );
   for (const entry of entries) {
-    const trimmedEntry = String(entry || '').trim();
-    if (!trimmedEntry || trimmedEntry === 'none') {
-      continue;
-    }
-    const separatorIndex = trimmedEntry.indexOf(
-      STRICT_PRELOAD_NODE_REASON_VALUE_SEPARATOR,
+    pushUniqueNodeId(
+      extractNodeIdFromPreloadReasonEntry(entry),
+      seenNodeIds,
+      nodeIds,
     );
-    const nodeId =
-      separatorIndex >= ZERO ?
-        trimmedEntry.slice(ZERO, separatorIndex) :
-        trimmedEntry;
-    if (nodeId.length > ZERO && !seenNodeIds.has(nodeId)) {
-      seenNodeIds.add(nodeId);
-      nodeIds.push(nodeId);
-    }
   }
   return nodeIds;
+}
+
+function isNodeAffectedByLoadMetrics(nodeMetrics) {
+  const attemptErrors = Number(nodeMetrics?.attemptErrors || ZERO);
+  const dispatched = Number(nodeMetrics?.dispatched || ZERO);
+  const success = Number(nodeMetrics?.success || ZERO);
+  const rejected = Number(nodeMetrics?.rejected || ZERO);
+  return attemptErrors > ZERO || dispatched > success || rejected > ZERO;
 }
 
 function collectAffectedNodeIdsFromLoadMetrics(loadMetrics, targetSet) {
@@ -932,21 +1012,17 @@ function collectAffectedNodeIdsFromLoadMetrics(loadMetrics, targetSet) {
     return;
   }
   const perNodeMetrics =
-    loadMetrics?.perNode &&
+    loadMetrics.perNode &&
     typeof loadMetrics.perNode === 'object' &&
     !Array.isArray(loadMetrics.perNode) ?
       loadMetrics.perNode :
       {};
   for (const [nodeId, nodeMetrics] of Object.entries(perNodeMetrics)) {
-    const attemptErrors = Number(nodeMetrics?.attemptErrors || ZERO);
-    const dispatched = Number(nodeMetrics?.dispatched || ZERO);
-    const success = Number(nodeMetrics?.success || ZERO);
-    const rejected = Number(nodeMetrics?.rejected || ZERO);
-    if (attemptErrors > ZERO || dispatched > success || rejected > ZERO) {
+    if (isNodeAffectedByLoadMetrics(nodeMetrics)) {
       targetSet.add(nodeId);
     }
   }
-  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors) ?
+  const distinctErrors = Array.isArray(loadMetrics.distinctErrors) ?
     loadMetrics.distinctErrors :
     [];
   for (const errorText of distinctErrors) {
@@ -956,9 +1032,7 @@ function collectAffectedNodeIdsFromLoadMetrics(loadMetrics, targetSet) {
   }
 }
 
-function buildFailureAffectedNodeIds(phaseResult, loadMetrics = null) {
-  const affectedNodeIds = new Set();
-  const artifacts = phaseResult?.artifacts || {};
+function collectArtifactNodeIdsIntoSet(artifacts, affectedNodeIds) {
   const artifactNodeIdFields = [
     'includedNodeIds',
     'excludedNodeIds',
@@ -976,19 +1050,31 @@ function buildFailureAffectedNodeIds(phaseResult, loadMetrics = null) {
       }
     }
   }
+}
 
-  const reasonHistogram = artifacts.reasonHistogram;
-  if (reasonHistogram && typeof reasonHistogram === 'object') {
-    for (const reason of Object.keys(reasonHistogram)) {
-      if (!reason.startsWith(QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX)) {
-        continue;
-      }
-      const nodeId = parseNodeIdFromNodeProbeReason(reason);
-      if (nodeId) {
-        affectedNodeIds.add(nodeId);
-      }
+function collectProbeErrorNodeIdsFromHistogram(reasonHistogram, affectedNodeIds) {
+  if (!reasonHistogram || typeof reasonHistogram !== 'object') {
+    return;
+  }
+  for (const reason of Object.keys(reasonHistogram)) {
+    if (!reason.startsWith(QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX)) {
+      continue;
+    }
+    const nodeId = parseNodeIdFromNodeProbeReason(reason);
+    if (nodeId) {
+      affectedNodeIds.add(nodeId);
     }
   }
+}
+
+function buildFailureAffectedNodeIds(phaseResult, loadMetrics = null) {
+  const affectedNodeIds = new Set();
+  const artifacts = phaseResult?.artifacts || {};
+  collectArtifactNodeIdsIntoSet(artifacts, affectedNodeIds);
+  collectProbeErrorNodeIdsFromHistogram(
+    artifacts.reasonHistogram,
+    affectedNodeIds,
+  );
 
   const errors = Array.isArray(phaseResult?.errors) ? phaseResult.errors : [];
   for (const errorMessage of errors) {
@@ -1019,48 +1105,64 @@ function resolveFailureRootCauseClass(phaseResult, reasonCounts) {
   return resolveReasonClassFromPhaseClass(phaseClass);
 }
 
+const STRICT_BENCHMARK_MODE_FLAGS = Object.freeze([
+  'strictDiscovery',
+  'strictPreloadReadiness',
+  'strictParity',
+  'strictCdcTelemetrySchema',
+  'strictAuthoritativeFallback',
+  'strictOverloadPolicy',
+  'strictWritePressure',
+]);
+
 function isStrictBenchmarkMode(benchmarkConfig) {
-  return (
-    benchmarkConfig?.strictDiscovery === true ||
-    benchmarkConfig?.strictPreloadReadiness === true ||
-    benchmarkConfig?.strictParity === true ||
-    benchmarkConfig?.strictCdcTelemetrySchema === true ||
-    benchmarkConfig?.strictAuthoritativeFallback === true ||
-    benchmarkConfig?.strictOverloadPolicy === true ||
-    benchmarkConfig?.strictWritePressure === true
+  if (!benchmarkConfig || typeof benchmarkConfig !== 'object') {
+    return false;
+  }
+  return STRICT_BENCHMARK_MODE_FLAGS.some(
+    (flag) => benchmarkConfig[flag] === true,
   );
+}
+
+function mergeReplicaOperationTimelineCandidate(target, candidate) {
+  if (!candidate || typeof candidate !== 'object') {
+    return;
+  }
+  for (const [operationId, entries] of Object.entries(candidate)) {
+    if (!operationId || !Array.isArray(entries)) {
+      continue;
+    }
+    const existing = target[operationId];
+    if (!Array.isArray(existing) || entries.length > existing.length) {
+      target[operationId] = entries;
+    }
+  }
 }
 
 function resolveReplicaOperationTimelineByOperationId(phaseResult) {
   const timelineByOperationId = {};
-  const appendTimeline = (candidate) => {
-    if (!candidate || typeof candidate !== 'object') {
-      return;
-    }
-    for (const [operationId, entries] of Object.entries(candidate)) {
-      if (!operationId || !Array.isArray(entries)) {
-        continue;
-      }
-      const existing = timelineByOperationId[operationId];
-      if (!Array.isArray(existing) || entries.length > existing.length) {
-        timelineByOperationId[operationId] = entries;
-      }
-    }
-  };
-  appendTimeline(phaseResult?.artifacts?.replicaOperationTimelineByOperationId);
-  appendTimeline(
-    phaseResult?.artifacts?.gateResult?.replicaOperationTimelineByOperationId,
+  const artifacts = phaseResult?.artifacts || {};
+  mergeReplicaOperationTimelineCandidate(
+    timelineByOperationId,
+    artifacts.replicaOperationTimelineByOperationId,
+  );
+  mergeReplicaOperationTimelineCandidate(
+    timelineByOperationId,
+    artifacts.gateResult?.replicaOperationTimelineByOperationId,
   );
 
-  const preflightSnapshots =
-    phaseResult?.artifacts?.preflightCriticalPathSnapshots;
+  const preflightSnapshots = artifacts.preflightCriticalPathSnapshots;
   if (preflightSnapshots && typeof preflightSnapshots === 'object') {
     for (const snapshot of Object.values(preflightSnapshots)) {
-      appendTimeline(
+      mergeReplicaOperationTimelineCandidate(
+        timelineByOperationId,
         snapshot?.controlPlaneDiagnostics?.replicaOperations
           ?.operationTimelineById,
       );
-      appendTimeline(snapshot?.replicaOperations?.operationTimelineById);
+      mergeReplicaOperationTimelineCandidate(
+        timelineByOperationId,
+        snapshot?.replicaOperations?.operationTimelineById,
+      );
     }
   }
   return timelineByOperationId;

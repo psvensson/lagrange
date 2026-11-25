@@ -39,6 +39,7 @@ import {
   listImportGraphInputFiles,
   listJavaScriptFiles,
   logicalJsonIdentity,
+  logicalOwnerAndAmbiguitySummary,
   normalizePath,
   normalizePathThroughSymlinkedRoot,
   ownerAreaForPath,
@@ -384,8 +385,7 @@ function duplicationReconciliation(target) {
     cloneGroups: target.total.clones,
     duplicatedLines: target.total.duplicatedLines,
     sourceCloneTouches: sources.reduce((sum, entry) => sum + entry.clones, 0),
-    sourceDuplicatedLineTouches: sources.reduce((sum, entry) =>
-      sum + entry.duplicatedLines, 0),
+    sourceDuplicatedLineTouches: sources.reduce((sum, entry) => sum + entry.duplicatedLines, 0),
     nonzeroSourceCount: sources.filter((entry) => entry.duplicatedLines > 0).length,
     touchMultiplicity: 2,
   };
@@ -394,33 +394,27 @@ function duplicationReconciliation(target) {
 function buildInventoryFromInputs(root, inputs) {
   const {signals, files} = collectReportSignals(root, inputs);
   const assignments = signals.map((signal) => ({
-    id: signal.id,
-    boundaryKey: classifyDebtPath(signal.path).key,
+    id: signal.id, boundaryKey: classifyDebtPath(signal.path).key,
   }));
   const assignment = reconcileAssignments(signals, assignments);
   const boundaries = aggregateBoundaries(files);
+  const ownerAndAmbiguity = logicalOwnerAndAmbiguitySummary(boundaries);
   const signalCounts = Object.fromEntries([...new Set(signals.map((item) => item.kind))]
     .sort().map((kind) => [kind, signals.filter((item) => item.kind === kind).length]));
   const duplication = inputs.duplication.map(duplicationReconciliation);
   const inputIdentities = [
-    inputs.identities.complexity,
-    inputs.identities.cognitive,
-    inputs.identities.cycles,
-    inputs.identities.importGraph,
-    inputs.identities.duplicationSource,
-    inputs.identities.duplicationTest,
-    inputs.identities.fileSizeAuthority,
-    inputs.identities.lintConfig,
-    inputs.identities.dependencyConfig,
-    inputs.identities.ownerClassifier,
+    inputs.identities.complexity, inputs.identities.cognitive,
+    inputs.identities.cycles, inputs.identities.importGraph,
+    inputs.identities.duplicationSource, inputs.identities.duplicationTest,
+    inputs.identities.fileSizeAuthority, inputs.identities.lintConfig,
+    inputs.identities.dependencyConfig, inputs.identities.ownerClassifier,
   ];
   return {
     schemaVersion: OWNER_DEBT.schemaVersion,
     generatedFrom: {
       root: OWNER_DEBT.rootRelative,
       inputs: inputIdentities,
-      inputDigest: sha256(inputIdentities.map((item) => item.sha256)
-        .join(OWNER_DEBT.newline)),
+      inputDigest: sha256(inputIdentities.map((item) => item.sha256).join(OWNER_DEBT.newline)),
     },
     reconciliation: {
       complexity: {
@@ -470,14 +464,19 @@ function buildInventoryFromInputs(root, inputs) {
       rankedBoundaryCount: boundaries.length,
       semanticBoundaryCount: boundaries.filter((item) => item.owner !== null).length,
       fallbackBoundaryCount: boundaries.filter((item) => item.owner === null).length,
+      declaredLogicalOwnerCount: ownerAndAmbiguity.declaredLogicalOwnerCount,
+      unownedSourceBoundaryCount: ownerAndAmbiguity.contractAmbiguity.unownedSourceBoundaryCount,
+      unownedSourceFileCount: ownerAndAmbiguity.contractAmbiguity.unownedSourceFileCount,
       childQuestCount: 0,
     },
+    logicalOwnerAndAmbiguitySummary: ownerAndAmbiguity,
     rankedBoundaries: boundaries,
     childQuestBatch: childQuestBatch(boundaries, inputs.importGraph),
   };
 }
 
 function validateInventory(inventory) {
+  const ownerSummary = inventory.logicalOwnerAndAmbiguitySummary;
   const checks = [
     inventory.reconciliation.complexity.declaredCount ===
       inventory.reconciliation.complexity.observedCount,
@@ -495,6 +494,12 @@ function validateInventory(inventory) {
       inventory.reconciliation.lintExclusions.assignedCount,
     inventory.assignment.sourceSignalCount === inventory.assignment.assignedSignalCount,
     inventory.assignment.assignedSignalCount === inventory.assignment.uniqueAssignmentCount,
+    Boolean(ownerSummary) &&
+      ownerSummary.declaredLogicalOwnerCount === ownerSummary.logicalOwners.length,
+    Boolean(ownerSummary) &&
+      ownerSummary.declaredOwnerFileCount +
+        ownerSummary.contractAmbiguity.unownedSourceFileCount <=
+        inventory.summary.filesWithDebt,
     inventory.childQuestBatch.quests.length > 0,
   ];
   if (checks.some((passed) => !passed)) {
@@ -1150,16 +1155,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 }
 
 export {
-  buildInventory,
-  buildInventoryFromInputs,
-  classifyDebtPath,
-  collectLiveInputs,
-  duplicationReportIdentity,
-  globPatternToRegex,
-  logicalJsonIdentity,
-  reconcileAssignments,
-  refreshImportGraphReport,
-  validateInventory,
-  verifyImportGraphReport,
+  buildInventory, buildInventoryFromInputs, classifyDebtPath,
+  collectLiveInputs, duplicationReportIdentity, globPatternToRegex,
+  logicalJsonIdentity, logicalOwnerAndAmbiguitySummary, reconcileAssignments,
+  refreshImportGraphReport, validateInventory, verifyImportGraphReport,
   writeInventory,
 };

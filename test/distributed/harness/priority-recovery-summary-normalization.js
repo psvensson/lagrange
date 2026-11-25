@@ -13,6 +13,8 @@ import {
   readExpectedReplicaCount,
 } from '../../../src/control-plane/membership-publication-priority-partition-canonical-data.js';
 
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+
 const ZERO = 0;
 const ONE = 1;
 const COMPARISON_LEFT_PRECEDES_RIGHT = -1;
@@ -759,27 +761,27 @@ function isPriorityRecoveryTerminalFollowUpCarrierWitness(witness) {
   );
 }
 
+function isSerialWaitSourcePrecedingCarrier(sourceWitness, carrierWitness) {
+  const sourcePartitionId = normalizeStringField(sourceWitness?.partitionId);
+  const carrierPartitionId = normalizeStringField(carrierWitness?.partitionId);
+  return Boolean(
+    sourcePartitionId &&
+      carrierPartitionId &&
+      isPriorityRecoverySerialWaitSourceBlockerWitness(sourceWitness) === true &&
+      isPriorityRecoverySupportingSerialWaitCarrierWitness(carrierWitness) ===
+        true &&
+      arrayIncludes(
+        normalizeDistinctStringArray(carrierWitness?.serialWaitPartitionIds),
+        sourcePartitionId,
+      ),
+  );
+}
+
 function resolveSerialWaitSourceDirectBlockerRankDelta(left, right) {
-  const leftPartitionId = normalizeStringField(left?.partitionId);
-  const rightPartitionId = normalizeStringField(right?.partitionId);
-  if (
-    leftPartitionId &&
-    rightPartitionId &&
-    isPriorityRecoverySerialWaitSourceBlockerWitness(left) === true &&
-    isPriorityRecoverySupportingSerialWaitCarrierWitness(right) === true &&
-    normalizeDistinctStringArray(right?.serialWaitPartitionIds)
-      .includes(leftPartitionId)
-  ) {
+  if (isSerialWaitSourcePrecedingCarrier(left, right)) {
     return COMPARISON_LEFT_PRECEDES_RIGHT;
   }
-  if (
-    leftPartitionId &&
-    rightPartitionId &&
-    isPriorityRecoverySupportingSerialWaitCarrierWitness(left) === true &&
-    isPriorityRecoverySerialWaitSourceBlockerWitness(right) === true &&
-    normalizeDistinctStringArray(left?.serialWaitPartitionIds)
-      .includes(rightPartitionId)
-  ) {
+  if (isSerialWaitSourcePrecedingCarrier(right, left)) {
     return COMPARISON_RIGHT_PRECEDES_LEFT;
   }
   return ZERO;
@@ -830,39 +832,30 @@ function resolveDominantWitnessPriorityRankDelta(left, right) {
   return selectedRankDelta || ZERO;
 }
 
+function isMeaningfulPriorityRecoveryProgressFieldValue(value) {
+  const normalizedValue = normalizeStringField(value);
+  return Boolean(
+    normalizedValue &&
+      normalizedValue !== PRIORITY_RECOVERY_PROGRESS_NONE &&
+      normalizedValue !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.UNAVAILABLE,
+  );
+}
+
 function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
-  const progressClassIds = normalizeDistinctStringArray(
-    witness?.progressClassIds,
-  );
-  const blockerReasonCodes = normalizeDistinctStringArray(
-    witness?.blockerReasonCodes,
-  );
-  if (
-    progressClassIds.length === ZERO &&
-    blockerReasonCodes.length === ZERO &&
-    PRIORITY_RECOVERY_NON_BLOCKING_PROGRESS_SEMANTIC_STATES.has(
-      witness?.semanticStateId,
-    )
-  ) {
+  if (isPriorityRecoveryNonBlockingProgressWitness(witness)) {
     return false;
   }
+  const source = witness ?? {};
   const progressFields = [
-    witness?.progressContractState,
-    witness?.actuationState,
-    witness?.currentOwner,
-    witness?.nextRequiredAction,
-    witness?.blockingBoundary,
-    witness?.waitMode,
-    witness?.pressureState,
+    source.progressContractState,
+    source.actuationState,
+    source.currentOwner,
+    source.nextRequiredAction,
+    source.blockingBoundary,
+    source.waitMode,
+    source.pressureState,
   ];
-  return progressFields.some((value) => {
-    const normalizedValue = normalizeStringField(value);
-    return (
-      normalizedValue &&
-      normalizedValue !== PRIORITY_RECOVERY_PROGRESS_NONE &&
-      normalizedValue !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.UNAVAILABLE
-    );
-  });
+  return progressFields.some(isMeaningfulPriorityRecoveryProgressFieldValue);
 }
 
 function isPriorityRecoveryNonBlockingProgressWitness(witness) {
@@ -1058,23 +1051,33 @@ function selectFreshestPriorityRecoveryWitnessesByOperation(witnesses) {
   return [...unkeyedWitnesses, ...freshestWitnessByKey.values()];
 }
 
+function compareNullableProgressTimestampMs(
+  leftLastProgressAtMs,
+  rightLastProgressAtMs,
+) {
+  if (leftLastProgressAtMs !== null && rightLastProgressAtMs !== null) {
+    return leftLastProgressAtMs - rightLastProgressAtMs;
+  }
+  if (leftLastProgressAtMs !== null) {
+    return COMPARISON_LEFT_PRECEDES_RIGHT;
+  }
+  if (rightLastProgressAtMs !== null) {
+    return COMPARISON_RIGHT_PRECEDES_LEFT;
+  }
+  return ZERO;
+}
+
 function comparePriorityRecoveryPartitionWitnessPriority(left, right) {
   const priorityRankDelta = resolveDominantWitnessPriorityRankDelta(left, right);
   if (priorityRankDelta !== ZERO) {
     return priorityRankDelta;
   }
-  const leftLastProgressAtMs = normalizeNonNegativeInteger(left?.lastProgressAtMs);
-  const rightLastProgressAtMs = normalizeNonNegativeInteger(
-    right?.lastProgressAtMs,
+  const progressTimestampDelta = compareNullableProgressTimestampMs(
+    normalizeNonNegativeInteger(left?.lastProgressAtMs),
+    normalizeNonNegativeInteger(right?.lastProgressAtMs),
   );
-  if (leftLastProgressAtMs !== null && rightLastProgressAtMs !== null) {
-    if (leftLastProgressAtMs !== rightLastProgressAtMs) {
-      return leftLastProgressAtMs - rightLastProgressAtMs;
-    }
-  } else if (leftLastProgressAtMs !== null) {
-    return COMPARISON_LEFT_PRECEDES_RIGHT;
-  } else if (rightLastProgressAtMs !== null) {
-    return COMPARISON_RIGHT_PRECEDES_LEFT;
+  if (progressTimestampDelta !== ZERO) {
+    return progressTimestampDelta;
   }
   return String(left?.partitionId || EMPTY_STRING).localeCompare(
     String(right?.partitionId || EMPTY_STRING),
@@ -1099,15 +1102,11 @@ function selectDominantPriorityRecoveryPartitionWitness(witnesses) {
   )[ZERO];
 }
 
-function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
-  const partitionWitnesses = normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
-    priorityRecoveryObservation?.priorityRecoveryPartitionWitnesses,
-  );
-  if (partitionWitnesses.length === ZERO) {
-    return null;
-  }
-  const currentPartitionWitnesses =
-    selectFreshestPriorityRecoveryWitnessesByOperation(partitionWitnesses);
+function includeNonEmptyCountMap(key, counts) {
+  return Object.keys(counts).length > ZERO ? {[key]: counts} : {};
+}
+
+function collectPriorityRecoveryWitnessCountMaps(currentPartitionWitnesses) {
   const currentOwnerCounts = {};
   const actuationStateCounts = {};
   const blockingBoundaryCounts = {};
@@ -1124,6 +1123,35 @@ function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
     addCount(progressContractStateCounts, witness.progressContractState);
     addCount(pressureStateCounts, witness.pressureState);
   }
+  return {
+    ...includeNonEmptyCountMap('actuationStateCounts', actuationStateCounts),
+    ...includeNonEmptyCountMap('currentOwnerCounts', currentOwnerCounts),
+    ...includeNonEmptyCountMap(
+      'blockingBoundaryCounts',
+      blockingBoundaryCounts,
+    ),
+    ...includeNonEmptyCountMap('waitModeCounts', waitModeCounts),
+    ...includeNonEmptyCountMap(
+      'nextRequiredActionCounts',
+      nextRequiredActionCounts,
+    ),
+    ...includeNonEmptyCountMap(
+      'progressContractStateCounts',
+      progressContractStateCounts,
+    ),
+    ...includeNonEmptyCountMap('pressureStateCounts', pressureStateCounts),
+  };
+}
+
+function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
+  const partitionWitnesses = normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
+    priorityRecoveryObservation?.priorityRecoveryPartitionWitnesses,
+  );
+  if (partitionWitnesses.length === ZERO) {
+    return null;
+  }
+  const currentPartitionWitnesses =
+    selectFreshestPriorityRecoveryWitnessesByOperation(partitionWitnesses);
   const dominantWitness = selectDominantPriorityRecoveryPartitionWitness(
     currentPartitionWitnesses,
   );
@@ -1133,25 +1161,42 @@ function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
     ...(isRecord(dominantWitness?.topologyOperatorWitness) ?
       {topologyOperatorWitness: dominantWitness.topologyOperatorWitness} :
       {}),
-    ...(Object.keys(actuationStateCounts).length > ZERO ?
-      {actuationStateCounts} :
-      {}),
-    ...(Object.keys(currentOwnerCounts).length > ZERO ?
-      {currentOwnerCounts} :
-      {}),
-    ...(Object.keys(blockingBoundaryCounts).length > ZERO ?
-      {blockingBoundaryCounts} :
-      {}),
-    ...(Object.keys(waitModeCounts).length > ZERO ? {waitModeCounts} : {}),
-    ...(Object.keys(nextRequiredActionCounts).length > ZERO ?
-      {nextRequiredActionCounts} :
-      {}),
-    ...(Object.keys(progressContractStateCounts).length > ZERO ?
-      {progressContractStateCounts} :
-      {}),
-    ...(Object.keys(pressureStateCounts).length > ZERO ?
-      {pressureStateCounts} :
-      {}),
+    ...collectPriorityRecoveryWitnessCountMaps(currentPartitionWitnesses),
+  };
+}
+
+function resolveDualCaseNonNegativeInteger(summary, camelKey, snakeKey) {
+  return normalizeNonNegativeInteger(
+    Number.isFinite(summary[camelKey]) ? summary[camelKey] : summary[snakeKey],
+  );
+}
+
+function resolveCountWithBlockedFallback(
+  explicitValue,
+  blockedPartitionsLength,
+  fallbackValue,
+) {
+  if (explicitValue !== null) {
+    return explicitValue;
+  }
+  return blockedPartitionsLength > ZERO ? fallbackValue : null;
+}
+
+function includeIfNonNull(key, value) {
+  return value !== null ? {[key]: value} : {};
+}
+
+function computeBlockedPartitionsSpreadMetrics(blockedPartitions) {
+  let computedTotalSpreadGap = ZERO;
+  let computedLargestSpreadGap = ZERO;
+  for (const blockedPartition of blockedPartitions) {
+    const gap = blockedPartition?.spreadGap || ZERO;
+    computedTotalSpreadGap += gap;
+    computedLargestSpreadGap = Math.max(computedLargestSpreadGap, gap);
+  }
+  return {
+    computedTotalSpreadGap,
+    computedLargestSpreadGap,
   };
 }
 
@@ -1165,72 +1210,68 @@ function normalizePriorityPartitionSummaryForDiagnostics(summary) {
   const missingPartitionIds = normalizeDistinctStringArray(
     summary.missingPartitionIds ?? summary.missing_partition_ids,
   );
-  const blockedPartitionCount = normalizeNonNegativeInteger(
-    Number.isFinite(summary.blockedPartitionCount) ?
-      summary.blockedPartitionCount :
-      summary?.blocked_partition_count,
+  const {computedTotalSpreadGap, computedLargestSpreadGap} =
+    computeBlockedPartitionsSpreadMetrics(blockedPartitions);
+  const blockedPartitionCount = resolveCountWithBlockedFallback(
+    resolveDualCaseNonNegativeInteger(
+      summary,
+      'blockedPartitionCount',
+      'blocked_partition_count',
+    ),
+    blockedPartitions.length,
+    blockedPartitions.length,
   );
-  const totalSpreadGap = normalizeNonNegativeInteger(
-    Number.isFinite(summary.totalSpreadGap) ?
-      summary.totalSpreadGap :
-      summary?.total_spread_gap,
+  const largestSpreadGap = resolveCountWithBlockedFallback(
+    resolveDualCaseNonNegativeInteger(
+      summary,
+      'largestSpreadGap',
+      'largest_spread_gap',
+    ),
+    blockedPartitions.length,
+    computedLargestSpreadGap,
   );
-  const largestSpreadGap = normalizeNonNegativeInteger(
-    Number.isFinite(summary.largestSpreadGap) ?
-      summary.largestSpreadGap :
-      summary?.largest_spread_gap,
-  );
-  const computedTotalSpreadGap = blockedPartitions.reduce(
-    (sum, blockedPartition) => sum + (blockedPartition?.spreadGap || ZERO),
-    ZERO,
-  );
-  const computedLargestSpreadGap = blockedPartitions.reduce(
-    (largest, blockedPartition) =>
-      Math.max(largest, blockedPartition?.spreadGap || ZERO),
-    ZERO,
-  );
-  const requiredDistinctNodeCount = normalizeNonNegativeInteger(
-    Number.isFinite(summary.requiredDistinctNodeCount) ?
-      summary.requiredDistinctNodeCount :
-      summary?.required_distinct_node_count,
-  );
-  const readyEligibleNodeCount = normalizeNonNegativeInteger(
-    Number.isFinite(summary.readyEligibleNodeCount) ?
-      summary.readyEligibleNodeCount :
-      summary?.ready_eligible_node_count,
-  );
-  const totalPriorityPartitionCount = normalizeNonNegativeInteger(
-    Number.isFinite(summary.totalPriorityPartitionCount) ?
-      summary.totalPriorityPartitionCount :
-      summary?.total_priority_partition_count,
+  const totalSpreadGap = resolveCountWithBlockedFallback(
+    resolveDualCaseNonNegativeInteger(
+      summary,
+      'totalSpreadGap',
+      'total_spread_gap',
+    ),
+    blockedPartitions.length,
+    computedTotalSpreadGap,
   );
   const normalizedSummary = {
-    ...(summary.satisfied === true ? {satisfied: true} : {}),
-    ...(summary.satisfied === false ? {satisfied: false} : {}),
-    ...(requiredDistinctNodeCount !== null ?
-      {requiredDistinctNodeCount} :
+    ...(typeof summary.satisfied === 'boolean' ?
+      {satisfied: summary.satisfied} :
       {}),
-    ...(readyEligibleNodeCount !== null ? {readyEligibleNodeCount} : {}),
-    ...(totalPriorityPartitionCount !== null ?
-      {totalPriorityPartitionCount} :
-      {}),
+    ...includeIfNonNull(
+      'requiredDistinctNodeCount',
+      resolveDualCaseNonNegativeInteger(
+        summary,
+        'requiredDistinctNodeCount',
+        'required_distinct_node_count',
+      ),
+    ),
+    ...includeIfNonNull(
+      'readyEligibleNodeCount',
+      resolveDualCaseNonNegativeInteger(
+        summary,
+        'readyEligibleNodeCount',
+        'ready_eligible_node_count',
+      ),
+    ),
+    ...includeIfNonNull(
+      'totalPriorityPartitionCount',
+      resolveDualCaseNonNegativeInteger(
+        summary,
+        'totalPriorityPartitionCount',
+        'total_priority_partition_count',
+      ),
+    ),
     ...(missingPartitionIds.length > ZERO ? {missingPartitionIds} : {}),
     ...(blockedPartitions.length > ZERO ? {blockedPartitions} : {}),
-    ...(blockedPartitionCount !== null ?
-      {blockedPartitionCount} :
-      blockedPartitions.length > ZERO ?
-        {blockedPartitionCount: blockedPartitions.length} :
-        {}),
-    ...(largestSpreadGap !== null ?
-      {largestSpreadGap} :
-      blockedPartitions.length > ZERO ?
-        {largestSpreadGap: computedLargestSpreadGap} :
-        {}),
-    ...(totalSpreadGap !== null ?
-      {totalSpreadGap} :
-      blockedPartitions.length > ZERO ?
-        {totalSpreadGap: computedTotalSpreadGap} :
-        {}),
+    ...includeIfNonNull('blockedPartitionCount', blockedPartitionCount),
+    ...includeIfNonNull('largestSpreadGap', largestSpreadGap),
+    ...includeIfNonNull('totalSpreadGap', totalSpreadGap),
   };
   return Object.keys(normalizedSummary).length > ZERO ? normalizedSummary : null;
 }

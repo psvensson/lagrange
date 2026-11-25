@@ -23,104 +23,56 @@ import {
   resolveUnderReplicationTolerance,
 } from './convergence-voter-targets.js';
 const {
-  SERVICES_QUERY,
-  NODES_QUERY,
-  PARTITIONS_QUERY,
+  SERVICES_QUERY, NODES_QUERY, PARTITIONS_QUERY,
   CONTROL_SNAPSHOT_REQUIRED_ERROR_PREFIX,
-  CONVERGENCE_REACHABILITY_TIMEOUT_MS,
-  CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS,
-  ADMIN_SOCKET_LANE_DEFAULT,
-  ADMIN_SOCKET_LANE_SNAPSHOT,
-  RAFT_ROLE_LEARNER,
-  REACHABILITY_SUMMARY_SEPARATOR,
-  REACHABILITY_SUMMARY_SOURCE_UNKNOWN,
-  REACHABILITY_SUMMARY_ERROR_NONE,
-  STATUS_LEADER,
-  STATUS_UNKNOWN,
-  VALUE_UNKNOWN,
-  VALUE_NONE,
-  VALUE_UNAVAILABLE,
-  REPLICA_MEMBERSHIP_SEPARATOR,
-  REPLICA_MEMBER_SEPARATOR,
-  MEMBER_SNIPPET_PREFIX,
-  MEMBER_SNIPPET_SUFFIX,
-  MEMBER_REPLICA_PREFIX,
-  MEMBER_LEADER_PREFIX,
-  MEMBER_VOTER_PREFIX,
-  MEMBER_VOTER_SEPARATOR,
-  SNIPPET_EXTRA_PREFIX,
-  SNIPPET_EXTRA_SUFFIX,
-  PARTITION_MEMBERSHIP_SNIPPET_LIMIT,
-  PARTITION_REPLICA_SNIPPET_LIMIT,
-  OPERATION_HISTORY_LIMIT,
-  OPERATION_HISTORY_SNIPPET_LIMIT,
-  OPERATION_HISTORY_SEPARATOR,
-  OPERATION_HISTORY_AT_PREFIX,
-  OPERATION_FIELD_CANDIDATE_IDS,
-  OPERATION_FIELD_CANDIDATE_PARTITION_IDS,
-  OPERATION_FIELD_CANDIDATE_TYPES,
-  OPERATION_FIELD_CANDIDATE_STATUSES,
-  OPERATION_FIELD_CANDIDATE_FROM_NODE_IDS,
-  OPERATION_FIELD_CANDIDATE_TO_NODE_IDS,
-  OPERATION_FIELD_CANDIDATE_TIMESTAMPS,
-  CONTROL_SNAPSHOT_FIELD_NODES,
-  CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES,
-  CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES,
-  CONTROL_SNAPSHOT_FIELD_PARTITIONS,
-  CONTROL_SNAPSHOT_FIELD_LEADERS,
+  CONVERGENCE_REACHABILITY_TIMEOUT_MS, CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS,
+  ADMIN_SOCKET_LANE_DEFAULT, ADMIN_SOCKET_LANE_SNAPSHOT, RAFT_ROLE_LEARNER,
+  REACHABILITY_SUMMARY_SEPARATOR, REACHABILITY_SUMMARY_SOURCE_UNKNOWN,
+  REACHABILITY_SUMMARY_ERROR_NONE, STATUS_LEADER, STATUS_UNKNOWN,
+  VALUE_UNKNOWN, VALUE_NONE, VALUE_UNAVAILABLE,
+  REPLICA_MEMBERSHIP_SEPARATOR, REPLICA_MEMBER_SEPARATOR,
+  MEMBER_SNIPPET_PREFIX, MEMBER_SNIPPET_SUFFIX, MEMBER_REPLICA_PREFIX,
+  MEMBER_LEADER_PREFIX, MEMBER_VOTER_PREFIX, MEMBER_VOTER_SEPARATOR,
+  SNIPPET_EXTRA_PREFIX, SNIPPET_EXTRA_SUFFIX,
+  PARTITION_MEMBERSHIP_SNIPPET_LIMIT, PARTITION_REPLICA_SNIPPET_LIMIT,
+  OPERATION_HISTORY_LIMIT, OPERATION_HISTORY_SNIPPET_LIMIT,
+  OPERATION_HISTORY_SEPARATOR, OPERATION_HISTORY_AT_PREFIX,
+  OPERATION_FIELD_CANDIDATE_IDS, OPERATION_FIELD_CANDIDATE_PARTITION_IDS,
+  OPERATION_FIELD_CANDIDATE_TYPES, OPERATION_FIELD_CANDIDATE_STATUSES,
+  OPERATION_FIELD_CANDIDATE_FROM_NODE_IDS, OPERATION_FIELD_CANDIDATE_TO_NODE_IDS,
+  OPERATION_FIELD_CANDIDATE_TIMESTAMPS, CONTROL_SNAPSHOT_FIELD_NODES,
+  CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES, CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES,
+  CONTROL_SNAPSHOT_FIELD_PARTITIONS, CONTROL_SNAPSHOT_FIELD_LEADERS,
   CONTROL_SNAPSHOT_FIELD_PARTITION_LEADER_AUTHORITY,
-  CONTROL_SNAPSHOT_FIELD_OBSERVATION_MODE,
-  CONTROL_SNAPSHOT_FIELD_ADMIN_OBSERVATION,
-  CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS,
-  CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION,
+  CONTROL_SNAPSHOT_FIELD_OBSERVATION_MODE, CONTROL_SNAPSHOT_FIELD_ADMIN_OBSERVATION,
+  CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS, CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_EXPECTED_MINIMUM_REVISION,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_GAP,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_RESUME_TOKEN,
-  CONTROL_SNAPSHOT_FIELD_REPLICA_OPERATIONS,
-  CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT,
-  CONTROL_SNAPSHOT_FIELD_STATUS_HISTOGRAM,
-  CONTROL_SNAPSHOT_FIELD_ROWS,
+  CONTROL_SNAPSHOT_FIELD_REPLICA_OPERATIONS, CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT,
+  CONTROL_SNAPSHOT_FIELD_STATUS_HISTOGRAM, CONTROL_SNAPSHOT_FIELD_ROWS,
   CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP,
   CONTROL_SNAPSHOT_FIELD_REPLICA_ROLE_DIAGNOSTICS,
   CONTROL_SNAPSHOT_FIELD_ACTIVE_NODE_VIEWS,
-  REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS,
-  CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES,
-  REPLICA_ROLE_LEADER,
-  CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD_MODE,
-  LEADER_ADDRESS_PATH_SEPARATOR,
-  UUID_PREFIX_PATTERN,
-  normalizeLeaderAddress,
-  normalizeLeaders,
-  hasConflictingLeaders,
-  isTolerableActiveNodeSkew,
-  isTolerablePartitionSkew,
-  probeNodeReachability,
-  summarizeReachabilityReports,
-  isVoterReady,
-  countVotersPerPartition,
-  extractLeaders,
-  supplementPartitionIdsFromServiceTopology,
-  updateOverTargetState,
-  finalizeOverTargetState,
-  normalizeStatusCountMap,
-  normalizeVoterCountMap,
-  extractControlSnapshotPayload,
-  extractControlSnapshotObservationMode,
-  extractControlSnapshotNodeIds,
-  extractControlSnapshotPublishedNodeIds,
-  extractControlSnapshotProjectedNodeIds,
-  extractControlSnapshotPartitionIds,
-  extractControlSnapshotLeaders,
-  extractControlSnapshotPartitionLeaderAuthority,
-  extractControlSnapshotVoterCounts,
-  extractControlSnapshotInFlightSummary,
-  extractControlSnapshotOperationRows,
-  extractControlSnapshotPartitionMembership,
+  REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS, CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES,
+  REPLICA_ROLE_LEADER, CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD_MODE,
+  LEADER_ADDRESS_PATH_SEPARATOR, UUID_PREFIX_PATTERN,
+  normalizeLeaderAddress, normalizeLeaders, hasConflictingLeaders,
+  isTolerableActiveNodeSkew, isTolerablePartitionSkew,
+  probeNodeReachability, summarizeReachabilityReports, isVoterReady,
+  countVotersPerPartition, extractLeaders, supplementPartitionIdsFromServiceTopology,
+  updateOverTargetState, finalizeOverTargetState,
+  normalizeStatusCountMap, normalizeVoterCountMap,
+  extractControlSnapshotPayload, extractControlSnapshotObservationMode,
+  extractControlSnapshotNodeIds, extractControlSnapshotPublishedNodeIds,
+  extractControlSnapshotProjectedNodeIds, extractControlSnapshotPartitionIds,
+  extractControlSnapshotLeaders, extractControlSnapshotPartitionLeaderAuthority,
+  extractControlSnapshotVoterCounts, extractControlSnapshotInFlightSummary,
+  extractControlSnapshotOperationRows, extractControlSnapshotPartitionMembership,
   extractControlSnapshotPublicationConvergence,
   extractControlSnapshotControlPlaneDiagnostics,
-  extractControlSnapshotRevisionMetadata,
-  queryControlSnapshot,
+  extractControlSnapshotRevisionMetadata, queryControlSnapshot,
 } = ASSERTIONS_CONTROL_SNAPSHOT_EXTRACTION;
 const OBSERVATION_SOURCE_SQL_FALLBACK = 'sql_fallback';
 const OBSERVATION_SOURCE_CONTROL_SNAPSHOT = 'control_snapshot';
@@ -137,6 +89,10 @@ const FINAL_ADJUDICATION_FORCE_REPAIR = true;
 const FINAL_ADJUDICATION_FORCE_AUTHORITATIVE_REPAIR = true;
 const REPLICA_OPERATION_PROGRESS_TOKEN_EMPTY = '';
 const REPLICA_OPERATION_PROGRESS_TOKEN_SEPARATOR = ':';
+const stringTrim = Function.call.bind(String.prototype.trim);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
 
 function buildCanonicalInFlightOperationIdSet(controlPlaneDiagnostics) {
   return new Set(
@@ -331,14 +287,30 @@ async function queryNodeConsistencyStateViaSql(node) {
   };
 }
 
+function supplementLeadersFromPartitionRows(partitionRows, leaders) {
+  for (const row of partitionRows) {
+    const record = row ?? {};
+    const partitionId = stringTrim(String(record.partition_id || ''));
+    if (partitionId.length === 0 || leaders.has(partitionId)) {
+      continue;
+    }
+    const partitionLeader = stringTrim(String(
+      record.leader_node_id || record.leaderNodeId || record.leader || '',
+    ));
+    if (partitionLeader.length > 0) {
+      leaders.set(partitionId, partitionLeader);
+    }
+  }
+}
+
 async function queryConvergenceSnapshotViaSql(node) {
   const [partResult, svcResult] = await Promise.all([
     node.query(PARTITIONS_QUERY),
     node.query(SERVICES_QUERY),
   ]);
 
-  const partitionRows = (partResult && partResult.rows) || [];
-  const servicesRows = (svcResult && svcResult.rows) || [];
+  const partitionRows = partResult?.rows || [];
+  const servicesRows = svcResult?.rows || [];
   const voterCounts = countVotersPerPartition(servicesRows);
   const leaders = extractLeaders(servicesRows);
   const expectedPartitionIds = new Set(
@@ -354,18 +326,7 @@ async function queryConvergenceSnapshotViaSql(node) {
 
   // When services rows are follower-only on a recovering node,
   // supplement leader identity from persisted partition metadata.
-  for (const row of partitionRows) {
-    const partitionId = String(row?.partition_id || '').trim();
-    if (partitionId.length === 0 || leaders.has(partitionId)) {
-      continue;
-    }
-    const partitionLeader = String(
-      row?.leader_node_id || row?.leaderNodeId || row?.leader || '',
-    ).trim();
-    if (partitionLeader.length > 0) {
-      leaders.set(partitionId, partitionLeader);
-    }
-  }
+  supplementLeadersFromPartitionRows(partitionRows, leaders);
 
   return {
     nodeId: String(node?.id || VALUE_UNKNOWN),
@@ -389,6 +350,52 @@ async function queryConvergenceSnapshotViaSql(node) {
   };
 }
 
+function normalizeOptionalSetToSortedArray(value) {
+  return value instanceof Set ? Array.from(value).sort() : null;
+}
+
+function normalizeMapEntriesToSortedObject(entries) {
+  return Object.fromEntries(
+    Array.from(entries || []).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  );
+}
+
+function buildConsistencyStateFromSnapshotState(node, snapshotState) {
+  const authoritativeActiveNodes = normalizeOptionalSetToSortedArray(
+    snapshotState.authoritativeActiveNodeIds,
+  );
+  return {
+    nodeId: String(node?.id || VALUE_UNKNOWN),
+    activeNodes: Array.from(snapshotState.activeNodeIds || []).sort(),
+    authoritativeActiveNodes,
+    projectedActiveNodes: normalizeOptionalSetToSortedArray(
+      snapshotState.projectedActiveNodeIds,
+    ),
+    partitions: Array.from(snapshotState.expectedPartitionIds || []).sort(),
+    leaders: normalizeMapEntriesToSortedObject(snapshotState.leaders),
+    partitionLeaderAuthority: normalizeMapEntriesToSortedObject(
+      snapshotState.partitionLeaderAuthority,
+    ),
+    publicationEpoch: snapshotState.publicationEpoch,
+    sourceSnapshotVersion: snapshotState.sourceSnapshotVersion,
+    snapshotRevision: snapshotState.snapshotRevision,
+    snapshotRevisionState: snapshotState.snapshotRevisionState,
+    snapshotExpectedMinimumRevision:
+      snapshotState.snapshotExpectedMinimumRevision,
+    snapshotRevisionGap: snapshotState.snapshotRevisionGap,
+    snapshotResumeToken: snapshotState.snapshotResumeToken,
+    publishedActiveNodeIds: authoritativeActiveNodes,
+    observationSource: OBSERVATION_SOURCE_CONTROL_SNAPSHOT,
+    observationMode: snapshotState.observationMode,
+    controlPlaneDiagnostics: cloneDiagnostics(
+      snapshotState.controlPlaneDiagnostics,
+    ),
+    controlSnapshotError: null,
+  };
+}
+
 async function queryNodeConsistencyState(node, options = {}) {
   if (typeof node?.getControlSnapshot === 'function') {
     const snapshotState = await queryControlSnapshot(node, {
@@ -396,47 +403,7 @@ async function queryNodeConsistencyState(node, options = {}) {
       forceAuthoritativeRepair: options.forceAuthoritativeRepair === true,
       timeoutMs: options.timeoutMs,
     });
-    return {
-      nodeId: String(node?.id || VALUE_UNKNOWN),
-      activeNodes: Array.from(snapshotState.activeNodeIds || []).sort(),
-      authoritativeActiveNodes:
-        snapshotState.authoritativeActiveNodeIds instanceof Set ?
-          Array.from(snapshotState.authoritativeActiveNodeIds).sort() :
-          null,
-      projectedActiveNodes:
-        snapshotState.projectedActiveNodeIds instanceof Set ?
-          Array.from(snapshotState.projectedActiveNodeIds).sort() :
-          null,
-      partitions: Array.from(snapshotState.expectedPartitionIds || []).sort(),
-      leaders: Object.fromEntries(
-        Array.from(snapshotState.leaders || []).sort(([left], [right]) =>
-          left.localeCompare(right),
-        ),
-      ),
-      partitionLeaderAuthority: Object.fromEntries(
-        Array.from(snapshotState.partitionLeaderAuthority || []).sort(
-          ([left], [right]) => left.localeCompare(right),
-        ),
-      ),
-      publicationEpoch: snapshotState.publicationEpoch,
-      sourceSnapshotVersion: snapshotState.sourceSnapshotVersion,
-      snapshotRevision: snapshotState.snapshotRevision,
-      snapshotRevisionState: snapshotState.snapshotRevisionState,
-      snapshotExpectedMinimumRevision:
-        snapshotState.snapshotExpectedMinimumRevision,
-      snapshotRevisionGap: snapshotState.snapshotRevisionGap,
-      snapshotResumeToken: snapshotState.snapshotResumeToken,
-      publishedActiveNodeIds:
-        snapshotState.authoritativeActiveNodeIds instanceof Set ?
-          Array.from(snapshotState.authoritativeActiveNodeIds).sort() :
-          null,
-      observationSource: OBSERVATION_SOURCE_CONTROL_SNAPSHOT,
-      observationMode: snapshotState.observationMode,
-      controlPlaneDiagnostics: cloneDiagnostics(
-        snapshotState.controlPlaneDiagnostics,
-      ),
-      controlSnapshotError: null,
-    };
+    return buildConsistencyStateFromSnapshotState(node, snapshotState);
   }
 
   return queryNodeConsistencyStateViaSql(node);
@@ -1303,6 +1270,40 @@ async function waitForConvergence(nodes, options = {}) {
   throw err;
 }
 
+function buildPartitionReplicaEntry(row) {
+  return {
+    nodeId: row.node_id ? String(row.node_id) : null,
+    address: row.address ? String(row.address) : null,
+    status: row.status ? String(row.status) : null,
+    raftRole: row.raft_role ? String(row.raft_role) : null,
+    voterReady: isVoterReady(row),
+  };
+}
+
+function buildSinglePartitionMembershipRecord(replicas, targetVoterCount) {
+  replicas.sort(compareReplicaMembershipEntries);
+  const voterCount = arrayFilter(
+    replicas,
+    (replica) => replica.voterReady === true,
+  ).length;
+  const leader = arrayFind(
+    replicas,
+    (replica) =>
+      String(replica.raftRole || '').toLowerCase() === STATUS_LEADER,
+  );
+  return {
+    targetVoterCount,
+    voterCount,
+    leader: leader?.address || leader?.nodeId || null,
+    replicas: arrayMap(replicas, (replica) => ({
+      nodeId: replica.nodeId,
+      address: replica.address,
+      status: replica.status,
+      raftRole: replica.raftRole,
+    })),
+  };
+}
+
 function buildPartitionMembership(rows, targetVoterCount) {
   const grouped = new Map();
   for (const row of rows) {
@@ -1313,36 +1314,15 @@ function buildPartitionMembership(rows, targetVoterCount) {
     if (!grouped.has(partitionId)) {
       grouped.set(partitionId, []);
     }
-    grouped.get(partitionId).push({
-      nodeId: row.node_id ? String(row.node_id) : null,
-      address: row.address ? String(row.address) : null,
-      status: row.status ? String(row.status) : null,
-      raftRole: row.raft_role ? String(row.raft_role) : null,
-      voterReady: isVoterReady(row),
-    });
+    grouped.get(partitionId).push(buildPartitionReplicaEntry(row));
   }
 
   const membership = {};
   for (const [partitionId, replicas] of grouped) {
-    replicas.sort(compareReplicaMembershipEntries);
-    const voterCount = replicas.filter(
-      (replica) => replica.voterReady === true,
-    ).length;
-    const leader = replicas.find(
-      (replica) =>
-        String(replica.raftRole || '').toLowerCase() === STATUS_LEADER,
-    );
-    membership[partitionId] = {
+    membership[partitionId] = buildSinglePartitionMembershipRecord(
+      replicas,
       targetVoterCount,
-      voterCount,
-      leader: leader?.address || leader?.nodeId || null,
-      replicas: replicas.map((replica) => ({
-        nodeId: replica.nodeId,
-        address: replica.address,
-        status: replica.status,
-        raftRole: replica.raftRole,
-      })),
-    };
+    );
   }
 
   return membership;
@@ -1522,13 +1502,14 @@ function formatOperationHistorySnippet(
 }
 
 function formatOperationHistoryEntry(entry) {
-  const operationId = entry?.operationId || VALUE_UNKNOWN;
-  const partitionId = entry?.partitionId || VALUE_UNKNOWN;
-  const type = entry?.type || VALUE_UNKNOWN;
-  const status = entry?.status || VALUE_UNKNOWN;
-  const fromNodeId = entry?.fromNodeId || VALUE_UNKNOWN;
-  const toNodeId = entry?.toNodeId || VALUE_UNKNOWN;
-  const at = entry?.at || VALUE_UNKNOWN;
+  const record = entry ?? {};
+  const operationId = record.operationId || VALUE_UNKNOWN;
+  const partitionId = record.partitionId || VALUE_UNKNOWN;
+  const type = record.type || VALUE_UNKNOWN;
+  const status = record.status || VALUE_UNKNOWN;
+  const fromNodeId = record.fromNodeId || VALUE_UNKNOWN;
+  const toNodeId = record.toNodeId || VALUE_UNKNOWN;
+  const at = record.at || VALUE_UNKNOWN;
   return (
     operationId +
     ':' +
@@ -1557,8 +1538,16 @@ function cloneDiagnostics(value) {
   }
 }
 
+function resolveOptionalIntegerField(primaryValue, fallbackValue = null) {
+  if (Number.isInteger(primaryValue)) {
+    return primaryValue;
+  }
+  return Number.isInteger(fallbackValue) ? fallbackValue : null;
+}
+
 function buildPublicationConvergenceFromState(state) {
-  const convergence = state?.controlPlaneDiagnostics?.publicationConvergence;
+  const source = state ?? {};
+  const convergence = source.controlPlaneDiagnostics?.publicationConvergence;
   if (
     convergence &&
     typeof convergence === 'object' &&
@@ -1567,37 +1556,50 @@ function buildPublicationConvergenceFromState(state) {
     const clonedConvergence = cloneDiagnostics(convergence);
     return {
       ...clonedConvergence,
-      sourceSnapshotVersion: Number.isInteger(
+      sourceSnapshotVersion: resolveOptionalIntegerField(
         clonedConvergence?.sourceSnapshotVersion,
-      ) ?
-        clonedConvergence.sourceSnapshotVersion :
-        Number.isInteger(state?.sourceSnapshotVersion) ?
-          state.sourceSnapshotVersion :
-          null,
+        source.sourceSnapshotVersion,
+      ),
     };
   }
-  const publicationEpoch = Number.isInteger(state?.publicationEpoch) ?
-    state.publicationEpoch :
-    null;
-  const sourceSnapshotVersion = Number.isInteger(state?.sourceSnapshotVersion) ?
-    state.sourceSnapshotVersion :
-    null;
-  const publishedActiveNodeIds = Array.isArray(state?.publishedActiveNodeIds) ?
-    [...state.publishedActiveNodeIds].sort() :
-    null;
+  const publicationEpoch = resolveOptionalIntegerField(source.publicationEpoch);
+  const sourceSnapshotVersion = resolveOptionalIntegerField(
+    source.sourceSnapshotVersion,
+  );
+  const hasPublishedNodes = Array.isArray(source.publishedActiveNodeIds);
   if (
-    !Number.isInteger(publicationEpoch) &&
-    !Number.isInteger(sourceSnapshotVersion) &&
-    !Array.isArray(publishedActiveNodeIds)
+    publicationEpoch === null &&
+    sourceSnapshotVersion === null &&
+    !hasPublishedNodes
   ) {
     return null;
   }
   return {
     publicationEpoch,
     sourceSnapshotVersion,
-    publishedActiveNodeIds: Array.isArray(publishedActiveNodeIds) ?
-      publishedActiveNodeIds :
+    publishedActiveNodeIds: hasPublishedNodes ?
+      [...source.publishedActiveNodeIds].sort() :
       [],
+  };
+}
+
+function buildFinalAdjudicationSnapshotFromState(nodeState) {
+  const diag = nodeState.controlPlaneDiagnostics ?? {};
+  const replicaOps = nodeState.replicaOperations ?? {};
+  const diagReplicaOps = diag.replicaOperations ?? {};
+  return {
+    nodeId: nodeState.nodeId,
+    partitions: nodeState.partitions || [],
+    leaders: nodeState.leaders || {},
+    replicaRoleDiagnostics: diag.replicaRoleDiagnostics || {},
+    replicaOperations: {
+      inFlightCount:
+        replicaOps.inFlightCount ??
+        diagReplicaOps.inFlightCount ??
+        FINAL_ADJUDICATION_EMPTY_IN_FLIGHT_COUNT,
+      statusHistogram:
+        replicaOps.statusHistogram || diagReplicaOps.statusHistogram || {},
+    },
   };
 }
 
@@ -1662,24 +1664,7 @@ async function runFinalAdjudication(nodes, options = {}) {
           timeoutMs: FINAL_ADJUDICATION_FINAL_SNAPSHOT_TIMEOUT_MS,
         });
 
-        snapshots.push({
-          nodeId: nodeState.nodeId,
-          partitions: nodeState.partitions || [],
-          leaders: nodeState.leaders || {},
-          replicaRoleDiagnostics:
-            nodeState.controlPlaneDiagnostics?.replicaRoleDiagnostics || {},
-          replicaOperations: {
-            inFlightCount: nodeState.replicaOperations?.inFlightCount ??
-              (
-                nodeState.controlPlaneDiagnostics
-                  ?.replicaOperations?.inFlightCount ??
-                FINAL_ADJUDICATION_EMPTY_IN_FLIGHT_COUNT
-              ),
-            statusHistogram: nodeState.replicaOperations?.statusHistogram ||
-              nodeState.controlPlaneDiagnostics
-                ?.replicaOperations?.statusHistogram || {},
-          },
-        });
+        snapshots.push(buildFinalAdjudicationSnapshotFromState(nodeState));
       }
     } catch (_error) {
       return null;

@@ -1,5 +1,24 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
+import {
+  CREATE_TABLE_ACTION, decideCreateTableAction,
+} from '../../src/query/table-creation-service-create-table.js';
+import {
+  decodePartitionMetadataRecord, decodeTableMetadataRecord,
+} from '../../src/query/table-creation-service-metadata-lookup.js';
+import {
+  isPartitionField, stripPartitionDetails, validatePrimaryKey,
+} from '../../src/query/table-creation-service-result-projection.js';
+import {
+  buildColumnMetadata, buildSchemaDefinition, derivePartitionKey,
+  extractColumnCheckConstraints, extractColumnCollations, extractColumnDefaults,
+  extractColumnNames, extractColumnTypes, extractNotNullColumns,
+  extractTableConstraints, extractUniqueColumns, findPrimaryKeyColumn,
+  normalizeDataType,
+} from '../../src/query/table-creation-service-schema-derivation.js';
+import {
+  SCHEMA_PROVISIONING_ERROR_CODE,
+} from '../../src/query/schema-provisioning-job-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
@@ -62,6 +81,9 @@ function createCreateTableAst() {
 function createObservableSystemCache(tableRows = [], partitionRows = []) {
   const listeners = new Set();
   return {
+    find(tableName, predicate) {
+      return this.getAll(tableName).find(predicate) || null;
+    },
     getAll(tableName) {
       if (tableName === 'tables') {
         return tableRows;
@@ -88,6 +110,18 @@ function createObservableSystemCache(tableRows = [], partitionRows = []) {
   };
 }
 
+function createMockCdcService(overrides = {}) {
+  return {
+    async executeAuthoritativeSystemTableRead() {
+      return {success: true, rows: []};
+    },
+    async insertSystemTableRow() {
+      return {success: true};
+    },
+    ...overrides,
+  };
+}
+
 test('TableCreationService - triggers split/merge evaluation after CREATE TABLE',
   async (t) => {
     let evaluationCalls = 0;
@@ -97,11 +131,7 @@ test('TableCreationService - triggers split/merge evaluation after CREATE TABLE'
           return null;
         },
       },
-      cdcIntegrationService: {
-        async insertSystemTableRow() {
-          return {success: true};
-        },
-      },
+      cdcIntegrationService: createMockCdcService(),
       partitionSplitMergeManager: {
         async evaluateAllPartitions() {
           evaluationCalls += 1;
@@ -123,11 +153,7 @@ test('TableCreationService - continues when split/merge evaluation fails',
           return null;
         },
       },
-      cdcIntegrationService: {
-        async insertSystemTableRow() {
-          return {success: true};
-        },
-      },
+      cdcIntegrationService: createMockCdcService(),
       partitionSplitMergeManager: {
         async evaluateAllPartitions() {
           throw new Error('manager unavailable');
@@ -349,12 +375,12 @@ test('TableCreationService - writes partition metadata with logical table_name',
           return null;
         },
       },
-      cdcIntegrationService: {
+      cdcIntegrationService: createMockCdcService({
         async insertSystemTableRow(tableName, row) {
           writes.push({tableName, row});
           return {success: true};
         },
-      },
+      }),
     });
 
     const result = await service.executeCreateTableProvisioning(createCreateTableAst());
@@ -442,6 +468,9 @@ test('TableCreationService - forwards timeout budget to fresh initial ' +
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
+      async readRows() {
+        return {success: true, rows: []};
+      },
       async submitMutation() {
         return {success: true};
       },
@@ -626,11 +655,7 @@ test('TableCreationService - provisions initial partition when callback is confi
           return null;
         },
       },
-      cdcIntegrationService: {
-        async insertSystemTableRow() {
-          return {success: true};
-        },
-      },
+      cdcIntegrationService: createMockCdcService(),
       partitionProvisioner: async (context) => {
         provisionContext = context;
       },
@@ -666,11 +691,7 @@ test('TableCreationService - provisions CREATE TABLE partitions with a ' +
         return null;
       },
     },
-    cdcIntegrationService: {
-      async insertSystemTableRow() {
-        return {success: true};
-      },
-    },
+    cdcIntegrationService: createMockCdcService(),
     calculateQuorumReplicaCount(replicaCount) {
       return Math.floor(replicaCount / 2) + 1;
     },
@@ -697,11 +718,7 @@ test('TableCreationService - surfaces initial partition provisioning failures',
           return null;
         },
       },
-      cdcIntegrationService: {
-        async insertSystemTableRow() {
-          return {success: true};
-        },
-      },
+      cdcIntegrationService: createMockCdcService(),
       partitionProvisioner: async () => {
         throw new Error('provision failed');
       },
@@ -798,6 +815,9 @@ function commitAnsweringTableCreation(provisioning, answerExtra = {}) {
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
+      async readRows() {
+        return {success: true, rows: []};
+      },
       async submitMutation(mutation, options) {
         submittedMutations.push({mutation, options});
         return {
@@ -906,11 +926,7 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
           return null;
         },
       },
-      cdcIntegrationService: {
-        async insertSystemTableRow() {
-          return {success: true};
-        },
-      },
+      cdcIntegrationService: createMockCdcService(),
       partitionProvisioner: async () => {
         return {
           requestedReplicaCount: 3,
@@ -965,11 +981,7 @@ async (t) => {
         return null;
       },
     },
-    cdcIntegrationService: {
-      async insertSystemTableRow() {
-        return {success: true};
-      },
-    },
+    cdcIntegrationService: createMockCdcService(),
     partitionProvisioner: async () => {},
   });
 
@@ -1013,41 +1025,29 @@ async (t) => {
     {
       label: 'zero routable and committed replicas',
       payload: {
-        requestedReplicaCount: 3,
-        resolvedReplicaCount: 3,
-        minimumRoutableReplicaCount: 2,
-        routableReplicaCount: 0,
-        committedReplicaCount: 0,
+        requestedReplicaCount: 3, resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2, routableReplicaCount: 0, committedReplicaCount: 0,
       },
     },
     {
       label: 'routableReplicaCount below minimumRoutableReplicaCount',
       payload: {
-        requestedReplicaCount: 3,
-        resolvedReplicaCount: 3,
-        minimumRoutableReplicaCount: 2,
-        routableReplicaCount: 1,
-        committedReplicaCount: 1,
+        requestedReplicaCount: 3, resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2, routableReplicaCount: 1, committedReplicaCount: 1,
       },
     },
     {
       label: 'committedReplicaCount below minimumRoutableReplicaCount',
       payload: {
-        requestedReplicaCount: 3,
-        resolvedReplicaCount: 3,
-        minimumRoutableReplicaCount: 2,
-        routableReplicaCount: 2,
-        committedReplicaCount: 1,
+        requestedReplicaCount: 3, resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2, routableReplicaCount: 2, committedReplicaCount: 1,
       },
     },
     {
       label: 'inconsistent under_replicated/proceed claim with zero observed replicas',
       payload: {
-        requestedReplicaCount: 3,
-        resolvedReplicaCount: 3,
-        minimumRoutableReplicaCount: 2,
-        routableReplicaCount: 0,
-        committedReplicaCount: 0,
+        requestedReplicaCount: 3, resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2, routableReplicaCount: 0, committedReplicaCount: 0,
         fullReplicaCountConverged: false,
         contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
         nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
@@ -1056,10 +1056,8 @@ async (t) => {
     {
       label: 'omitted committedReplicaCount must not be inferred from routableReplicaCount',
       payload: {
-        requestedReplicaCount: 3,
-        resolvedReplicaCount: 3,
-        minimumRoutableReplicaCount: 2,
-        routableReplicaCount: 3,
+        requestedReplicaCount: 3, resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2, routableReplicaCount: 3,
         fullReplicaCountConverged: true,
         contractState: OWNER_CONTRACT_STATE.READY,
         nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
@@ -1069,58 +1067,18 @@ async (t) => {
 
   for (const testCase of insufficientCases) {
     const service = new TableCreationService({
-      systemCache: {
-        find() {
-          return null;
-        },
-      },
-      cdcIntegrationService: {
-        async insertSystemTableRow() {
-          return {success: true};
-        },
-      },
+      systemCache: {find: () => null},
+      cdcIntegrationService: createMockCdcService(),
       partitionProvisioner: async () => testCase.payload,
     });
-
-    const result = await service.executeCreateTableProvisioning(
-      createCreateTableAst(),
-    );
-
-    t.not(
-      result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
-      `${testCase.label}: must never report completionState active`,
-    );
-    t.not(
-      result.nextAction,
-      OWNER_CONTRACT_NEXT_ACTION.PROCEED,
-      `${testCase.label}: must never report nextAction proceed`,
-    );
-    t.equal(
-      result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
-      `${testCase.label}: must classify as pending_creation`,
-    );
-    t.equal(
-      result.completionReason,
-      'replica_convergence_pending',
-      `${testCase.label}: must explain pending replica convergence`,
-    );
-    t.equal(
-      result.contractState,
-      OWNER_CONTRACT_STATE.PENDING,
-      `${testCase.label}: contractState must be pending`,
-    );
-    t.equal(
-      result.nextAction,
-      OWNER_CONTRACT_NEXT_ACTION.WAIT,
-      `${testCase.label}: nextAction must be wait`,
-    );
-    t.equal(
-      result.provisioningSummary.fullReplicaCountConverged,
-      false,
-      `${testCase.label}: fullReplicaCountConverged must be false`,
-    );
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+    t.not(result.completionState, TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE, testCase.label);
+    t.not(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED, testCase.label);
+    t.equal(result.completionState, TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION);
+    t.equal(result.completionReason, 'replica_convergence_pending');
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+    t.equal(result.provisioningSummary.fullReplicaCountConverged, false);
   }
 });
 
@@ -1338,4 +1296,168 @@ test('resolveActivePartitionVersion and isPartitionVisibleForRouting require ' +
     isPartitionVisibleForRouting({partition_version: 1, state: 'NORMAL'}, null),
     false,
   );
+});
+
+test('TableCreationService - validates collaborators at composition point',
+  async (t) => {
+    t.throws(() => new TableCreationService({systemCache: {getAll: () => []}}), TypeError);
+    const service = new TableCreationService();
+    t.throws(() => service.setSystemCache({getAll: () => []}), TypeError);
+    t.throws(() => new TableCreationService({
+      controlPlaneSystemTableGateway: {async readRows() {}},
+    }), TypeError);
+    t.throws(() => new TableCreationService({
+      controlPlaneSystemTableGateway: {async submitMutation() {}},
+    }), TypeError);
+    t.throws(() => service.setControlPlaneSystemTableGateway({}), TypeError);
+    await service.shutdown();
+  });
+
+test('TableCreationService - decodes metadata records once into frozen canonical shapes',
+  async (t) => {
+    const decodedTable = decodeTableMetadataRecord({
+      table_id: 'tbl-orders', table_name: 'orders',
+      partition_key: 'order_id', schema_definition: '{"columns":[]}',
+    });
+    t.equal(Object.isFrozen(decodedTable), true);
+    t.equal(decodedTable.table_id, 'tbl-orders');
+    t.equal(decodedTable.table_name, 'orders');
+    t.equal(decodedTable.partition_key, 'order_id');
+    t.equal(decodedTable.schema_definition, '{"columns":[]}');
+    t.equal(decodedTable.table_policies, null);
+    t.equal(decodedTable.partition_count, null);
+    t.equal(decodeTableMetadataRecord(null), null);
+
+    const decodedPartition = decodePartitionMetadataRecord({
+      partition_id: 'tbl-orders-p1', table_id: 'tbl-orders',
+      table_name: 'orders', replica_count: 3,
+    });
+    t.equal(Object.isFrozen(decodedPartition), true);
+    t.equal(decodedPartition.partition_id, 'tbl-orders-p1');
+    t.equal(decodedPartition.table_id, 'tbl-orders');
+    t.equal(decodedPartition.table_name, 'orders');
+    t.equal(decodedPartition.replica_count, 3);
+    t.equal(decodedPartition.partition_key_start, null);
+    t.equal(decodedPartition.partition_key_end, null);
+    t.equal(decodedPartition.partition_key_type, null);
+    t.equal(decodePartitionMetadataRecord(null), null);
+
+    const service = new TableCreationService({
+      systemCache: {
+        find(tableName, predicate) {
+          if (tableName === 'tables') {
+            return [{
+              table_id: 'tbl-orders', table_name: 'orders', partition_key: 'order_id',
+              schema_definition: '{"columns":[{"name":"order_id","type":"TEXT"}]}',
+            }].find(predicate) || null;
+          }
+          if (tableName === 'partitions') {
+            return [{
+              partition_id: 'tbl-orders-p1', table_id: 'tbl-orders',
+              table_name: 'orders', replica_count: 3,
+            }].find(predicate) || null;
+          }
+          return null;
+        },
+      },
+    });
+    const cachedTable = service.getTableRecord('orders');
+    t.equal(Object.isFrozen(cachedTable), true);
+    t.equal(cachedTable.table_id, 'tbl-orders');
+    t.equal(service.getPartitionKey('orders'), 'order_id');
+    t.same(service.getTableSchema('orders'), {columns: [{name: 'order_id', type: 'TEXT'}]});
+    const cachedPartition = service.getPartitionRecord('tbl-orders-p1');
+    t.equal(Object.isFrozen(cachedPartition), true);
+    t.equal(cachedPartition.partition_id, 'tbl-orders-p1');
+    await service.shutdown();
+  });
+
+test('TableCreationService - distinguishes absence from unavailable authority ' +
+  'in findExistingTableRecord and findExistingPartitionRecord', async (t) => {
+  const missingGatewayService = new TableCreationService({
+    systemCache: {find: () => null},
+    cdcIntegrationService: createMockCdcService(),
+    controlPlaneSystemTableGateway: null,
+  });
+  await t.rejects(
+    missingGatewayService.findExistingTableRecord('users'),
+    {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE},
+  );
+  await t.rejects(
+    missingGatewayService.findExistingPartitionRecord('tbl-users-p1'),
+    {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE},
+  );
+  await missingGatewayService.shutdown();
+
+  const failingGatewayService = new TableCreationService({
+    systemCache: {find: () => null},
+    cdcIntegrationService: createMockCdcService(),
+    controlPlaneSystemTableGateway: {
+      async readRows() {
+        throw new Error('gateway read timeout');
+      },
+      async submitMutation() {
+        return {success: true};
+      },
+    },
+  });
+  await t.rejects(failingGatewayService.findExistingTableRecord('users'), {
+    message: /gateway read timeout/u,
+    code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE,
+  });
+  await t.rejects(failingGatewayService.findExistingPartitionRecord('tbl-users-p1'), {
+    message: /gateway read timeout/u,
+    code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE,
+  });
+  await failingGatewayService.shutdown();
+});
+
+test('TableCreationService - pure schema derivation, result projection, and ' +
+  'decideCreateTableAction exports', async (t) => {
+  const ast = {
+    tableName: 'accounts',
+    primaryKey: ['account_id'],
+    ifNotExists: false,
+    columns: [
+      {name: 'account_id', dataType: {name: 'INT'}, primaryKey: true, notNull: true, unique: true},
+      {
+        name: 'balance', dataType: {name: 'INTEGER'}, notNull: true, checkSql: 'balance >= 0',
+        defaultValue: {type: 'literal', value: 0, sqlType: 'INTEGER'}, collation: 'binary',
+      },
+    ],
+    tableConstraints: [{type: 'CHECK', checkSql: 'balance >= 0'}],
+  };
+
+  t.equal(derivePartitionKey(ast.primaryKey), 'account_id');
+  t.equal(normalizeDataType('VARCHAR'), 'TEXT');
+  t.same(extractColumnNames(ast), ['account_id', 'balance']);
+  t.equal(findPrimaryKeyColumn(ast), 'account_id');
+  t.same(extractNotNullColumns(ast), ['account_id', 'balance']);
+  t.same(extractColumnTypes(ast), {account_id: 'INTEGER', balance: 'INTEGER'});
+  t.same(extractColumnDefaults(ast), {account_id: undefined, balance: '0'});
+  t.same(extractColumnCollations(ast), {account_id: 'BINARY', balance: 'BINARY'});
+  t.same(extractUniqueColumns(ast), ['account_id']);
+  t.same(extractColumnCheckConstraints(ast), [{name: 'balance', checkSql: 'balance >= 0'}]);
+  t.same(extractTableConstraints(ast), [{type: 'CHECK', checkSql: 'balance >= 0'}]);
+  t.equal(buildColumnMetadata(ast.columns[0]).type, 'INTEGER');
+  t.equal(buildSchemaDefinition(ast).primaryKey[0], 'account_id');
+  t.equal(validatePrimaryKey(ast).valid, true);
+  t.equal(isPartitionField('_partition_id'), true);
+  t.equal(isPartitionField('balance'), false);
+  t.same(stripPartitionDetails({rows: [{account_id: 1, _partition_id: 'p1'}], sourcePartition: 'p1'}),
+    {rows: [{account_id: 1}]});
+
+  t.same(decideCreateTableAction({
+    ast, options: {}, existingTable: {table_id: 'tbl-1'}, hasPersistenceAuthority: true,
+  }), {action: CREATE_TABLE_ACTION.THROW_TABLE_EXISTS});
+  t.same(decideCreateTableAction({
+    ast: {...ast, ifNotExists: true}, options: {},
+    existingTable: {table_id: 'tbl-1'}, hasPersistenceAuthority: true,
+  }), {action: CREATE_TABLE_ACTION.RECONCILE_EXISTING});
+  t.same(decideCreateTableAction({
+    ast, options: {}, existingTable: null, hasPersistenceAuthority: true,
+  }), {action: CREATE_TABLE_ACTION.CREATE_PERSISTED});
+  t.same(decideCreateTableAction({
+    ast, options: {}, existingTable: null, hasPersistenceAuthority: false,
+  }), {action: CREATE_TABLE_ACTION.CREATE_EPHEMERAL});
 });

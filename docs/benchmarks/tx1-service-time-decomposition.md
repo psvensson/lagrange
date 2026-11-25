@@ -233,9 +233,9 @@ The following eleven optimizations and diagnostic sensors identified during the 
 1. **Per-key `readRowKeys` footprint tracking (`Implemented in Wave 5, 44eeb290a`):**
    - `src/partition/partition-participant-transaction-staging.js` replaces partition-wide `session.hasExecutedRead` boolean conflict escalation with per-key `session.readRowKeys` (`Set`) + `session.hasUnscopedRead`, preventing false `40001` aborts when concurrent transactions read and write disjoint primary keys on the same partition (such as disjoint `item_id` rows on `stock-p1`).
 2. **Durable `PREPARE` read-dependency preservation (`Implemented in Wave 5, 44eeb290a`):**
-   - `src/partition/partition-service-transaction-prepare.js` and `src/partition/partition-transaction-intent-validation.js` persist `readRowKeys` and `hasUnscopedRead` into the durable `PREPARE` record and enforce the full read/write conflict predicate `(W_1 \cap W_2) \lor (W_1 \cap R_2) \lor (R_1 \cap W_2)` across re-evaluation, prepare validation, and follower/restart replay.
+   - `src/partition/partition-participant-transaction-session.js` and `src/partition/partition-participant-transaction-store.js` persist `readRowKeys` and `hasUnscopedRead` into the durable `PREPARE` record and enforce the full read/write conflict predicate `(W_1 \cap W_2) \lor (W_1 \cap R_2) \lor (R_1 \cap W_2)` across re-evaluation, prepare validation, and follower/restart replay.
 3. **Footprint AST plan caching (`Implemented in Wave 5, 44eeb290a`):**
-   - `src/partition/partition-row-key-footprint.js` caches compiled primary-key extraction plans across repeated parameterized SQL templates so per-statement row-key footprint extraction avoids re-parsing SQL ASTs on hot OLTP statements.
+   - `src/partition/partition-participant-transaction-staging.js` caches compiled primary-key extraction plans across repeated parameterized SQL templates so per-statement row-key footprint extraction avoids re-parsing SQL ASTs on hot OLTP statements.
 4. **Incremental staged byte accounting (`Implemented in Wave 5, 44eeb290a`):**
    - `src/partition/partition-participant-transaction-staging.js` maintains incremental staged byte totals as operations are appended rather than re-serializing the full staged operation list on every write statement.
 5. **Disjoint-read replay bypass (`Implemented in Wave 5, 44eeb290a`):**
@@ -243,15 +243,15 @@ The following eleven optimizations and diagnostic sensors identified during the 
 6. **Local wait-for-cycle detection & victim claim release (`Implemented in Wave 5, 44eeb290a`):**
    - `src/partition/partition-row-key-waiters.js` tracks directed waiter->holder edges across active row-key claims on a partition, detects wait-for cycles (such as 2-worker `stock-p1` key-order inversions) immediately instead of stalling for the `15,000 ms` `DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS` timeout, and releases victim row-key claims cleanly on rollback/abort.
 7. **Storage-owned `observePersistedPartitionTerm` (`Implemented in Wave 5, 44eeb290a`):**
-   - `src/storage/sqlite-persisted-term-observer.js` and `src/raft/raft-coordinator.js` replace per-poll readonly SQLite open/close handles with a storage-owned persistent prepared-statement term observer, eliminating formation-time file-descriptor churn.
+   - `src/storage/sqlite-store.js` and `src/raft/raft-rs-durable-store.js` replace per-poll readonly SQLite open/close handles with a storage-owned persistent prepared-statement term observer, eliminating formation-time file-descriptor churn.
 8. **`RaftRsDurableStore` `totalSyncMs` / `syncCommitCount` / `syncFailureCount` instrumentation (`Implemented in Wave 5, 44eeb290a`):**
    - `src/raft/raft-rs-durable-store.js` directly measures cumulative synchronous WAL `fsync` commit elapsed time (`totalSyncMs`), count (`syncCommitCount`), and failures (`syncFailureCount`) inside `commitDurably`.
 9. **Narrow $O(1)$ pressure sensor (`Implemented in Wave 5, 44eeb290a`):**
-   - `src/network/pressure-governor-release-watch.js` and `src/network/message-router-inbound-dispatch.js` short-circuit unchanged pressure-governor release passes in $O(1)$ using a 3-integer revision check without allocating signature strings or re-scanning pending waiter arrays.
+   - `src/control-plane/pressure-governor.js` short-circuit unchanged pressure-governor release passes in $O(1)$ using a 3-integer revision check without allocating signature strings or re-scanning pending waiter arrays.
 10. **Partition-indexed `servicesForPartition(partitionId)` lookup (`Implemented in Wave 5, 44eeb290a`):**
     - Control-plane service-instance lookups index services by `partitionId` rather than scanning all service instances linearly on each partition routing/rebalance check.
 11. **Atomic coordinator status transitions (`manifest-freeze + PREPARING` and `decision + COMMITTING`) & async PG-wire flush (`Implemented in Wave 5, 44eeb290a`):**
-    - `src/query/distributed-transaction-coordinator-commit.js` and `src/query/sql-query-engine-transaction-persistence-methods.js` atomically combine `freezeParticipantSet` with `status = 'PREPARING'` and `recordTransactionDecision` with `status = 'COMMITTING'`, reducing actual coordinator metadata submissions per write transaction from `7 + 4P + W` (`12` for `P = 1, W = 1`; `27` for `payment`; `54` for 12-item `new_order`) to **`5 + 4P + W` (`10` for `P = 1, W = 1`; `25` for `payment`; `52` for 12-item `new_order`)**.
+    - `src/query/distributed/distributed-transaction-decision-protocol.js` and `src/query/sql-query-engine-transaction-persistence-methods.js` atomically combine `freezeParticipantSet` with `status = 'PREPARING'` and `recordTransactionDecision` with `status = 'COMMITTING'`, reducing actual coordinator metadata submissions per write transaction from `7 + 4P + W` (`12` for `P = 1, W = 1`; `27` for `payment`; `54` for 12-item `new_order`) to **`5 + 4P + W` (`10` for `P = 1, W = 1`; `25` for `payment`; `52` for 12-item `new_order`)**.
 
 ### 6.2 Remaining Future Levers and Their Required Prerequisite Contracts
 

@@ -106,8 +106,9 @@ const RATCHET_TARGETS = [
     // State-read named defaults (42/1330 on its branch) merged at the lower 37/1187;
     // 37/1187 -> 35/1109 on the checker's hint after the admin control snapshot
     // imported the one latest-membership-publication-row resolver.
-    baselineCloneGroupCount: 35,
-    baselineDuplicatedLineCount: 1109,
+    // 2026-11-25: tightened 35/1109 -> 32/1028 on the checker's hint.
+    baselineCloneGroupCount: 32,
+    baselineDuplicatedLineCount: 1028,
     strictEligible: true,
   },
   {
@@ -302,8 +303,10 @@ const RATCHET_TARGETS = [
     // 2026-11-21: measured after the SQLite fixture migration.
     // 2026-11-21 (leader-role dead arms): tightened 609/21780 -> 606/21632
     // on the checker hint.
-    baselineCloneGroupCount: 606,
-    baselineDuplicatedLineCount: 21632,
+    // 2026-11-25: tightened 606/21632 -> 594/21048 after extracting shared
+    // recovery-tail and bootstrap-plan fixtures.
+    baselineCloneGroupCount: 594,
+    baselineDuplicatedLineCount: 21048,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

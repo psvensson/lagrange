@@ -16,8 +16,50 @@ import {
   buildCreateTableSuccessResult,
   resolveTableCreationCompletion,
 } from './table-creation-service-completion.js';
+import {
+  buildSchemaDefinition,
+  derivePartitionKey,
+} from './table-creation-service-schema-derivation.js';
 
 const EMPTY_SCHEMA_DEFINITION_JSON = '{}';
+
+const CREATE_TABLE_ACTION = Object.freeze({
+  RECONCILE_EXISTING: 'reconcile_existing',
+  THROW_TABLE_EXISTS: 'throw_table_exists',
+  CREATE_PERSISTED: 'create_persisted',
+  CREATE_EPHEMERAL: 'create_ephemeral',
+});
+
+/**
+ * Pure CREATE TABLE action decision from normalized facts.
+ * @param {Object} input
+ * @param {Object} input.ast - Parsed CREATE TABLE AST.
+ * @param {Object} [input.options] - Provisioning options.
+ * @param {Object|null} [input.existingTable] - Canonical existing table row.
+ * @param {boolean} [input.hasPersistenceAuthority] - Whether control-plane
+ *   metadata persistence is wired.
+ * @return {{action: string}}
+ */
+function decideCreateTableAction({
+  ast,
+  options = {},
+  existingTable = null,
+  hasPersistenceAuthority = false,
+} = {}) {
+  if (existingTable) {
+    if (ast?.ifNotExists) {
+      return {action: CREATE_TABLE_ACTION.RECONCILE_EXISTING};
+    }
+    if (options?.schemaJobId) {
+      return {action: CREATE_TABLE_ACTION.RECONCILE_EXISTING};
+    }
+    return {action: CREATE_TABLE_ACTION.THROW_TABLE_EXISTS};
+  }
+  if (hasPersistenceAuthority) {
+    return {action: CREATE_TABLE_ACTION.CREATE_PERSISTED};
+  }
+  return {action: CREATE_TABLE_ACTION.CREATE_EPHEMERAL};
+}
 
 function sortObject(value) {
   if (Array.isArray(value)) return value.map(sortObject);
@@ -33,9 +75,9 @@ function resolveComparableDefaultValue(derivedCol, rawCol) {
   return null;
 }
 
-function projectComparableSchema(service, schema) {
+function projectComparableSchema(schema) {
   const cols = Array.isArray(schema?.columns) ? schema.columns : [];
-  const derived = service.buildSchemaDefinition({
+  const derived = buildSchemaDefinition({
     columns: cols,
     primaryKey: schema?.primaryKey,
     tableConstraints: schema?.tableConstraints,
@@ -56,17 +98,16 @@ function projectComparableSchema(service, schema) {
   });
 }
 
-function assertDurableMetadataIdentity(service, existingTable, ast, options) {
+function assertDurableMetadataIdentity(existingTable, ast, options) {
   if (!options.schemaJobId) return;
-  const existingTableId = existingTable.table_id || existingTable.tableId;
+  const existingTableId = existingTable.table_id;
   const expectedSchema = sortObject(
-    service.buildSchemaDefinition(ast.columns, ast),
+    buildSchemaDefinition(ast.columns, ast),
   );
   let existingSchema = {};
   try {
     existingSchema = sortObject(JSON.parse(
-      existingTable.schema_definition || existingTable.schemaDefinition ||
-      EMPTY_SCHEMA_DEFINITION_JSON,
+      existingTable.schema_definition || EMPTY_SCHEMA_DEFINITION_JSON,
     ));
   } catch {
     existingSchema = {};
@@ -77,8 +118,8 @@ function assertDurableMetadataIdentity(service, existingTable, ast, options) {
     }
     if (
       options.globalIndex &&
-      JSON.stringify(projectComparableSchema(service, existingSchema)) ===
-        JSON.stringify(projectComparableSchema(service, ast))
+      JSON.stringify(projectComparableSchema(existingSchema)) ===
+        JSON.stringify(projectComparableSchema(ast))
     ) {
       return;
     }
@@ -93,16 +134,12 @@ function assertDurableMetadataIdentity(service, existingTable, ast, options) {
 function requireDurableMetadataGateway(service, options) {
   if (!options.schemaJobId) return null;
   const gateway = service.getControlPlaneSystemTableGateway();
-  if (typeof gateway?.submitMutation === 'function') return gateway;
+  if (gateway) return gateway;
   const error = new Error(
     `Schema job ${options.schemaJobId} metadata persistence is unavailable`,
   );
   error.code = SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE;
   throw error;
-}
-
-function firstTruthyValue(...values) {
-  return values.find(Boolean) || null;
 }
 
 function createTableExistsError(tableName) {
@@ -158,16 +195,9 @@ function buildExistingTableResult(ast, existingTable, reconciliation) {
   const provisioningSummary = reconciliation?.provisioningSummary || null;
   const completion = resolveTableCreationCompletion({provisioningSummary});
   return buildCreateTableSuccessResult({
-    tableId: firstTruthyValue(
-      reconciliation?.tableId,
-      existingTable.table_id,
-      existingTable.tableId,
-    ),
+    tableId: existingTable.table_id,
     tableName: ast.tableName,
-    partitionKey: firstTruthyValue(
-      existingTable.partition_key,
-      existingTable.partitionKey,
-    ),
+    partitionKey: existingTable.partition_key,
     partitionId: reconciliation?.partitionId || null,
     columns: ast.columns.length,
     skipped: true,
@@ -191,10 +221,7 @@ async function reconcileExistingCreateTable(
   options,
   existingTable,
 ) {
-  assertDurableMetadataIdentity(service, existingTable, ast, options);
-  if (!ast.ifNotExists && !options.schemaJobId) {
-    throw createTableExistsError(ast.tableName);
-  }
+  assertDurableMetadataIdentity(existingTable, ast, options);
   const reconciliation = await service.reconcileExistingInitialPartition(
     ast.tableName,
     existingTable,
@@ -206,8 +233,8 @@ async function reconcileExistingCreateTable(
   return buildExistingTableResult(ast, existingTable, reconciliation);
 }
 
-function buildContextSchemaDefinition(service, ast, globalIndex, partitionKey) {
-  const baseSchema = service.buildSchemaDefinition(ast.columns, ast);
+function buildContextSchemaDefinition(ast, globalIndex, partitionKey) {
+  const baseSchema = buildSchemaDefinition(ast.columns, ast);
   if (!globalIndex) {
     return baseSchema;
   }
@@ -263,11 +290,11 @@ function buildContextPartitionMetadata(
   };
 }
 
-function resolveContextPartitionKey(service, ast, globalIndex) {
+function resolveContextPartitionKey(ast, globalIndex) {
   if (globalIndex?.columnNames?.[0]) {
     return globalIndex.columnNames[0];
   }
-  return service.derivePartitionKey(ast.primaryKey);
+  return derivePartitionKey(ast.primaryKey);
 }
 
 function resolveContextPartitionId(tableId, options, firstPartition) {
@@ -285,11 +312,11 @@ function resolveContextPartitionCount(options) {
 function buildCreateTableMetadataContext(service, ast, options) {
   const firstPartition = resolveFirstPartitionSpec(options);
   const globalIndex = options.globalIndex ?? null;
-  const partitionKey = resolveContextPartitionKey(service, ast, globalIndex);
+  const partitionKey = resolveContextPartitionKey(ast, globalIndex);
   const tableId = options.tableId || `tbl-${uuidv4()}`;
   const partitionId = resolveContextPartitionId(tableId, options, firstPartition);
   const schemaDefinition = buildContextSchemaDefinition(
-    service, ast, globalIndex, partitionKey,
+    ast, globalIndex, partitionKey,
   );
   const now = Date.now();
   const tableMetadata = {
@@ -416,6 +443,13 @@ async function buildCreatedTableResult(
 }
 
 async function executePersistedCreateTable(service, context, options, gateway) {
+  if (!gateway) {
+    const error = new Error(
+      `CREATE TABLE ${context.tableName} metadata persistence is unavailable`,
+    );
+    error.code = SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE;
+    throw error;
+  }
   await submitCreateTableMetadata(gateway, context, options);
   await options.assertProvisioningOwnership?.();
   const provisioningSummary = await service.provisionInitialPartition(
@@ -431,55 +465,57 @@ async function executeUnpersistedCreateTable(service, context, options) {
   return buildCreatedTableResult(service, context, provisioningSummary);
 }
 
-const tableCreationCreateTableMethods = {
-  async executeCreateTableProvisioning(ast, options = {}) {
-    validateUserTableCreateIntent(ast);
-    this.logger.info(QUERY_LOG_MSG.TABLE_CREATE_START, {
-      tableName: ast.tableName,
-      columnCount: ast.columns.length,
-      primaryKey: ast.primaryKey,
-      ifNotExists: ast.ifNotExists,
-    });
+async function executeCreateTableProvisioning(service, ast, options = {}) {
+  validateUserTableCreateIntent(ast);
+  service.logger.info(QUERY_LOG_MSG.TABLE_CREATE_START, {
+    tableName: ast.tableName,
+    columnCount: ast.columns.length,
+    primaryKey: ast.primaryKey,
+    ifNotExists: ast.ifNotExists,
+  });
 
-    const existingTable = await this.findExistingTableRecord(ast.tableName);
-    if (existingTable) {
-      return reconcileExistingCreateTable(
-        this,
-        ast,
-        options,
-        existingTable,
-      );
-    }
-
-    const context = buildCreateTableMetadataContext(this, ast, options);
-    const durableMetadataGateway = requireDurableMetadataGateway(this, options);
-    if (this.cdcIntegrationService || durableMetadataGateway) {
-      const metadataGateway = durableMetadataGateway ||
-        this.getControlPlaneSystemTableGateway();
-      return executePersistedCreateTable(
-        this,
-        context,
-        options,
-        metadataGateway,
-      );
-    }
-    return executeUnpersistedCreateTable(this, context, options);
-  },
-};
-
-const EXECUTE_CREATE_TABLE_PROVISIONING_METHOD =
-  'executeCreateTableProvisioning';
-
-function defineTableCreationCreateTableMethod(serviceClass) {
-  Object.defineProperty(
-    serviceClass.prototype,
-    EXECUTE_CREATE_TABLE_PROVISIONING_METHOD,
-    {
-      configurable: true,
-      value: tableCreationCreateTableMethods.executeCreateTableProvisioning,
-      writable: true,
-    },
+  const existingTable = await service.findExistingTableRecord(ast.tableName);
+  const durableMetadataGateway = existingTable ?
+    null :
+    requireDurableMetadataGateway(service, options);
+  const hasPersistenceAuthority = Boolean(
+    service.cdcIntegrationService || durableMetadataGateway,
   );
+  const decision = decideCreateTableAction({
+    ast,
+    options,
+    existingTable,
+    hasPersistenceAuthority,
+  });
+
+  switch (decision.action) {
+  case CREATE_TABLE_ACTION.THROW_TABLE_EXISTS:
+    assertDurableMetadataIdentity(existingTable, ast, options);
+    throw createTableExistsError(ast.tableName);
+  case CREATE_TABLE_ACTION.RECONCILE_EXISTING:
+    return reconcileExistingCreateTable(service, ast, options, existingTable);
+  case CREATE_TABLE_ACTION.CREATE_PERSISTED: {
+    const context = buildCreateTableMetadataContext(service, ast, options);
+    const metadataGateway = durableMetadataGateway ||
+      service.getControlPlaneSystemTableGateway();
+    return executePersistedCreateTable(
+      service,
+      context,
+      options,
+      metadataGateway,
+    );
+  }
+  case CREATE_TABLE_ACTION.CREATE_EPHEMERAL: {
+    const context = buildCreateTableMetadataContext(service, ast, options);
+    return executeUnpersistedCreateTable(service, context, options);
+  }
+  default:
+    throw new Error(`Unsupported CREATE TABLE action: ${decision.action}`);
+  }
 }
 
-export {defineTableCreationCreateTableMethod};
+export {
+  CREATE_TABLE_ACTION,
+  decideCreateTableAction,
+  executeCreateTableProvisioning,
+};

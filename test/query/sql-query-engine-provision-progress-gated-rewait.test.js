@@ -62,6 +62,9 @@ function createClusterFixture({nodeIds}) {
   const cache = {
     onCacheChange() {},
     offCacheChange() {},
+    find(type, predicate) {
+      return (rowsByTable.get(type) || []).find(predicate) || null;
+    },
     filter(type, predicate) {
       return (rowsByTable.get(type) || []).filter(predicate);
     },
@@ -127,6 +130,9 @@ function createEngineFixture({rebalanceCoordinator, cache, localNodeId, clock}) 
   engine.tableCreationService.setControlPlaneSystemTableGateway({
     async readRows() {
       return {success: true, rows: []};
+    },
+    async submitMutation() {
+      return {success: true};
     },
   });
   engine.tableCreationService.createTable = (ast, createOptions) =>

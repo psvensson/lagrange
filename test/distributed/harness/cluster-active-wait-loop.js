@@ -1,38 +1,29 @@
 import {CLUSTER_STARTUP_GATE_LAYER} from './cluster-startup-gate-layer.js';
-import {
-  LIFECYCLE_REASON,
-} from '../../../src/bootstrap/lifecycle-controller-constants.js';
+import {LIFECYCLE_REASON} from '../../../src/bootstrap/lifecycle-controller-constants.js';
 import {
   ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_PUBLICATION_LAG,
   ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG,
 } from './active-gate-closure-classification.js';
 
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arraySome = Function.call.bind(Array.prototype.some);
+
 const {
-  ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE,
-  ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
-  ACTIVE_WAIT_PROGRESS_OBSERVED_REASON_CODE,
-  ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS,
-  CLUSTER_READINESS_MODE_LOAD,
-  CLUSTER_READINESS_MODE_STARTUP,
-  PRIORITY_RECOVERY_SEMANTIC_STATE,
-  ONE,
-  ZERO,
-  normalizeDistinctStringArray,
+  ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE, ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+  ACTIVE_WAIT_PROGRESS_OBSERVED_REASON_CODE, ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS,
+  CLUSTER_READINESS_MODE_LOAD, CLUSTER_READINESS_MODE_STARTUP,
+  PRIORITY_RECOVERY_SEMANTIC_STATE, ONE, ZERO, normalizeDistinctStringArray,
 } = CLUSTER_STARTUP_GATE_LAYER;
 
 const LOAD_READINESS_STABLE_WINDOW_TIMESTAMP_STATE = Object.freeze({
-  AVAILABLE: 'available',
-  UNAVAILABLE: 'unavailable',
+  AVAILABLE: 'available', UNAVAILABLE: 'unavailable',
 });
 const LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP = Object.freeze({
-  state: LOAD_READINESS_STABLE_WINDOW_TIMESTAMP_STATE.UNAVAILABLE,
-  timestampMs: ZERO,
+  state: LOAD_READINESS_STABLE_WINDOW_TIMESTAMP_STATE.UNAVAILABLE, timestampMs: ZERO,
 });
 const LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE = 'none';
-const LOAD_READINESS_STABLE_WINDOW_SOURCE_SELECTED_SNAPSHOT =
-  'selected_snapshot';
-const LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE =
-  'observed_probe';
+const LOAD_READINESS_STABLE_WINDOW_SOURCE_SELECTED_SNAPSHOT = 'selected_snapshot';
+const LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE = 'observed_probe';
 const LOAD_READINESS_STABLE_WINDOW_STATE_CLOSED = 'closed';
 const LOAD_READINESS_STABLE_WINDOW_STATE_PENDING = 'pending';
 const LOAD_READINESS_STABLE_WINDOW_STATE_BLOCKED = 'blocked';
@@ -262,6 +253,13 @@ function isStableWindowTimestampAvailable(timestamp) {
   );
 }
 
+function isSnapshotStartedAtAfterReset(selectedCapturedAt, resetAt) {
+  if (!isStableWindowTimestampAvailable(resetAt)) {
+    return true;
+  }
+  return selectedCapturedAt.timestampMs >= resetAt.timestampMs;
+}
+
 function resolveLoadReadinessSnapshotStartedAt({
   snapshotCoverage = {},
   resetAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
@@ -270,21 +268,37 @@ function resolveLoadReadinessSnapshotStartedAt({
   const selectedCapturedAt = normalizeStableWindowTimestamp(
     snapshotCoverage?.selectedCapturedAtMs,
   );
-  const normalizedResetAt = isStableWindowTimestampAvailable(resetAt) ?
-    resetAt :
-    LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
   if (
     snapshotCoverage?.completeCoverage !== true ||
     isStableWindowTimestampAvailable(selectedCapturedAt) !== true ||
     selectedCapturedAt.timestampMs > nowMs ||
-    (
-      isStableWindowTimestampAvailable(normalizedResetAt) &&
-      selectedCapturedAt.timestampMs < normalizedResetAt.timestampMs
-    )
+    !isSnapshotStartedAtAfterReset(selectedCapturedAt, resetAt)
   ) {
     return LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
   }
   return selectedCapturedAt;
+}
+
+function canBackdateStableWindowToSnapshot({
+  snapshotStartedAt,
+  observedStartedAt,
+  currentSource,
+}) {
+  return (
+    currentSource !== LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE &&
+    isStableWindowTimestampAvailable(snapshotStartedAt) &&
+    snapshotStartedAt.timestampMs < observedStartedAt.timestampMs
+  );
+}
+
+function resolveObservedStableWindowSource(currentStartedAt, currentSource) {
+  if (
+    isStableWindowTimestampAvailable(currentStartedAt) !== true ||
+    currentSource === LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE
+  ) {
+    return LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE;
+  }
+  return currentSource;
 }
 
 function resolveLoadReadinessStableWindowStart({
@@ -304,12 +318,10 @@ function resolveLoadReadinessStableWindowStart({
     currentStartedAt :
     normalizeStableWindowTimestamp(nowMs);
   const snapshotStartedAt = resolveLoadReadinessSnapshotStartedAt({
-    snapshotCoverage: activeProbe?.snapshotCoverage || {},
+    snapshotCoverage: activeProbe.snapshotCoverage || {},
     resetAt,
     nowMs,
   });
-  const mayBackdateToSnapshot =
-    currentSource !== LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE;
   // The snapshot timestamp may only BACKDATE the window start (credit for
   // green observed before this wait's first probe). Adopting a NEWER capture
   // restarts the clock on every poll once forced repair re-captures the
@@ -317,9 +329,11 @@ function resolveLoadReadinessStableWindowStart({
   // the window can then never close against a continuously green cluster
   // (CL-027).
   if (
-    isStableWindowTimestampAvailable(snapshotStartedAt) &&
-    snapshotStartedAt.timestampMs < observedStartedAt.timestampMs &&
-    mayBackdateToSnapshot
+    canBackdateStableWindowToSnapshot({
+      snapshotStartedAt,
+      observedStartedAt,
+      currentSource,
+    })
   ) {
     return {
       startedAt: snapshotStartedAt,
@@ -328,11 +342,7 @@ function resolveLoadReadinessStableWindowStart({
   }
   return {
     startedAt: observedStartedAt,
-    source:
-      isStableWindowTimestampAvailable(currentStartedAt) !== true ||
-        currentSource === LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE ?
-        LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE :
-        currentSource,
+    source: resolveObservedStableWindowSource(currentStartedAt, currentSource),
   };
 }
 
@@ -493,6 +503,68 @@ function selectActiveWaitReadinessFailureProjection({
   };
 }
 
+function normalizeNonEmptyActiveWaitString(value) {
+  return typeof value === 'string' && value.length > ZERO ? value : null;
+}
+
+function resolveActiveWaitReadinessFailureClassCode({
+  projectedFailure,
+  readinessDelay,
+  noProgress,
+}) {
+  if (typeof projectedFailure?.classCode === 'string') {
+    return projectedFailure.classCode;
+  }
+  const timedOutCause =
+    readinessDelay?.timedOut === true ?
+      normalizeNonEmptyActiveWaitString(readinessDelay.cause) :
+      null;
+  if (timedOutCause) {
+    return timedOutCause;
+  }
+  if (
+    noProgress.reasonCode === ACTIVE_WAIT_NO_PROGRESS_REASON_CODE ||
+    noProgress.stalled === true
+  ) {
+    return ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE;
+  }
+  return null;
+}
+
+function buildActiveWaitProgressSignal({
+  attemptsSinceProgress,
+  maxAttempts,
+  noProgress,
+}) {
+  return {
+    attemptsSinceProgress: Number.isInteger(attemptsSinceProgress) ?
+      Math.max(ZERO, attemptsSinceProgress) :
+      null,
+    maxAttempts:
+      Number.isInteger(maxAttempts) && maxAttempts > ZERO ?
+        Math.max(ZERO, maxAttempts) :
+        null,
+    stalled: noProgress.stalled === true,
+  };
+}
+
+function resolveActiveWaitReadinessFailureError(
+  projectedFailure,
+  readinessDelay,
+) {
+  if (projectedFailure?.error === null) {
+    return null;
+  }
+  return normalizeNonEmptyActiveWaitString(readinessDelay?.error);
+}
+
+function resolvePreferredActiveWaitString(primaryValue, fallbackValue) {
+  return (
+    normalizeNonEmptyActiveWaitString(primaryValue) ||
+    normalizeNonEmptyActiveWaitString(fallbackValue)
+  );
+}
+
 function buildActiveWaitReadinessFailure({
   mode = null,
   noProgress = null,
@@ -502,78 +574,36 @@ function buildActiveWaitReadinessFailure({
   if (!noProgress || typeof noProgress !== 'object') {
     return null;
   }
-  const readinessDelay =
-    typeof noProgress.readinessDelay === 'object' &&
-    noProgress.readinessDelay !== null ?
-      noProgress.readinessDelay :
-      null;
-  const timedOut = readinessDelay && readinessDelay.timedOut === true;
+  const readinessDelay = isActiveWaitReadinessDelay(noProgress.readinessDelay) ?
+    noProgress.readinessDelay :
+    null;
   const projectedFailure = selectActiveWaitReadinessFailureProjection({
     mode,
     noProgress,
     readinessDelay,
   });
-  let classCode = null;
-  if (typeof projectedFailure?.classCode === 'string') {
-    classCode = projectedFailure.classCode;
-  } else if (
-    timedOut &&
-    typeof readinessDelay?.cause === 'string' &&
-    readinessDelay.cause.length > ZERO
-  ) {
-    classCode = readinessDelay.cause;
-  } else if (
-    noProgress?.reasonCode === ACTIVE_WAIT_NO_PROGRESS_REASON_CODE ||
-    noProgress?.stalled === true
-  ) {
-    classCode = ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE;
-  }
+  const projected = projectedFailure ?? {};
+  const delay = readinessDelay ?? {};
   return {
-    mode: typeof mode === 'string' && mode.length > ZERO ? mode : null,
-    classCode,
-    recoverability:
-      typeof readinessDelay?.recoverability === 'string' &&
-      readinessDelay.recoverability.length > ZERO ?
-        readinessDelay.recoverability :
-        null,
-    progressSignal: {
-      attemptsSinceProgress: Number.isInteger(attemptsSinceProgress) ?
-        Math.max(ZERO, attemptsSinceProgress) :
-        null,
-      maxAttempts:
-        Number.isInteger(maxAttempts) && maxAttempts > ZERO ?
-          Math.max(ZERO, maxAttempts) :
-          null,
-      stalled: noProgress?.stalled === true,
-    },
-    terminalReason:
-      typeof noProgress?.reasonCode === 'string' &&
-      noProgress.reasonCode.length > ZERO ?
-        noProgress.reasonCode :
-        null,
-    source:
-      typeof projectedFailure?.source === 'string' &&
-      projectedFailure.source.length > ZERO ?
-        projectedFailure.source :
-        typeof readinessDelay?.source === 'string' &&
-        readinessDelay.source.length > ZERO ?
-          readinessDelay.source :
-          null,
-    cause:
-      typeof projectedFailure?.cause === 'string' &&
-      projectedFailure.cause.length > ZERO ?
-        projectedFailure.cause :
-        typeof readinessDelay?.cause === 'string' &&
-        readinessDelay.cause.length > ZERO ?
-          readinessDelay.cause :
-          null,
-    error:
-      projectedFailure?.error === null ?
-        null :
-        typeof readinessDelay?.error === 'string' &&
-        readinessDelay.error.length > ZERO ?
-          readinessDelay.error :
-          null,
+    mode: normalizeNonEmptyActiveWaitString(mode),
+    classCode: resolveActiveWaitReadinessFailureClassCode({
+      projectedFailure,
+      readinessDelay,
+      noProgress,
+    }),
+    recoverability: normalizeNonEmptyActiveWaitString(delay.recoverability),
+    progressSignal: buildActiveWaitProgressSignal({
+      attemptsSinceProgress,
+      maxAttempts,
+      noProgress,
+    }),
+    terminalReason: normalizeNonEmptyActiveWaitString(noProgress.reasonCode),
+    source: resolvePreferredActiveWaitString(projected.source, delay.source),
+    cause: resolvePreferredActiveWaitString(projected.cause, delay.cause),
+    error: resolveActiveWaitReadinessFailureError(
+      projectedFailure,
+      readinessDelay,
+    ),
   };
 }
 
@@ -819,30 +849,44 @@ function normalizeStartupSnapshotRepairDurationMs(value) {
     STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS;
 }
 
-function selectStartupOwnerProgressDecisionSnapshots(probeResult) {
-  const snapshotCoverage =
-    probeResult?.snapshotCoverage &&
-    typeof probeResult.snapshotCoverage === ACTIVE_WAIT_TYPE_OBJECT ?
-      probeResult.snapshotCoverage :
-      {};
-  const selectedSnapshots = [
+function collectStartupOwnerProgressCandidateContainers(
+  probe,
+  snapshotCoverage,
+) {
+  const publicationConvergenceGate = probe.publicationConvergenceGate ?? {};
+  const selectedPublicationConvergenceGate =
+    snapshotCoverage.selectedPublicationConvergenceGate ?? {};
+  const selectedPublicationConvergence =
+    snapshotCoverage.selectedPublicationConvergence ?? {};
+  const selectedPriorityRecoveryObservation =
+    snapshotCoverage.selectedPriorityRecoveryObservation ?? {};
+  const priorityRecoveryObservation =
+    snapshotCoverage.priorityRecoveryObservation ?? {};
+  return [
     snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots,
     snapshotCoverage.priorityRecoveryDecisionSnapshots,
-    probeResult?.publicationConvergenceGate?.priorityRecoveryDecisionSnapshots,
-    snapshotCoverage.selectedPublicationConvergenceGate
-      ?.priorityRecoveryDecisionSnapshots,
-    snapshotCoverage.selectedPublicationConvergence
-      ?.priorityRecoveryDecisionSnapshots,
-    snapshotCoverage.selectedPriorityRecoveryObservation
-      ?.priorityRecoveryCurrentSummary,
-    snapshotCoverage.priorityRecoveryObservation?.priorityRecoveryCurrentSummary,
-    probeResult?.publicationConvergenceGate?.priorityRecoveryCurrentSummary,
-    snapshotCoverage.selectedPublicationConvergenceGate
-      ?.priorityRecoveryCurrentSummary,
-    snapshotCoverage.selectedPublicationConvergence
-      ?.priorityRecoveryCurrentSummary,
+    publicationConvergenceGate.priorityRecoveryDecisionSnapshots,
+    selectedPublicationConvergenceGate.priorityRecoveryDecisionSnapshots,
+    selectedPublicationConvergence.priorityRecoveryDecisionSnapshots,
+    selectedPriorityRecoveryObservation.priorityRecoveryCurrentSummary,
+    priorityRecoveryObservation.priorityRecoveryCurrentSummary,
+    publicationConvergenceGate.priorityRecoveryCurrentSummary,
+    selectedPublicationConvergenceGate.priorityRecoveryCurrentSummary,
+    selectedPublicationConvergence.priorityRecoveryCurrentSummary,
   ];
-  return selectedSnapshots
+}
+
+function selectStartupOwnerProgressDecisionSnapshots(probeResult) {
+  const probe = probeResult ?? {};
+  const snapshotCoverage =
+    probe.snapshotCoverage &&
+    typeof probe.snapshotCoverage === ACTIVE_WAIT_TYPE_OBJECT ?
+      probe.snapshotCoverage :
+      {};
+  return collectStartupOwnerProgressCandidateContainers(
+    probe,
+    snapshotCoverage,
+  )
     .filter(hasStartupOwnerProgressEvidence)
     .flatMap(selectStartupOwnerProgressEvidenceSnapshots);
 }
@@ -936,16 +980,23 @@ function resolveStartupOwnerProgressStepTimeoutMs(snapshot) {
   );
 }
 
+function hasFiniteStartupOwnerProgressTimestamp(values) {
+  return arraySome(values, (value) => Number.isFinite(Number(value)));
+}
+
 function hasStartupOwnerProgressFreshnessEvidence(snapshot) {
-  return (
-    isStartupOwnerProgressEvidenceRecord(snapshot?.observation?.provenance) ||
-    Number.isFinite(Number(snapshot?.snapshotCapturedAt)) ||
-    Number.isFinite(Number(snapshot?.capturedAt)) ||
-    Number.isFinite(Number(snapshot?.lastProgressAtMs)) ||
-    Number.isFinite(Number(snapshot?.progress?.lastProgressAtMs)) ||
-    Number.isFinite(Number(snapshot?.actuation?.lastProgressAtMs)) ||
-    Number.isFinite(Number(snapshot?.topologyOperatorWitness?.lastObservedAtMs))
-  );
+  const source = snapshot ?? {};
+  if (isStartupOwnerProgressEvidenceRecord(source.observation?.provenance)) {
+    return true;
+  }
+  return hasFiniteStartupOwnerProgressTimestamp([
+    source.snapshotCapturedAt,
+    source.capturedAt,
+    source.lastProgressAtMs,
+    source.progress?.lastProgressAtMs,
+    source.actuation?.lastProgressAtMs,
+    source.topologyOperatorWitness?.lastObservedAtMs,
+  ]);
 }
 
 function isStartupOwnerProgressWitness(snapshot) {
@@ -968,6 +1019,33 @@ function resolveStartupOwnerProgressWitnessRemainingMs(snapshot) {
   return Math.max(STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS, stepTimeoutMs - stepAgeMs);
 }
 
+function buildBlockedStartupOwnerProgressContinuation(reasonCode) {
+  return Object.freeze({
+    state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
+    continuePolling: false,
+    reasonCode,
+    extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
+  });
+}
+
+function resolveStartupOwnerProgressContextBlockedReason(
+  readinessMode,
+  progressSnapshot,
+) {
+  if (
+    readinessMode !== CLUSTER_READINESS_MODE_STARTUP ||
+    hasStartupOwnerProgressContinuationContext(progressSnapshot) !== true
+  ) {
+    return STARTUP_OWNER_PROGRESS_CONTINUATION_REASON
+      .OWNER_PROGRESS_CONTEXT_ABSENT;
+  }
+  if (hasStartupOwnerProgressRecoveringState(progressSnapshot) !== true) {
+    return STARTUP_OWNER_PROGRESS_CONTINUATION_REASON
+      .RECOVERING_IN_FLIGHT_ABSENT;
+  }
+  return null;
+}
+
 function selectStartupActiveGateOwnerProgressContinuation({
   readinessMode = LOAD_READINESS_PHASE_UNSPECIFIED,
   progressSnapshot = null,
@@ -975,52 +1053,31 @@ function selectStartupActiveGateOwnerProgressContinuation({
   attemptsSinceProgress = ZERO,
   pollIntervalMs = ZERO,
 } = {}) {
-  if (
-    readinessMode !== CLUSTER_READINESS_MODE_STARTUP ||
-    hasStartupOwnerProgressContinuationContext(progressSnapshot) !== true
-  ) {
-    return Object.freeze({
-      state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
-      continuePolling: false,
-      reasonCode:
-        STARTUP_OWNER_PROGRESS_CONTINUATION_REASON
-          .OWNER_PROGRESS_CONTEXT_ABSENT,
-      extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
-    });
-  }
-  if (hasStartupOwnerProgressRecoveringState(progressSnapshot) !== true) {
-    return Object.freeze({
-      state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
-      continuePolling: false,
-      reasonCode:
-        STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.RECOVERING_IN_FLIGHT_ABSENT,
-      extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
-    });
+  const contextBlockedReason = resolveStartupOwnerProgressContextBlockedReason(
+    readinessMode,
+    progressSnapshot,
+  );
+  if (contextBlockedReason) {
+    return buildBlockedStartupOwnerProgressContinuation(contextBlockedReason);
   }
   const ownerProgressWitnesses = selectStartupOwnerProgressDecisionSnapshots(
     probeResult,
-  )
-    .filter(isStartupOwnerProgressWitness);
-  const witnessRemainingMs = ownerProgressWitnesses
-    .map(resolveStartupOwnerProgressWitnessRemainingMs);
+  ).filter(isStartupOwnerProgressWitness);
+  const witnessRemainingMs = ownerProgressWitnesses.map(
+    resolveStartupOwnerProgressWitnessRemainingMs,
+  );
   if (witnessRemainingMs.length === ZERO) {
-    return Object.freeze({
-      state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
-      continuePolling: false,
-      reasonCode: STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.OWNER_WITNESS_ABSENT,
-      extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
-    });
+    return buildBlockedStartupOwnerProgressContinuation(
+      STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.OWNER_WITNESS_ABSENT,
+    );
   }
   const currentWitnessFresh =
     attemptsSinceProgress === ZERO ||
     ownerProgressWitnesses.some(hasStartupOwnerProgressFreshnessEvidence);
   if (currentWitnessFresh !== true) {
-    return Object.freeze({
-      state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
-      continuePolling: false,
-      reasonCode: STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.PROGRESS_NOT_FRESH,
-      extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
-    });
+    return buildBlockedStartupOwnerProgressContinuation(
+      STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.PROGRESS_NOT_FRESH,
+    );
   }
   const minimumExtensionMs = normalizeStartupOwnerProgressDurationMs(
     pollIntervalMs,
@@ -1086,61 +1143,53 @@ function hasStartupSnapshotRepairBoundedOwnerQueue(progressSnapshot) {
   return pendingWrites > ZERO && pendingWriteGrowthCount === ZERO;
 }
 
+function resolveActiveGateSnapshotRepairBlockedReason({
+  readinessMode,
+  allowedReadinessModes,
+  progressSnapshot,
+}) {
+  if (arrayIncludes(allowedReadinessModes, readinessMode) !== true) {
+    return ACTIVE_GATE_SNAPSHOT_REPAIR_MODE_UNSUPPORTED;
+  }
+  if (hasStartupSnapshotRepairRetryEvidence(progressSnapshot) !== true) {
+    return STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.SNAPSHOT_RETRY_ABSENT;
+  }
+  if (hasStartupSnapshotRepairOwnerHandoff(progressSnapshot) !== true) {
+    return STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.OWNER_HANDOFF_ABSENT;
+  }
+  if (hasStartupSnapshotRepairHandoffOutcome(progressSnapshot) !== true) {
+    return STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.HANDOFF_OUTCOME_ABSENT;
+  }
+  if (hasStartupSnapshotRepairBoundedOwnerQueue(progressSnapshot) !== true) {
+    return STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.OWNER_QUEUE_UNBOUNDED;
+  }
+  return null;
+}
+
 function selectActiveGateSnapshotRepairContinuation({
   readinessMode = LOAD_READINESS_PHASE_UNSPECIFIED,
   progressSnapshot = null,
   pollIntervalMs = ZERO,
   allowedReadinessModes = ACTIVE_GATE_SNAPSHOT_REPAIR_STARTUP_READINESS_MODES,
 } = {}) {
-  if (allowedReadinessModes.includes(readinessMode) !== true) {
+  const blockedReasonCode = resolveActiveGateSnapshotRepairBlockedReason({
+    readinessMode,
+    allowedReadinessModes,
+    progressSnapshot,
+  });
+  if (blockedReasonCode) {
     return Object.freeze({
       state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
       continuePolling: false,
-      reasonCode: ACTIVE_GATE_SNAPSHOT_REPAIR_MODE_UNSUPPORTED,
-      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
-    });
-  }
-  if (hasStartupSnapshotRepairRetryEvidence(progressSnapshot) !== true) {
-    return Object.freeze({
-      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
-      continuePolling: false,
-      reasonCode:
-        STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.SNAPSHOT_RETRY_ABSENT,
-      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
-    });
-  }
-  if (hasStartupSnapshotRepairOwnerHandoff(progressSnapshot) !== true) {
-    return Object.freeze({
-      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
-      continuePolling: false,
-      reasonCode:
-        STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.OWNER_HANDOFF_ABSENT,
-      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
-    });
-  }
-  if (hasStartupSnapshotRepairHandoffOutcome(progressSnapshot) !== true) {
-    return Object.freeze({
-      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
-      continuePolling: false,
-      reasonCode:
-        STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.HANDOFF_OUTCOME_ABSENT,
-      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
-    });
-  }
-  if (hasStartupSnapshotRepairBoundedOwnerQueue(progressSnapshot) !== true) {
-    return Object.freeze({
-      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
-      continuePolling: false,
-      reasonCode:
-        STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.OWNER_QUEUE_UNBOUNDED,
+      reasonCode: blockedReasonCode,
       extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
     });
   }
   const snapshotRetryMs = normalizeStartupSnapshotRepairDurationMs(
-    progressSnapshot?.selectedSnapshotObservationRetryAfterMs,
+    progressSnapshot.selectedSnapshotObservationRetryAfterMs,
   );
   const handoffRetryMs = normalizeStartupSnapshotRepairDurationMs(
-    progressSnapshot?.membershipPublicationHandoffOutcomeRetryAfterMs,
+    progressSnapshot.membershipPublicationHandoffOutcomeRetryAfterMs,
   );
   const minimumExtensionMs = normalizeStartupSnapshotRepairDurationMs(
     pollIntervalMs,
@@ -1206,11 +1255,50 @@ function buildTerminalPublicationImprovementEvidence(options = {}) {
   });
 }
 
+function isCurrentSnapshotZeroCoverageRegression({
+  bothSnapshotsPresent,
+  currentProgressSnapshot,
+  currentSnapshotCoverageNodeCount,
+}) {
+  return (
+    bothSnapshotsPresent &&
+    currentProgressSnapshot.snapshotCoverageComplete !== true &&
+    currentSnapshotCoverageNodeCount === ZERO &&
+    hasActiveWaitProgressSelectedSnapshotError(currentProgressSnapshot)
+  );
+}
+
+function isPublicationEpochRegression({
+  bothSnapshotsPresent,
+  currentPublicationEpoch,
+  lastMeaningfulPublicationEpoch,
+  semanticPublicationImproved,
+}) {
+  return (
+    bothSnapshotsPresent &&
+    currentPublicationEpoch !== null &&
+    lastMeaningfulPublicationEpoch !== null &&
+    currentPublicationEpoch < lastMeaningfulPublicationEpoch &&
+    semanticPublicationImproved !== true
+  );
+}
+
 function buildTerminalActiveWaitProgressEvidence({
   currentProgressSnapshot = null,
   lastMeaningfulProgressSnapshot = null,
   bestSnapshotCoverageProgressSnapshot = null,
 } = {}) {
+  const currentProgressPresent = isActiveWaitProgressSnapshot(
+    currentProgressSnapshot,
+  );
+  const lastMeaningfulProgressPresent = isActiveWaitProgressSnapshot(
+    lastMeaningfulProgressSnapshot,
+  );
+  const bestSnapshotCoverageProgressPresent = isActiveWaitProgressSnapshot(
+    bestSnapshotCoverageProgressSnapshot,
+  );
+  const bothSnapshotsPresent =
+    currentProgressPresent && lastMeaningfulProgressPresent;
   const currentActiveNodeCount =
     normalizeActiveWaitProgressActiveNodeCount(currentProgressSnapshot);
   const lastMeaningfulActiveNodeCount =
@@ -1233,9 +1321,6 @@ function buildTerminalActiveWaitProgressEvidence({
     normalizeActiveWaitProgressCoverageNodeCount(
       bestSnapshotCoverageProgressSnapshot,
     );
-  const currentSnapshotErrorPresent =
-    typeof currentProgressSnapshot?.selectedSnapshotError === 'string' &&
-    currentProgressSnapshot.selectedSnapshotError.length > ZERO;
   const priorityRecoveryRegressionEvidence =
     buildTerminalPriorityRecoveryRegressionEvidence({
       currentProgressSnapshot,
@@ -1251,47 +1336,44 @@ function buildTerminalActiveWaitProgressEvidence({
       currentProgressSnapshot,
       lastMeaningfulProgressSnapshot: bestSnapshotCoverageProgressSnapshot,
     });
+  const unimprovedFromLastMeaningful =
+    bothSnapshotsPresent &&
+    publicationImprovementEvidence.semanticPublicationImproved !== true;
   return {
-    currentProgressPresent:
-      isActiveWaitProgressSnapshot(currentProgressSnapshot),
-    lastMeaningfulProgressPresent:
-      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot),
-    bestSnapshotCoverageProgressPresent:
-      isActiveWaitProgressSnapshot(bestSnapshotCoverageProgressSnapshot),
+    currentProgressPresent,
+    lastMeaningfulProgressPresent,
+    bestSnapshotCoverageProgressPresent,
     currentActiveNodeCount,
     lastMeaningfulActiveNodeCount,
     currentSnapshotCoverageNodeCount,
     lastMeaningfulCoverageNodeCount,
     bestSnapshotCoverageNodeCount,
     currentSnapshotZeroCoverageRegression:
-      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
-      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
-      currentProgressSnapshot.snapshotCoverageComplete !== true &&
-      currentSnapshotCoverageNodeCount === ZERO &&
-      currentSnapshotErrorPresent === true,
+      isCurrentSnapshotZeroCoverageRegression({
+        bothSnapshotsPresent,
+        currentProgressSnapshot,
+        currentSnapshotCoverageNodeCount,
+      }),
     coverageRegressionWithoutPublicationImprovement:
-      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
-      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
-      currentSnapshotCoverageNodeCount < lastMeaningfulCoverageNodeCount &&
-      publicationImprovementEvidence.semanticPublicationImproved !== true,
+      unimprovedFromLastMeaningful &&
+      currentSnapshotCoverageNodeCount < lastMeaningfulCoverageNodeCount,
     bestSnapshotCoverageRegressionWithoutPublicationImprovement:
-      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
-      isActiveWaitProgressSnapshot(bestSnapshotCoverageProgressSnapshot) &&
+      currentProgressPresent &&
+      bestSnapshotCoverageProgressPresent &&
       currentSnapshotCoverageNodeCount < bestSnapshotCoverageNodeCount &&
       bestSnapshotCoveragePublicationImprovementEvidence
         .semanticPublicationImproved !== true,
     activeRegressionWithoutPublicationImprovement:
-      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
-      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
-      currentActiveNodeCount < lastMeaningfulActiveNodeCount &&
-      publicationImprovementEvidence.semanticPublicationImproved !== true,
+      unimprovedFromLastMeaningful &&
+      currentActiveNodeCount < lastMeaningfulActiveNodeCount,
     publicationEpochRegressionWithoutPublicationImprovement:
-      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
-      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
-      currentPublicationEpoch !== null &&
-      lastMeaningfulPublicationEpoch !== null &&
-      currentPublicationEpoch < lastMeaningfulPublicationEpoch &&
-      publicationImprovementEvidence.semanticPublicationImproved !== true,
+      isPublicationEpochRegression({
+        bothSnapshotsPresent,
+        currentPublicationEpoch,
+        lastMeaningfulPublicationEpoch,
+        semanticPublicationImproved:
+          publicationImprovementEvidence.semanticPublicationImproved,
+      }),
     currentPriorityRecoveryOperationEvidenceRegression:
       priorityRecoveryRegressionEvidence.operationEvidenceRegression,
   };

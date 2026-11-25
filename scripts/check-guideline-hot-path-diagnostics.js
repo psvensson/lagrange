@@ -117,34 +117,40 @@ function isHotPathModule(filePath) {
 }
 
 
+const NO_CALL_VIOLATION_KIND = null;
+
+function memberCallViolationKind(callee) {
+  const objectName = callee.object?.type === NODE_TYPE.IDENTIFIER ?
+    callee.object.name :
+    NO_CALL_VIOLATION_KIND;
+  const propertyName = callee.property?.type === NODE_TYPE.IDENTIFIER ?
+    callee.property.name :
+    NO_CALL_VIOLATION_KIND;
+  if (objectName === JSON_OBJECT_NAME) {
+    if (propertyName === JSON_METHOD.STRINGIFY) {
+      return VIOLATION_KIND.JSON_STRINGIFY;
+    }
+    if (propertyName === JSON_METHOD.PARSE) {
+      return VIOLATION_KIND.JSON_PARSE;
+    }
+    return NO_CALL_VIOLATION_KIND;
+  }
+  if (DEEP_CLONE_CALLEE_NAME.includes(propertyName)) {
+    return VIOLATION_KIND.DEEP_CLONE;
+  }
+  if (
+    LOG_EMISSION_PROPERTY_NAME.includes(propertyName) ||
+    LOG_EMISSION_FUNCTION_NAME.includes(propertyName)
+  ) {
+    return VIOLATION_KIND.LOG_EMISSION;
+  }
+  return NO_CALL_VIOLATION_KIND;
+}
+
 function classifyCallViolationKind(node) {
   const callee = node.callee;
   if (callee?.type === NODE_TYPE.MEMBER_EXPRESSION && !callee.computed) {
-    const objectName = callee.object?.type === NODE_TYPE.IDENTIFIER ?
-      callee.object.name :
-      null;
-    const propertyName = callee.property?.type === NODE_TYPE.IDENTIFIER ?
-      callee.property.name :
-      null;
-    if (objectName === JSON_OBJECT_NAME) {
-      if (propertyName === JSON_METHOD.STRINGIFY) {
-        return VIOLATION_KIND.JSON_STRINGIFY;
-      }
-      if (propertyName === JSON_METHOD.PARSE) {
-        return VIOLATION_KIND.JSON_PARSE;
-      }
-      return null;
-    }
-    if (DEEP_CLONE_CALLEE_NAME.includes(propertyName)) {
-      return VIOLATION_KIND.DEEP_CLONE;
-    }
-    if (LOG_EMISSION_PROPERTY_NAME.includes(propertyName)) {
-      return VIOLATION_KIND.LOG_EMISSION;
-    }
-    if (LOG_EMISSION_FUNCTION_NAME.includes(propertyName)) {
-      return VIOLATION_KIND.LOG_EMISSION;
-    }
-    return null;
+    return memberCallViolationKind(callee);
   }
   if (callee?.type === NODE_TYPE.IDENTIFIER) {
     if (DEEP_CLONE_CALLEE_NAME.includes(callee.name)) {

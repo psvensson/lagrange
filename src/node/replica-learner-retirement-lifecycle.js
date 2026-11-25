@@ -17,6 +17,8 @@ const CLEANUP_TOKEN_COLUMN = 'cleanup_token';
 const TRIGGER_REASON_COLUMN = 'trigger_reason';
 const DISK_REJOIN_REASON = 'placement_learner_disk_rejoin';
 const RETIREMENT_TOKEN_PREFIX = 'placement-learner-retire:';
+const CUSTODY_WRITE_ACK_UNCERTAIN_LOG =
+  'replica lifecycle custody write acknowledgement uncertain';
 const CRITICAL_MUTATION = Object.freeze({
   allowCoalescing: false, deliveryPriority: 'critical', workClass: 'critical',
 });
@@ -56,7 +58,7 @@ async function writeLifecycleCustody(stateMachine, row, data) {
       data,
     }, CRITICAL_MUTATION);
   } catch (error) {
-    stateMachine.logger.warn('replica lifecycle custody write acknowledgement uncertain',
+    stateMachine.logger.warn(CUSTODY_WRITE_ACK_UNCERTAIN_LOG,
       {replicaId: row[COLUMN.REPLICA_ID], error: String(error)});
   }
   const observed = await observeAuthoritativeReplicaLifecycle(

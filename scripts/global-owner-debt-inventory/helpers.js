@@ -590,6 +590,122 @@ function reconcileAssignments(sourceSignals, assignments) {
   };
 }
 
+function emptyLogicalOwnerEntry(owner) {
+  return {
+    owner,
+    boundaries: [],
+    ownerAreas: new Set(),
+    fileCount: 0,
+    signalCount: 0,
+    complexity: 0,
+    cognitive: 0,
+    oversizedFiles: 0,
+    duplicatedLines: 0,
+    cycleGroups: 0,
+    lintExclusions: 0,
+    importIn: 0,
+    importOut: 0,
+    score: 0,
+  };
+}
+
+function accumulateLogicalOwnerBoundary(target, boundary) {
+  target.boundaries.push(boundary.boundary);
+  for (const area of boundary.ownerAreas) {
+    target.ownerAreas.add(area);
+  }
+  target.fileCount += boundary.fileCount;
+  target.signalCount += boundary.signalCount;
+  target.complexity += boundary.complexity;
+  target.cognitive += boundary.cognitive;
+  target.oversizedFiles += boundary.oversizedFiles;
+  target.duplicatedLines += boundary.duplicatedLines;
+  target.cycleGroups += boundary.cycleGroups;
+  target.lintExclusions += boundary.lintExclusions;
+  target.importIn += boundary.importIn;
+  target.importOut += boundary.importOut;
+  target.score += boundary.score;
+}
+
+function finalizeLogicalOwnerEntry(entry) {
+  const sortedBoundaries = [...new Set(entry.boundaries)].sort();
+  const sortedOwnerAreas = [...entry.ownerAreas].sort();
+  return {
+    owner: entry.owner,
+    boundaryCount: sortedBoundaries.length,
+    boundaries: sortedBoundaries,
+    ownerAreas: sortedOwnerAreas,
+    fileCount: entry.fileCount,
+    signalCount: entry.signalCount,
+    complexity: entry.complexity,
+    cognitive: entry.cognitive,
+    oversizedFiles: entry.oversizedFiles,
+    duplicatedLines: entry.duplicatedLines,
+    cycleGroups: entry.cycleGroups,
+    lintExclusions: entry.lintExclusions,
+    importIn: entry.importIn,
+    importOut: entry.importOut,
+    score: Number(entry.score.toFixed(1)),
+  };
+}
+
+function logicalOwnerAndAmbiguitySummary(boundaries) {
+  const ownersByKey = new Map();
+  const unownedSourceBoundaries = [];
+  for (const boundary of boundaries) {
+    if (boundary.classification === OWNER_DEBT.classDeclaredOwner &&
+        boundary.owner !== null) {
+      if (!ownersByKey.has(boundary.owner)) {
+        ownersByKey.set(boundary.owner, emptyLogicalOwnerEntry(boundary.owner));
+      }
+      accumulateLogicalOwnerBoundary(ownersByKey.get(boundary.owner), boundary);
+    } else if (boundary.classification === OWNER_DEBT.classOwnerAreaFallback) {
+      unownedSourceBoundaries.push({
+        boundary: boundary.boundary,
+        ownerAreas: boundary.ownerAreas,
+        fileCount: boundary.fileCount,
+        signalCount: boundary.signalCount,
+        score: boundary.score,
+        topPaths: boundary.topPaths,
+      });
+    }
+  }
+  const logicalOwners = [...ownersByKey.values()]
+    .map(finalizeLogicalOwnerEntry)
+    .sort((left, right) => right.score - left.score ||
+      left.owner.localeCompare(right.owner));
+  const declaredOwnerFileCount = logicalOwners.reduce(
+    (sum, item) => sum + item.fileCount, 0);
+  const declaredOwnerSignalCount = logicalOwners.reduce(
+    (sum, item) => sum + item.signalCount, 0);
+  const declaredOwnerScore = Number(logicalOwners.reduce(
+    (sum, item) => sum + item.score, 0).toFixed(1));
+  const unownedSourceFileCount = unownedSourceBoundaries.reduce(
+    (sum, item) => sum + item.fileCount, 0);
+  const unownedSourceSignalCount = unownedSourceBoundaries.reduce(
+    (sum, item) => sum + item.signalCount, 0);
+  const unownedSourceScore = Number(unownedSourceBoundaries.reduce(
+    (sum, item) => sum + item.score, 0).toFixed(1));
+  return {
+    declaredLogicalOwnerCount: logicalOwners.length,
+    multiBoundaryLogicalOwnerCount: logicalOwners.filter(
+      (item) => item.boundaryCount > 1).length,
+    crossAreaLogicalOwnerCount: logicalOwners.filter(
+      (item) => item.ownerAreas.length > 1).length,
+    declaredOwnerFileCount,
+    declaredOwnerSignalCount,
+    declaredOwnerScore,
+    logicalOwners,
+    contractAmbiguity: {
+      unownedSourceBoundaryCount: unownedSourceBoundaries.length,
+      unownedSourceFileCount,
+      unownedSourceSignalCount,
+      unownedSourceScore,
+      unownedSourceBoundaries,
+    },
+  };
+}
+
 export {
   classifyDebtPath,
   duplicationReportIdentity,
@@ -602,6 +718,7 @@ export {
   listImportGraphInputFiles,
   listJavaScriptFiles,
   logicalJsonIdentity,
+  logicalOwnerAndAmbiguitySummary,
   normalizePath,
   normalizePathThroughSymlinkedRoot,
   ownerAreaForPath,

@@ -503,8 +503,10 @@ class ReplicaCreateAdmissionOwner {
     } catch (_error) {
       result = null;
     }
-    const current = await this.readOperation(row.operation_id);
-    await this.requireCurrentBootIncarnation();
+    const [current] = await Promise.all([
+      this.readOperation(row.operation_id),
+      this.requireCurrentBootIncarnation(),
+    ]);
     if (!currentRowMatchesRetainedAdmission(
       current, retainedEvidence, this.ownerIncarnation,
     )) {
@@ -579,8 +581,10 @@ class ReplicaCreateAdmissionOwner {
       // below is the only adoption path.
       mutation = null;
     }
-    const row = await this.readOperation(request.operationId);
-    await this.requireCurrentBootIncarnation();
+    const [row] = await Promise.all([
+      this.readOperation(request.operationId),
+      this.requireCurrentBootIncarnation(),
+    ]);
     if (rowMatchesAdmission(row, request, admissionBasis)) {
       if (isClosedAdmission(row)) {
         throw admissionError(
@@ -650,8 +654,10 @@ class ReplicaCreateAdmissionOwner {
       }
       if (classifyControlPlaneMutationResult(result).applied === true) break;
     }
-    const row = await this.readOperation(evidence.operationId);
-    await this.requireCurrentBootIncarnation();
+    const [row] = await Promise.all([
+      this.readOperation(evidence.operationId),
+      this.requireCurrentBootIncarnation(),
+    ]);
     if (!rowMatchesAdvanceResult(
       row, evidence, nextState, this.ownerIncarnation, data,
     )) return {progressed: null, row};

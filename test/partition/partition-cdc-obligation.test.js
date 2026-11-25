@@ -1301,3 +1301,190 @@ test('CDC regression: config literal with ?, trailing comments, parameterized wr
       await shutdownAll(leader);
     }
   });
+
+test('CDC regression: batch UPSERT, non-PK DELETE via RETURNING, PK payload guard, and WHERE expressions',
+  async () => {
+    const cache = new SystemTableCache();
+    const configSchema = {
+      columns: [
+        {name: 'config_key', type: 'TEXT', primaryKey: true},
+        {name: 'config_value', type: 'TEXT'},
+      ],
+    };
+    const {leader} = await startLeader({
+      tableName: TABLES.CONFIG,
+      schema: configSchema,
+      systemTableCache: cache,
+    });
+    const silentLogger = {debug() {}, info() {}, warn() {}, error() {}};
+    try {
+      // 1. Direct primary-key payload validation for system tables
+      assert.equal(
+        hasValidPartitionCdcRowPayload(TABLES.CONFIG, {
+          config_value: 'old',
+          updated_at_hlc: '99',
+        }),
+        false,
+        'config CDC payload without config_key must be rejected',
+      );
+      assert.equal(
+        hasValidPartitionCdcRowPayload(TABLES.CONFIG, {
+          config_key: 'probe.pk',
+          config_value: 'old',
+          updated_at_hlc: '99',
+        }),
+        true,
+      );
+
+      // 2. Parameterized 2-row batch INSERT OR REPLACE through committed application
+      const batchUpsertSql =
+        'INSERT OR REPLACE INTO config (config_key, config_value) VALUES (?, ?), (?, ?)';
+      const batchCommand = {
+        ...committedQueryOf('cfg-batch-upsert', batchUpsertSql),
+        params: ['probe.batch.1', 'val-1', 'probe.batch.2', 'val-2'],
+        timestamp: new HLCTimestamp(20, 0, 'cfg-test').toString(),
+      };
+      assert.equal(applyCommitted(leader, batchCommand), null);
+      await settleTicks();
+
+      const ob0 = readCdcObligation(leader.db, 'entry:cfg-batch-upsert');
+      const ob1 = readCdcObligation(leader.db, 'entry:cfg-batch-upsert:1');
+      assert.ok(ob0, 'first row obligation recorded for batch UPSERT');
+      assert.ok(ob1, 'second row obligation recorded for batch UPSERT');
+      assert.equal(ob0.ordinal, 0);
+      assert.equal(ob1.ordinal, 1);
+      assert.deepEqual(
+        {
+          k0: JSON.parse(ob0.eventJson).data.config_key,
+          v0: JSON.parse(ob0.eventJson).data.config_value,
+          k1: JSON.parse(ob1.eventJson).data.config_key,
+          v1: JSON.parse(ob1.eventJson).data.config_value,
+        },
+        {
+          k0: 'probe.batch.1',
+          v0: 'val-1',
+          k1: 'probe.batch.2',
+          v1: 'val-2',
+        },
+      );
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.batch.1')?.config_value, 'val-1');
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.batch.2')?.config_value, 'val-2');
+
+      // 3. Batch INSERT OR REPLACE inside a participant transaction decision
+      const txBatch = identityOf('cfg-tx-batch');
+      const txApplied = commitHandBuilt(leader, txBatch, [{
+        entryId: 'tx-batch-op-0',
+        sql: batchUpsertSql,
+        params: ['probe.tx.1', 'tx-v1', 'probe.tx.2', 'tx-v2'],
+      }]);
+      assert.equal(txApplied.prepareApply, null);
+      assert.equal(txApplied.decisionApply, null);
+      await settleTicks();
+
+      const txOb0 = readCdcObligation(leader.db, txKey(txBatch, 0));
+      const txOb1 = readCdcObligation(leader.db, `${txKey(txBatch, 0)}:1`);
+      assert.ok(txOb0, 'first participant batch row obligation recorded');
+      assert.ok(txOb1, 'second participant batch row obligation recorded');
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.tx.1')?.config_value, 'tx-v1');
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.tx.2')?.config_value, 'tx-v2');
+
+      // 4. DELETE by non-PK predicate captures actual deleted row via RETURNING *
+      assert.equal(applyCommitted(leader, {
+        ...committedQueryOf(
+          'cfg-seed-nonpk-del',
+          'INSERT INTO config (config_key, config_value) VALUES (?, ?)',
+        ),
+        params: ['probe.del.nonpk', 'old-delete-target'],
+        timestamp: new HLCTimestamp(22, 0, 'cfg-test').toString(),
+      }), null);
+      await settleTicks();
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.del.nonpk')?.config_value, 'old-delete-target');
+
+      assert.equal(applyCommitted(leader, {
+        ...committedQueryOf(
+          'cfg-exec-nonpk-del',
+          'DELETE FROM config WHERE config_value = \'old-delete-target\'',
+        ),
+        timestamp: new HLCTimestamp(23, 0, 'cfg-test').toString(),
+      }), null);
+      await settleTicks();
+
+      const delObligation = readCdcObligation(leader.db, 'entry:cfg-exec-nonpk-del');
+      assert.ok(delObligation, 'DELETE obligation recorded from RETURNING * row identity');
+      assert.equal(JSON.parse(delObligation.eventJson).data.config_key, 'probe.del.nonpk');
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.del.nonpk'), undefined);
+
+      // 5. Expression WHERE (config_key = lower(?)) on UPDATE and DELETE
+      assert.equal(applyCommitted(leader, {
+        ...committedQueryOf(
+          'cfg-seed-expr',
+          'INSERT INTO config (config_key, config_value) VALUES (?, ?)',
+        ),
+        params: ['probe.expr', 'initial'],
+        timestamp: new HLCTimestamp(24, 0, 'cfg-test').toString(),
+      }), null);
+      await settleTicks();
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.expr')?.config_value, 'initial');
+
+      assert.equal(applyCommitted(leader, {
+        ...committedQueryOf(
+          'cfg-update-expr',
+          'UPDATE config SET config_value = \'updated-via-lower\' WHERE config_key = lower(?)',
+        ),
+        params: ['PROBE.EXPR'],
+        timestamp: new HLCTimestamp(25, 0, 'cfg-test').toString(),
+      }), null);
+      await settleTicks();
+
+      const updateExprOb = readCdcObligation(leader.db, 'entry:cfg-update-expr');
+      assert.ok(updateExprOb);
+      assert.equal(JSON.parse(updateExprOb.eventJson).data.config_key, 'probe.expr');
+      assert.equal(JSON.parse(updateExprOb.eventJson).data.config_value, 'updated-via-lower');
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.expr')?.config_value, 'updated-via-lower');
+      assert.equal(cache.get(TABLES.CONFIG, 'PROBE.EXPR'), undefined);
+
+      const generator = new PartitionCDCGenerator({
+        partitionId: PARTITION_ID,
+        replicaId: REPLICAS[0],
+        tableName: TABLES.CONFIG,
+        db: leader.db,
+        logger: silentLogger,
+      });
+      const directUpdateExpr = generator.buildEvent({
+        type: 'QUERY',
+        sql: 'UPDATE config SET config_value = \'updated-via-lower\' WHERE config_key = lower(?)',
+        params: ['PROBE.EXPR'],
+        timestamp: '25-0-cfg',
+        changes: 1,
+      });
+      assert.equal(directUpdateExpr.state, PARTITION_CDC_EVENT_BUILD_STATE.BUILT);
+      assert.equal(directUpdateExpr.cdcEvent.data.config_key, 'probe.expr');
+
+      const directDeleteExpr = generator.buildEvent({
+        type: 'QUERY',
+        sql: 'DELETE FROM config WHERE config_key = lower(?)',
+        params: ['PROBE.EXPR'],
+        timestamp: '26-0-cfg',
+        changes: 1,
+      });
+      assert.equal(directDeleteExpr.state, PARTITION_CDC_EVENT_BUILD_STATE.BUILT);
+      assert.equal(directDeleteExpr.cdcEvent.data.config_key, 'probe.expr');
+
+      assert.equal(applyCommitted(leader, {
+        ...committedQueryOf(
+          'cfg-delete-expr',
+          'DELETE FROM config WHERE config_key = lower(?)',
+        ),
+        params: ['PROBE.EXPR'],
+        timestamp: new HLCTimestamp(26, 0, 'cfg-test').toString(),
+      }), null);
+      await settleTicks();
+
+      const deleteExprOb = readCdcObligation(leader.db, 'entry:cfg-delete-expr');
+      assert.ok(deleteExprOb);
+      assert.equal(JSON.parse(deleteExprOb.eventJson).data.config_key, 'probe.expr');
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.expr'), undefined);
+    } finally {
+      await shutdownAll(leader);
+    }
+  });

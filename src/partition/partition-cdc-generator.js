@@ -5,9 +5,15 @@
  */
 
 import {CDC_OPERATION, COLUMN, SQL} from '../constants/index.js';
+import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  hasSystemCacheKeyDescriptor,
+  resolveSystemCacheRowKey,
+} from '../cache/system-cache-key-descriptor.js';
 import {
   extractDeleteDataFromSQL as extractDeleteDataFromSQLImpl,
   extractInsertDataFromSQL as extractInsertDataFromSQLImpl,
+  extractInsertRowsFromSQL as extractInsertRowsFromSQLImpl,
   hasSqlParameterPlaceholders,
   parseValue as parseValueImpl,
   parseValuesFromSQL as parseValuesFromSQLImpl,
@@ -61,16 +67,35 @@ function isPlainRecordObject(value) {
   return proto === Object.prototype || proto === null;
 }
 
+const SYNTHETIC_FIXTURE_ID_KEY = 'id';
+
+function hasDeclaredSystemTableColumn(tableName, data) {
+  const columns = getSchemaByTableName(tableName)?.columns;
+  return Array.isArray(columns) &&
+    columns.some((col) => Object.prototype.hasOwnProperty.call(data, col.name));
+}
+
+function hasSyntheticFixturePrimaryKey(tableName, data) {
+  const value = data?.[SYNTHETIC_FIXTURE_ID_KEY];
+  return value !== undefined && value !== null && value !== '' &&
+    !hasDeclaredSystemTableColumn(tableName, data);
+}
+
 /**
- * Validate that extracted CDC row data carries at least one non-HLC row column.
- * @param {string} _tableName - Target table name.
+ * Validate that extracted CDC row data carries the table's primary key (when
+ * the table has a system-cache key descriptor) or a non-HLC row column.
+ * @param {string} tableName - Target table name.
  * @param {Object} data - Candidate CDC row payload.
  * @return {boolean}
  */
-function hasValidPartitionCdcRowPayload(_tableName, data) {
+function hasValidPartitionCdcRowPayload(tableName, data) {
   if (!isPlainRecordObject(data)) return false;
+  if (typeof tableName === 'string' && hasSystemCacheKeyDescriptor(tableName)) {
+    return resolveSystemCacheRowKey(tableName, data) !== undefined ||
+      hasSyntheticFixturePrimaryKey(tableName, data);
+  }
   return Object.keys(data).some(
-    (key) => key !== COLUMN.UPDATED_AT_HLC && data[key] !== undefined,
+    (key) => key !== COLUMN.UPDATED_AT_HLC && data[key] !== undefined && data[key] !== null,
   );
 }
 
@@ -78,6 +103,27 @@ function stampOriginHlc(data, originHlc) {
   if (!data || typeof data !== 'object' ||
       originHlc === null || typeof originHlc === 'undefined') return data;
   return {...data, [COLUMN.UPDATED_AT_HLC]: String(originHlc)};
+}
+
+function isInsertOrUpsertOperation(entryType) {
+  return entryType === PARTITION_SERVICE_OPERATION.INSERT ||
+    entryType === PARTITION_SERVICE_OPERATION.UPSERT;
+}
+
+function hasPopulatedEntryData(entry) {
+  return Boolean(entry?.data && Object.keys(entry.data).length > 0);
+}
+
+function canExtractQueryInsertRows(entry, entryType) {
+  return entry?.type === PARTITION_SERVICE_OPERATION.QUERY &&
+    typeof entry?.sql === 'string' &&
+    !hasPopulatedEntryData(entry) &&
+    isInsertOrUpsertOperation(entryType);
+}
+
+function firstAffectedRowOf(entry) {
+  return Array.isArray(entry?.affectedRows) && entry.affectedRows.length > 0 ?
+    entry.affectedRows[0] : null;
 }
 
 // Shared by normal committed capture and read-only correspondence. The row
@@ -90,26 +136,12 @@ function hydratePartitionCdcEvent(envelope, data, options = {}) {
 
 /**
  * Generates CDC events for partition write operations.
- * Handles event creation, formatting, and delivery to subscribers.
- *
- * Responsibilities:
- * - CDC event generation for INSERT, UPDATE, DELETE, UPSERT operations
- * - SQL parsing to extract table names and data
- * - CDC event formatting with proper structure
- * - CDC event delivery to subscribers
- *
  * @class
  */
 class PartitionCDCGenerator {
   /**
    * Create a new CDC generator instance.
    * @param {Object} options - Configuration options.
-   * @param {string} options.partitionId - Partition ID.
-   * @param {string} options.replicaId - Replica ID.
-   * @param {string} options.tableName - Default table name.
-   * @param {Database} options.db - SQLite database instance for row lookups.
-   * @param {Object} options.logger - Logger instance.
-   * @param {EventEmitter} options.eventEmitter - Event emitter for CDC events.
    */
   constructor(options = {}) {
     this.partitionId = options.partitionId;
@@ -118,8 +150,6 @@ class PartitionCDCGenerator {
     this.db = options.db;
     this.logger = options.logger || console;
     this.eventEmitter = options.eventEmitter;
-
-    // CDC subscribers
     this.cdcSubscribers = new Set();
   }
 
@@ -177,22 +207,22 @@ class PartitionCDCGenerator {
       return;
     }
 
-    const buildResult = this.buildEvent(entry);
+    const buildResult = this.buildEvents(entry);
     if (buildResult.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
       return;
     }
 
-    const cdcEvent = buildResult.cdcEvent;
+    for (const cdcEvent of buildResult.cdcEvents) {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATED_CDC_EVENT, {
+        partitionId: this.partitionId,
+        operation: cdcEvent.operation,
+        tableName: cdcEvent.tableName,
+        dataKeys: Object.keys(cdcEvent.data),
+        subscriberCount: this.cdcSubscribers.size,
+      });
 
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATED_CDC_EVENT, {
-      partitionId: this.partitionId,
-      operation: cdcEvent.operation,
-      tableName: cdcEvent.tableName,
-      dataKeys: Object.keys(cdcEvent.data),
-      subscriberCount: this.cdcSubscribers.size,
-    });
-
-    await this.deliverEvent(cdcEvent);
+      await this.deliverEvent(cdcEvent);
+    }
   }
 
   /**
@@ -258,23 +288,14 @@ class PartitionCDCGenerator {
    * @return {Object} Built CDC event.
    */
   hydrateEventEnvelope(entry, envelopeResult, options = {}) {
-    return hydratePartitionCdcEvent(envelopeResult.cdcEventEnvelope,
+    const row = firstAffectedRowOf(entry) ??
       this.extractCDCData(entry, envelopeResult.entryType,
-        envelopeResult.cdcEventEnvelope.tableName), options);
+        envelopeResult.cdcEventEnvelope.tableName);
+    return hydratePartitionCdcEvent(envelopeResult.cdcEventEnvelope, row, options);
   }
 
   /**
    * Stamp the origin write HLC onto the CDC row data as `updated_at_hlc`.
-   *
-   * The envelope-level `timestamp` is re-minted from each receiver's local clock
-   * during delivery, so it is NOT origin-stable across replicas. `data`, by
-   * contrast, is carried unchanged through every propagation hop, so the origin
-   * HLC stamped here reaches every replica's cache identically — making the cache
-   * LWW compare and DELETE-tombstone fence order-insensitive and skew-immune.
-   *
-   * Cache-only: the durable-write path filters unknown columns
-   * (`filterDataForTable`), so this stamp is never persisted to storage.
-   *
    * @param {Object} data - Extracted CDC row data.
    * @param {string} originHlc - Origin write HLC (the entry's timestamp).
    * @return {Object} Data carrying the origin HLC stamp.
@@ -285,30 +306,49 @@ class PartitionCDCGenerator {
   }
 
   /**
+   * Build one or more CDC events for a write entry with an explicit state/result contract.
+   * @param {Object} entry - Write entry.
+   * @param {Object} options - Event build options.
+   * @return {Object} Explicit build outcome with cdcEvent and cdcEvents.
+   */
+  buildEvents(entry, options = {}) {
+    const envelopeResult = this.resolveEventEnvelope(entry, options);
+    if (envelopeResult.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
+      return Object.freeze({...envelopeResult, cdcEvents: Object.freeze([])});
+    }
+    const candidateRows = this.extractCDCRows(
+      entry, envelopeResult.entryType, envelopeResult.cdcEventEnvelope.tableName,
+    );
+    const cdcEvents = [];
+    for (const row of candidateRows) {
+      const cdcEvent = hydratePartitionCdcEvent(envelopeResult.cdcEventEnvelope, row, options);
+      if (!hasValidPartitionCdcRowPayload(cdcEvent.tableName, cdcEvent.data)) {
+        this.logger.error(PARTITION_CDC_GENERATOR_LITERAL.REFUSING_INCOMPLETE_ROW_PAYLOAD, {
+          tableName: cdcEvent.tableName,
+          operationType: cdcEvent.operation,
+          extractedKeys: Object.keys(cdcEvent.data || {}),
+        });
+        return Object.freeze({
+          state: PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED,
+          reasonCode: PARTITION_CDC_EVENT_SKIP_REASON.INCOMPLETE_ROW_PAYLOAD,
+          entryType: envelopeResult.entryType,
+          cdcEvents: Object.freeze([]),
+        });
+      }
+      cdcEvents.push(cdcEvent);
+    }
+    const frozenEvents = Object.freeze(cdcEvents);
+    return Object.freeze({...envelopeResult, cdcEvent: frozenEvents[0], cdcEvents: frozenEvents});
+  }
+
+  /**
    * Build a CDC event with an explicit state/result contract.
    * @param {Object} entry - Write entry.
    * @param {Object} options - Event build options.
    * @return {Object} Explicit build outcome.
    */
   buildEvent(entry, options = {}) {
-    const envelopeResult = this.resolveEventEnvelope(entry, options);
-    if (envelopeResult.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
-      return envelopeResult;
-    }
-    const cdcEvent = this.hydrateEventEnvelope(entry, envelopeResult, options);
-    if (!hasValidPartitionCdcRowPayload(cdcEvent.tableName, cdcEvent.data)) {
-      this.logger.error(PARTITION_CDC_GENERATOR_LITERAL.REFUSING_INCOMPLETE_ROW_PAYLOAD, {
-        tableName: cdcEvent.tableName,
-        operationType: cdcEvent.operation,
-        extractedKeys: Object.keys(cdcEvent.data || {}),
-      });
-      return Object.freeze({
-        state: PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED,
-        reasonCode: PARTITION_CDC_EVENT_SKIP_REASON.INCOMPLETE_ROW_PAYLOAD,
-        entryType: envelopeResult.entryType,
-      });
-    }
-    return Object.freeze({...envelopeResult, cdcEvent});
+    return this.buildEvents(entry, options);
   }
 
   /**
@@ -363,6 +403,20 @@ class PartitionCDCGenerator {
     }
 
     return {operation, entryType};
+  }
+
+  extractCDCRows(entry, entryType, resolvedTableName = null) {
+    if (Array.isArray(entry?.affectedRows) && entry.affectedRows.length > 0) {
+      return entry.affectedRows;
+    }
+    const tableName = resolvedTableName || this.extractTableName(entry);
+    if (canExtractQueryInsertRows(entry, entryType)) {
+      const rows = extractInsertRowsFromSQLImpl(
+        entry.sql, entry.params, tableName, this.db, this.logger,
+      );
+      if (rows.length > 0) return rows;
+    }
+    return [this.extractCDCData(entry, entryType, tableName)];
   }
 
   /**
@@ -576,7 +630,7 @@ class PartitionCDCGenerator {
   * @private
   */
   extractDeleteDataFromSQL(sql) {
-    return extractDeleteDataFromSQLImpl(sql, this.logger);
+    return extractDeleteDataFromSQLImpl(sql, this.logger, this.db);
   }
 
   /**
@@ -644,6 +698,7 @@ class PartitionCDCGenerator {
       sql,
       params,
       tableName,
+      db: this.db,
       logger: this.logger,
       fetchInsertRow: (...args) => this.fetchInsertRow(...args),
     });
@@ -662,6 +717,7 @@ class PartitionCDCGenerator {
       sql,
       params,
       tableName,
+      db: this.db,
       logger: this.logger,
       fetchUpdatedRow: (...args) => this.fetchUpdatedRow(...args),
     });
@@ -680,6 +736,7 @@ class PartitionCDCGenerator {
       sql,
       params,
       tableName,
+      db: this.db,
       logger: this.logger,
     });
   }

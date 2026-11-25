@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "7cf707cb002efdadc4b43e5b730344f95823d9d2411f02dced327af3f0fe59e8"
+    "sourceSha256": "d2ddaa55e58ad6aad518a9c46c1a334a8d7847113c511b5e850931f83ebf0358"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,7 +18,7 @@
   },
   "metrics": {
     "moduleCount": 67,
-    "publicExportCount": 776,
+    "publicExportCount": 777,
     "importEdgeCount": 327,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
@@ -1771,9 +1771,10 @@
         "PUBLICATION_RECOVERY_MACHINE_CONTEXT",
         "PUBLICATION_RECOVERY_MACHINE_SPEC",
         "PUBLICATION_RECOVERY_REASON",
-        "PUBLICATION_RECOVERY_TERMINAL_PUBLICATION_STATUSES",
+        "PUBLICATION_RECOVERY_TRANSITION_ID",
         "evaluatePublicationRecoveryMachine",
-        "isTerminalPublicationRecoveryStatus"
+        "isTerminalPublicationRecoveryStatus",
+        "resolvePublicationRecoveryTransition"
       ],
       "localExports": [
         "PUBLICATION_RECOVERY_EVIDENCE_FLAG",
@@ -1784,9 +1785,10 @@
         "PUBLICATION_RECOVERY_MACHINE_CONTEXT",
         "PUBLICATION_RECOVERY_MACHINE_SPEC",
         "PUBLICATION_RECOVERY_REASON",
-        "PUBLICATION_RECOVERY_TERMINAL_PUBLICATION_STATUSES",
+        "PUBLICATION_RECOVERY_TRANSITION_ID",
         "evaluatePublicationRecoveryMachine",
-        "isTerminalPublicationRecoveryStatus"
+        "isTerminalPublicationRecoveryStatus",
+        "resolvePublicationRecoveryTransition"
       ]
     },
     {

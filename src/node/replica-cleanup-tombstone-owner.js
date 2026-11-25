@@ -32,6 +32,12 @@ import {buildReplicaLifecycleMutationPredicateFromRow,
 const REPLICA_CLEANUP_SERVICE_TYPE = SERVICE_TYPE.PARTITION_CLEANUP;
 const REPLICA_CLEANUP_CRITICAL_WORK = 'critical';
 const REPLICA_CLEANUP_STARTUP_SNAPSHOT_ID = 'startup-snapshot';
+const SELECT_COMPLETED_CLEANUP_RECEIPTS_SQL =
+  'SELECT service_id, service_type, node_id, partition_id, status, ' +
+  'cleanup_token, created_at, create_attempt_token, updated_at ' +
+  'FROM services WHERE service_type = ? AND status = ?';
+const PLACEMENT_LEARNER_MEMBERSHIP_CLEARED_REASON =
+  'placement_learner_membership_cleared';
 const REPLICA_CLEANUP_ACQUIRE_OUTCOME = Object.freeze({
   ACQUIRED: 'acquired',
   DEFERRED: 'deferred',
@@ -252,9 +258,7 @@ class ReplicaCleanupTombstoneOwner {
 
   async completedLearnerCleanupReceipts() {
     const result = await readAuthoritativeControlPlaneRows(this.gateway, TABLES.SERVICES,
-      'SELECT service_id, service_type, node_id, partition_id, status, ' +
-        'cleanup_token, created_at, create_attempt_token, updated_at ' +
-        'FROM services WHERE service_type = ? AND status = ?',
+      SELECT_COMPLETED_CLEANUP_RECEIPTS_SQL,
       [REPLICA_CLEANUP_SERVICE_TYPE, REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE], {
         authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
@@ -316,7 +320,9 @@ class ReplicaCleanupTombstoneOwner {
           ownerToken: row.cleanup_token}, scope)) return null;
     const whereClause = buildReplicaLifecycleMutationPredicateFromRow(row);
     if (!isReplicaLifecycleMutationPredicate(whereClause)) return null;
-    const authority = await this.takeoverRow(whereClause, token, 'placement_learner_membership_cleared');
+    const authority = await this.takeoverRow(
+      whereClause, token, PLACEMENT_LEARNER_MEMBERSHIP_CLEARED_REASON,
+    );
     return matchesScopedLearnerCleanup(authority, scope) ? authority : null;
   }
 

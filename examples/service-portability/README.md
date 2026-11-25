@@ -108,6 +108,12 @@ demonstrate.
 The certificates and private key in `certs/` are local example fixtures only.
 Never use them anywhere else.
 
+## Additional client-only evaluation fixture
+
+- [Python / Psycopg](python-psycopg/README.md) - ordinary Python SQL client,
+  local transaction/parameter tests, and a manual two-endpoint comparison.
+  This does not extend the certified driver matrix or the Node Docker proof.
+
 ## Continue
 
 - [request-binding-deployment](../request-binding-deployment/README.md) - the

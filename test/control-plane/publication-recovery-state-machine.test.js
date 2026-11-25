@@ -10,7 +10,9 @@ import {
   PUBLICATION_RECOVERY_MACHINE_CONTEXT,
   PUBLICATION_RECOVERY_MACHINE_SPEC,
   PUBLICATION_RECOVERY_REASON,
+  PUBLICATION_RECOVERY_TRANSITION_ID,
   evaluatePublicationRecoveryMachine,
+  resolvePublicationRecoveryTransition,
 } from '../../src/control-plane/publication-recovery-state-machine.js';
 
 const TEST_NODE_ID = Object.freeze({
@@ -157,5 +159,39 @@ test('publication recovery machine flags published pending ACK contradiction',
     t.same(result.invariantBreaches.map((breach) => breach.id), [
       PUBLICATION_RECOVERY_INVARIANT_ID.PUBLISHED_WITH_PENDING_ACK,
     ]);
+    t.end();
+  });
+
+test('publication recovery machine explicitly matches unavailable across all contexts and throws on unmatched transition',
+  (t) => {
+    for (const context of Object.values(PUBLICATION_RECOVERY_MACHINE_CONTEXT)) {
+      const unavailableResult = evaluatePublicationRecoveryMachine({
+        context,
+        available: false,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      });
+      t.equal(
+        unavailableResult.action,
+        PUBLICATION_RECOVERY_MACHINE_ACTION.REPORT_UNAVAILABLE,
+      );
+      t.equal(
+        unavailableResult.reasonCode,
+        PUBLICATION_RECOVERY_REASON.PUBLICATION_UNAVAILABLE,
+      );
+      t.equal(
+        unavailableResult.transitionId,
+        context === PUBLICATION_RECOVERY_MACHINE_CONTEXT.PREFLIGHT ?
+          PUBLICATION_RECOVERY_TRANSITION_ID.PREFLIGHT_UNAVAILABLE :
+          PUBLICATION_RECOVERY_TRANSITION_ID.REPORT_UNAVAILABLE,
+      );
+    }
+
+    t.throws(
+      () => resolvePublicationRecoveryTransition(
+        PUBLICATION_RECOVERY_MACHINE_CONTEXT.ACK_WRITE,
+        [],
+      ),
+      /Unmatched publication recovery transition for context ack_write/,
+    );
     t.end();
   });

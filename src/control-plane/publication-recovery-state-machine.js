@@ -4,6 +4,7 @@ import {
 
 const PUBLICATION_RECOVERY_TEXT = Object.freeze({
   EMPTY: '',
+  COMMA_SPACE: ', ',
   CURRENT: 'current',
   UNKNOWN: 'UNKNOWN',
   PUBLICATION_RECOVERY: 'publication_recovery',
@@ -88,6 +89,7 @@ const PUBLICATION_RECOVERY_TRANSITION_ID = Object.freeze({
   PREFLIGHT_PUBLISHED: 'preflight_published',
   PREFLIGHT_UNAVAILABLE: 'preflight_unavailable',
   RECORD_ACK: 'record_ack',
+  REPORT_UNAVAILABLE: 'report_unavailable',
 });
 
 const PUBLICATION_RECOVERY_INVARIANT_SEVERITY = Object.freeze({
@@ -191,6 +193,20 @@ const PUBLICATION_RECOVERY_MACHINE_SPEC = Object.freeze({
       id: PUBLICATION_RECOVERY_TRANSITION_ID.PREFLIGHT_UNAVAILABLE,
       contexts: Object.freeze([
         PUBLICATION_RECOVERY_MACHINE_CONTEXT.PREFLIGHT,
+      ]),
+      when: Object.freeze([
+        PUBLICATION_RECOVERY_EVIDENCE_FLAG.UNAVAILABLE,
+      ]),
+      unless: Object.freeze([]),
+      nextStatus: PUBLICATION_RECOVERY_TEXT.CURRENT,
+      action: PUBLICATION_RECOVERY_MACHINE_ACTION.REPORT_UNAVAILABLE,
+      reasonCode: PUBLICATION_RECOVERY_REASON.PUBLICATION_UNAVAILABLE,
+    }),
+    Object.freeze({
+      id: PUBLICATION_RECOVERY_TRANSITION_ID.REPORT_UNAVAILABLE,
+      contexts: Object.freeze([
+        PUBLICATION_RECOVERY_MACHINE_CONTEXT.ACK_WRITE,
+        PUBLICATION_RECOVERY_MACHINE_CONTEXT.METADATA_REFRESH,
       ]),
       when: Object.freeze([
         PUBLICATION_RECOVERY_EVIDENCE_FLAG.UNAVAILABLE,
@@ -468,12 +484,24 @@ function transitionMatchesPublicationRecoveryEvidence(
 }
 
 function resolvePublicationRecoveryTransition(context, satisfiedFlagIds) {
-  return PUBLICATION_RECOVERY_MACHINE_SPEC.transitions.find((transition) =>
-    transitionMatchesPublicationRecoveryContext(transition, context) &&
-    transitionMatchesPublicationRecoveryEvidence(transition, satisfiedFlagIds),
-  ) || PUBLICATION_RECOVERY_MACHINE_SPEC.transitions[
-    PUBLICATION_RECOVERY_MACHINE_SPEC.transitions.length - 1
-  ];
+  const matched = PUBLICATION_RECOVERY_MACHINE_SPEC.transitions.find(
+    (transition) =>
+      transitionMatchesPublicationRecoveryContext(transition, context) &&
+      transitionMatchesPublicationRecoveryEvidence(
+        transition,
+        satisfiedFlagIds,
+      ),
+  );
+  if (!matched) {
+    const flagSummary = Array.isArray(satisfiedFlagIds) ?
+      satisfiedFlagIds.join(PUBLICATION_RECOVERY_TEXT.COMMA_SPACE) :
+      PUBLICATION_RECOVERY_TEXT.EMPTY;
+    throw new Error(
+      `Unmatched publication recovery transition for context ${String(context)} ` +
+      `with flags [${flagSummary}]`,
+    );
+  }
+  return matched;
 }
 
 function resolvePublicationRecoveryNextStatus(transition, evidence) {
@@ -550,7 +578,8 @@ export {
   PUBLICATION_RECOVERY_MACHINE_CONTEXT,
   PUBLICATION_RECOVERY_MACHINE_SPEC,
   PUBLICATION_RECOVERY_REASON,
-  PUBLICATION_RECOVERY_TERMINAL_PUBLICATION_STATUSES,
+  PUBLICATION_RECOVERY_TRANSITION_ID,
   evaluatePublicationRecoveryMachine,
   isTerminalPublicationRecoveryStatus,
+  resolvePublicationRecoveryTransition,
 };

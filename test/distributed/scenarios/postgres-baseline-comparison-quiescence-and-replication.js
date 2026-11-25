@@ -72,6 +72,328 @@ const {
   summarizeInFlightReplicaOperationTimeline,
 } = POSTGRES_BASELINE_COMPARISON_LOAD_NODE_RESOLUTION_BUNDLE;
 
+function resolveQuiescenceWindowOptions({
+  stableWindowMs,
+  noProgressTimeoutMs,
+  maxReplicaOpsInFlight,
+}) {
+  return {
+    effectiveStableWindowMs: Math.max(
+      ZERO,
+      Number.isFinite(stableWindowMs) ?
+        Math.floor(stableWindowMs) :
+        QUIESCENCE_DEFAULT_STABLE_WINDOW_MS,
+    ),
+    effectiveNoProgressTimeoutMs:
+      Number.isInteger(noProgressTimeoutMs) && noProgressTimeoutMs > ZERO ?
+        noProgressTimeoutMs :
+        null,
+    effectiveMaxReplicaOpsInFlight:
+      Number.isInteger(maxReplicaOpsInFlight) && maxReplicaOpsInFlight >= ZERO ?
+        maxReplicaOpsInFlight :
+        BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT,
+  };
+}
+
+function cloneArrayOrEmpty(values) {
+  return Array.isArray(values) ? [...values] : [];
+}
+
+function buildMetadataSnapshotSignature({
+  stage,
+  readinessState,
+  requiredSchemaVersion,
+  probeError,
+}) {
+  return JSON.stringify({
+    stage: String(stage || BENCHMARK_METADATA_STAGE_READINESS_POLL),
+    ready: readinessState?.ready === true,
+    requiredSchemaVersion:
+      readinessState?.requiredSchemaVersion ||
+      normalizeRequiredSchemaVersion(requiredSchemaVersion),
+    appliedSchemaVersion: readinessState?.appliedSchemaVersion || null,
+    reasons: cloneArrayOrEmpty(readinessState?.reasons),
+    discoveryReasons: cloneArrayOrEmpty(readinessState?.discoveryReasons),
+    probeError:
+      typeof probeError === 'string' && probeError.length > ZERO ?
+        probeError :
+        null,
+  });
+}
+
+function buildQuiescenceDiscoveryContext(
+  tableName,
+  requiredSchemaTableId,
+  useCanonicalFieldKeys = true,
+) {
+  if (typeof tableName !== 'string' || tableName.length === ZERO) {
+    return {
+      ...NODE_CLIENT_TRANSIENT_CONTEXT,
+      requireReadiness: true,
+    };
+  }
+  const tableNameKey = useCanonicalFieldKeys ?
+    NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME :
+    'tableName';
+  const tableIdKey = useCanonicalFieldKeys ?
+    NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID :
+    'tableId';
+  return {
+    ...NODE_CLIENT_TRANSIENT_CONTEXT,
+    requireReadiness: true,
+    [tableNameKey]: tableName,
+    ...(typeof requiredSchemaTableId === 'string' &&
+    requiredSchemaTableId.length > ZERO ?
+      {
+        [tableIdKey]: requiredSchemaTableId,
+      } :
+      {}),
+  };
+}
+
+function emitCanonicalReadinessConvergenceEvents({
+  onConvergenceEvent,
+  nodeId,
+  requiredSchemaTableId,
+  tableName,
+  requiredSchemaVersion,
+  discoveryReadiness,
+}) {
+  if (typeof onConvergenceEvent !== 'function') {
+    return;
+  }
+  const effectiveRequiredVersion =
+    discoveryReadiness.requiredSchemaVersion || requiredSchemaVersion;
+  const observedVersion = discoveryReadiness.appliedSchemaVersion || null;
+  onConvergenceEvent({
+    type: 'cdc_received',
+    nodeId,
+    tableId: requiredSchemaTableId || null,
+    tableName,
+    requiredSchemaVersion: effectiveRequiredVersion,
+    observedSchemaVersion: observedVersion,
+    reasons: discoveryReadiness.reasons,
+    ready: discoveryReadiness.ready,
+  });
+  if (discoveryReadiness.appliedSchemaVersion) {
+    onConvergenceEvent({
+      type: 'cache_applied_version',
+      nodeId,
+      tableId: requiredSchemaTableId || null,
+      tableName,
+      requiredSchemaVersion: effectiveRequiredVersion,
+      observedSchemaVersion: discoveryReadiness.appliedSchemaVersion,
+      reasons: discoveryReadiness.reasons,
+      ready: discoveryReadiness.ready,
+    });
+  }
+  if (discoveryReadiness.ready) {
+    onConvergenceEvent({
+      type: 'readiness_predicate_pass',
+      nodeId,
+      tableId: requiredSchemaTableId || null,
+      tableName,
+      requiredSchemaVersion: effectiveRequiredVersion,
+      observedSchemaVersion: observedVersion,
+      reasons: [],
+      ready: true,
+    });
+  }
+}
+
+function buildCanonicalDiscoveryProbeFailureResult(nodeId, discoveryReadiness) {
+  const discoveryReasonDetails =
+    Array.isArray(discoveryReadiness.discoveryReasons) &&
+    discoveryReadiness.discoveryReasons.length > ZERO ?
+      QUIESCENCE_REASON_DISCOVERY_REASON_DETAIL_PREFIX +
+        discoveryReadiness.discoveryReasons.join(
+          QUIESCENCE_REASON_DISCOVERY_REASON_DETAIL_SEPARATOR,
+        ) :
+      null;
+  const discoveryReasonText =
+    discoveryReadiness.reasons.length > ZERO ?
+      discoveryReadiness.reasons.join('|') :
+      DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN;
+  return {
+    ready: false,
+    reasons: [
+      QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
+        nodeId +
+        '=' +
+        QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
+        discoveryReasonText +
+        (discoveryReasonDetails ? '|' + discoveryReasonDetails : ''),
+    ],
+  };
+}
+
+function normalizePartitionGroupInFlightMap(rawMap) {
+  if (!rawMap || typeof rawMap !== 'object') {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(rawMap)
+      .filter((entry) => Number.isInteger(entry[1]) && entry[1] >= ZERO)
+      .map(([partitionGroupId, count]) => [
+        String(partitionGroupId),
+        Number(count),
+      ]),
+  );
+}
+
+function buildPollSnapshotTimelineEvent({
+  sequence,
+  nodeId,
+  readinessState,
+  reasons,
+  requiredSchemaVersion,
+  timestampMs,
+}) {
+  const source =
+    readinessState && typeof readinessState === 'object' ? readinessState : {};
+  const readinessStateSnapshot = cloneDiscoveryReadinessState(
+    source.readinessState,
+  );
+  const event = {
+    type: READINESS_TIMELINE_EVENT_POLL_SNAPSHOT,
+    sequence,
+    nodeId,
+    ready: source.ready === true,
+    reasons,
+    requiredSchemaVersion:
+      source.requiredSchemaVersion ||
+      normalizeRequiredSchemaVersion(requiredSchemaVersion),
+    observedSchemaVersion: source.appliedSchemaVersion || null,
+    discoveryReasons: cloneArrayOrEmpty(source.discoveryReasons),
+    timestampMs,
+  };
+  if (readinessStateSnapshot) {
+    event.readinessState = readinessStateSnapshot;
+  }
+  return event;
+}
+
+function extractControlSnapshotReplicaOperationDetails(controlSnapshot) {
+  const replicaOperations =
+    controlSnapshot?.replicaOperations &&
+    typeof controlSnapshot.replicaOperations === 'object' ?
+      controlSnapshot.replicaOperations :
+      {};
+  const inFlightCount = Number.isInteger(replicaOperations.inFlightCount) ?
+    replicaOperations.inFlightCount :
+    ZERO;
+  const partitionGroupInFlight = normalizePartitionGroupInFlightMap(
+    replicaOperations.partitionGroupInFlight,
+  );
+  const operationTimelineByOperationId =
+    replicaOperations.operationTimelineById &&
+    typeof replicaOperations.operationTimelineById === 'object' ?
+      replicaOperations.operationTimelineById :
+      {};
+  return {
+    inFlightCount,
+    partitionGroupInFlight,
+    operationTimelineByOperationId,
+    operationTimelineSignature: buildReplicaOperationProgressSignature(
+      operationTimelineByOperationId,
+    ),
+    operationLiveness: summarizeInFlightReplicaOperationTimeline(
+      operationTimelineByOperationId,
+    ),
+  };
+}
+
+function extractSortedLeaderEntries(controlSnapshot) {
+  const leaders =
+    controlSnapshot?.leaders && typeof controlSnapshot.leaders === 'object' ?
+      controlSnapshot.leaders :
+      {};
+  return Object.entries(leaders).sort((left, right) =>
+    left[0].localeCompare(right[0]),
+  );
+}
+
+function buildGlobalQuiescenceConditionReasons(
+  inFlightCount,
+  effectiveMaxReplicaOpsInFlight,
+  leadershipStable,
+  leaderQuietElapsedMs,
+) {
+  const reasons = [];
+  if (inFlightCount > effectiveMaxReplicaOpsInFlight) {
+    reasons.push(
+      QUIESCENCE_REASON_IN_FLIGHT_NOT_DRAINED_PREFIX + String(inFlightCount),
+    );
+  }
+  if (!leadershipStable) {
+    reasons.push(
+      QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX +
+        String(leaderQuietElapsedMs),
+    );
+  }
+  return reasons;
+}
+
+function buildQuiescenceFailureDetails(reasonHistogram, readyLoadNodeCount) {
+  const reasonKeys = Object.keys(reasonHistogram || {});
+  const filterByPrefix = (prefix) =>
+    reasonKeys.filter((reason) => reason.startsWith(prefix));
+  const nodeProbeReasons = filterByPrefix(
+    QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX,
+  );
+  const inFlightQueryReasons = filterByPrefix(
+    QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX,
+  );
+  const inFlightCountReasons = filterByPrefix(
+    QUIESCENCE_REASON_IN_FLIGHT_NOT_DRAINED_PREFIX,
+  );
+  const leadershipReasons = filterByPrefix(
+    QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX,
+  );
+  const stallReasons = filterByPrefix(
+    QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX,
+  );
+
+  const details = [];
+  if (nodeProbeReasons.length > ZERO) {
+    details.push(
+      QUIESCENCE_NODE_ERROR_PREFIX +
+        nodeProbeReasons.join(QUIESCENCE_NODE_ERROR_SEPARATOR),
+    );
+  }
+  if (inFlightQueryReasons.length > ZERO) {
+    details.push(
+      QUIESCENCE_IN_FLIGHT_ERROR_PREFIX + inFlightQueryReasons.join(','),
+    );
+  }
+  if (inFlightCountReasons.length > ZERO) {
+    details.push(
+      QUIESCENCE_IN_FLIGHT_COUNT_PREFIX + inFlightCountReasons.join(','),
+    );
+  }
+  if (leadershipReasons.length > ZERO) {
+    details.push('leadershipStability=' + leadershipReasons.join(','));
+  }
+  if (stallReasons.length > ZERO) {
+    details.push(QUIESCENCE_STALL_PREFIX + stallReasons.join(','));
+  }
+  if (readyLoadNodeCount > ZERO) {
+    details.push(QUIESCENCE_READY_NODE_COUNT_PREFIX + String(readyLoadNodeCount));
+  }
+  return details;
+}
+
+function shouldSuppressQuiescenceStallAbort(inFlightCount, operationLiveness) {
+  return (
+    Number.isInteger(inFlightCount) &&
+    inFlightCount > ZERO &&
+    Number.isInteger(operationLiveness?.inFlightOperationCount) &&
+    operationLiveness.inFlightOperationCount > ZERO &&
+    Number.isInteger(operationLiveness?.nearestInFlightTimeoutRemainingMs) &&
+    operationLiveness.hasStaleInFlightOperation !== true
+  );
+}
+
 async function waitForSutLoadQuiescence({
   nodeClient,
   loadNodes,
@@ -94,20 +416,15 @@ async function waitForSutLoadQuiescence({
   const timing = resolveScenarioTiming(configuredTiming);
   const tableProbeSql = buildSutTableProbeSql(tableName);
   const requireCanonicalReadiness = strictCanonicalReadiness === true;
-  const effectiveStableWindowMs = Math.max(
-    ZERO,
-    Number.isFinite(stableWindowMs) ?
-      Math.floor(stableWindowMs) :
-      QUIESCENCE_DEFAULT_STABLE_WINDOW_MS,
-  );
-  const effectiveNoProgressTimeoutMs =
-    Number.isInteger(noProgressTimeoutMs) && noProgressTimeoutMs > ZERO ?
-      noProgressTimeoutMs :
-      null;
-  const effectiveMaxReplicaOpsInFlight =
-    Number.isInteger(maxReplicaOpsInFlight) && maxReplicaOpsInFlight >= ZERO ?
-      maxReplicaOpsInFlight :
-      BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT;
+  const {
+    effectiveStableWindowMs,
+    effectiveNoProgressTimeoutMs,
+    effectiveMaxReplicaOpsInFlight,
+  } = resolveQuiescenceWindowOptions({
+    stableWindowMs,
+    noProgressTimeoutMs,
+    maxReplicaOpsInFlight,
+  });
   let lastLeaderSignature = null;
   let lastLeaderChangeAtMs = timing.now();
   let lastProgressAtMs = timing.now();
@@ -146,23 +463,11 @@ async function waitForSutLoadQuiescence({
       return;
     }
     const nodeId = String(node?.id || DISCOVERY_UNKNOWN_NODE_ID);
-    const signature = JSON.stringify({
-      stage: String(stage || BENCHMARK_METADATA_STAGE_READINESS_POLL),
-      ready: readinessState?.ready === true,
-      requiredSchemaVersion:
-        readinessState?.requiredSchemaVersion ||
-        normalizeRequiredSchemaVersion(requiredSchemaVersion),
-      appliedSchemaVersion: readinessState?.appliedSchemaVersion || null,
-      reasons: Array.isArray(readinessState?.reasons) ?
-        [...readinessState.reasons] :
-        [],
-      discoveryReasons: Array.isArray(readinessState?.discoveryReasons) ?
-        [...readinessState.discoveryReasons] :
-        [],
-      probeError:
-        typeof probeError === 'string' && probeError.length > ZERO ?
-          probeError :
-          null,
+    const signature = buildMetadataSnapshotSignature({
+      stage,
+      readinessState,
+      requiredSchemaVersion,
+      probeError,
     });
     if (benchmarkMetadataSignatureByNodeId[nodeId] === signature) {
       return;
@@ -189,12 +494,8 @@ async function waitForSutLoadQuiescence({
         normalizeRequiredSchemaVersion(requiredSchemaVersion),
       appliedSchemaVersion: readinessState?.appliedSchemaVersion || null,
       ready: readinessState?.ready === true,
-      reasons: Array.isArray(readinessState?.reasons) ?
-        [...readinessState.reasons] :
-        [],
-      discoveryReasons: Array.isArray(readinessState?.discoveryReasons) ?
-        [...readinessState.discoveryReasons] :
-        [],
+      reasons: cloneArrayOrEmpty(readinessState?.reasons),
+      discoveryReasons: cloneArrayOrEmpty(readinessState?.discoveryReasons),
       readinessState: cloneDiscoveryReadinessState(
         readinessState?.readinessState,
       ),
@@ -205,9 +506,7 @@ async function waitForSutLoadQuiescence({
     if (!requireCanonicalReadiness) {
       return;
     }
-    const reasons = Array.isArray(readinessState?.reasons) ?
-      [...readinessState.reasons] :
-      [];
+    const reasons = cloneArrayOrEmpty(readinessState?.reasons);
     const reasonSignature = reasons.join('|');
     const hasPreviousReasonSignature = Object.prototype.hasOwnProperty.call(
       readinessReasonSignatureByNodeId,
@@ -216,30 +515,18 @@ async function waitForSutLoadQuiescence({
     const previousReasonSignature = hasPreviousReasonSignature ?
       readinessReasonSignatureByNodeId[nodeId] :
       null;
-    const discoveryReasons = Array.isArray(readinessState?.discoveryReasons) ?
-      [...readinessState.discoveryReasons] :
-      [];
-    const readinessStateSnapshot = cloneDiscoveryReadinessState(
-      readinessState?.readinessState,
-    );
 
     readinessTimelineSequence += ONE;
-    readinessTimeline.push({
-      type: READINESS_TIMELINE_EVENT_POLL_SNAPSHOT,
-      sequence: readinessTimelineSequence,
-      nodeId,
-      ready: readinessState?.ready === true,
-      reasons,
-      requiredSchemaVersion:
-        readinessState?.requiredSchemaVersion ||
-        normalizeRequiredSchemaVersion(requiredSchemaVersion),
-      observedSchemaVersion: readinessState?.appliedSchemaVersion || null,
-      discoveryReasons,
-      ...(readinessStateSnapshot ?
-        {readinessState: readinessStateSnapshot} :
-        {}),
-      timestampMs: timing.now(),
-    });
+    readinessTimeline.push(
+      buildPollSnapshotTimelineEvent({
+        sequence: readinessTimelineSequence,
+        nodeId,
+        readinessState,
+        reasons,
+        requiredSchemaVersion,
+        timestampMs: timing.now(),
+      }),
+    );
 
     if (
       !hasPreviousReasonSignature ||
@@ -273,9 +560,7 @@ async function waitForSutLoadQuiescence({
         unmetReasons: Array.isArray(snapshot?.reasons) ?
           [...snapshot.reasons] :
           [DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN],
-        discoveryReasons: Array.isArray(snapshot?.discoveryReasons) ?
-          [...snapshot.discoveryReasons] :
-          [],
+        discoveryReasons: cloneArrayOrEmpty(snapshot?.discoveryReasons),
         readinessState: cloneDiscoveryReadinessState(snapshot?.readinessState),
       };
     }
@@ -283,6 +568,193 @@ async function waitForSutLoadQuiescence({
       requiredSchemaVersion: requiredVersion,
       nodes,
     };
+  }
+
+  async function probeCanonicalReadinessForNode(node, nodeId) {
+    try {
+      const discoveryContext = buildQuiescenceDiscoveryContext(
+        tableName,
+        requiredSchemaTableId,
+        true,
+      );
+      const discoverySnapshot = await nodeClient.fetchServiceDiscovery(
+        node,
+        discoveryContext,
+      );
+      const discoveryReadiness = resolveNodeReadinessFromServiceDiscovery(
+        discoverySnapshot,
+        nodeId,
+        {
+          enforceCanonicalVersionedReadiness: true,
+          adminQueryable: true,
+          requiredSchemaVersion,
+          admissionRuntimeOwnership: runtimeAdmissionOwnership,
+        },
+      );
+      await maybeCaptureBenchmarkMetadataSnapshot(
+        node,
+        BENCHMARK_METADATA_STAGE_READINESS_POLL,
+        discoveryReadiness,
+        null,
+      );
+      recordVersionedReadiness(nodeId, discoveryReadiness);
+      recordReadinessObservation(nodeId, discoveryReadiness);
+      emitCanonicalReadinessConvergenceEvents({
+        onConvergenceEvent,
+        nodeId,
+        requiredSchemaTableId,
+        tableName,
+        requiredSchemaVersion,
+        discoveryReadiness,
+      });
+      if (discoveryReadiness.ready) {
+        return {
+          ready: true,
+          reasons: [],
+        };
+      }
+      return buildCanonicalDiscoveryProbeFailureResult(
+        nodeId,
+        discoveryReadiness,
+      );
+    } catch (error) {
+      const canonicalReadiness = buildCanonicalReadinessFromDiscoveryError({
+        error,
+        requiredSchemaVersion,
+      });
+      const probeErrorMessage = String(error?.message || error);
+      await maybeCaptureBenchmarkMetadataSnapshot(
+        node,
+        BENCHMARK_METADATA_STAGE_DISCOVERY_ERROR,
+        canonicalReadiness,
+        probeErrorMessage,
+      );
+      recordVersionedReadiness(nodeId, canonicalReadiness);
+      recordReadinessObservation(nodeId, canonicalReadiness);
+      const canonicalReasonText =
+        canonicalReadiness.reasons.length > ZERO ?
+          canonicalReadiness.reasons.join('|') :
+          DISCOVERY_READINESS_REASON_ADMIN_NOT_QUERYABLE;
+      return {
+        ready: false,
+        reasons: [
+          QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
+            nodeId +
+            '=' +
+            QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
+            canonicalReasonText +
+            '|probe_error=' +
+            probeErrorMessage,
+        ],
+      };
+    }
+  }
+
+  async function probeTableReadinessForNode(node, nodeId) {
+    try {
+      await nodeClient.queryControl(
+        node,
+        tableProbeSql,
+        [],
+        NODE_CLIENT_TRANSIENT_CONTEXT,
+      );
+      return {
+        ready: true,
+        reasons: [],
+      };
+    } catch (error) {
+      const probeErrorMessage = String(error?.message || error);
+      if (isRetriableTableReadyError(error)) {
+        try {
+          const discoverySnapshot = await nodeClient.fetchServiceDiscovery(
+            node,
+            buildQuiescenceDiscoveryContext(
+              tableName,
+              requiredSchemaTableId,
+              false,
+            ),
+          );
+          const discoveryReadiness = resolveNodeReadinessFromServiceDiscovery(
+            discoverySnapshot,
+            nodeId,
+            {
+              admissionRuntimeOwnership: runtimeAdmissionOwnership,
+            },
+          );
+          if (!discoveryReadiness.ready) {
+            return {
+              ready: false,
+              reasons: [
+                QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
+                  nodeId +
+                  '=' +
+                  QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
+                  discoveryReadiness.reasons.join('|') +
+                  '|probe_error=' +
+                  probeErrorMessage,
+              ],
+            };
+          }
+        } catch (_discoveryError) {
+          // Fall through to the original probe error path.
+        }
+      }
+      return {
+        ready: false,
+        reasons: [
+          QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
+            nodeId +
+            '=' +
+            probeErrorMessage,
+        ],
+      };
+    }
+  }
+
+  function hasQuiescenceProgressAdvanced(includedNodeIds) {
+    let progressObserved = false;
+    const inFlightCount = gateProgressState.inFlightCount;
+    if (
+      Number.isInteger(inFlightCount) &&
+      inFlightCount < lowestInFlightCount
+    ) {
+      lowestInFlightCount = inFlightCount;
+      progressObserved = true;
+    }
+
+    const leaderQuietElapsedMs = Number.isFinite(
+      gateProgressState.leaderQuietElapsedMs,
+    ) ?
+      gateProgressState.leaderQuietElapsedMs :
+      ZERO;
+    if (
+      inFlightCount === ZERO &&
+      leaderQuietElapsedMs > maxLeaderQuietElapsedMs
+    ) {
+      maxLeaderQuietElapsedMs = leaderQuietElapsedMs;
+      progressObserved = true;
+    }
+
+    const includedCount = Array.isArray(includedNodeIds) ?
+      includedNodeIds.length :
+      ZERO;
+    if (includedCount > maxIncludedNodeCount) {
+      maxIncludedNodeCount = includedCount;
+      progressObserved = true;
+    }
+
+    const operationTimelineSignature =
+      typeof gateProgressState.operationTimelineSignature === 'string' ?
+        gateProgressState.operationTimelineSignature :
+        null;
+    if (
+      operationTimelineSignature !== null &&
+      operationTimelineSignature !== lastOperationTimelineSignature
+    ) {
+      lastOperationTimelineSignature = operationTimelineSignature;
+      progressObserved = true;
+    }
+    return progressObserved;
   }
 
   const gateEngine = new GateEngine({
@@ -301,225 +773,9 @@ async function waitForSutLoadQuiescence({
     probeNode: async (node) => {
       const nodeId = String(node?.id || DISCOVERY_UNKNOWN_NODE_ID);
       if (requireCanonicalReadiness) {
-        try {
-          const discoveryContext = {
-            ...NODE_CLIENT_TRANSIENT_CONTEXT,
-            requireReadiness: true,
-            ...(typeof tableName === 'string' && tableName.length > ZERO ?
-              {
-                [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME]: tableName,
-                ...(typeof requiredSchemaTableId === 'string' &&
-                  requiredSchemaTableId.length > ZERO ?
-                  {
-                    [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID]:
-                          requiredSchemaTableId,
-                  } :
-                  {}),
-              } :
-              {}),
-          };
-          const discoverySnapshot = await nodeClient.fetchServiceDiscovery(
-            node,
-            discoveryContext,
-          );
-          const discoveryReadiness = resolveNodeReadinessFromServiceDiscovery(
-            discoverySnapshot,
-            nodeId,
-            {
-              enforceCanonicalVersionedReadiness: true,
-              adminQueryable: true,
-              requiredSchemaVersion,
-              admissionRuntimeOwnership: runtimeAdmissionOwnership,
-            },
-          );
-          await maybeCaptureBenchmarkMetadataSnapshot(
-            node,
-            BENCHMARK_METADATA_STAGE_READINESS_POLL,
-            discoveryReadiness,
-            null,
-          );
-          recordVersionedReadiness(nodeId, discoveryReadiness);
-          recordReadinessObservation(nodeId, discoveryReadiness);
-          if (typeof onConvergenceEvent === 'function') {
-            onConvergenceEvent({
-              type: 'cdc_received',
-              nodeId,
-              tableId: requiredSchemaTableId || null,
-              tableName,
-              requiredSchemaVersion:
-                discoveryReadiness.requiredSchemaVersion ||
-                requiredSchemaVersion,
-              observedSchemaVersion:
-                discoveryReadiness.appliedSchemaVersion || null,
-              reasons: discoveryReadiness.reasons,
-              ready: discoveryReadiness.ready,
-            });
-            if (discoveryReadiness.appliedSchemaVersion) {
-              onConvergenceEvent({
-                type: 'cache_applied_version',
-                nodeId,
-                tableId: requiredSchemaTableId || null,
-                tableName,
-                requiredSchemaVersion:
-                  discoveryReadiness.requiredSchemaVersion ||
-                  requiredSchemaVersion,
-                observedSchemaVersion: discoveryReadiness.appliedSchemaVersion,
-                reasons: discoveryReadiness.reasons,
-                ready: discoveryReadiness.ready,
-              });
-            }
-            if (discoveryReadiness.ready) {
-              onConvergenceEvent({
-                type: 'readiness_predicate_pass',
-                nodeId,
-                tableId: requiredSchemaTableId || null,
-                tableName,
-                requiredSchemaVersion:
-                  discoveryReadiness.requiredSchemaVersion ||
-                  requiredSchemaVersion,
-                observedSchemaVersion:
-                  discoveryReadiness.appliedSchemaVersion || null,
-                reasons: [],
-                ready: true,
-              });
-            }
-          }
-          if (discoveryReadiness.ready) {
-            return {
-              ready: true,
-              reasons: [],
-            };
-          }
-          const discoveryReasonDetails =
-            Array.isArray(discoveryReadiness.discoveryReasons) &&
-            discoveryReadiness.discoveryReasons.length > ZERO ?
-              QUIESCENCE_REASON_DISCOVERY_REASON_DETAIL_PREFIX +
-                discoveryReadiness.discoveryReasons.join(
-                  QUIESCENCE_REASON_DISCOVERY_REASON_DETAIL_SEPARATOR,
-                ) :
-              null;
-          const discoveryReasonText =
-            discoveryReadiness.reasons.length > ZERO ?
-              discoveryReadiness.reasons.join('|') :
-              DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN;
-          return {
-            ready: false,
-            reasons: [
-              QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
-                nodeId +
-                '=' +
-                QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
-                discoveryReasonText +
-                (discoveryReasonDetails ? '|' + discoveryReasonDetails : ''),
-            ],
-          };
-        } catch (error) {
-          const canonicalReadiness = buildCanonicalReadinessFromDiscoveryError({
-            error,
-            requiredSchemaVersion,
-          });
-          await maybeCaptureBenchmarkMetadataSnapshot(
-            node,
-            BENCHMARK_METADATA_STAGE_DISCOVERY_ERROR,
-            canonicalReadiness,
-            String(error?.message || error),
-          );
-          recordVersionedReadiness(nodeId, canonicalReadiness);
-          recordReadinessObservation(nodeId, canonicalReadiness);
-          const canonicalReasonText =
-            canonicalReadiness.reasons.length > ZERO ?
-              canonicalReadiness.reasons.join('|') :
-              DISCOVERY_READINESS_REASON_ADMIN_NOT_QUERYABLE;
-          return {
-            ready: false,
-            reasons: [
-              QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
-                nodeId +
-                '=' +
-                QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
-                canonicalReasonText +
-                '|probe_error=' +
-                String(error?.message || error),
-            ],
-          };
-        }
+        return probeCanonicalReadinessForNode(node, nodeId);
       }
-
-      try {
-        await nodeClient.queryControl(
-          node,
-          tableProbeSql,
-          [],
-          NODE_CLIENT_TRANSIENT_CONTEXT,
-        );
-        return {
-          ready: true,
-          reasons: [],
-        };
-      } catch (error) {
-        const probeErrorMessage = String(error?.message || error);
-        if (isRetriableTableReadyError(error)) {
-          try {
-            const discoverySnapshot = await nodeClient.fetchServiceDiscovery(
-              node,
-              {
-                ...NODE_CLIENT_TRANSIENT_CONTEXT,
-                tableName,
-                ...(typeof requiredSchemaTableId === 'string' &&
-                requiredSchemaTableId.length > ZERO ?
-                  {
-                    tableId: requiredSchemaTableId,
-                  } :
-                  {}),
-                requireReadiness: true,
-              },
-            );
-            const discoveryReadiness = resolveNodeReadinessFromServiceDiscovery(
-              discoverySnapshot,
-              nodeId,
-              {
-                admissionRuntimeOwnership: runtimeAdmissionOwnership,
-              },
-            );
-            if (discoveryReadiness.ready) {
-              // Discovery readiness is diagnostic-only here. A node is considered
-              // ready for load only after the table probe itself succeeds.
-              return {
-                ready: false,
-                reasons: [
-                  QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
-                    nodeId +
-                    '=' +
-                    probeErrorMessage,
-                ],
-              };
-            }
-            return {
-              ready: false,
-              reasons: [
-                QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
-                  nodeId +
-                  '=' +
-                  QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
-                  discoveryReadiness.reasons.join('|') +
-                  '|probe_error=' +
-                  probeErrorMessage,
-              ],
-            };
-          } catch (_discoveryError) {
-            // Fall through to the original probe error path.
-          }
-        }
-        return {
-          ready: false,
-          reasons: [
-            QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
-              nodeId +
-              '=' +
-              probeErrorMessage,
-          ],
-        };
-      }
+      return probeTableReadinessForNode(node, nodeId);
     },
     evaluateGlobalCondition: async () => {
       try {
@@ -528,75 +784,33 @@ async function waitForSutLoadQuiescence({
           controlSnapshotCandidates,
           NODE_CLIENT_TRANSIENT_CONTEXT,
         );
-        const replicaOperations = controlSnapshot?.replicaOperations || {};
-        const inFlightCount = Number.isInteger(replicaOperations.inFlightCount) ?
-          replicaOperations.inFlightCount :
-          ZERO;
-        const partitionGroupInFlight =
-          replicaOperations.partitionGroupInFlight &&
-          typeof replicaOperations.partitionGroupInFlight === 'object' ?
-            Object.fromEntries(
-              Object.entries(replicaOperations.partitionGroupInFlight)
-                .filter(
-                  (entry) => Number.isInteger(entry[1]) && entry[1] >= ZERO,
-                )
-                .map(([partitionGroupId, count]) => [
-                  String(partitionGroupId),
-                  Number(count),
-                ]),
-            ) :
-            {};
-        const operationTimelineByOperationId =
-          replicaOperations.operationTimelineById &&
-          typeof replicaOperations.operationTimelineById === 'object' ?
-            replicaOperations.operationTimelineById :
-            {};
-        const operationTimelineSignature =
-          buildReplicaOperationProgressSignature(
-            operationTimelineByOperationId,
-          );
-        const operationLiveness = summarizeInFlightReplicaOperationTimeline(
+        const {
+          inFlightCount,
+          partitionGroupInFlight,
           operationTimelineByOperationId,
-        );
-        const leaders =
-          controlSnapshot?.leaders &&
-          typeof controlSnapshot.leaders === 'object' ?
-            controlSnapshot.leaders :
-            {};
-        const leaderEntries = Object.entries(leaders).sort((left, right) =>
-          left[0].localeCompare(right[0]),
-        );
+          operationTimelineSignature,
+          operationLiveness,
+        } = extractControlSnapshotReplicaOperationDetails(controlSnapshot);
+        const leaderEntries = extractSortedLeaderEntries(controlSnapshot);
         const leaderSignature = JSON.stringify(leaderEntries);
         if (
-          lastLeaderSignature !== null &&
+          lastLeaderSignature === null ||
           lastLeaderSignature !== leaderSignature
         ) {
           lastLeaderChangeAtMs = timing.now();
         }
-        if (lastLeaderSignature === null) {
-          lastLeaderChangeAtMs = timing.now();
-        }
         lastLeaderSignature = leaderSignature;
 
-        const leaderCoverageReady = leaderEntries.length > ZERO;
         const leaderQuietElapsedMs = timing.now() - lastLeaderChangeAtMs;
         const leadershipStable =
-          leaderCoverageReady &&
+          leaderEntries.length > ZERO &&
           leaderQuietElapsedMs >= effectiveStableWindowMs;
-
-        const reasons = [];
-        if (inFlightCount > effectiveMaxReplicaOpsInFlight) {
-          reasons.push(
-            QUIESCENCE_REASON_IN_FLIGHT_NOT_DRAINED_PREFIX +
-              String(inFlightCount),
-          );
-        }
-        if (!leadershipStable) {
-          reasons.push(
-            QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX +
-              String(leaderQuietElapsedMs),
-          );
-        }
+        const reasons = buildGlobalQuiescenceConditionReasons(
+          inFlightCount,
+          effectiveMaxReplicaOpsInFlight,
+          leadershipStable,
+          leaderQuietElapsedMs,
+        );
 
         gateProgressState.inFlightCount = inFlightCount;
         gateProgressState.leaderQuietElapsedMs = leaderQuietElapsedMs;
@@ -625,81 +839,25 @@ async function waitForSutLoadQuiescence({
       if (effectiveNoProgressTimeoutMs === null) {
         return null;
       }
-
-      let progressObserved = false;
-      const inFlightCount = gateProgressState.inFlightCount;
-      if (
-        Number.isInteger(inFlightCount) &&
-        inFlightCount < lowestInFlightCount
-      ) {
-        lowestInFlightCount = inFlightCount;
-        progressObserved = true;
-      }
-
-      const leaderQuietElapsedMs = Number.isFinite(
-        gateProgressState.leaderQuietElapsedMs,
-      ) ?
-        gateProgressState.leaderQuietElapsedMs :
-        ZERO;
-      if (
-        inFlightCount === ZERO &&
-        leaderQuietElapsedMs > maxLeaderQuietElapsedMs
-      ) {
-        maxLeaderQuietElapsedMs = leaderQuietElapsedMs;
-        progressObserved = true;
-      }
-
-      const includedCount = Array.isArray(includedNodeIds) ?
-        includedNodeIds.length :
-        ZERO;
-      if (includedCount > maxIncludedNodeCount) {
-        maxIncludedNodeCount = includedCount;
-        progressObserved = true;
-      }
-
-      const operationTimelineSignature =
-        typeof gateProgressState.operationTimelineSignature === 'string' ?
-          gateProgressState.operationTimelineSignature :
-          null;
-      if (
-        operationTimelineSignature !== null &&
-        operationTimelineSignature !== lastOperationTimelineSignature
-      ) {
-        lastOperationTimelineSignature = operationTimelineSignature;
-        progressObserved = true;
-      }
-
-      if (progressObserved) {
+      if (hasQuiescenceProgressAdvanced(includedNodeIds)) {
         lastProgressAtMs = nowMs;
         return null;
       }
 
       const stalledMs = nowMs - lastProgressAtMs;
-      const operationLiveness =
-        gateProgressState.operationLiveness &&
-        typeof gateProgressState.operationLiveness === 'object' ?
-          gateProgressState.operationLiveness :
-          null;
-      const suppressStallAbortForFreshInFlight =
-        Number.isInteger(inFlightCount) &&
-        inFlightCount > ZERO &&
-        Number.isInteger(operationLiveness?.inFlightOperationCount) &&
-        operationLiveness.inFlightOperationCount > ZERO &&
-        Number.isInteger(
-          operationLiveness?.nearestInFlightTimeoutRemainingMs,
-        ) &&
-        operationLiveness.hasStaleInFlightOperation !== true;
-      if (stalledMs >= effectiveNoProgressTimeoutMs) {
-        if (suppressStallAbortForFreshInFlight) {
-          return null;
-        }
-        return {
-          abort: true,
-          reason:
-            QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX + String(stalledMs),
-        };
+      if (
+        stalledMs < effectiveNoProgressTimeoutMs ||
+        shouldSuppressQuiescenceStallAbort(
+          gateProgressState.inFlightCount,
+          gateProgressState.operationLiveness,
+        )
+      ) {
+        return null;
       }
-      return null;
+      return {
+        abort: true,
+        reason: QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX + String(stalledMs),
+      };
     },
   });
 
@@ -712,9 +870,6 @@ async function waitForSutLoadQuiescence({
     .filter((nodeId) => !includedNodeIds.has(nodeId));
 
   if (gateResult.mode === GATE_RESULT_MODE.ALL_READY) {
-    const versionConvergence = requireCanonicalReadiness ?
-      buildVersionConvergenceSnapshot() :
-      null;
     return {
       mode: gateResult.mode,
       attempts: gateResult.attempts,
@@ -731,58 +886,18 @@ async function waitForSutLoadQuiescence({
       reasonHistogram: gateResult.reasonHistogram || {},
       includedNodeIds: gateResult.includedNodeIds || [],
       ...(requireCanonicalReadiness ?
-        {readinessTimeline: [...readinessTimeline]} :
+        {
+          readinessTimeline: [...readinessTimeline],
+          versionConvergence: buildVersionConvergenceSnapshot(),
+        } :
         {}),
-      ...(versionConvergence ? {versionConvergence} : {}),
     };
   }
 
-  const reasonKeys = Object.keys(gateResult.reasonHistogram || {});
-  const nodeProbeReasons = reasonKeys.filter((reason) =>
-    reason.startsWith(QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX),
+  const details = buildQuiescenceFailureDetails(
+    gateResult.reasonHistogram,
+    readyLoadNodes.length,
   );
-  const inFlightQueryReasons = reasonKeys.filter((reason) =>
-    reason.startsWith(QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX),
-  );
-  const inFlightCountReasons = reasonKeys.filter((reason) =>
-    reason.startsWith(QUIESCENCE_REASON_IN_FLIGHT_NOT_DRAINED_PREFIX),
-  );
-  const leadershipReasons = reasonKeys.filter((reason) =>
-    reason.startsWith(QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX),
-  );
-  const stallReasons = reasonKeys.filter((reason) =>
-    reason.startsWith(QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX),
-  );
-
-  const details = [];
-  if (nodeProbeReasons.length > ZERO) {
-    details.push(
-      QUIESCENCE_NODE_ERROR_PREFIX +
-        nodeProbeReasons.join(QUIESCENCE_NODE_ERROR_SEPARATOR),
-    );
-  }
-  if (inFlightQueryReasons.length > ZERO) {
-    details.push(
-      QUIESCENCE_IN_FLIGHT_ERROR_PREFIX + inFlightQueryReasons.join(','),
-    );
-  }
-  if (inFlightCountReasons.length > ZERO) {
-    details.push(
-      QUIESCENCE_IN_FLIGHT_COUNT_PREFIX + inFlightCountReasons.join(','),
-    );
-  }
-  if (leadershipReasons.length > ZERO) {
-    details.push('leadershipStability=' + leadershipReasons.join(','));
-  }
-  if (stallReasons.length > ZERO) {
-    details.push(QUIESCENCE_STALL_PREFIX + stallReasons.join(','));
-  }
-  if (readyLoadNodes.length > ZERO) {
-    details.push(
-      QUIESCENCE_READY_NODE_COUNT_PREFIX + String(readyLoadNodes.length),
-    );
-  }
-
   const errorPrefix =
     gateResult.aborted === true ?
       'SUT load nodes did not reach quiescent state; gate aborted due to ' +
@@ -806,10 +921,10 @@ async function waitForSutLoadQuiescence({
     excludedNodeIds: gateResult.excludedNodeIds || [],
     reasonHistogram: gateResult.reasonHistogram || {},
     ...(requireCanonicalReadiness ?
-      {readinessTimeline: [...readinessTimeline]} :
-      {}),
-    ...(requireCanonicalReadiness ?
-      {versionConvergence: buildVersionConvergenceSnapshot()} :
+      {
+        readinessTimeline: [...readinessTimeline],
+        versionConvergence: buildVersionConvergenceSnapshot(),
+      } :
       {}),
   };
   throw error;
@@ -982,66 +1097,53 @@ function resolveBenchmarkConfig(cluster) {
   );
 }
 
+function normalizePositiveFiniteIntegerOrZero(value) {
+  return Number.isFinite(value) && value > ZERO ? Math.floor(value) : ZERO;
+}
+
+function normalizePositiveFiniteIntegerOrNull(value) {
+  return Number.isFinite(value) && value > ZERO ? Math.floor(value) : null;
+}
+
 function resolvePreflightConvergenceOptions(
   cluster,
   benchmarkConfig,
   nodeCount,
 ) {
-  const configuredSettleTimeoutMs =
-    Number.isFinite(cluster?._config?.convergence?.settleTimeoutMs) &&
-    cluster._config.convergence.settleTimeoutMs > ZERO ?
-      Math.floor(cluster._config.convergence.settleTimeoutMs) :
-      null;
-  const readyTimeoutMs =
-    Number.isFinite(benchmarkConfig?.readyTimeoutMs) &&
-    benchmarkConfig.readyTimeoutMs > ZERO ?
-      Math.floor(benchmarkConfig.readyTimeoutMs) :
-      null;
-  const quiescentTimeoutMs =
-    Number.isFinite(benchmarkConfig?.quiescentTimeoutMs) &&
-    benchmarkConfig.quiescentTimeoutMs > ZERO ?
-      Math.floor(benchmarkConfig.quiescentTimeoutMs) :
-      null;
-
-  const configuredTargetVoterCount =
-    Number.isFinite(cluster?._config?.convergence?.targetVoterCount) &&
-    cluster._config.convergence.targetVoterCount > ZERO ?
-      Math.floor(cluster._config.convergence.targetVoterCount) :
-      null;
-
+  const convergenceConfig = cluster?._config?.convergence;
+  const isLargeCluster =
+    nodeCount >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD;
   let settleTimeoutMs = Math.max(
-    configuredSettleTimeoutMs || ZERO,
-    readyTimeoutMs || ZERO,
-    quiescentTimeoutMs || ZERO,
+    normalizePositiveFiniteIntegerOrZero(convergenceConfig?.settleTimeoutMs),
+    normalizePositiveFiniteIntegerOrZero(benchmarkConfig?.readyTimeoutMs),
+    normalizePositiveFiniteIntegerOrZero(benchmarkConfig?.quiescentTimeoutMs),
+  );
+  let targetVoterCount = normalizePositiveFiniteIntegerOrNull(
+    convergenceConfig?.targetVoterCount,
   );
 
-  let targetVoterCount = configuredTargetVoterCount;
-
-  if (nodeCount >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD) {
+  if (isLargeCluster) {
     settleTimeoutMs = Math.max(
       settleTimeoutMs,
       PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_MIN_SETTLE_TIMEOUT_MS,
     );
-    if (Number.isInteger(targetVoterCount) && targetVoterCount > ZERO) {
+    if (targetVoterCount !== null) {
       targetVoterCount += PREFLIGHT_CONVERGENCE_ALLOWED_VOTER_SKEW;
     }
   }
 
-  if (!Number.isFinite(settleTimeoutMs) || settleTimeoutMs <= ZERO) {
+  if (settleTimeoutMs <= ZERO) {
     settleTimeoutMs = BENCHMARK_DEFAULTS.readyTimeoutMs;
   }
 
-  const options = {
+  return {
     settleTimeoutMs,
-    quietWindowMs: cluster?._config?.convergence?.quietWindowMs,
+    quietWindowMs: convergenceConfig?.quietWindowMs,
     targetVoterCount,
+    ...(isLargeCluster ?
+      {forceRepairAfterMs: PREFLIGHT_CONVERGENCE_FORCE_REPAIR_AFTER_MS} :
+      {}),
   };
-
-  if (nodeCount >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD) {
-    options.forceRepairAfterMs = PREFLIGHT_CONVERGENCE_FORCE_REPAIR_AFTER_MS;
-  }
-
-  return options;
 }
 
 function resolvePrimaryProvider(cluster) {

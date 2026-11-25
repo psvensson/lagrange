@@ -489,6 +489,23 @@ function buildUnexecutedReportDetail(nodeCount) {
   });
 }
 
+function computeLiveFinalBytes(invocations) {
+  return invocations.every((item) => Number.isFinite(item?.bytes)) ?
+    invocations.reduce((sum, item) => sum + item.bytes, ZERO) :
+    null;
+}
+
+function resolveLiveLocalReadProof(logEntries, partitionIds, invocationCount) {
+  if (logEntries.length > ZERO && partitionIds.length > ZERO) {
+    return buildLocalReadProof({
+      invocationCount,
+      logEntries,
+      partitionIds,
+    });
+  }
+  return {distinctNodes: ZERO, perNode: [], spreadUnit: SPREAD_UNIT.NODE};
+}
+
 function buildLiveReportDetail({
   hasLiveTelemetry,
   invocations,
@@ -513,33 +530,21 @@ function buildLiveReportDetail({
   const logEntries = Array.isArray(workload?.logEntries) ?
     workload.logEntries :
     [];
-  const localReadProof =
-    logEntries.length > ZERO && partitionIds.length > ZERO ?
-      buildLocalReadProof({
-        invocationCount: invocations.length,
-        logEntries,
-        partitionIds,
-      }) :
-      {distinctNodes: ZERO, perNode: [], spreadUnit: SPREAD_UNIT.NODE};
+  const localReadProof = resolveLiveLocalReadProof(
+    logEntries,
+    partitionIds,
+    invocations.length,
+  );
   const networkPerNode = hasLiveTelemetry ?
     buildNetworkPerNode(nodeIds, snapshotsBefore, snapshotsAfter) :
     [];
   const resourcePerNode = hasLiveTelemetry ?
     buildResourcePerNode(nodeIds, snapshotsAfter) :
     [];
-  const finalBytes = invocations.every((item) => Number.isFinite(item?.bytes)) ?
-    invocations.reduce((sum, item) => sum + item.bytes, ZERO) :
-    null;
-  const partialBytes = Number.isFinite(workload?.partialBytes) ?
-    workload.partialBytes :
-    null;
-  const sentinelRowCount = Number.isFinite(workload?.sentinelRowCount) ?
-    workload.sentinelRowCount :
-    ZERO;
   return composeReportDetail({
     datasetDigest: computeDatasetDigest(rows),
     fidelity: resolveLiveFidelity(workload),
-    finalBytes,
+    finalBytes: computeLiveFinalBytes(invocations),
     generatorDigest: computeGeneratorDigest(),
     invokerTelemetry: summarizeInvokerTelemetry(logEntries),
     latencyMs: computeLatencySummary(
@@ -549,10 +554,185 @@ function buildLiveReportDetail({
     networkPerNode,
     nodeCount: nodeIds.length,
     parity,
-    partialBytes,
+    partialBytes: Number.isFinite(workload?.partialBytes) ?
+      workload.partialBytes :
+      null,
     resourcePerNode,
-    sentinelRowCount,
+    sentinelRowCount: Number.isFinite(workload?.sentinelRowCount) ?
+      workload.sentinelRowCount :
+      ZERO,
     topology,
+  });
+}
+
+async function collectOptionalNodeResourceSnapshots(cluster, nodes, phase) {
+  if (typeof cluster?.collectNodeResourceSnapshots !== 'function') {
+    return null;
+  }
+  return cluster.collectNodeResourceSnapshots({
+    cluster,
+    nodes,
+    phase,
+  });
+}
+
+async function executeOptionalPublicPathWorkload(
+  cluster,
+  nodes,
+  options,
+  defaultRows,
+) {
+  if (typeof cluster?.executePublicPathWorkload !== 'function') {
+    return null;
+  }
+  return cluster.executePublicPathWorkload({
+    cluster,
+    nodes,
+    options,
+    rows: defaultRows,
+  });
+}
+
+async function executeOptionalNonSeedFailureDrill(
+  cluster,
+  nodes,
+  primaryNonSeedNode,
+  options,
+) {
+  if (
+    typeof cluster?.executeNonSeedFailureDrill !== 'function' ||
+    primaryNonSeedNode === null
+  ) {
+    return null;
+  }
+  return cluster.executeNonSeedFailureDrill({
+    cluster,
+    nodes,
+    nonSeedNode: primaryNonSeedNode,
+    options,
+  });
+}
+
+function isLiveWorkloadExecution(hasWorkloadHook, invocations, workload) {
+  const workloadMode = workload?.mode;
+  const isLiveWorkloadMode =
+    workload?.synthetic !== true &&
+    (workloadMode === undefined || workloadMode === LIVE_FIDELITY_MODE);
+  return hasWorkloadHook && invocations.length > ZERO && isLiveWorkloadMode;
+}
+
+function resolveTelemetryMetricOverrides(hasLiveTelemetry, options) {
+  if (hasLiveTelemetry) {
+    return options.metrics;
+  }
+  return {
+    [DIMENSION_NAME.CPU_PERCENT]: null,
+    [DIMENSION_NAME.MEMORY_BYTES]: null,
+    ...(options.metrics || {}),
+  };
+}
+
+function assertCertificationVerdictPassed(certification, result) {
+  if (certification.overallVerdict === CERTIFICATION_VERDICT.PASS) {
+    return;
+  }
+  const errorCode =
+    certification.overallVerdict === CERTIFICATION_VERDICT.NON_TERMINAL ?
+      CERTIFICATION_ERROR_CODE.NON_TERMINAL :
+      CERTIFICATION_ERROR_CODE.FAILED;
+  const reasons = certification.nonTerminalReasons.join(', ') ||
+    certification.failedDimensions.join(', ');
+  throw new PublicPathCertificationError(
+    `${SCENARIO_NAME}: certification ${certification.overallVerdict}` +
+      (reasons.length > ZERO ? ` (${reasons})` : ''),
+    {
+      certification,
+      code: errorCode,
+      reportDetail: result,
+    },
+  );
+}
+
+function extractClusterNodesAndNonSeedInfo(cluster) {
+  const rawNodes =
+    cluster && typeof cluster.getNodes === 'function' ?
+      cluster.getNodes() :
+      null;
+  const nodes = Array.isArray(rawNodes) ? rawNodes : [];
+  const nodeIds = nodes.map((node) => node.id);
+  const nonSeedNodes = nodes.filter((node) => node.role !== 'seed');
+  return {
+    nodes,
+    nodeIds,
+    nonSeedNodeIds: new Set(nonSeedNodes.map((node) => node.id)),
+    primaryNonSeedNode: nonSeedNodes[ZERO] || null,
+  };
+}
+
+function resolveWorkloadReportDetail({
+  hasWorkloadHook,
+  hasLiveTelemetry,
+  invocations,
+  nodeIds,
+  defaultRows,
+  beforeCheck,
+  afterCheck,
+  workload,
+}) {
+  if (!hasWorkloadHook || invocations.length === ZERO) {
+    return buildUnexecutedReportDetail(nodeIds.length);
+  }
+  const rows = Array.isArray(workload?.rows) ? workload.rows : defaultRows;
+  return buildLiveReportDetail({
+    hasLiveTelemetry,
+    invocations,
+    nodeIds,
+    rows,
+    snapshotsAfter: afterCheck.snapshots,
+    snapshotsBefore: beforeCheck.snapshots,
+    workload,
+  });
+}
+
+function extractWorkloadRepresentativeness(workload) {
+  return workload?.representativeness &&
+    typeof workload.representativeness === 'object' ?
+    workload.representativeness :
+    {};
+}
+
+function attachCertificationReportToCluster(cluster, result) {
+  if (cluster && typeof cluster === 'object') {
+    cluster.reportDetail = result;
+  }
+}
+
+function evaluateLiveCertification({
+  options,
+  hasLiveWorkload,
+  hasLiveTelemetry,
+  failureDrill,
+  reportDetail,
+  representativeness,
+}) {
+  const fidelityMode = hasLiveWorkload && hasLiveTelemetry ?
+    LIVE_FIDELITY_MODE :
+    SYNTHETIC_FIDELITY_MODE;
+  const baselineMetrics =
+    options.baselineMetrics === undefined ?
+      DEFAULT_BASELINE_METRICS :
+      options.baselineMetrics;
+  return evaluateScaleAndFailureCertification({
+    barDefinition:
+      options.barDefinition || SEALED_PUBLIC_PATH_CERTIFICATION_BAR,
+    baselineMetrics,
+    expectedBarDigest: options.expectedBarDigest,
+    failureDrill,
+    fidelityMode,
+    metrics: resolveTelemetryMetricOverrides(hasLiveTelemetry, options),
+    reportDetail,
+    representativeness,
+    rt2PressureProof: executeRt1AndRt2RuntimeProof(),
   });
 }
 
@@ -566,46 +746,30 @@ function buildLiveReportDetail({
  * @return {Promise<Object>}
  */
 export async function run(cluster = null, options = {}) {
-  const nodes = Array.isArray(cluster?.getNodes?.()) ?
-    cluster.getNodes() :
-    [];
-  const nodeIds = nodes.map((node) => node.id);
-  const nonSeedNodes = nodes.filter((node) => node.role !== 'seed');
-  const nonSeedNodeIds = new Set(nonSeedNodes.map((node) => node.id));
-  const primaryNonSeedNode = nonSeedNodes[ZERO] || null;
-
+  const {nodes, nodeIds, nonSeedNodeIds, primaryNonSeedNode} =
+    extractClusterNodesAndNonSeedInfo(cluster);
   const hasTelemetryHook =
     typeof cluster?.collectNodeResourceSnapshots === 'function';
   const hasWorkloadHook =
     typeof cluster?.executePublicPathWorkload === 'function';
-  const hasDrillHook =
-    typeof cluster?.executeNonSeedFailureDrill === 'function';
 
-  const rawSnapshotsBefore = hasTelemetryHook ?
-    await cluster.collectNodeResourceSnapshots({
-      cluster,
-      nodes,
-      phase: 'before',
-    }) :
-    null;
-
+  const rawSnapshotsBefore = await collectOptionalNodeResourceSnapshots(
+    cluster,
+    nodes,
+    'before',
+  );
   const defaultRows = generateDatasetRows();
-  const workload = hasWorkloadHook ?
-    await cluster.executePublicPathWorkload({
-      cluster,
-      nodes,
-      options,
-      rows: defaultRows,
-    }) :
-    null;
-
-  const rawSnapshotsAfter = hasTelemetryHook ?
-    await cluster.collectNodeResourceSnapshots({
-      cluster,
-      nodes,
-      phase: 'after',
-    }) :
-    null;
+  const workload = await executeOptionalPublicPathWorkload(
+    cluster,
+    nodes,
+    options,
+    defaultRows,
+  );
+  const rawSnapshotsAfter = await collectOptionalNodeResourceSnapshots(
+    cluster,
+    nodes,
+    'after',
+  );
 
   const beforeCheck = normalizeSnapshotMap(rawSnapshotsBefore, nodeIds);
   const afterCheck = normalizeSnapshotMap(rawSnapshotsAfter, nodeIds);
@@ -615,93 +779,43 @@ export async function run(cluster = null, options = {}) {
   const invocations = Array.isArray(workload?.invocations) ?
     workload.invocations :
     [];
-  const workloadMode = workload?.mode;
-  const isLiveWorkloadMode =
-    workload?.synthetic !== true &&
-    (workloadMode === undefined || workloadMode === LIVE_FIDELITY_MODE);
-  const hasLiveWorkload =
-    hasWorkloadHook && invocations.length > ZERO && isLiveWorkloadMode;
+  const hasLiveWorkload = isLiveWorkloadExecution(
+    hasWorkloadHook,
+    invocations,
+    workload,
+  );
+  const reportDetail = resolveWorkloadReportDetail({
+    hasWorkloadHook,
+    hasLiveTelemetry,
+    invocations,
+    nodeIds,
+    defaultRows,
+    beforeCheck,
+    afterCheck,
+    workload,
+  });
 
-  const rows = Array.isArray(workload?.rows) ? workload.rows : defaultRows;
-  const reportDetail = hasWorkloadHook && invocations.length > ZERO ?
-    buildLiveReportDetail({
-      hasLiveTelemetry,
-      invocations,
-      nodeIds,
-      rows,
-      snapshotsAfter: afterCheck.snapshots,
-      snapshotsBefore: beforeCheck.snapshots,
-      workload,
-    }) :
-    buildUnexecutedReportDetail(nodeIds.length);
-
-  const rawDrill = hasDrillHook && primaryNonSeedNode !== null ?
-    await cluster.executeNonSeedFailureDrill({
-      cluster,
-      nodes,
-      nonSeedNode: primaryNonSeedNode,
-      options,
-    }) :
-    null;
-  const failureDrill = resolveLiveFailureDrill(rawDrill, nonSeedNodeIds);
-  const representativeness =
-    workload?.representativeness &&
-    typeof workload.representativeness === 'object' ?
-      workload.representativeness :
-      {};
-
-  const fidelityMode = hasLiveWorkload && hasLiveTelemetry ?
-    LIVE_FIDELITY_MODE :
-    SYNTHETIC_FIDELITY_MODE;
-  const telemetryMetricOverrides = hasLiveTelemetry ?
-    options.metrics :
-    {
-      [DIMENSION_NAME.CPU_PERCENT]: null,
-      [DIMENSION_NAME.MEMORY_BYTES]: null,
-      ...(options.metrics || {}),
-    };
-  const baselineMetrics =
-    options.baselineMetrics === undefined ?
-      DEFAULT_BASELINE_METRICS :
-      options.baselineMetrics;
-
-  const certification = evaluateScaleAndFailureCertification({
-    barDefinition:
-      options.barDefinition || SEALED_PUBLIC_PATH_CERTIFICATION_BAR,
-    baselineMetrics,
-    expectedBarDigest: options.expectedBarDigest,
-    failureDrill,
-    fidelityMode,
-    metrics: telemetryMetricOverrides,
+  const rawDrill = await executeOptionalNonSeedFailureDrill(
+    cluster,
+    nodes,
+    primaryNonSeedNode,
+    options,
+  );
+  const certification = evaluateLiveCertification({
+    options,
+    hasLiveWorkload,
+    hasLiveTelemetry,
+    failureDrill: resolveLiveFailureDrill(rawDrill, nonSeedNodeIds),
     reportDetail,
-    representativeness,
-    rt2PressureProof: executeRt1AndRt2RuntimeProof(),
+    representativeness: extractWorkloadRepresentativeness(workload),
   });
 
   const result = {
     ...reportDetail,
     certification,
   };
-  if (cluster && typeof cluster === 'object') {
-    cluster.reportDetail = result;
-  }
-  if (certification.overallVerdict !== CERTIFICATION_VERDICT.PASS) {
-    const errorCode =
-      certification.overallVerdict === CERTIFICATION_VERDICT.NON_TERMINAL ?
-        CERTIFICATION_ERROR_CODE.NON_TERMINAL :
-        CERTIFICATION_ERROR_CODE.FAILED;
-    const reasons = certification.nonTerminalReasons.join(', ') ||
-      certification.failedDimensions.join(', ');
-    throw new PublicPathCertificationError(
-      `${SCENARIO_NAME}: certification ${certification.overallVerdict}` +
-        (reasons.length > ZERO ? ` (${reasons})` : ''),
-      {
-        certification,
-        code: errorCode,
-        reportDetail: result,
-      },
-    );
-  }
+  attachCertificationReportToCluster(cluster, result);
+  assertCertificationVerdictPassed(certification, result);
   return result;
 }
 

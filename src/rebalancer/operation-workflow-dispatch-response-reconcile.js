@@ -23,27 +23,24 @@ import {
   isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
 } from './operation-workflow-ambiguous-create-delivery.js';
-import {didOperationReconcileAdvanceOrComplete} from
-  './operation-workflow-reconcile-outcome.js';
-import {reconcileSatisfiedCreateResponse} from
-  './operation-workflow-create-satisfied-response.js';
-import {captureStrandedRemovePreimage, resolveStrandedRemoveReply} from
-  './operation-workflow-stranded-remove-repair.js';
+import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
+import {reconcileSatisfiedCreateResponse} from './operation-workflow-create-satisfied-response.js';
 import {
-  applyGrowthPromoteRequestFields,
-  isHeldGrowthPromoteOperation,
-  reconcileGrowthPromoteDispatchResponse,
-  resolveGrowthPromoteTargetNodeId,
+  captureStrandedRemovePreimage, resolveStrandedRemoveReply,
+} from './operation-workflow-stranded-remove-repair.js';
+import {
+  applyGrowthPromoteRequestFields, isHeldGrowthPromoteOperation,
+  reconcileGrowthPromoteDispatchResponse, resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
 import {LEARNER_RETIREMENT_OUTCOME} from './replica-operation-constants.js';
 import {
   completeOwnedLearnerRetirement, evaluatePlacementLearnerRetirement,
   reconcileUnscopedPlacementRemoval, settleSupersededRemoval,
-} from
-  './operation-workflow-placement-learner-retirement.js';
+} from './operation-workflow-placement-learner-retirement.js';
 import {recordAcknowledgedCreateInFlight} from './operation-workflow-create-ack-state.js';
-import {deliverAdmittedOperationEffect, holdReplaceSourceRemovalEffect, prepareReplaceRemovalEffectTurn} from
-  './operation-workflow-remove-effect-admission.js';
+import {
+  deliverAdmittedOperationEffect, holdReplaceSourceRemovalEffect, prepareReplaceRemovalEffectTurn,
+} from './operation-workflow-remove-effect-admission.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL, OPERATION_OWNER_ACTION, OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -68,22 +65,13 @@ const DISPATCH_OBSERVED_FIELDS = Object.freeze([
 ]);
 const DISPATCH_SCOPE_FIELDS = Object.freeze(['partitionId', 'operationId']);
 
-/**
- * The bounded critical dispatch spent its deadline without a response: one
- * wait_bound_spent ERROR (the deferred retry that follows is unchanged).
- * @param {Object} owner
- * @param {Object} operation
- * @param {number} boundMs
- * @param {number} startedAtMs - Date.now() when the deadline was armed.
- * @return {void}
- */
+// Bounded critical dispatch spent its deadline without a response: emit one wait_bound_spent ERROR.
 function reportReplicaOperationDispatchSpent(owner, operation, boundMs, startedAtMs) {
   reportWaitBoundSpent(owner.logger, {
     ...REPLICA_OPERATION_DISPATCH_WAIT, boundMs, elapsedMs: Date.now() - startedAtMs,
     lastObserved: () => pickDispatchFields(operation, DISPATCH_OBSERVED_FIELDS),
     scope: () => ({
-      nodeId: owner.nodeId ?? null,
-      ...pickDispatchFields(operation, DISPATCH_SCOPE_FIELDS),
+      nodeId: owner.nodeId ?? null, ...pickDispatchFields(operation, DISPATCH_SCOPE_FIELDS),
     }),
   });
 }
@@ -105,49 +93,29 @@ const REFUSED_CREATE_DISPATCH_AUTHORITY = Object.freeze({
   action: CREATE_DISPATCH_AUTHORITY_ACTION.REFUSE, operation: null,
 });
 
-/**
- * The first dispatch attempt per (operation, step) logs at info so run
- * forensics can distinguish "never dispatched" from "dispatch retrying"
- * without debug logging (run-22's silence was exactly this ambiguity);
- * retries stay at debug to avoid retry-loop flood. Module-level on purpose:
- * this file's methods run `.call(owner)`-delegated, so only exported names
- * exist on the owner instance.
- * @param {Object} owner
- * @param {Object} operation
- * @param {Object} payload
- * @return {void}
- */
+// First dispatch attempt per (operation, step) logs at info; retries stay at debug.
 function logSendOperationAttempt(owner, operation, payload) {
-  const sendOperationLogKey =
-    `${operation.operationId}:${operation.workflowStep}`;
+  const sendOperationLogKey = `${operation.operationId}:${operation.workflowStep}`;
   if (!owner.sendOperationInfoLoggedKeys) {
     owner.sendOperationInfoLoggedKeys = new Set();
   }
   if (owner.sendOperationInfoLoggedKeys.size > SEND_OPERATION_LOG_KEY_CAP) {
     owner.sendOperationInfoLoggedKeys.clear();
   }
-  const firstAttemptForStep =
-    !owner.sendOperationInfoLoggedKeys.has(sendOperationLogKey);
+  const firstAttemptForStep = !owner.sendOperationInfoLoggedKeys.has(sendOperationLogKey);
   owner.sendOperationInfoLoggedKeys.add(sendOperationLogKey);
   const sendOperationLog = firstAttemptForStep ?
-    owner.logger.info.bind(owner.logger) :
-    owner.logger.debug.bind(owner.logger);
-  sendOperationLog(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
-    ...payload,
-    firstAttemptForStep,
-  });
+    owner.logger.info.bind(owner.logger) : owner.logger.debug.bind(owner.logger);
+  sendOperationLog(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {...payload, firstAttemptForStep});
 }
 
 function isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) {
   return replaceRemoveDispatchPhase !== true &&
-    (operation?.type === OperationType.ADD ||
-      operation?.type === OperationType.REPLACE);
+    (operation?.type === OperationType.ADD || operation?.type === OperationType.REPLACE);
 }
 
 function sameCreateDispatchIdentity(left, right) {
-  return CREATE_DISPATCH_IDENTITY_FIELDS.every(
-    (field) => left?.[field] === right?.[field],
-  );
+  return CREATE_DISPATCH_IDENTITY_FIELDS.every((field) => left?.[field] === right?.[field]);
 }
 
 function buildCreateDispatchRefreshDeferred(operation, observation) {
@@ -176,19 +144,12 @@ function hasDurableCreateDispatchTuple(operation) {
 }
 
 function allowCreateDispatchAuthority(operation) {
-  return {
-    action: CREATE_DISPATCH_AUTHORITY_ACTION.DISPATCH,
-    operation,
-  };
+  return {action: CREATE_DISPATCH_AUTHORITY_ACTION.DISPATCH, operation};
 }
 
 // Adopt the durable admission tuple so retries never rebuild its token from
 // mutable workflow timestamps.
-function resolveObservedCreateDispatchAuthority(
-  owner,
-  operation,
-  observation,
-) {
+function resolveObservedCreateDispatchAuthority(owner, operation, observation) {
   const current = observation?.operation || null;
   if (!current) {
     throw buildCreateDispatchRefreshDeferred(operation, observation);
@@ -208,11 +169,7 @@ function resolveObservedCreateDispatchAuthority(
   return allowCreateDispatchAuthority(current);
 }
 
-async function refreshCreateDispatchAuthority(
-  owner,
-  operation,
-  replaceRemoveDispatchPhase,
-) {
+async function refreshCreateDispatchAuthority(owner, operation, replaceRemoveDispatchPhase) {
   if (requiresPlacementCreateBootstrapTopology(operation, replaceRemoveDispatchPhase)) {
     // The placement binder already validated the exact committed record.
     // The dispatch workflow owns a detached copy for subsequent projections.
@@ -222,32 +179,21 @@ async function refreshCreateDispatchAuthority(
       DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep)) {
     return allowCreateDispatchAuthority(operation);
   }
-  const observation =
-    await owner.repository.getOperationByIdVisibilityObservation(
-      operation.operationId,
-      {
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        allowOwnerPersistedTransitionDeferredVisibility: false,
-      },
-    );
+  const observation = await owner.repository.getOperationByIdVisibilityObservation(
+    operation.operationId, {
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      allowOwnerPersistedTransitionDeferredVisibility: false,
+    });
   return resolveObservedCreateDispatchAuthority(owner, operation, observation);
 }
 const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
-  new Set([
-    ReplicaStatus.SYNCING,
-    ReplicaStatus.ACTIVE,
-    ReplicaStatus.FAILED,
-  ]),
+  new Set([ReplicaStatus.SYNCING, ReplicaStatus.ACTIVE, ReplicaStatus.FAILED]),
 );
-const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(
-  new Set([ReplicaStatus.SYNCING]),
-);
+const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(new Set([ReplicaStatus.SYNCING]));
 async function settleDispatchFailure(owner, operation, error, options) {
   const outcome = await owner.failOperation(operation, error, options);
   return owner.buildTerminalOperationDispatchResult(outcome, {
-    operationId: operation.operationId,
-    status: ReplicaOperationResponseStatus.COMPLETED,
+    operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED,
   });
 }
 
@@ -260,12 +206,8 @@ function resolveDispatchDeliveryErrorLike(response) {
     return response;
   }
   return {
-    ...response,
-    ...nestedError,
-    error:
-      typeof nestedError.message === 'string' ?
-        nestedError.message :
-        response.error,
+    ...response, ...nestedError,
+    error: typeof nestedError.message === 'string' ? nestedError.message : response.error,
     cause: nestedError,
   };
 }
@@ -281,8 +223,28 @@ function buildReplicaOperationDispatchTimeoutError(operation) {
 }
 // After durable removal intent, only the REPLACE owner's T5' re-send re-enters.
 function isReplaceStoppingOwnerEntry(operation, options) {
-  return isReplaceRemovalIntentDurable(operation) &&
-    options?.replaceStoppingEffect !== true;
+  return isReplaceRemovalIntentDurable(operation) && options?.replaceStoppingEffect !== true;
+}
+
+async function reconcileRetainedCreateDeliveryStep(
+  owner, operation, response, replaceRemoveDispatchPhase,
+) {
+  recordAcknowledgedCreateInFlight(owner, operation, replaceRemoveDispatchPhase);
+  if (replaceRemoveDispatchPhase === true || operation?.workflowStep !== WORKFLOW_STEP.SENDING) {
+    return;
+  }
+  if (await owner.reconcileCreateInProgressDispatchResponse(
+    operation, response, replaceRemoveDispatchPhase,
+  )) {
+    return;
+  }
+  await owner.updateStep(operation, WORKFLOW_STEP.CREATING).catch((stepError) => {
+    owner.deferTransitionRetry(operation.operationId, stepError, {
+      boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH, workflowStep: WORKFLOW_STEP.CREATING,
+      partitionId: operation.partitionId, updatedAt: operation.updatedAt,
+      createdAt: operation.createdAt, operationSnapshot: operation,
+    });
+  });
 }
 
 const DISPATCH_RESPONSE_RECONCILE_METHODS = {
@@ -844,6 +806,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         if (!retainedCreateDelivery) {
           scheduleUnretainedCreateDelivery(this, operation);
         }
+        await reconcileRetainedCreateDeliveryStep(
+          this,
+          operation,
+          response,
+          replaceRemoveDispatchPhase,
+        );
         return retainedCreateDeliveryResolution.result;
       }
       const stranded = await resolveStrandedRemoveReply(
@@ -1200,33 +1168,19 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
   },
 };
 const {
-  _handleDispatchResponse,
-  awaitReplicaOperationDispatchDeadline,
-  buildCreateSatisfiedReplaceResumeDecision,
-  buildReplicaOperationDispatchOptions,
-  deliverReplicaOperationRequest,
-  ensurePriorityActiveReplaceRetryArmed,
-  executeOperation,
-  executeOperationFromReconcilePath,
-  executeOperationInternal,
-  handleCreatePhaseSatisfiedResponse,
-  reconcileCreateInProgressDispatchResponse,
-  resolveCreateInProgressDispatchResponseStatus,
-  shouldBoundReplicaOperationDispatch,
+  _handleDispatchResponse, awaitReplicaOperationDispatchDeadline,
+  buildCreateSatisfiedReplaceResumeDecision, buildReplicaOperationDispatchOptions,
+  deliverReplicaOperationRequest, ensurePriorityActiveReplaceRetryArmed,
+  executeOperation, executeOperationFromReconcilePath, executeOperationInternal,
+  handleCreatePhaseSatisfiedResponse, reconcileCreateInProgressDispatchResponse,
+  resolveCreateInProgressDispatchResponseStatus, shouldBoundReplicaOperationDispatch,
 } = DISPATCH_RESPONSE_RECONCILE_METHODS;
 export {
-  _handleDispatchResponse,
-  awaitReplicaOperationDispatchDeadline,
-  buildCreateSatisfiedReplaceResumeDecision,
-  buildReplicaOperationDispatchOptions,
-  buildReplicaOperationDispatchTimeoutError,
-  deliverReplicaOperationRequest,
-  ensurePriorityActiveReplaceRetryArmed,
-  executeOperation,
-  executeOperationFromReconcilePath,
-  executeOperationInternal,
-  handleCreatePhaseSatisfiedResponse,
-  reconcileCreateInProgressDispatchResponse,
-  resolveCreateInProgressDispatchResponseStatus,
-  shouldBoundReplicaOperationDispatch,
+  _handleDispatchResponse, awaitReplicaOperationDispatchDeadline,
+  buildCreateSatisfiedReplaceResumeDecision, buildReplicaOperationDispatchOptions,
+  buildReplicaOperationDispatchTimeoutError, deliverReplicaOperationRequest,
+  ensurePriorityActiveReplaceRetryArmed, executeOperation,
+  executeOperationFromReconcilePath, executeOperationInternal,
+  handleCreatePhaseSatisfiedResponse, reconcileCreateInProgressDispatchResponse,
+  resolveCreateInProgressDispatchResponseStatus, shouldBoundReplicaOperationDispatch,
 };

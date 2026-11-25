@@ -23,7 +23,6 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from 'fs';
 
@@ -264,7 +263,12 @@ const SMOKE_UTF8 = 'utf8';
 const SMOKE_CLI_BUNDLE = 'admin-cli.bundle.cjs';
 const SMOKE_MAIN_BUNDLE = 'index.bundle.cjs';
 const SMOKE_NODE_MODULES_DIR = 'node_modules';
-const SMOKE_DIR_SYMLINK_TYPE = 'dir';
+const MERGE_WORKER_RUNTIME_PACKAGES = Object.freeze([
+  'better-sqlite3',
+  'bindings',
+  'file-uri-to-path',
+  'piscina',
+]);
 const SMOKE_VERIFIED_MSG = '  \u2713 smoke-tested SEA CJS bundles (--help, --dry-run)';
 const MERGE_SMOKE_TEMP_PREFIX = 'lagrange-sea-merge-smoke-';
 const MERGE_WORKER_FLAG = '--lagrange-coordinator-merge-worker';
@@ -384,11 +388,15 @@ async function verifyIsolatedMergeWorkerBundle(distDir) {
   const tempMergeDir = mkdtempSync(join(tmpdir(), MERGE_SMOKE_TEMP_PREFIX));
   const isolatedBundle = join(tempMergeDir, SMOKE_MAIN_BUNDLE);
   cpSync(join(distDir, SMOKE_MAIN_BUNDLE), isolatedBundle);
-  symlinkSync(
-    join(distDir, SMOKE_NODE_MODULES_DIR),
-    join(tempMergeDir, SMOKE_NODE_MODULES_DIR),
-    SMOKE_DIR_SYMLINK_TYPE,
-  );
+  const isolatedNodeModules = join(tempMergeDir, SMOKE_NODE_MODULES_DIR);
+  mkdirSync(isolatedNodeModules, {recursive: true});
+  for (const packageName of MERGE_WORKER_RUNTIME_PACKAGES) {
+    cpSync(
+      join(distDir, SMOKE_NODE_MODULES_DIR, packageName),
+      join(isolatedNodeModules, packageName),
+      {recursive: true, dereference: true},
+    );
+  }
   const child = fork(isolatedBundle, [MERGE_WORKER_FLAG], {
     cwd: tempMergeDir,
     env: {...process.env, SEA_BUILD: MERGE_SEA_BUILD_TRUE},

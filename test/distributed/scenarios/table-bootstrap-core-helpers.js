@@ -127,17 +127,29 @@ function classifyTableBootstrapProgressError(error) {
   return TABLE_BOOTSTRAP_PROGRESS_ERROR_OTHER;
 }
 
+function resolveBootstrapSnapshotOrDefault(snapshot) {
+  return snapshot && typeof snapshot === 'object' ?
+    snapshot :
+    buildTableBootstrapVisibilitySnapshot();
+}
+
+function resolveMutationVisibilitySummaryOrDefault(summary) {
+  return summary && typeof summary === 'object' ?
+    summary :
+    summarizeMutationVisibility(null);
+}
+
+function formatBootstrapFieldOrFallback(value, fallback = 'none') {
+  return String(value || fallback);
+}
+
 function buildTableBootstrapProgressToken(options = {}) {
-  const snapshot =
-    options.bootstrapVisibilitySnapshot &&
-    typeof options.bootstrapVisibilitySnapshot === 'object' ?
-      options.bootstrapVisibilitySnapshot :
-      buildTableBootstrapVisibilitySnapshot();
-  const visibilitySummary =
-    options.createVisibilitySummary &&
-    typeof options.createVisibilitySummary === 'object' ?
-      options.createVisibilitySummary :
-      summarizeMutationVisibility(null);
+  const snapshot = resolveBootstrapSnapshotOrDefault(
+    options.bootstrapVisibilitySnapshot,
+  );
+  const visibilitySummary = resolveMutationVisibilitySummaryOrDefault(
+    options.createVisibilitySummary,
+  );
   const attemptedNodeIds = Array.isArray(options.attemptedCreateNodeIds) ?
     options.attemptedCreateNodeIds.map((nodeId) => String(nodeId)).sort() :
     [];
@@ -147,12 +159,18 @@ function buildTableBootstrapProgressToken(options = {}) {
     partitionCount: Array.isArray(snapshot.partitionIds) ?
       snapshot.partitionIds.length :
       ZERO,
-    topologyState: String(snapshot.distribution?.topologyState || 'none'),
-    createVisibilityState: String(
-      visibilitySummary.visibilityState || 'none',
+    topologyState: formatBootstrapFieldOrFallback(
+      snapshot.distribution?.topologyState,
     ),
-    createContractState: String(visibilitySummary.contractState || 'none'),
-    createNextAction: String(visibilitySummary.nextAction || 'none'),
+    createVisibilityState: formatBootstrapFieldOrFallback(
+      visibilitySummary.visibilityState,
+    ),
+    createContractState: formatBootstrapFieldOrFallback(
+      visibilitySummary.contractState,
+    ),
+    createNextAction: formatBootstrapFieldOrFallback(
+      visibilitySummary.nextAction,
+    ),
     createAuthoritative:
       visibilitySummary.authoritativeVisibilityConfirmed === true,
     attemptedNodeIds,
@@ -169,59 +187,56 @@ function buildTableBootstrapProgressToken(options = {}) {
   });
 }
 
+function resolveBootstrapFailureReason(failureReason) {
+  return typeof failureReason === 'string' && failureReason.length > ZERO ?
+    failureReason :
+    TABLE_BOOTSTRAP_FAILURE_REASON_TIMEOUT;
+}
+
 function buildTableBootstrapFailureMessage(options = {}) {
   const requiredBootstrapVisibilityState =
     options.requiredBootstrapVisibilityState ||
     TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  const bootstrapVisibilitySnapshot =
-    options.bootstrapVisibilitySnapshot &&
-    typeof options.bootstrapVisibilitySnapshot === 'object' ?
-      options.bootstrapVisibilitySnapshot :
-      buildTableBootstrapVisibilitySnapshot();
-  const createVisibilitySummary =
-    options.createVisibilitySummary &&
-    typeof options.createVisibilitySummary === 'object' ?
-      options.createVisibilitySummary :
-      summarizeMutationVisibility(null);
-  const failureReason =
-    typeof options.failureReason === 'string' &&
-      options.failureReason.length > ZERO ?
-      options.failureReason :
-      TABLE_BOOTSTRAP_FAILURE_REASON_TIMEOUT;
+  const bootstrapVisibilitySnapshot = resolveBootstrapSnapshotOrDefault(
+    options.bootstrapVisibilitySnapshot,
+  );
+  const createVisibilitySummary = resolveMutationVisibilitySummaryOrDefault(
+    options.createVisibilitySummary,
+  );
+  const failureReason = resolveBootstrapFailureReason(options.failureReason);
+  const observedState =
+    bootstrapVisibilitySnapshot.state || TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
   return (
     'Timed out waiting for ' +
     TABLE_BOOTSTRAP_VISIBILITY_STATE_LABEL[requiredBootstrapVisibilityState] +
     ' for "' +
-    String(options.tableName || '') +
+    formatBootstrapFieldOrFallback(options.tableName, '') +
     '" (failureReason=' +
     failureReason +
     ', timeoutMs=' +
-    String(options.timeoutMs || 'none') +
+    formatBootstrapFieldOrFallback(options.timeoutMs) +
     ', noProgressTimeoutMs=' +
-    String(options.noProgressTimeoutMs || 'disabled') +
+    formatBootstrapFieldOrFallback(options.noProgressTimeoutMs, 'disabled') +
     ', lastProgressElapsedMs=' +
-    String(options.lastProgressElapsedMs || 'none') +
+    formatBootstrapFieldOrFallback(options.lastProgressElapsedMs) +
     ', lastProgressToken=' +
-    String(options.lastProgressToken || 'none') +
+    formatBootstrapFieldOrFallback(options.lastProgressToken) +
     ', lastCreateError=' +
-    String(options.lastCreateError || 'none') +
+    formatBootstrapFieldOrFallback(options.lastCreateError) +
     ', lastCreateVisibilityState=' +
-    String(createVisibilitySummary.visibilityState || 'none') +
+    formatBootstrapFieldOrFallback(createVisibilitySummary.visibilityState) +
     ', lastCreateVisibilityRetryAfterMs=' +
-    String(createVisibilitySummary.retryAfterMs || 'none') +
+    formatBootstrapFieldOrFallback(createVisibilitySummary.retryAfterMs) +
     ', lastVisibilityError=' +
-    String(options.lastVisibilityError || 'none') +
+    formatBootstrapFieldOrFallback(options.lastVisibilityError) +
     ', lastPartitionVisibilityError=' +
-    String(options.lastPartitionVisibilityError || 'none') +
+    formatBootstrapFieldOrFallback(options.lastPartitionVisibilityError) +
     ', lastTopologyVisibilityError=' +
-    String(options.lastTopologyVisibilityError || 'none') +
+    formatBootstrapFieldOrFallback(options.lastTopologyVisibilityError) +
     ', requiredBootstrapVisibilityState=' +
     String(requiredBootstrapVisibilityState) +
     ', observedBootstrapVisibilityState=' +
-    String(
-      bootstrapVisibilitySnapshot.state ||
-        TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE,
-    ) +
+    String(observedState) +
     ', authoritativeRepairAttempted=' +
     String(options.tableVisibilityRepairAttempted === true) +
     ', authoritativeRepairApplied=' +
@@ -230,16 +245,20 @@ function buildTableBootstrapFailureMessage(options = {}) {
   );
 }
 
-function shouldForceAuthoritativeRepairAfterTimedOutCreate(options = {}) {
-  if (options.createTimeoutObserved !== true) {
-    return false;
-  }
+function isAuthoritativePendingMutationVisibility(visibilitySummary) {
   const mutationVisibilityState = normalizeMutationVisibilityState(
-    options?.visibilitySummary?.visibilityState,
+    visibilitySummary?.visibilityState,
   );
-  if (
-    options?.visibilitySummary?.authoritativeVisibilityConfirmed === true &&
+  return (
+    visibilitySummary?.authoritativeVisibilityConfirmed === true &&
     isPendingControlPlaneSystemTableVisibilityState(mutationVisibilityState)
+  );
+}
+
+function shouldForceAuthoritativeRepairAfterTimedOutCreate(options = {}) {
+  if (
+    options.createTimeoutObserved !== true ||
+    isAuthoritativePendingMutationVisibility(options.visibilitySummary)
   ) {
     return false;
   }
@@ -266,6 +285,21 @@ function resolveMutationVisibilityDelayMs(visibilitySummary, fallbackMs) {
   );
 }
 
+function isDeferredMutationVisibility(contractState, visibilityState) {
+  return (
+    contractState === OWNER_CONTRACT_STATE.DEFERRED ||
+    visibilityState ===
+      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
+  );
+}
+
+function isPendingMutationVisibility(contractState, visibilityState) {
+  return (
+    contractState === OWNER_CONTRACT_STATE.PENDING ||
+    isPendingControlPlaneSystemTableVisibilityState(visibilityState)
+  );
+}
+
 function resolveMutationVisibilityWarning(options = {}) {
   const visibilityState = normalizeMutationVisibilityState(
     options?.visibilitySummary?.visibilityState,
@@ -274,38 +308,30 @@ function resolveMutationVisibilityWarning(options = {}) {
     options?.visibilitySummary?.contractState,
     null,
   );
-  if (
-    contractState === OWNER_CONTRACT_STATE.DEFERRED ||
-    visibilityState ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
-  ) {
+  if (isDeferredMutationVisibility(contractState, visibilityState)) {
     return options.deferredWarning || null;
   }
-  if (
-    contractState === OWNER_CONTRACT_STATE.PENDING ||
-    isPendingControlPlaneSystemTableVisibilityState(visibilityState)
-  ) {
+  if (isPendingMutationVisibility(contractState, visibilityState)) {
     return options.pendingWarning || null;
   }
-  if (options.repairApplied === true) {
-    return options.repairedWarning || null;
-  }
-  return null;
+  return options.repairApplied === true ?
+    options.repairedWarning || null :
+    null;
+}
+
+function hasRemainingCreatePrimaryCandidate(options = {}) {
+  return (
+    Array.isArray(options.createQueryNodes) &&
+    options.createQueryNodes.length > ONE &&
+    Number.isInteger(options.createPrimaryNodeIndex) &&
+    options.createPrimaryNodeIndex < options.createQueryNodes.length - ONE
+  );
 }
 
 function shouldAdvanceTimedOutCreateMutationPrimary(options = {}) {
-  if (!isTimeoutShapedError(options.lastCreateError)) {
-    return false;
-  }
   if (
-    !Array.isArray(options.createQueryNodes) ||
-    options.createQueryNodes.length <= ONE
-  ) {
-    return false;
-  }
-  if (
-    !Number.isInteger(options.createPrimaryNodeIndex) ||
-    options.createPrimaryNodeIndex >= options.createQueryNodes.length - ONE
+    !isTimeoutShapedError(options.lastCreateError) ||
+    !hasRemainingCreatePrimaryCandidate(options)
   ) {
     return false;
   }
@@ -381,18 +407,9 @@ function shouldDeferTableBootstrapRepairForUnavailableCreate(options = {}) {
 }
 
 function shouldUseUnattemptedTableBootstrapVisibilityNodes(options = {}) {
-  if (!isTimeoutShapedError(options.lastCreateError)) {
-    return false;
-  }
   if (
-    !Array.isArray(options.createQueryNodes) ||
-    options.createQueryNodes.length <= ONE
-  ) {
-    return false;
-  }
-  if (
-    !Number.isInteger(options.createPrimaryNodeIndex) ||
-    options.createPrimaryNodeIndex >= options.createQueryNodes.length - ONE
+    !isTimeoutShapedError(options.lastCreateError) ||
+    !hasRemainingCreatePrimaryCandidate(options)
   ) {
     return false;
   }
@@ -400,6 +417,31 @@ function shouldUseUnattemptedTableBootstrapVisibilityNodes(options = {}) {
     options?.bootstrapVisibilitySnapshot?.state ===
     TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
   );
+}
+
+function shouldPinPrimaryVisibilityNodeForUnavailableCreate(options = {}) {
+  return (
+    isTableBootstrapCandidateUnavailableError(options.lastCreateError) &&
+    Number.isInteger(options.createPrimaryNodeIndex) &&
+    options.tableVisibilityRepairAttempted !== true &&
+    options?.bootstrapVisibilitySnapshot?.state ===
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
+  );
+}
+
+function buildVisibilityQueryContextResult(
+  primaryNode,
+  resolvedNodes,
+  baseOptions,
+) {
+  return {
+    seedNode: primaryNode,
+    options: {
+      ...(baseOptions || {}),
+      queryNodes: resolvedNodes,
+      fallbackNodes: resolvedNodes,
+    },
+  };
 }
 
 function resolveTableBootstrapVisibilityQueryContext(
@@ -413,36 +455,24 @@ function resolveTableBootstrapVisibilityQueryContext(
       [seedNode];
 
   if (!shouldUseUnattemptedTableBootstrapVisibilityNodes(options)) {
-    if (
-      isTableBootstrapCandidateUnavailableError(options.lastCreateError) &&
-      Number.isInteger(options.createPrimaryNodeIndex) &&
-      options.tableVisibilityRepairAttempted !== true &&
-      options?.bootstrapVisibilitySnapshot?.state ===
-        TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
-    ) {
+    if (shouldPinPrimaryVisibilityNodeForUnavailableCreate(options)) {
       const primaryVisNode =
         queryNodes[options.createPrimaryNodeIndex] || seedNode;
-      return {
-        seedNode: primaryVisNode,
-        options: {
-          ...(options.baseOptions || {}),
-          queryNodes: [primaryVisNode],
-          fallbackNodes: [primaryVisNode],
-        },
-      };
+      return buildVisibilityQueryContextResult(
+        primaryVisNode,
+        [primaryVisNode],
+        options.baseOptions,
+      );
     }
     const resolvedNodes = [
       seedNode,
       ...queryNodes.filter((node) => node?.id !== seedNode?.id),
     ];
-    return {
+    return buildVisibilityQueryContextResult(
       seedNode,
-      options: {
-        ...(options.baseOptions || {}),
-        queryNodes: resolvedNodes,
-        fallbackNodes: resolvedNodes,
-      },
-    };
+      resolvedNodes,
+      options.baseOptions,
+    );
   }
   const unattemptedQueryNodes = options.createQueryNodes.slice(
     options.createPrimaryNodeIndex + ONE,
@@ -452,14 +482,11 @@ function resolveTableBootstrapVisibilityQueryContext(
     primaryVisNode,
     ...queryNodes.filter((node) => node?.id !== primaryVisNode?.id),
   ];
-  return {
-    seedNode: primaryVisNode,
-    options: {
-      ...(options.baseOptions || {}),
-      queryNodes: resolvedNodes,
-      fallbackNodes: resolvedNodes,
-    },
-  };
+  return buildVisibilityQueryContextResult(
+    primaryVisNode,
+    resolvedNodes,
+    options.baseOptions,
+  );
 }
 
 function shouldCycleTableBootstrapCreatePrimary(options = {}) {

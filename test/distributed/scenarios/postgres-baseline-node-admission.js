@@ -121,39 +121,49 @@ function shouldConfirmLocalReadinessViaLoadLane(localReadiness, options = {}) {
   return hasLoadLaneConfirmableLocalReadinessBlock(localReadiness.evaluation);
 }
 
-function normalizeSutLoadNodeAdmissionEvidence(input = {}) {
-  const localReadiness =
-    input.localReadiness && typeof input.localReadiness === 'object' ?
-      input.localReadiness :
+function normalizeLocalAdmissionEvidence(
+  localReadiness,
+  allowTopologyDeferredSelection,
+) {
+  const readiness =
+    localReadiness && typeof localReadiness === 'object' ?
+      localReadiness :
       {};
   const localEvaluation =
-    localReadiness.evaluation && typeof localReadiness.evaluation === 'object' ?
-      localReadiness.evaluation :
+    readiness.evaluation && typeof readiness.evaluation === 'object' ?
+      readiness.evaluation :
       null;
   const localReasons = normalizeReasonList(localEvaluation?.reasons);
   const hasLocalVoterBlock = localReasons.some((reason) =>
     reason.startsWith(LOCAL_VOTER_BLOCK_PREFIX));
+  return {
+    requiresConfirmation: readiness.requiresConfirmation === true,
+    ready: localEvaluation?.ready === true,
+    reasons: localReasons,
+    hasAdmission: localEvaluation?.hasAdmission === true,
+    hasVoterBlock: hasLocalVoterBlock,
+    topologyDeferredEligible:
+      !hasLocalVoterBlock &&
+      isTopologyDeferredEligible(
+        localEvaluation,
+        allowTopologyDeferredSelection,
+      ),
+    loadLaneConfirmable:
+      hasLoadLaneConfirmableLocalReadinessBlock(localEvaluation),
+  };
+}
+
+function normalizeSutLoadNodeAdmissionEvidence(input = {}) {
   const normalizedEvidence = {
     nodeId: String(input.nodeId || ''),
     admin: {
       ready: input.adminReady === true,
       reasons: normalizeReasonList(input.adminReasons),
     },
-    local: {
-      requiresConfirmation: localReadiness.requiresConfirmation === true,
-      ready: localEvaluation?.ready === true,
-      reasons: localReasons,
-      hasAdmission: localEvaluation?.hasAdmission === true,
-      hasVoterBlock: hasLocalVoterBlock,
-      topologyDeferredEligible:
-        !hasLocalVoterBlock &&
-        isTopologyDeferredEligible(
-          localEvaluation,
-          input.allowTopologyDeferredSelection === true,
-        ),
-      loadLaneConfirmable:
-        hasLoadLaneConfirmableLocalReadinessBlock(localEvaluation),
-    },
+    local: normalizeLocalAdmissionEvidence(
+      input.localReadiness,
+      input.allowTopologyDeferredSelection === true,
+    ),
     loadLane: {
       attempted: input.loadLaneAttempted === true,
       ready: input.loadLaneReadiness?.ready === true,
@@ -192,58 +202,87 @@ function buildSutLoadNodeAdmissionDecisionTrace(rawEvidence, decision) {
   });
 }
 
+function evaluateLocalReplicaAdmissionState(evidence, exclusionReasons) {
+  if (
+    evidence.policy.deferLocalReplicaReadiness ||
+    evidence.local.requiresConfirmation !== true ||
+    evidence.local.ready === true
+  ) {
+    return null;
+  }
+  if (
+    !evidence.local.hasVoterBlock &&
+    evidence.loadLane.ready === true &&
+    evidence.local.loadLaneConfirmable === true
+  ) {
+    return SUT_LOAD_NODE_ADMISSION_STATE.LOAD_LANE_CONFIRMED;
+  }
+  if (
+    !evidence.local.hasVoterBlock &&
+    evidence.local.topologyDeferredEligible === true
+  ) {
+    return SUT_LOAD_NODE_ADMISSION_STATE.TOPOLOGY_DEFERRED;
+  }
+  const localReasons = evidence.local.reasons.length > ZERO ?
+    evidence.local.reasons :
+    [LOCAL_READINESS_REASON_FALLBACK];
+  for (const reason of localReasons) {
+    exclusionReasons.push(LOCAL_READINESS_REASON_PREFIX + String(reason));
+  }
+  return SUT_LOAD_NODE_ADMISSION_STATE.STALE_LOCAL_READINESS;
+}
+
+function resolveFinalAdmissionState(
+  evidence,
+  uniqueExclusionReasons,
+  derivedLocalState,
+) {
+  if (uniqueExclusionReasons.length === ZERO) {
+    return derivedLocalState || SUT_LOAD_NODE_ADMISSION_STATE.ADMITTED;
+  }
+  if (evidence.admin.ready !== true) {
+    return SUT_LOAD_NODE_ADMISSION_STATE.AWAITING_ADMIN;
+  }
+  if (
+    evidence.loadLane.attempted === true &&
+    evidence.loadLane.ready !== true &&
+    evidence.loadLane.reasons.length > ZERO
+  ) {
+    return SUT_LOAD_NODE_ADMISSION_STATE.LOAD_LANE_DENIED;
+  }
+  return SUT_LOAD_NODE_ADMISSION_STATE.STALE_LOCAL_READINESS;
+}
+
 function adjudicateSutLoadNodeAdmission(normalizedEvidence) {
   const evidence =
     normalizedEvidence && typeof normalizedEvidence === 'object' ?
       normalizedEvidence :
       normalizeSutLoadNodeAdmissionEvidence();
   const exclusionReasons = [];
-  let derivedLocalState = null;
 
   if (evidence.admin.ready !== true) {
     exclusionReasons.push(...evidence.admin.reasons);
   }
 
-  if (!evidence.policy.deferLocalReplicaReadiness &&
-      evidence.local.requiresConfirmation === true &&
-      evidence.local.ready !== true) {
-    if (!evidence.local.hasVoterBlock &&
-        evidence.loadLane.ready === true &&
-        evidence.local.loadLaneConfirmable === true) {
-      derivedLocalState = SUT_LOAD_NODE_ADMISSION_STATE.LOAD_LANE_CONFIRMED;
-    } else if (!evidence.local.hasVoterBlock &&
-        evidence.local.topologyDeferredEligible === true) {
-      derivedLocalState = SUT_LOAD_NODE_ADMISSION_STATE.TOPOLOGY_DEFERRED;
-    } else {
-      derivedLocalState = SUT_LOAD_NODE_ADMISSION_STATE.STALE_LOCAL_READINESS;
-      const localReasons = evidence.local.reasons.length > ZERO ?
-        evidence.local.reasons :
-        [LOCAL_READINESS_REASON_FALLBACK];
-      for (const reason of localReasons) {
-        exclusionReasons.push(LOCAL_READINESS_REASON_PREFIX + String(reason));
-      }
-    }
-  }
+  const derivedLocalState = evaluateLocalReplicaAdmissionState(
+    evidence,
+    exclusionReasons,
+  );
 
-  if (evidence.loadLane.attempted === true &&
-      evidence.loadLane.ready !== true &&
-      evidence.local.topologyDeferredEligible !== true) {
+  if (
+    evidence.loadLane.attempted === true &&
+    evidence.loadLane.ready !== true &&
+    evidence.local.topologyDeferredEligible !== true
+  ) {
     exclusionReasons.push(...evidence.loadLane.reasons);
   }
 
   const uniqueExclusionReasons = normalizeReasonList(exclusionReasons);
-  let state = SUT_LOAD_NODE_ADMISSION_STATE.ADMITTED;
-  if (uniqueExclusionReasons.length === ZERO) {
-    state = derivedLocalState || SUT_LOAD_NODE_ADMISSION_STATE.ADMITTED;
-  } else if (evidence.admin.ready !== true) {
-    state = SUT_LOAD_NODE_ADMISSION_STATE.AWAITING_ADMIN;
-  } else if (evidence.loadLane.attempted === true &&
-      evidence.loadLane.ready !== true &&
-      evidence.loadLane.reasons.length > ZERO) {
-    state = SUT_LOAD_NODE_ADMISSION_STATE.LOAD_LANE_DENIED;
-  } else {
-    state = SUT_LOAD_NODE_ADMISSION_STATE.STALE_LOCAL_READINESS;
-  }
+  const state = resolveFinalAdmissionState(
+    evidence,
+    uniqueExclusionReasons,
+    derivedLocalState,
+  );
 
   return Object.freeze({
     normalizedEvidence: evidence,

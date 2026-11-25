@@ -19,6 +19,19 @@ import {
 import {participantSetTextOf, readParticipantSet} from
   './distributed-transaction-participant-manifest.js';
 
+const SETTLED_STATUS_REJECTED = 'rejected';
+
+async function settleAllOrThrow(promises) {
+  const settled = await Promise.allSettled(promises);
+  const rejected = settled.find(
+    (entry) => entry.status === SETTLED_STATUS_REJECTED,
+  );
+  if (rejected) {
+    throw rejected.reason;
+  }
+  return settled.map((entry) => entry.value);
+}
+
 function incompleteParticipantSet() {
   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
@@ -56,7 +69,7 @@ async function enlistReadOnlyParticipants(coordinator, tx, sessionId, requested)
   const newlyEnlisted = volatileTargets.filter(
     (partitionId) => readOnlyMap.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE,
   );
-  await Promise.all(newlyEnlisted.map(async (partitionId) => {
+  await settleAllOrThrow(newlyEnlisted.map(async (partitionId) => {
     await coordinator.beginParticipant(
       sessionId,
       partitionId,
@@ -201,12 +214,12 @@ const distributedTransactionParticipantSetMethods = {
     const activeUpserts = collectPromotedActiveParticipants(tx, requested);
     const newlyEnlisted = requested.filter((partitionId) =>
       tx.participants.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE);
-    await Promise.all(newlyEnlisted.map(async (partitionId) => {
+    await settleAllOrThrow(newlyEnlisted.map(async (partitionId) => {
       const participant = tx.participants.get(partitionId);
       await this.beginParticipant(sessionId, partitionId, participantIdentityOf(tx, partitionId));
       activeUpserts.push(participant);
     }));
-    const persistActiveParticipants = () => Promise.all(
+    const persistActiveParticipants = () => settleAllOrThrow(
       activeUpserts.map((participant) =>
         this.workflowCoordinator.upsertParticipant(tx.workflowId, {
           ...participant, status: PARTICIPANT_STATUS.ACTIVE, lastError: null,

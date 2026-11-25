@@ -846,6 +846,7 @@ test('SQLQueryEngine - executes CREATE INDEX and DROP INDEX statements end-to-en
   );
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    cdcIntegrationService: createMockCDCService(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -899,6 +900,7 @@ test('SQLQueryEngine - rejects unsupported CREATE INDEX features fail-closed', a
   );
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    cdcIntegrationService: createMockCDCService(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
   });
@@ -968,4 +970,60 @@ test('IndexService - local index DDL fails closed without canonical partitionExe
   }
   t.equal(bypassCalled, false, 'multi-interface partition bypasses must not be called');
   await indexService.shutdown();
+});
+
+test('IndexService - getTableIdForTableName propagates gateway errors and metadata writes fail closed without write authority', async (t) => {
+  const failingReadGateway = {
+    async readRows() {
+      throw new Error('authoritative gateway read failure');
+    },
+  };
+  const serviceWithFailingRead = new IndexService({
+    controlPlaneSystemTableGateway: failingReadGateway,
+  });
+  await t.rejects(
+    serviceWithFailingRead.getTableIdForTableName('users'),
+    /authoritative gateway read failure/,
+    'getTableIdForTableName must propagate gateway read errors instead of swallowing them',
+  );
+
+  const unwritableService = new IndexService({
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine(),
+  });
+  await t.rejects(
+    unwritableService.createIndex({
+      tableId: 'users-table',
+      tableName: 'users',
+      indexName: 'idx_unpersisted',
+      columnNames: ['email'],
+    }),
+    {code: 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE'},
+    'createIndex must fail closed when system-table write authority is absent',
+  );
+  t.equal(
+    unwritableService.indexExists('users-table', 'idx_unpersisted'),
+    false,
+    'unpersisted index must not be recorded in memory',
+  );
+
+  unwritableService.indexCache.set(
+    'users-table',
+    new Map([
+      [
+        'idx_seeded',
+        {
+          indexId: 'idx-1',
+          tableId: 'users-table',
+          indexName: 'idx_seeded',
+          columnNames: ['email'],
+        },
+      ],
+    ]),
+  );
+  await t.rejects(
+    unwritableService.dropIndex('users-table', 'idx_seeded'),
+    {code: 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE'},
+    'dropIndex must fail closed when system-table write authority is absent',
+  );
 });

@@ -21,6 +21,7 @@ export function createMetricFixture() {
     fs.copyFileSync(path.join(ROOT, name), path.join(root, name));
   }
   const scripts = [...PRODUCERS, 'check-file-size-thresholds.js',
+    'baselines/complexity-ratchet-baseline.json',
     'inventory-ordinal-segments.js', 'checks/impact-proof-cone-constants.js',
     'checks/test-primary-classification-constants.js',
     'checks/test-resource-classification-constants.js',

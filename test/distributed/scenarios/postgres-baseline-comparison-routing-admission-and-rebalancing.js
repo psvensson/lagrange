@@ -47,27 +47,28 @@ const {
   uniqueSorted,
 } = POSTGRES_BASELINE_COMPARISON_BASELINE_CACHE_AND_POLICY_BUNDLE;
 
-function updateRoutingAdmissionNodeState(
-  routingAdmission,
-  nodeId,
+function buildRoutingAdmissionTransitionSnapshot(state) {
+  if (!state) {
+    return null;
+  }
+  return {
+    ready: state.ready === true,
+    reasons: normalizeRoutingAdmissionReasons(state.reasons),
+    source:
+      typeof state.source === 'string' && state.source.length > ZERO ?
+        state.source :
+        null,
+    lastReadyObservedAtMs: normalizeOptionalNonNegativeInteger(
+      state.lastReadyObservedAtMs,
+    ),
+    grace: normalizeRoutingAdmissionGrace(state.grace),
+  };
+}
+
+function buildNormalizedRoutingAdmissionNodeState(
+  normalizedNodeId,
   nextState = {},
 ) {
-  if (!routingAdmission || !routingAdmission.stateByNodeId) {
-    return;
-  }
-  const normalizedNodeId = String(nodeId || '').trim();
-  if (normalizedNodeId.length === ZERO) {
-    return;
-  }
-  if (!routingAdmission.admittedNodeIds.includes(normalizedNodeId)) {
-    routingAdmission.admittedNodeIds.push(normalizedNodeId);
-    routingAdmission.admittedNodeIds = uniqueSorted(
-      routingAdmission.admittedNodeIds,
-    );
-  }
-
-  const previousState =
-    routingAdmission.stateByNodeId[normalizedNodeId] || null;
   const normalizedObservedAtMs = normalizeNonNegativeInteger(
     nextState.observedAtMs,
   );
@@ -75,7 +76,7 @@ function updateRoutingAdmissionNodeState(
   const explicitLastReadyObservedAtMs = normalizeOptionalNonNegativeInteger(
     nextState.lastReadyObservedAtMs,
   );
-  const normalizedState = {
+  return {
     nodeId: normalizedNodeId,
     ready: normalizedReady,
     reasons: normalizeRoutingAdmissionReasons(nextState.reasons),
@@ -89,59 +90,46 @@ function updateRoutingAdmissionNodeState(
       explicitLastReadyObservedAtMs,
     grace: normalizeRoutingAdmissionGrace(nextState.grace),
   };
+}
+
+function updateRoutingAdmissionNodeState(
+  routingAdmission,
+  nodeId,
+  nextState = {},
+) {
+  if (!routingAdmission?.stateByNodeId) {
+    return;
+  }
+  const normalizedNodeId = String(nodeId || '').trim();
+  if (normalizedNodeId.length === ZERO) {
+    return;
+  }
+  if (!routingAdmission.admittedNodeIds.includes(normalizedNodeId)) {
+    routingAdmission.admittedNodeIds = uniqueSorted([
+      ...routingAdmission.admittedNodeIds,
+      normalizedNodeId,
+    ]);
+  }
+
+  const previousSnapshot = buildRoutingAdmissionTransitionSnapshot(
+    routingAdmission.stateByNodeId[normalizedNodeId] || null,
+  );
+  const normalizedState = buildNormalizedRoutingAdmissionNodeState(
+    normalizedNodeId,
+    nextState,
+  );
   routingAdmission.stateByNodeId[normalizedNodeId] = normalizedState;
 
-  const previousSignature = previousState ?
-    JSON.stringify({
-      ready: previousState.ready === true,
-      reasons: normalizeRoutingAdmissionReasons(previousState.reasons),
-      source:
-          typeof previousState.source === 'string' &&
-          previousState.source.length > ZERO ?
-            previousState.source :
-            null,
-      lastReadyObservedAtMs: normalizeOptionalNonNegativeInteger(
-        previousState.lastReadyObservedAtMs,
-      ),
-      grace: normalizeRoutingAdmissionGrace(previousState.grace),
-    }) :
-    null;
-  const nextSignature = JSON.stringify({
-    ready: normalizedState.ready,
-    reasons: normalizedState.reasons,
-    source: normalizedState.source,
-    lastReadyObservedAtMs: normalizedState.lastReadyObservedAtMs,
-    grace: normalizedState.grace,
-  });
-  if (previousSignature === nextSignature) {
+  const nextSnapshot = buildRoutingAdmissionTransitionSnapshot(normalizedState);
+  if (JSON.stringify(previousSnapshot) === JSON.stringify(nextSnapshot)) {
     return;
   }
 
   routingAdmission.transitions.push({
     nodeId: normalizedNodeId,
     observedAtMs: normalizedState.observedAtMs,
-    previous: previousState ?
-      {
-        ready: previousState.ready === true,
-        reasons: normalizeRoutingAdmissionReasons(previousState.reasons),
-        source:
-            typeof previousState.source === 'string' &&
-            previousState.source.length > ZERO ?
-              previousState.source :
-              null,
-        lastReadyObservedAtMs: normalizeOptionalNonNegativeInteger(
-          previousState.lastReadyObservedAtMs,
-        ),
-        grace: normalizeRoutingAdmissionGrace(previousState.grace),
-      } :
-      null,
-    next: {
-      ready: normalizedState.ready,
-      reasons: normalizedState.reasons,
-      source: normalizedState.source,
-      lastReadyObservedAtMs: normalizedState.lastReadyObservedAtMs,
-      grace: normalizedState.grace,
-    },
+    previous: previousSnapshot,
+    next: nextSnapshot,
   });
   if (
     routingAdmission.transitions.length > LOAD_ROUTING_ADMISSION_MAX_TRANSITIONS
@@ -275,21 +263,104 @@ function normalizeControlSnapshotNodeLiveness(nodeLivenessByNodeId, nodeId) {
   };
 }
 
+function createEmptyPerNodeHeartbeatFreshnessState() {
+  return {
+    sampleCount: ZERO,
+    firstObservedAtMs: null,
+    lastObservedAtMs: null,
+    firstLastHeartbeat: null,
+    lastLastHeartbeat: null,
+    lastAdvancedAtMs: null,
+    maxHeartbeatAgeMs: null,
+    currentHeartbeatAgeMs: null,
+    maxReadyLeaseLagMs: null,
+    currentReadyLeaseLagMs: null,
+    maxStallDurationMs: ZERO,
+    advanced: false,
+    failedReasons: [],
+  };
+}
+
+function updateMaxFiniteMetric(currentMax, nextValue) {
+  return Number.isFinite(currentMax) ?
+    Math.max(currentMax, nextValue) :
+    nextValue;
+}
+
+function updateNodeHeartbeatProgression(perNode, lastHeartbeat, observedAtMs) {
+  if (!Number.isFinite(lastHeartbeat)) {
+    return;
+  }
+  if (!Number.isFinite(perNode.firstLastHeartbeat)) {
+    perNode.firstLastHeartbeat = lastHeartbeat;
+  }
+  if (
+    !Number.isFinite(perNode.lastLastHeartbeat) ||
+    lastHeartbeat > perNode.lastLastHeartbeat
+  ) {
+    perNode.advanced =
+      Number.isFinite(perNode.firstLastHeartbeat) &&
+      lastHeartbeat > perNode.firstLastHeartbeat;
+    perNode.lastLastHeartbeat = lastHeartbeat;
+    perNode.lastAdvancedAtMs = observedAtMs;
+    return;
+  }
+  const stallAnchorMs = Number.isFinite(perNode.lastAdvancedAtMs) ?
+    perNode.lastAdvancedAtMs :
+    perNode.firstObservedAtMs;
+  if (Number.isFinite(stallAnchorMs)) {
+    perNode.maxStallDurationMs = Math.max(
+      perNode.maxStallDurationMs,
+      observedAtMs - stallAnchorMs,
+    );
+  }
+}
+
+function updatePerNodeHeartbeatFreshnessSample(
+  perNode,
+  nodeLiveness,
+  observedAtMs,
+) {
+  perNode.sampleCount += ONE;
+  if (!Number.isFinite(perNode.firstObservedAtMs)) {
+    perNode.firstObservedAtMs = observedAtMs;
+  }
+  perNode.lastObservedAtMs = observedAtMs;
+  if (Number.isFinite(nodeLiveness.heartbeatAgeMs)) {
+    perNode.currentHeartbeatAgeMs = nodeLiveness.heartbeatAgeMs;
+    perNode.maxHeartbeatAgeMs = updateMaxFiniteMetric(
+      perNode.maxHeartbeatAgeMs,
+      nodeLiveness.heartbeatAgeMs,
+    );
+  }
+  if (Number.isFinite(nodeLiveness.readyLeaseLagMs)) {
+    perNode.currentReadyLeaseLagMs = nodeLiveness.readyLeaseLagMs;
+    perNode.maxReadyLeaseLagMs = updateMaxFiniteMetric(
+      perNode.maxReadyLeaseLagMs,
+      nodeLiveness.readyLeaseLagMs,
+    );
+  }
+  updateNodeHeartbeatProgression(
+    perNode,
+    nodeLiveness.lastHeartbeat,
+    observedAtMs,
+  );
+}
+
 function recordHeartbeatFreshnessSample(
   pressure,
   observedAtMs,
   snapshot = null,
 ) {
   const heartbeatFreshness = pressure?.heartbeatFreshness;
-  if (!heartbeatFreshness || typeof heartbeatFreshness !== 'object') {
-    return;
-  }
   const nodeLivenessByNodeId =
-    snapshot?.controlPlaneDiagnostics?.nodeLivenessByNodeId &&
-    typeof snapshot.controlPlaneDiagnostics.nodeLivenessByNodeId === 'object' ?
-      snapshot.controlPlaneDiagnostics.nodeLivenessByNodeId :
-      null;
-  if (!nodeLivenessByNodeId) {
+    snapshot?.controlPlaneDiagnostics?.nodeLivenessByNodeId;
+  if (
+    !heartbeatFreshness ||
+    typeof heartbeatFreshness !== 'object' ||
+    !nodeLivenessByNodeId ||
+    typeof nodeLivenessByNodeId !== 'object'
+  ) {
     return;
   }
 
@@ -299,70 +370,51 @@ function recordHeartbeatFreshnessSample(
       nodeLivenessByNodeId,
       nodeId,
     );
-    const perNode = heartbeatFreshness.perNode[nodeId] || {
-      sampleCount: ZERO,
-      firstObservedAtMs: null,
-      lastObservedAtMs: null,
-      firstLastHeartbeat: null,
-      lastLastHeartbeat: null,
-      lastAdvancedAtMs: null,
-      maxHeartbeatAgeMs: null,
-      currentHeartbeatAgeMs: null,
-      maxReadyLeaseLagMs: null,
-      currentReadyLeaseLagMs: null,
-      maxStallDurationMs: ZERO,
-      advanced: false,
-      failedReasons: [],
-    };
-    if (!nodeLiveness) {
-      heartbeatFreshness.perNode[nodeId] = perNode;
-      continue;
-    }
-
-    perNode.sampleCount += ONE;
-    perNode.firstObservedAtMs = Number.isFinite(perNode.firstObservedAtMs) ?
-      perNode.firstObservedAtMs :
-      observedAtMs;
-    perNode.lastObservedAtMs = observedAtMs;
-    if (Number.isFinite(nodeLiveness.heartbeatAgeMs)) {
-      perNode.currentHeartbeatAgeMs = nodeLiveness.heartbeatAgeMs;
-      perNode.maxHeartbeatAgeMs = Number.isFinite(perNode.maxHeartbeatAgeMs) ?
-        Math.max(perNode.maxHeartbeatAgeMs, nodeLiveness.heartbeatAgeMs) :
-        nodeLiveness.heartbeatAgeMs;
-    }
-    if (Number.isFinite(nodeLiveness.readyLeaseLagMs)) {
-      perNode.currentReadyLeaseLagMs = nodeLiveness.readyLeaseLagMs;
-      perNode.maxReadyLeaseLagMs = Number.isFinite(perNode.maxReadyLeaseLagMs) ?
-        Math.max(perNode.maxReadyLeaseLagMs, nodeLiveness.readyLeaseLagMs) :
-        nodeLiveness.readyLeaseLagMs;
-    }
-    if (Number.isFinite(nodeLiveness.lastHeartbeat)) {
-      perNode.firstLastHeartbeat = Number.isFinite(perNode.firstLastHeartbeat) ?
-        perNode.firstLastHeartbeat :
-        nodeLiveness.lastHeartbeat;
-      if (
-        !Number.isFinite(perNode.lastLastHeartbeat) ||
-        nodeLiveness.lastHeartbeat > perNode.lastLastHeartbeat
-      ) {
-        perNode.advanced =
-          Number.isFinite(perNode.firstLastHeartbeat) &&
-          nodeLiveness.lastHeartbeat > perNode.firstLastHeartbeat;
-        perNode.lastLastHeartbeat = nodeLiveness.lastHeartbeat;
-        perNode.lastAdvancedAtMs = observedAtMs;
-      } else if (Number.isFinite(perNode.lastObservedAtMs)) {
-        const stallAnchorMs = Number.isFinite(perNode.lastAdvancedAtMs) ?
-          perNode.lastAdvancedAtMs :
-          perNode.firstObservedAtMs;
-        if (Number.isFinite(stallAnchorMs)) {
-          perNode.maxStallDurationMs = Math.max(
-            perNode.maxStallDurationMs,
-            observedAtMs - stallAnchorMs,
-          );
-        }
-      }
+    const perNode =
+      heartbeatFreshness.perNode[nodeId] ||
+      createEmptyPerNodeHeartbeatFreshnessState();
+    if (nodeLiveness) {
+      updatePerNodeHeartbeatFreshnessSample(
+        perNode,
+        nodeLiveness,
+        observedAtMs,
+      );
     }
     heartbeatFreshness.perNode[nodeId] = perNode;
   }
+}
+
+function collectPerNodeHeartbeatFailedReasons(perNode, maxStallMs) {
+  const failedReasons = [];
+  if (perNode.advanced !== true) {
+    failedReasons.push('heartbeat_not_advancing');
+  }
+  if (
+    Number.isFinite(perNode.maxStallDurationMs) &&
+    perNode.maxStallDurationMs > maxStallMs
+  ) {
+    failedReasons.push(
+      'heartbeat_stalled:' + String(perNode.maxStallDurationMs),
+    );
+  }
+  if (
+    Number.isFinite(perNode.currentHeartbeatAgeMs) &&
+    perNode.currentHeartbeatAgeMs > maxStallMs
+  ) {
+    failedReasons.push(
+      'heartbeat_age_exceeded:' + String(perNode.currentHeartbeatAgeMs),
+    );
+  }
+  return failedReasons;
+}
+
+function resolveHeartbeatFreshnessStatus(stalledNodeIds, evaluatedNodeIds) {
+  if (stalledNodeIds.length > ZERO) {
+    return HEARTBEAT_FRESHNESS_STATUS_FAILED;
+  }
+  return evaluatedNodeIds.length > ZERO ?
+    HEARTBEAT_FRESHNESS_STATUS_OK :
+    HEARTBEAT_FRESHNESS_STATUS_UNAVAILABLE;
 }
 
 function finalizeHeartbeatFreshnessState(pressure) {
@@ -388,26 +440,10 @@ function finalizeHeartbeatFreshnessState(pressure) {
     }
 
     evaluatedNodeIds.push(nodeId);
-    const failedReasons = [];
-    if (perNode.advanced !== true) {
-      failedReasons.push('heartbeat_not_advancing');
-    }
-    if (
-      Number.isFinite(perNode.maxStallDurationMs) &&
-      perNode.maxStallDurationMs > heartbeatFreshness.maxStallMs
-    ) {
-      failedReasons.push(
-        'heartbeat_stalled:' + String(perNode.maxStallDurationMs),
-      );
-    }
-    if (
-      Number.isFinite(perNode.currentHeartbeatAgeMs) &&
-      perNode.currentHeartbeatAgeMs > heartbeatFreshness.maxStallMs
-    ) {
-      failedReasons.push(
-        'heartbeat_age_exceeded:' + String(perNode.currentHeartbeatAgeMs),
-      );
-    }
+    const failedReasons = collectPerNodeHeartbeatFailedReasons(
+      perNode,
+      heartbeatFreshness.maxStallMs,
+    );
     perNode.failedReasons = failedReasons;
     if (failedReasons.length > ZERO) {
       stalledNodeIds.push(nodeId);
@@ -426,12 +462,10 @@ function finalizeHeartbeatFreshnessState(pressure) {
   heartbeatFreshness.stalledNodeIds = stalledNodeIds;
   heartbeatFreshness.messages = messages;
   heartbeatFreshness.failed = stalledNodeIds.length > ZERO;
-  heartbeatFreshness.status =
-    stalledNodeIds.length > ZERO ?
-      HEARTBEAT_FRESHNESS_STATUS_FAILED :
-      evaluatedNodeIds.length > ZERO ?
-        HEARTBEAT_FRESHNESS_STATUS_OK :
-        HEARTBEAT_FRESHNESS_STATUS_UNAVAILABLE;
+  heartbeatFreshness.status = resolveHeartbeatFreshnessStatus(
+    stalledNodeIds,
+    evaluatedNodeIds,
+  );
   return heartbeatFreshness;
 }
 
@@ -463,6 +497,224 @@ function formatLoadRebalancingPinningReasons(reasons) {
   return normalizedReasons.length > ZERO ?
     normalizedReasons.join('|') :
     'unknown';
+}
+
+function checkAndApplyRebalancingPinningViolation(
+  pressure,
+  inFlightReplicaOps,
+  leaderChangesWithinCooldown,
+  loadRun,
+) {
+  if (
+    !pressure.pinning.enabled ||
+    pressure.pinning.bypassed ||
+    pressure.pinning.violated
+  ) {
+    return;
+  }
+  const violationReasons = [];
+  if (inFlightReplicaOps > pressure.maxReplicaOpsInFlightLimit) {
+    violationReasons.push(
+      REBALANCING_PINNING_REASON_IN_FLIGHT_REPLICA_OPS +
+        ':observed=' +
+        String(inFlightReplicaOps) +
+        ',limit=' +
+        String(pressure.maxReplicaOpsInFlightLimit),
+    );
+  }
+  if (leaderChangesWithinCooldown >= pressure.minLeaderChangeDelta) {
+    violationReasons.push(
+      REBALANCING_PINNING_REASON_LEADERSHIP_CHURN +
+        ':observed=' +
+        String(leaderChangesWithinCooldown) +
+        ',min_delta=' +
+        String(pressure.minLeaderChangeDelta) +
+        ',cooldown_ms=' +
+        String(pressure.cooldownMs),
+    );
+  }
+  if (violationReasons.length === ZERO) {
+    return;
+  }
+  pressure.pinning.violated = true;
+  for (const reason of violationReasons) {
+    if (!pressure.pinning.violationReasons.includes(reason)) {
+      pressure.pinning.violationReasons.push(reason);
+    }
+  }
+  if (loadRun && typeof loadRun.cancel === 'function') {
+    pressure.pinning.cancelledLoad = true;
+    loadRun.cancel();
+  }
+}
+
+function recordRoutingAdmissionProbeFailure({
+  routingAdmission,
+  nodeId,
+  observedAtMs,
+  error,
+  graceNodeIds,
+  blockedNodeIds,
+}) {
+  const errorMessage = String(error?.message || error);
+  const reason =
+    LOAD_ROUTING_ADMISSION_REASON_PROBE_ERROR_PREFIX +
+    truncateDiscoveryErrorMessage(errorMessage);
+  const previousState = routingAdmission.stateByNodeId?.[nodeId] || null;
+  routingAdmission.probeErrors.push({
+    nodeId,
+    observedAtMs,
+    error: errorMessage,
+  });
+  if (
+    routingAdmission.probeErrors.length >
+    LOAD_ROUTING_ADMISSION_MAX_PROBE_ERRORS
+  ) {
+    routingAdmission.probeErrors.shift();
+  }
+  const retainedState = resolveRoutingAdmissionProbeErrorGraceState(
+    previousState,
+    observedAtMs,
+    routingAdmission.probeErrorGraceMs,
+    reason,
+  );
+  if (retainedState) {
+    updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
+      ready: true,
+      reasons: [],
+      source: LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR_GRACE,
+      observedAtMs,
+      lastReadyObservedAtMs: retainedState.lastReadyObservedAtMs,
+      grace: retainedState.grace,
+    });
+    graceNodeIds.push(nodeId);
+    return false;
+  }
+  updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
+    ready: false,
+    reasons: [reason],
+    source: LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR,
+    observedAtMs,
+    lastReadyObservedAtMs: null,
+    grace: null,
+  });
+  blockedNodeIds.push(nodeId);
+  return true;
+}
+
+function evaluateNodeRoutingAdmissionFromDiscovery({
+  routingDiscoverySnapshot,
+  routingDiscoveryErrorMessage,
+  routingAdmission,
+  nodeId,
+  observedAtMs,
+  options,
+  blockedNodeIds,
+  graceNodeIds,
+}) {
+  try {
+    if (!routingDiscoverySnapshot) {
+      throw new Error(
+        routingDiscoveryErrorMessage || ROUTING_DISCOVERY_NO_SNAPSHOT_CANDIDATE,
+      );
+    }
+    const readiness = resolveNodeReadinessFromServiceDiscovery(
+      routingDiscoverySnapshot,
+      nodeId,
+      {
+        enforceCanonicalRouteReadiness: true,
+        adminQueryable: true,
+        requiredSchemaVersion: options.requiredSchemaVersion,
+        admissionRuntimeOwnership: options.admissionRuntimeOwnership,
+      },
+    );
+    const ready = readiness?.ready === true;
+    const hasReasons =
+      Array.isArray(readiness?.reasons) && readiness.reasons.length > ZERO;
+    const reasons = ready ?
+      [] :
+      hasReasons ?
+        readiness.reasons :
+        [DISCOVERY_READINESS_REASON_ROUTING_NOT_READY];
+    updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
+      ready,
+      reasons,
+      source: LOAD_ROUTING_ADMISSION_SOURCE_DISCOVERY,
+      observedAtMs,
+    });
+    if (!ready) {
+      blockedNodeIds.push(nodeId);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    return recordRoutingAdmissionProbeFailure({
+      routingAdmission,
+      nodeId,
+      observedAtMs,
+      error,
+      graceNodeIds,
+      blockedNodeIds,
+    });
+  }
+}
+
+async function sampleRoutingAdmissionAcrossLoadNodes({
+  nodeClient,
+  routingSnapshotCandidates,
+  routingAdmissionContext,
+  loadNodes,
+  pressure,
+  observedAtMs,
+  options,
+  sample,
+}) {
+  let routingDiscoverySnapshot = null;
+  let routingDiscoveryErrorMessage = null;
+  try {
+    routingDiscoverySnapshot = await fetchServiceDiscoveryFromCandidates(
+      nodeClient,
+      routingSnapshotCandidates,
+      routingAdmissionContext,
+    );
+  } catch (error) {
+    routingDiscoveryErrorMessage = String(error?.message || error);
+  }
+  const routingAdmission = pressure.routingAdmission;
+  let blockedCount = ZERO;
+  const blockedNodeIds = [];
+  const graceNodeIds = [];
+  for (const node of loadNodes) {
+    const nodeId =
+      typeof node?.id === 'string' && node.id.length > ZERO ?
+        node.id :
+        DISCOVERY_UNKNOWN_NODE_ID;
+    const blocked = evaluateNodeRoutingAdmissionFromDiscovery({
+      routingDiscoverySnapshot,
+      routingDiscoveryErrorMessage,
+      routingAdmission,
+      nodeId,
+      observedAtMs,
+      options,
+      blockedNodeIds,
+      graceNodeIds,
+    });
+    if (blocked) {
+      blockedCount += ONE;
+    }
+  }
+  routingAdmission.sampleCount += ONE;
+  if (blockedCount > ZERO) {
+    routingAdmission.blockedSampleCount += ONE;
+  } else {
+    routingAdmission.allowedSampleCount += ONE;
+  }
+  if (graceNodeIds.length > ZERO) {
+    routingAdmission.graceSampleCount += ONE;
+  }
+  sample.routingAdmissionBlockedCount = blockedCount;
+  sample.routingAdmissionBlockedNodeIds = uniqueSorted(blockedNodeIds);
+  sample.routingAdmissionGraceNodeIds = uniqueSorted(graceNodeIds);
 }
 
 function startLoadRebalancingPressureMonitor(options = {}) {
@@ -522,6 +774,53 @@ function startLoadRebalancingPressureMonitor(options = {}) {
     });
   }
 
+  async function sampleControlPlaneRebalancingPressure(observedAtMs, sample) {
+    const snapshot = await fetchControlSnapshotFromCandidates(
+      nodeClient,
+      controlSnapshotCandidates,
+      NODE_CLIENT_TRANSIENT_CONTEXT,
+    );
+    recordHeartbeatFreshnessSample(pressure, observedAtMs, snapshot);
+    const inFlightReplicaOps = normalizeNonNegativeInteger(
+      snapshot?.replicaOperations?.inFlightCount,
+    );
+    sample.inFlightReplicaOps = inFlightReplicaOps;
+    pressure.maxReplicaOpsInFlight = Math.max(
+      pressure.maxReplicaOpsInFlight,
+      inFlightReplicaOps,
+    );
+
+    const leaderSignature = buildLeaderSignatureFromSnapshot(snapshot);
+    if (
+      lastLeaderSignature !== null &&
+      leaderSignature !== lastLeaderSignature
+    ) {
+      leaderChangeAtMs.push(observedAtMs);
+      pressure.totalLeaderChanges += ONE;
+    }
+    lastLeaderSignature = leaderSignature;
+
+    const cooldownFloorMs = observedAtMs - pressure.cooldownMs;
+    while (
+      leaderChangeAtMs.length > ZERO &&
+      leaderChangeAtMs[ZERO] < cooldownFloorMs
+    ) {
+      leaderChangeAtMs.shift();
+    }
+    const leaderChangesWithinCooldown = leaderChangeAtMs.length;
+    sample.leaderChangesWithinCooldown = leaderChangesWithinCooldown;
+    pressure.maxLeaderChangesWithinCooldown = Math.max(
+      pressure.maxLeaderChangesWithinCooldown,
+      leaderChangesWithinCooldown,
+    );
+    checkAndApplyRebalancingPinningViolation(
+      pressure,
+      inFlightReplicaOps,
+      leaderChangesWithinCooldown,
+      loadRun,
+    );
+  }
+
   const monitorLoop = (async () => {
     while (!stopRequested) {
       const observedAtMs = Date.now();
@@ -534,205 +833,21 @@ function startLoadRebalancingPressureMonitor(options = {}) {
         routingAdmissionGraceNodeIds: [],
       };
       try {
-        const snapshot = await fetchControlSnapshotFromCandidates(
-          nodeClient,
-          controlSnapshotCandidates,
-          NODE_CLIENT_TRANSIENT_CONTEXT,
-        );
-        recordHeartbeatFreshnessSample(pressure, observedAtMs, snapshot);
-        const replicaOperations = snapshot?.replicaOperations || {};
-        const inFlightReplicaOps = normalizeNonNegativeInteger(
-          replicaOperations?.inFlightCount,
-        );
-        sample.inFlightReplicaOps = inFlightReplicaOps;
-        pressure.maxReplicaOpsInFlight = Math.max(
-          pressure.maxReplicaOpsInFlight,
-          inFlightReplicaOps,
-        );
-
-        const leaderSignature = buildLeaderSignatureFromSnapshot(snapshot);
-        if (
-          lastLeaderSignature !== null &&
-          leaderSignature !== lastLeaderSignature
-        ) {
-          leaderChangeAtMs.push(observedAtMs);
-          pressure.totalLeaderChanges += ONE;
-        }
-        lastLeaderSignature = leaderSignature;
-
-        const cooldownFloorMs = observedAtMs - pressure.cooldownMs;
-        while (
-          leaderChangeAtMs.length > ZERO &&
-          leaderChangeAtMs[ZERO] < cooldownFloorMs
-        ) {
-          leaderChangeAtMs.shift();
-        }
-        const leaderChangesWithinCooldown = leaderChangeAtMs.length;
-        sample.leaderChangesWithinCooldown = leaderChangesWithinCooldown;
-        pressure.maxLeaderChangesWithinCooldown = Math.max(
-          pressure.maxLeaderChangesWithinCooldown,
-          leaderChangesWithinCooldown,
-        );
-
-        if (
-          pressure.pinning.enabled &&
-          !pressure.pinning.bypassed &&
-          !pressure.pinning.violated
-        ) {
-          const violationReasons = [];
-          if (inFlightReplicaOps > pressure.maxReplicaOpsInFlightLimit) {
-            violationReasons.push(
-              REBALANCING_PINNING_REASON_IN_FLIGHT_REPLICA_OPS +
-                ':observed=' +
-                String(inFlightReplicaOps) +
-                ',limit=' +
-                String(pressure.maxReplicaOpsInFlightLimit),
-            );
-          }
-          if (leaderChangesWithinCooldown >= pressure.minLeaderChangeDelta) {
-            violationReasons.push(
-              REBALANCING_PINNING_REASON_LEADERSHIP_CHURN +
-                ':observed=' +
-                String(leaderChangesWithinCooldown) +
-                ',min_delta=' +
-                String(pressure.minLeaderChangeDelta) +
-                ',cooldown_ms=' +
-                String(pressure.cooldownMs),
-            );
-          }
-          if (violationReasons.length > ZERO) {
-            pressure.pinning.violated = true;
-            for (const reason of violationReasons) {
-              if (!pressure.pinning.violationReasons.includes(reason)) {
-                pressure.pinning.violationReasons.push(reason);
-              }
-            }
-            if (loadRun && typeof loadRun.cancel === 'function') {
-              pressure.pinning.cancelledLoad = true;
-              loadRun.cancel();
-            }
-          }
-        }
+        await sampleControlPlaneRebalancingPressure(observedAtMs, sample);
       } catch (error) {
         pressure.snapshotErrors.push(String(error?.message || error));
         sample.error = String(error?.message || error);
       }
-      let routingDiscoverySnapshot = null;
-      let routingDiscoveryError = null;
-      try {
-        routingDiscoverySnapshot = await fetchServiceDiscoveryFromCandidates(
-          nodeClient,
-          routingSnapshotCandidates,
-          routingAdmissionContext,
-        );
-      } catch (error) {
-        routingDiscoveryError = error;
-      }
-      const routingAdmission = pressure.routingAdmission;
-      let blockedCount = ZERO;
-      const blockedNodeIds = [];
-      const graceNodeIds = [];
-      const routingDiscoveryErrorMessage = routingDiscoveryError ?
-        String(routingDiscoveryError?.message || routingDiscoveryError) :
-        null;
-      for (const node of loadNodes) {
-        const nodeId =
-          typeof node?.id === 'string' && node.id.length > ZERO ?
-            node.id :
-            DISCOVERY_UNKNOWN_NODE_ID;
-        try {
-          if (!routingDiscoverySnapshot) {
-            throw new Error(
-              routingDiscoveryErrorMessage ||
-                ROUTING_DISCOVERY_NO_SNAPSHOT_CANDIDATE,
-            );
-          }
-          const readiness = resolveNodeReadinessFromServiceDiscovery(
-            routingDiscoverySnapshot,
-            nodeId,
-            {
-              enforceCanonicalRouteReadiness: true,
-              adminQueryable: true,
-              requiredSchemaVersion: options.requiredSchemaVersion,
-              admissionRuntimeOwnership: options.admissionRuntimeOwnership,
-            },
-          );
-          const ready = readiness?.ready === true;
-          const reasons = ready ?
-            [] :
-            Array.isArray(readiness?.reasons) &&
-                readiness.reasons.length > ZERO ?
-              readiness.reasons :
-              [DISCOVERY_READINESS_REASON_ROUTING_NOT_READY];
-          updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
-            ready,
-            reasons,
-            source: LOAD_ROUTING_ADMISSION_SOURCE_DISCOVERY,
-            observedAtMs,
-          });
-          if (!ready) {
-            blockedCount += ONE;
-            blockedNodeIds.push(nodeId);
-          }
-        } catch (error) {
-          const reason =
-            LOAD_ROUTING_ADMISSION_REASON_PROBE_ERROR_PREFIX +
-            truncateDiscoveryErrorMessage(String(error?.message || error));
-          const previousState =
-            routingAdmission.stateByNodeId?.[nodeId] || null;
-          routingAdmission.probeErrors.push({
-            nodeId,
-            observedAtMs,
-            error: String(error?.message || error),
-          });
-          if (
-            routingAdmission.probeErrors.length >
-            LOAD_ROUTING_ADMISSION_MAX_PROBE_ERRORS
-          ) {
-            routingAdmission.probeErrors.shift();
-          }
-          const retainedState = resolveRoutingAdmissionProbeErrorGraceState(
-            previousState,
-            observedAtMs,
-            routingAdmission.probeErrorGraceMs,
-            reason,
-          );
-          if (retainedState) {
-            updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
-              ready: true,
-              reasons: [],
-              source: LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR_GRACE,
-              observedAtMs,
-              lastReadyObservedAtMs: retainedState.lastReadyObservedAtMs,
-              grace: retainedState.grace,
-            });
-            graceNodeIds.push(nodeId);
-          } else {
-            updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
-              ready: false,
-              reasons: [reason],
-              source: LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR,
-              observedAtMs,
-              lastReadyObservedAtMs: null,
-              grace: null,
-            });
-            blockedCount += ONE;
-            blockedNodeIds.push(nodeId);
-          }
-        }
-      }
-      routingAdmission.sampleCount += ONE;
-      if (blockedCount > ZERO) {
-        routingAdmission.blockedSampleCount += ONE;
-      } else {
-        routingAdmission.allowedSampleCount += ONE;
-      }
-      if (graceNodeIds.length > ZERO) {
-        routingAdmission.graceSampleCount += ONE;
-      }
-      sample.routingAdmissionBlockedCount = blockedCount;
-      sample.routingAdmissionBlockedNodeIds = uniqueSorted(blockedNodeIds);
-      sample.routingAdmissionGraceNodeIds = uniqueSorted(graceNodeIds);
+      await sampleRoutingAdmissionAcrossLoadNodes({
+        nodeClient,
+        routingSnapshotCandidates,
+        routingAdmissionContext,
+        loadNodes,
+        pressure,
+        observedAtMs,
+        options,
+        sample,
+      });
 
       pressure.samples.push(sample);
       pressure.sampleCount = pressure.samples.length;
@@ -808,21 +923,18 @@ function buildCriticalRebalancingSignalMessage(criticalState) {
   );
 }
 
-function buildRebalancingCriticalState(
-  rebalancingPressure,
-  benchmarkConfig = {},
-) {
-  const pressure =
-    rebalancingPressure && typeof rebalancingPressure === 'object' ?
-      rebalancingPressure :
-      {};
-  const samples = Array.isArray(pressure.samples) ? pressure.samples : [];
-  const sustainedSampleThreshold =
-    Number.isInteger(benchmarkConfig.criticalRebalancingSustainedSamples) &&
+function resolveSustainedSampleThreshold(benchmarkConfig) {
+  return Number.isInteger(benchmarkConfig?.criticalRebalancingSustainedSamples) &&
     benchmarkConfig.criticalRebalancingSustainedSamples > ZERO ?
-      benchmarkConfig.criticalRebalancingSustainedSamples :
-      BENCHMARK_CRITICAL_REBALANCING_SUSTAINED_SAMPLES_DEFAULT;
+    benchmarkConfig.criticalRebalancingSustainedSamples :
+    BENCHMARK_CRITICAL_REBALANCING_SUSTAINED_SAMPLES_DEFAULT;
+}
 
+function countCriticalRebalancingStreaks(
+  samples,
+  pressure,
+  sustainedSampleThreshold,
+) {
   let criticalSampleCount = ZERO;
   let maxConsecutiveCriticalSamples = ZERO;
   let consecutiveCriticalSamples = ZERO;
@@ -845,6 +957,33 @@ function buildRebalancingCriticalState(
   if (consecutiveCriticalSamples >= sustainedSampleThreshold) {
     sustainedEpisodeCount += ONE;
   }
+  return {
+    criticalSampleCount,
+    maxConsecutiveCriticalSamples,
+    sustainedEpisodeCount,
+  };
+}
+
+function buildRebalancingCriticalState(
+  rebalancingPressure,
+  benchmarkConfig = {},
+) {
+  const pressure =
+    rebalancingPressure && typeof rebalancingPressure === 'object' ?
+      rebalancingPressure :
+      {};
+  const samples = Array.isArray(pressure.samples) ? pressure.samples : [];
+  const sustainedSampleThreshold =
+    resolveSustainedSampleThreshold(benchmarkConfig);
+  const {
+    criticalSampleCount,
+    maxConsecutiveCriticalSamples,
+    sustainedEpisodeCount,
+  } = countCriticalRebalancingStreaks(
+    samples,
+    pressure,
+    sustainedSampleThreshold,
+  );
   const sustained = sustainedEpisodeCount > ZERO;
   const criticalState = {
     schemaVersion: REBALANCING_CRITICAL_STATE_SCHEMA_VERSION,

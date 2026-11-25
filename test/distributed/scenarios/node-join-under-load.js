@@ -111,22 +111,39 @@ function resolveCanonicalFailedOperationCount(metrics) {
   return ZERO_FAILURES;
 }
 
+function numberOrZeroFailures(value) {
+  return Number(value || ZERO_FAILURES);
+}
+
+function resolveDispatchBacklogGateReason(
+  withinRatio,
+  admissionPressureDispatchDeficitTolerated,
+) {
+  if (withinRatio) {
+    return DISPATCH_BACKLOG_GATE_REASON.WITHIN_RATIO;
+  }
+  return admissionPressureDispatchDeficitTolerated ?
+    DISPATCH_BACKLOG_GATE_REASON
+      .ADMISSION_PRESSURE_DISPATCH_DEFICIT_TOLERATED :
+    DISPATCH_BACKLOG_GATE_REASON.RATIO_EXCEEDED;
+}
+
 function buildDispatchBacklogGateDecision(options) {
-  const targetOperations = Number(options?.targetOperations || ZERO_FAILURES);
-  const undispatchedOperations = Number(
-    options?.undispatchedOperations || ZERO_FAILURES,
+  const source = options && typeof options === 'object' ? options : {};
+  const targetOperations = numberOrZeroFailures(source.targetOperations);
+  const undispatchedOperations = numberOrZeroFailures(
+    source.undispatchedOperations,
   );
-  const dispatchedOperations = Number(
-    options?.dispatchedOperations || ZERO_FAILURES,
+  const dispatchedOperations = numberOrZeroFailures(
+    source.dispatchedOperations,
   );
-  const successfulOperations = Number(
-    options?.successfulOperations || ZERO_FAILURES,
+  const successfulOperations = numberOrZeroFailures(
+    source.successfulOperations,
   );
-  const maxUndispatchedRatio = Number(
-    options?.maxUndispatchedRatio || ZERO_FAILURES,
+  const maxUndispatchedRatio = numberOrZeroFailures(
+    source.maxUndispatchedRatio,
   );
-  const admissionPressureDominant =
-    options?.admissionPressureDominant === true;
+  const admissionPressureDominant = source.admissionPressureDominant === true;
   const undispatchedRatio =
     targetOperations > ZERO_FAILURES ?
       undispatchedOperations / targetOperations :
@@ -140,8 +157,7 @@ function buildDispatchBacklogGateDecision(options) {
   const requiredDispatchedOperations =
     targetOperations > ZERO_FAILURES ?
       Math.ceil(
-        targetOperations *
-            (COMPLETE_RATIO - effectiveMaxUndispatchedRatio),
+        targetOperations * (COMPLETE_RATIO - effectiveMaxUndispatchedRatio),
       ) :
       ZERO_FAILURES;
   const dispatchDeficit = Math.max(
@@ -155,17 +171,13 @@ function buildDispatchBacklogGateDecision(options) {
     dispatchDeficit > ZERO_FAILURES &&
     dispatchDeficit <=
       ADMISSION_PRESSURE_DISPATCH_DEFICIT_TOLERANCE_OPERATIONS;
-  const reason = withinRatio ?
-    DISPATCH_BACKLOG_GATE_REASON.WITHIN_RATIO :
-    admissionPressureDispatchDeficitTolerated ?
-      DISPATCH_BACKLOG_GATE_REASON
-        .ADMISSION_PRESSURE_DISPATCH_DEFICIT_TOLERATED :
-      DISPATCH_BACKLOG_GATE_REASON.RATIO_EXCEEDED;
 
   return {
-    passed:
-      withinRatio || admissionPressureDispatchDeficitTolerated,
-    reason,
+    passed: withinRatio || admissionPressureDispatchDeficitTolerated,
+    reason: resolveDispatchBacklogGateReason(
+      withinRatio,
+      admissionPressureDispatchDeficitTolerated,
+    ),
     undispatchedRatio,
     effectiveMaxUndispatchedRatio,
     requiredDispatchedOperations,
@@ -227,6 +239,12 @@ function retainPriorityRecoveryObservationDiagnostics(
   };
 }
 
+const SPECIAL_RETAINED_DIAGNOSTIC_KEYS = new Set([
+  'publicationConvergence',
+  'publicationConvergenceGate',
+  'priorityRecoveryObservation',
+]);
+
 function normalizeRetainedControlPlaneDiagnostics(controlPlaneDiagnostics) {
   if (!isRecord(controlPlaneDiagnostics)) {
     return null;
@@ -244,26 +262,15 @@ function normalizeRetainedControlPlaneDiagnostics(controlPlaneDiagnostics) {
     );
   const retainedDiagnostics = {
     ...(publicationConvergence ? {publicationConvergence} : {}),
-    ...(publicationConvergenceGate ?
-      {publicationConvergenceGate} :
-      {}),
+    ...(publicationConvergenceGate ? {publicationConvergenceGate} : {}),
     ...(priorityRecoveryObservation ? {priorityRecoveryObservation} : {}),
   };
   for (const key of RETAINED_CONTROL_PLANE_OBJECT_KEYS) {
-    if (
-      (key === 'publicationConvergence' ||
-        key === 'publicationConvergenceGate' ||
-        key === 'priorityRecoveryObservation') ||
-      !(key in controlPlaneDiagnostics)
-    ) {
+    if (SPECIAL_RETAINED_DIAGNOSTIC_KEYS.has(key)) {
       continue;
     }
     const value = controlPlaneDiagnostics[key];
-    if (Array.isArray(value)) {
-      retainedDiagnostics[key] = value;
-      continue;
-    }
-    if (isRecord(value)) {
+    if (Array.isArray(value) || isRecord(value)) {
       retainedDiagnostics[key] = value;
     }
   }
@@ -272,33 +279,35 @@ function normalizeRetainedControlPlaneDiagnostics(controlPlaneDiagnostics) {
     null;
 }
 
+function mergeOptionalDiagnosticObjects(primaryValue, fallbackValue) {
+  if (!primaryValue && !fallbackValue) {
+    return null;
+  }
+  return {
+    ...(fallbackValue || {}),
+    ...(primaryValue || {}),
+  };
+}
+
+function firstPresentDiagnosticField(primary, fallback, key) {
+  return primary[key] || fallback[key] || null;
+}
+
 function mergeRetainedControlPlaneDiagnostics(primary, fallback) {
-  const normalizedPrimary =
-    normalizeRetainedControlPlaneDiagnostics(primary);
+  const normalizedPrimary = normalizeRetainedControlPlaneDiagnostics(primary);
   const normalizedFallback =
     normalizeRetainedControlPlaneDiagnostics(fallback);
-  if (!normalizedPrimary) {
-    return normalizedFallback;
+  if (!normalizedPrimary || !normalizedFallback) {
+    return normalizedPrimary || normalizedFallback;
   }
-  if (!normalizedFallback) {
-    return normalizedPrimary;
-  }
-  const mergedPublicationConvergence =
-    normalizedPrimary.publicationConvergence ||
-    normalizedFallback.publicationConvergence ?
-      {
-        ...(normalizedFallback.publicationConvergence || {}),
-        ...(normalizedPrimary.publicationConvergence || {}),
-      } :
-      null;
-  const mergedPublicationConvergenceGate =
-    normalizedPrimary.publicationConvergenceGate ||
-    normalizedFallback.publicationConvergenceGate ?
-      {
-        ...(normalizedFallback.publicationConvergenceGate || {}),
-        ...(normalizedPrimary.publicationConvergenceGate || {}),
-      } :
-      null;
+  const mergedPublicationConvergence = mergeOptionalDiagnosticObjects(
+    normalizedPrimary.publicationConvergence,
+    normalizedFallback.publicationConvergence,
+  );
+  const mergedPublicationConvergenceGate = mergeOptionalDiagnosticObjects(
+    normalizedPrimary.publicationConvergenceGate,
+    normalizedFallback.publicationConvergenceGate,
+  );
   return {
     ...normalizedFallback,
     ...normalizedPrimary,
@@ -309,31 +318,39 @@ function mergeRetainedControlPlaneDiagnostics(primary, fallback) {
       {publicationConvergenceGate: mergedPublicationConvergenceGate} :
       {}),
     priorityRecoveryObservation:
-      normalizedPrimary.priorityRecoveryObservation ||
-      normalizedFallback.priorityRecoveryObservation ||
+      firstPresentDiagnosticField(
+        normalizedPrimary,
+        normalizedFallback,
+        'priorityRecoveryObservation',
+      ) ||
       buildPriorityRecoveryObservationSnapshot({
         publicationConvergence: mergedPublicationConvergence,
         publicationConvergenceGate: mergedPublicationConvergenceGate,
-        priorityRecoveryDecisionSnapshots:
-          normalizedPrimary.priorityRecoveryDecisionSnapshots ||
-          normalizedFallback.priorityRecoveryDecisionSnapshots ||
-          null,
-        priorityRecoveryInvariants:
-          normalizedPrimary.priorityRecoveryInvariants ||
-          normalizedFallback.priorityRecoveryInvariants ||
-          null,
-        activeGateProgress:
-          normalizedPrimary.activeGateProgress ||
-          normalizedFallback.activeGateProgress ||
-          null,
-        activeGateBestProgress:
-          normalizedPrimary.activeGateBestProgress ||
-          normalizedFallback.activeGateBestProgress ||
-          null,
-        activeGateNoProgress:
-          normalizedPrimary.activeGateNoProgress ||
-          normalizedFallback.activeGateNoProgress ||
-          null,
+        priorityRecoveryDecisionSnapshots: firstPresentDiagnosticField(
+          normalizedPrimary,
+          normalizedFallback,
+          'priorityRecoveryDecisionSnapshots',
+        ),
+        priorityRecoveryInvariants: firstPresentDiagnosticField(
+          normalizedPrimary,
+          normalizedFallback,
+          'priorityRecoveryInvariants',
+        ),
+        activeGateProgress: firstPresentDiagnosticField(
+          normalizedPrimary,
+          normalizedFallback,
+          'activeGateProgress',
+        ),
+        activeGateBestProgress: firstPresentDiagnosticField(
+          normalizedPrimary,
+          normalizedFallback,
+          'activeGateBestProgress',
+        ),
+        activeGateNoProgress: firstPresentDiagnosticField(
+          normalizedPrimary,
+          normalizedFallback,
+          'activeGateNoProgress',
+        ),
       }),
   };
 }
@@ -622,196 +639,209 @@ async function buildFailureDetails(cluster, details) {
  * @param {Object} cluster - Cluster handle from the harness.
  * @param {Object} [options]
  */
-async function run(cluster, options = {}) {
+function resolveFiniteNumberOption(value, fallback) {
+  return Number.isFinite(value) ? Number(value) : fallback;
+}
+
+function resolveNonEmptyStringOption(value, fallback) {
+  return typeof value === 'string' && value.length > ZERO_FAILURES ?
+    value :
+    fallback;
+}
+
+function resolveNodeJoinScenarioRuntimeConfig(cluster, options = {}) {
   const scenarioOptions = resolveScenarioOptions(
     options,
     cluster,
     'nodeJoinUnderLoad',
   );
-  const loadOpsPerSec = Number.isFinite(scenarioOptions.loadOpsPerSec) ?
-    Number(scenarioOptions.loadOpsPerSec) :
-    LOAD_OPS_PER_SEC;
-  const loadDuration =
-    typeof scenarioOptions.loadDuration === 'string' &&
-    scenarioOptions.loadDuration.length > 0 ?
-      scenarioOptions.loadDuration :
-      LOAD_DURATION;
-  const preJoinSettleMs = Number.isFinite(scenarioOptions.preJoinSettleMs) ?
-    Number(scenarioOptions.preJoinSettleMs) :
-    PRE_JOIN_SETTLE_MS;
-  const loadReadinessStableWindowMs = Number.isFinite(
-    scenarioOptions.loadReadinessStableWindowMs,
-  ) ?
-    Number(scenarioOptions.loadReadinessStableWindowMs) :
-    LOAD_READINESS_STABLE_WINDOW_MS;
-  const loadReadinessStabilizationTimeoutMs = Number.isFinite(
-    scenarioOptions.loadReadinessStabilizationTimeoutMs,
-  ) ?
-    Number(scenarioOptions.loadReadinessStabilizationTimeoutMs) :
-    LOAD_READINESS_STABILIZATION_TIMEOUT_MS;
-  const postJoinConvergenceTimeoutMs = Number.isFinite(
-    scenarioOptions.postJoinConvergenceTimeoutMs,
-  ) ?
-    Number(scenarioOptions.postJoinConvergenceTimeoutMs) :
-    POST_JOIN_CONVERGENCE_TIMEOUT_MS;
-  const postJoinActiveTimeoutMs = Number.isFinite(
-    scenarioOptions.postJoinActiveTimeoutMs,
-  ) ?
-    Number(scenarioOptions.postJoinActiveTimeoutMs) :
-    POST_JOIN_ACTIVE_TIMEOUT_MS;
-  const consistencyTimeoutMs = Number.isFinite(
-    scenarioOptions.consistencyTimeoutMs,
-  ) ?
-    Number(scenarioOptions.consistencyTimeoutMs) :
-    CONSISTENCY_TIMEOUT_MS;
-  const consistencyPollIntervalMs = Number.isFinite(
-    scenarioOptions.consistencyPollIntervalMs,
-  ) ?
-    Number(scenarioOptions.consistencyPollIntervalMs) :
-    CONSISTENCY_POLL_INTERVAL_MS;
-  const consistencyForceRepairAfterMs = Number.isFinite(
-    scenarioOptions.consistencyForceRepairAfterMs,
-  ) ?
-    Number(scenarioOptions.consistencyForceRepairAfterMs) :
-    CONSISTENCY_FORCE_REPAIR_AFTER_MS;
-  const maxFailedOperations = Number.isFinite(
-    scenarioOptions.maxFailedOperations,
-  ) ?
-    Number(scenarioOptions.maxFailedOperations) :
-    MAX_FAILED_OPERATIONS;
-  const maxUndispatchedRatio = Number.isFinite(
-    scenarioOptions.maxUndispatchedRatio,
-  ) ?
-    Number(scenarioOptions.maxUndispatchedRatio) :
-    MAX_UNDISPATCHED_RATIO;
-  const maxQueueDelayP95Ms = Number.isFinite(scenarioOptions.maxQueueDelayP95Ms) ?
-    Number(scenarioOptions.maxQueueDelayP95Ms) :
-    MAX_QUEUE_DELAY_P95_MS;
-  const adaptiveDispatchGuardrailEnabled =
-    scenarioOptions.adaptiveDispatchGuardrailEnabled === undefined ?
-      ADAPTIVE_DISPATCH_GUARDRAIL_ENABLED :
-      scenarioOptions.adaptiveDispatchGuardrailEnabled === true;
-  const adaptiveDispatchGuardrailPressureSignalThreshold = Number.isFinite(
-    scenarioOptions.adaptiveDispatchGuardrailPressureSignalThreshold,
-  ) ?
-    Number(scenarioOptions.adaptiveDispatchGuardrailPressureSignalThreshold) :
-    ADAPTIVE_DISPATCH_GUARDRAIL_PRESSURE_SIGNAL_THRESHOLD;
-  const adaptiveDispatchGuardrailQueueDepthThreshold = Number.isFinite(
-    scenarioOptions.adaptiveDispatchGuardrailQueueDepthThreshold,
-  ) ?
-    Number(scenarioOptions.adaptiveDispatchGuardrailQueueDepthThreshold) :
-    ADAPTIVE_DISPATCH_GUARDRAIL_QUEUE_DEPTH_THRESHOLD;
-  const adaptiveDispatchGuardrailReductionStepRatio = Number.isFinite(
-    scenarioOptions.adaptiveDispatchGuardrailReductionStepRatio,
-  ) ?
-    Number(scenarioOptions.adaptiveDispatchGuardrailReductionStepRatio) :
-    ADAPTIVE_DISPATCH_GUARDRAIL_REDUCTION_STEP_RATIO;
-  const adaptiveDispatchGuardrailMinMaxInFlight = Number.isFinite(
-    scenarioOptions.adaptiveDispatchGuardrailMinMaxInFlight,
-  ) ?
-    Number(scenarioOptions.adaptiveDispatchGuardrailMinMaxInFlight) :
-    ADAPTIVE_DISPATCH_GUARDRAIL_MIN_MAX_IN_FLIGHT;
-  const adaptiveDispatchGuardrailRecoveryQuietTicks = Number.isFinite(
-    scenarioOptions.adaptiveDispatchGuardrailRecoveryQuietTicks,
-  ) ?
-    Number(scenarioOptions.adaptiveDispatchGuardrailRecoveryQuietTicks) :
-    ADAPTIVE_DISPATCH_GUARDRAIL_RECOVERY_QUIET_TICKS;
-  const requestedTableName =
-    typeof scenarioOptions.tableName === 'string' &&
-    scenarioOptions.tableName.length > ZERO_FAILURES ?
-      scenarioOptions.tableName :
-      '';
-  const effectiveLoadTableName = resolvePartitioningLoadTableName(
-    cluster,
-    requestedTableName,
-    {
-      explicitTableName: requestedTableName.length > ZERO_FAILURES,
-    },
+  const requestedTableName = resolveNonEmptyStringOption(
+    scenarioOptions.tableName,
+    '',
   );
-  const clusterNodes = resolveClusterNodes(cluster);
+  return {
+    loadOpsPerSec: resolveFiniteNumberOption(
+      scenarioOptions.loadOpsPerSec,
+      LOAD_OPS_PER_SEC,
+    ),
+    loadDuration: resolveNonEmptyStringOption(
+      scenarioOptions.loadDuration,
+      LOAD_DURATION,
+    ),
+    preJoinSettleMs: resolveFiniteNumberOption(
+      scenarioOptions.preJoinSettleMs,
+      PRE_JOIN_SETTLE_MS,
+    ),
+    loadReadinessStableWindowMs: resolveFiniteNumberOption(
+      scenarioOptions.loadReadinessStableWindowMs,
+      LOAD_READINESS_STABLE_WINDOW_MS,
+    ),
+    loadReadinessStabilizationTimeoutMs: resolveFiniteNumberOption(
+      scenarioOptions.loadReadinessStabilizationTimeoutMs,
+      LOAD_READINESS_STABILIZATION_TIMEOUT_MS,
+    ),
+    postJoinConvergenceTimeoutMs: resolveFiniteNumberOption(
+      scenarioOptions.postJoinConvergenceTimeoutMs,
+      POST_JOIN_CONVERGENCE_TIMEOUT_MS,
+    ),
+    postJoinActiveTimeoutMs: resolveFiniteNumberOption(
+      scenarioOptions.postJoinActiveTimeoutMs,
+      POST_JOIN_ACTIVE_TIMEOUT_MS,
+    ),
+    consistencyTimeoutMs: resolveFiniteNumberOption(
+      scenarioOptions.consistencyTimeoutMs,
+      CONSISTENCY_TIMEOUT_MS,
+    ),
+    consistencyPollIntervalMs: resolveFiniteNumberOption(
+      scenarioOptions.consistencyPollIntervalMs,
+      CONSISTENCY_POLL_INTERVAL_MS,
+    ),
+    consistencyForceRepairAfterMs: resolveFiniteNumberOption(
+      scenarioOptions.consistencyForceRepairAfterMs,
+      CONSISTENCY_FORCE_REPAIR_AFTER_MS,
+    ),
+    maxFailedOperations: resolveFiniteNumberOption(
+      scenarioOptions.maxFailedOperations,
+      MAX_FAILED_OPERATIONS,
+    ),
+    maxUndispatchedRatio: resolveFiniteNumberOption(
+      scenarioOptions.maxUndispatchedRatio,
+      MAX_UNDISPATCHED_RATIO,
+    ),
+    maxQueueDelayP95Ms: resolveFiniteNumberOption(
+      scenarioOptions.maxQueueDelayP95Ms,
+      MAX_QUEUE_DELAY_P95_MS,
+    ),
+    adaptiveDispatchGuardrail: {
+      enabled:
+        scenarioOptions.adaptiveDispatchGuardrailEnabled === undefined ?
+          ADAPTIVE_DISPATCH_GUARDRAIL_ENABLED :
+          scenarioOptions.adaptiveDispatchGuardrailEnabled === true,
+      pressureSignalThreshold: resolveFiniteNumberOption(
+        scenarioOptions.adaptiveDispatchGuardrailPressureSignalThreshold,
+        ADAPTIVE_DISPATCH_GUARDRAIL_PRESSURE_SIGNAL_THRESHOLD,
+      ),
+      queueDepthThreshold: resolveFiniteNumberOption(
+        scenarioOptions.adaptiveDispatchGuardrailQueueDepthThreshold,
+        ADAPTIVE_DISPATCH_GUARDRAIL_QUEUE_DEPTH_THRESHOLD,
+      ),
+      reductionStepRatio: resolveFiniteNumberOption(
+        scenarioOptions.adaptiveDispatchGuardrailReductionStepRatio,
+        ADAPTIVE_DISPATCH_GUARDRAIL_REDUCTION_STEP_RATIO,
+      ),
+      minMaxInFlight: resolveFiniteNumberOption(
+        scenarioOptions.adaptiveDispatchGuardrailMinMaxInFlight,
+        ADAPTIVE_DISPATCH_GUARDRAIL_MIN_MAX_IN_FLIGHT,
+      ),
+      recoveryQuietTicks: resolveFiniteNumberOption(
+        scenarioOptions.adaptiveDispatchGuardrailRecoveryQuietTicks,
+        ADAPTIVE_DISPATCH_GUARDRAIL_RECOVERY_QUIET_TICKS,
+      ),
+    },
+    effectiveLoadTableName: resolvePartitioningLoadTableName(
+      cluster,
+      requestedTableName,
+      {
+        explicitTableName: requestedTableName.length > ZERO_FAILURES,
+      },
+    ),
+  };
+}
+
+function resolveQueryableSeedNode(clusterNodes) {
   const rawSeedNode =
     Array.isArray(clusterNodes) && clusterNodes.length > 0 ?
       clusterNodes[0] :
       null;
-  const seedNode =
+  if (
     rawSeedNode &&
     typeof rawSeedNode.query !== 'function' &&
-    typeof rawSeedNode.queryWithTimeout === 'function' ?
-      {
-        ...rawSeedNode,
-        query(sql, params = []) {
-          return rawSeedNode.queryWithTimeout(sql, params);
-        },
-      } :
-      rawSeedNode;
-
-  // 1. Wait for load-readiness stability before creating benchmark table
-  // metadata. This avoids snapshotting table IDs while initial partition
-  // provisioning is still blocked by startup placement gates.
-  if (
-    typeof cluster.waitForLoadReadinessStability === 'function' &&
-    loadReadinessStableWindowMs > ZERO_FAILURES
+    typeof rawSeedNode.queryWithTimeout === 'function'
   ) {
-    try {
-      await cluster.waitForLoadReadinessStability({
-        stableWindowMs: loadReadinessStableWindowMs,
-        timeoutMs: loadReadinessStabilizationTimeoutMs,
-      });
-    } catch (_error) {
-      // Benchmark-table admission gates below remain authoritative. Keep this
-      // warm-up as best-effort so transient publication convergence windows
-      // do not fail the scenario before table-local readiness can be evaluated.
-    }
+    return {
+      ...rawSeedNode,
+      query(sql, params = []) {
+        return rawSeedNode.queryWithTimeout(sql, params);
+      },
+    };
   }
+  return rawSeedNode;
+}
 
-  // 2. Prepare a benchmark-safe workload table up front so the scenario does
-  // not compete with control-plane `logs` ingestion under join pressure.
-  let ensuredBenchmarkTable = null;
-  if (seedNode && typeof seedNode.query === 'function') {
-    ensuredBenchmarkTable = await ensureBenchmarkPartitioningTable(seedNode, {
+async function warmupNodeJoinLoadReadiness(
+  cluster,
+  loadReadinessStableWindowMs,
+  loadReadinessStabilizationTimeoutMs,
+) {
+  if (
+    typeof cluster.waitForLoadReadinessStability !== 'function' ||
+    loadReadinessStableWindowMs <= ZERO_FAILURES
+  ) {
+    return;
+  }
+  try {
+    await cluster.waitForLoadReadinessStability({
+      stableWindowMs: loadReadinessStableWindowMs,
+      timeoutMs: loadReadinessStabilizationTimeoutMs,
+    });
+  } catch (_error) {
+    // Benchmark-table admission gates below remain authoritative.
+  }
+}
+
+async function queryInitialBenchmarkReadyLoadNodes(
+  cluster,
+  effectiveLoadTableName,
+  tableId,
+  requiredBenchmarkReadyNodeCount,
+  loadReadinessStableWindowMs,
+  loadReadinessStabilizationTimeoutMs,
+) {
+  if (typeof cluster.waitForBenchmarkReadyLoadNodes === 'function') {
+    return cluster.waitForBenchmarkReadyLoadNodes({
       tableName: effectiveLoadTableName,
-      requiredBootstrapVisibilityState:
-        TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
-      queryNodes: clusterNodes,
+      tableId,
+      minNodeCount: requiredBenchmarkReadyNodeCount,
+      stableWindowMs: loadReadinessStableWindowMs,
+      timeoutMs: loadReadinessStabilizationTimeoutMs,
     });
   }
+  if (typeof cluster.resolveBenchmarkReadyLoadNodes === 'function') {
+    return cluster.resolveBenchmarkReadyLoadNodes({
+      tableName: effectiveLoadTableName,
+      tableId,
+    });
+  }
+  return resolveClusterNodes(cluster);
+}
 
-  const requiredBenchmarkReadyNodeCount = Math.max(
-    1,
-    Math.min(
-      clusterNodes.length > ZERO_FAILURES ? clusterNodes.length : 1,
-      MIN_BENCHMARK_READY_LOAD_NODES,
-    ),
-  );
-  const supportsBenchmarkAdmissionGating =
-    typeof cluster.waitForBenchmarkReadyLoadNodes === 'function' &&
-    typeof cluster.resolveBenchmarkReadyLoadNodes === 'function';
+async function resolveInitialNodeJoinLoadNodes({
+  cluster,
+  effectiveLoadTableName,
+  tableId,
+  requiredBenchmarkReadyNodeCount,
+  loadReadinessStableWindowMs,
+  loadReadinessStabilizationTimeoutMs,
+}) {
   let loadNodes = null;
   let benchmarkReadyGateError = null;
   let usedUngatedLoadNodeFallback = false;
   try {
-    loadNodes =
-      typeof cluster.waitForBenchmarkReadyLoadNodes === 'function' ?
-        await cluster.waitForBenchmarkReadyLoadNodes({
-          tableName: effectiveLoadTableName,
-          tableId: ensuredBenchmarkTable?.tableId,
-          minNodeCount: requiredBenchmarkReadyNodeCount,
-          stableWindowMs: loadReadinessStableWindowMs,
-          timeoutMs: loadReadinessStabilizationTimeoutMs,
-        }) :
-        typeof cluster.resolveBenchmarkReadyLoadNodes === 'function' ?
-          await cluster.resolveBenchmarkReadyLoadNodes({
-            tableName: effectiveLoadTableName,
-            tableId: ensuredBenchmarkTable?.tableId,
-          }) :
-          resolveClusterNodes(cluster);
+    loadNodes = await queryInitialBenchmarkReadyLoadNodes(
+      cluster,
+      effectiveLoadTableName,
+      tableId,
+      requiredBenchmarkReadyNodeCount,
+      loadReadinessStableWindowMs,
+      loadReadinessStabilizationTimeoutMs,
+    );
   } catch (error) {
     benchmarkReadyGateError = error;
     if (typeof cluster.resolveBenchmarkReadyLoadNodes === 'function') {
       try {
         loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
           tableName: effectiveLoadTableName,
-          tableId: ensuredBenchmarkTable?.tableId,
+          tableId,
         });
       } catch (_fallbackError) {
         loadNodes = null;
@@ -834,257 +864,198 @@ async function run(cluster, options = {}) {
       }),
     );
   }
+  return {loadNodes, usedUngatedLoadNodeFallback};
+}
 
-  const benchmarkLoadAdmissionController =
-    supportsBenchmarkAdmissionGating && !usedUngatedLoadNodeFallback ?
-      createBenchmarkLoadAdmissionController(cluster, {
-        tableName: effectiveLoadTableName,
-        tableId: ensuredBenchmarkTable?.tableId,
-        initialReadyNodes: loadNodes,
-      }) :
-      null;
-  const dynamicLoadNodes = benchmarkLoadAdmissionController ?
-    benchmarkLoadAdmissionController.getNodes() :
-    loadNodes;
-  const effectiveLoadOpsPerSec = supportsBenchmarkAdmissionGating ?
-    resolveBenchmarkScaledLoadOpsPerSec(
-      loadOpsPerSec,
-      loadNodes.length,
-      clusterNodes.length,
-    ) :
-    loadOpsPerSec;
+function isAdmissionPressureDominantInMetrics(metrics) {
+  const admissionSignals = numberOrZeroFailures(metrics?.admissionSignals);
+  const nodeAdmissionBlockedWaits = numberOrZeroFailures(
+    metrics?.waitReasons?.nodeAdmissionBlocked,
+  );
+  const retryableControlPlanePressureWaits = numberOrZeroFailures(
+    metrics?.waitReasons?.retryableControlPlanePressure,
+  );
+  const nonAdmissionAttemptErrors = numberOrZeroFailures(
+    metrics?.nonAdmissionAttemptErrors,
+  );
+  const admissionPressureSignalsPresent =
+    admissionSignals > ZERO_FAILURES ||
+    nodeAdmissionBlockedWaits > ZERO_FAILURES ||
+    retryableControlPlanePressureWaits > ZERO_FAILURES;
+  return (
+    admissionPressureSignalsPresent &&
+    nonAdmissionAttemptErrors <= ZERO_FAILURES
+  );
+}
 
-  // 3. Start sustained write load against the running cluster.
-  const loadRun = cluster.startLoad({
-    nodes: dynamicLoadNodes,
-    nodeResolver: benchmarkLoadAdmissionController ?
-      () => benchmarkLoadAdmissionController.getNodes() :
-      undefined,
-    opsPerSec: effectiveLoadOpsPerSec,
-    duration: loadDuration,
-    tableName: effectiveLoadTableName,
-    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
-    adaptiveDispatchGuardrail: {
-      enabled: adaptiveDispatchGuardrailEnabled,
-      pressureSignalThreshold: adaptiveDispatchGuardrailPressureSignalThreshold,
-      queueDepthThreshold: adaptiveDispatchGuardrailQueueDepthThreshold,
-      reductionStepRatio: adaptiveDispatchGuardrailReductionStepRatio,
-      minMaxInFlight: adaptiveDispatchGuardrailMinMaxInFlight,
-      recoveryQuietTicks: adaptiveDispatchGuardrailRecoveryQuietTicks,
-    },
-  });
-  let newNode = null;
-  let convergence = null;
-  let metrics;
-  let loadRunCompleted = false;
-  try {
-    // 4. Let load stabilize before adding a node.
-    await sleep(preJoinSettleMs);
+async function verifyNodeJoinLoadMetrics({
+  cluster,
+  metrics,
+  convergence,
+  newNodeId,
+  maxFailedOperations,
+  maxUndispatchedRatio,
+  maxQueueDelayP95Ms,
+}) {
+  const dispatchedOperations = numberOrZeroFailures(
+    metrics?.dispatchedOperations,
+  );
+  const admissionPressureDominant =
+    isAdmissionPressureDominantInMetrics(metrics);
+  const toleratedZeroByAdmission =
+    admissionPressureDominant && dispatchedOperations > ZERO_FAILURES;
 
-    // 5. Add a new node to the cluster while load is active.
-    newNode = await cluster.addNode({
-      waitForActive: false,
-    });
-    const nodeHandles = resolveClusterNodes(cluster);
-    const expectedPostJoinNodes = Math.max(
-      CONVERGENCE_DEFAULTS.targetVoterCount,
-      nodeHandles.length,
+  if (metrics.total <= ZERO_FAILURES && !toleratedZeroByAdmission) {
+    throw buildNodeJoinFailure(
+      'Expected at least one operation to complete',
+      await buildFailureDetails(cluster, {
+        loadMetrics: metrics,
+        convergenceTiming: convergence,
+        newNodeId,
+        failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
+        dominantAssertion: 'load_total_zero',
+      }),
     );
-
-    // 6. Wait for the cluster to converge with the new node.
-    try {
-      convergence = await cluster.waitForConvergence({
-        settleTimeoutMs: postJoinConvergenceTimeoutMs,
-        quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-        targetVoterCount: expectedPostJoinNodes,
-      });
-    } catch (_error) {
-      // Under sustained write pressure, replica operations can remain in-flight
-      // longer than the active load window. Re-assert convergence strictly
-      // after load completes.
-      convergence = null;
-    }
-
-    // 7. Wait for load to complete and verify metrics.
-    metrics = await loadRun.waitComplete();
-    loadRunCompleted = true;
-
-    const admissionSignals = Number(metrics?.admissionSignals || ZERO_FAILURES);
-    const nodeAdmissionBlockedWaits = Number(
-      metrics?.waitReasons?.nodeAdmissionBlocked || ZERO_FAILURES,
-    );
-    const retryableControlPlanePressureWaits = Number(
-      metrics?.waitReasons?.retryableControlPlanePressure || ZERO_FAILURES,
-    );
-    const nonAdmissionAttemptErrors = Number(
-      metrics?.nonAdmissionAttemptErrors || ZERO_FAILURES,
-    );
-    const dispatchedOperations = Number(
-      metrics?.dispatchedOperations || ZERO_FAILURES,
-    );
-    const admissionPressureSignalsPresent =
-      admissionSignals > ZERO_FAILURES ||
-      nodeAdmissionBlockedWaits > ZERO_FAILURES ||
-      retryableControlPlanePressureWaits > ZERO_FAILURES;
-    const admissionPressureDominant =
-      admissionPressureSignalsPresent &&
-      nonAdmissionAttemptErrors <= ZERO_FAILURES;
-
-    if (
-      metrics.total <= ZERO_FAILURES &&
-      !(admissionPressureDominant && dispatchedOperations > ZERO_FAILURES)
-    ) {
-      throw buildNodeJoinFailure(
-        'Expected at least one operation to complete',
-        await buildFailureDetails(cluster, {
-          loadMetrics: metrics,
-          convergenceTiming: convergence,
-          newNodeId: newNode?.id || null,
-          failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
-          dominantAssertion: 'load_total_zero',
-        }),
-      );
-    }
-    if (
-      metrics.success <= ZERO_FAILURES &&
-      !(admissionPressureDominant && dispatchedOperations > ZERO_FAILURES)
-    ) {
-      throw buildNodeJoinFailure(
-        'Expected at least one successful operation',
-        await buildFailureDetails(cluster, {
-          loadMetrics: metrics,
-          convergenceTiming: convergence,
-          newNodeId: newNode?.id || null,
-          failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
-          dominantAssertion: 'load_success_zero',
-        }),
-      );
-    }
-    const failedOperationCount = resolveCanonicalFailedOperationCount(metrics);
-    if (failedOperationCount > maxFailedOperations) {
-      throw buildNodeJoinFailure(
-        'Expected no failed load operations during node join: observed ' +
-          failedOperationCount,
-        await buildFailureDetails(cluster, {
-          loadMetrics: metrics,
-          convergenceTiming: convergence,
-          newNodeId: newNode?.id || null,
-          failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
-          dominantAssertion: 'failed_operations',
-        }),
-      );
-    }
-    const undispatchedOperations = Number(
-      metrics.undispatchedOperations || ZERO_FAILURES,
-    );
-    const targetOperations = Number(metrics.targetOperations || ZERO_FAILURES);
-    const dispatchBacklogGateDecision = buildDispatchBacklogGateDecision({
-      targetOperations,
-      undispatchedOperations,
-      dispatchedOperations,
-      successfulOperations: metrics.success,
-      maxUndispatchedRatio,
-      admissionPressureDominant,
-    });
-    if (!dispatchBacklogGateDecision.passed) {
-      throw buildNodeJoinFailure(
-        'Expected dispatch backlog to stay below ' +
-          dispatchBacklogGateDecision.effectiveMaxUndispatchedRatio +
-          ' during node join: observed ' +
-          dispatchBacklogGateDecision.undispatchedRatio,
-        await buildFailureDetails(cluster, {
-          loadMetrics: metrics,
-          convergenceTiming: convergence,
-          newNodeId: newNode?.id || null,
-          failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
-          dominantAssertion: DOMINANT_ASSERTION_DISPATCH_BACKLOG,
-        }),
-      );
-    }
-    const queueDelayP95Ms = Number(metrics?.queueDelay?.p95 || ZERO_FAILURES);
-    if (queueDelayP95Ms > maxQueueDelayP95Ms) {
-      throw buildNodeJoinFailure(
-        'Expected queue-delay p95 to stay below ' +
-          maxQueueDelayP95Ms +
-          'ms during node join: observed ' +
-          queueDelayP95Ms +
-          'ms',
-        await buildFailureDetails(cluster, {
-          loadMetrics: metrics,
-          convergenceTiming: convergence,
-          newNodeId: newNode?.id || null,
-          failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
-          dominantAssertion: 'queue_delay_p95',
-        }),
-      );
-    }
-
-    // Re-validate convergence once write load has quiesced.
-    try {
-      convergence = await cluster.waitForConvergence({
-        settleTimeoutMs: postJoinConvergenceTimeoutMs,
-        quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-        targetVoterCount: expectedPostJoinNodes,
-      });
-    } catch (error) {
-      throw buildNodeJoinFailure(
-        error?.message || 'Cluster did not converge within SLO',
-        await buildFailureDetails(cluster, {
-          loadMetrics: metrics,
-          convergenceTiming: convergence,
-          newNodeId: newNode?.id || null,
-          failurePhase: FAILURE_PHASE_CONVERGENCE,
-          dominantAssertion: 'convergence_timeout',
-          controlPlaneDiagnostics:
-            error?.diagnostics?.controlPlaneDiagnostics || null,
-        }),
-      );
-    }
-
-    if (convergence.settledAfterMs > postJoinConvergenceTimeoutMs) {
-      throw buildNodeJoinFailure(
-        'Cluster did not converge within SLO: ' +
-          convergence.settledAfterMs +
-          'ms',
-        await buildFailureDetails(cluster, {
-          loadMetrics: metrics,
-          convergenceTiming: convergence,
-          newNodeId: newNode?.id || null,
-          failurePhase: FAILURE_PHASE_CONVERGENCE,
-          dominantAssertion: 'convergence_timeout',
-        }),
-      );
-    }
-  } finally {
-    if (!loadRunCompleted && typeof loadRun.cancel === 'function') {
-      loadRun.cancel();
-    }
-    if (
-      benchmarkLoadAdmissionController &&
-      typeof benchmarkLoadAdmissionController.stop === 'function'
-    ) {
-      await benchmarkLoadAdmissionController.stop();
-    }
   }
+  if (metrics.success <= ZERO_FAILURES && !toleratedZeroByAdmission) {
+    throw buildNodeJoinFailure(
+      'Expected at least one successful operation',
+      await buildFailureDetails(cluster, {
+        loadMetrics: metrics,
+        convergenceTiming: convergence,
+        newNodeId,
+        failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
+        dominantAssertion: 'load_success_zero',
+      }),
+    );
+  }
+  const failedOperationCount = resolveCanonicalFailedOperationCount(metrics);
+  if (failedOperationCount > maxFailedOperations) {
+    throw buildNodeJoinFailure(
+      'Expected no failed load operations during node join: observed ' +
+        failedOperationCount,
+      await buildFailureDetails(cluster, {
+        loadMetrics: metrics,
+        convergenceTiming: convergence,
+        newNodeId,
+        failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
+        dominantAssertion: 'failed_operations',
+      }),
+    );
+  }
+  const dispatchBacklogGateDecision = buildDispatchBacklogGateDecision({
+    targetOperations: numberOrZeroFailures(metrics.targetOperations),
+    undispatchedOperations: numberOrZeroFailures(
+      metrics.undispatchedOperations,
+    ),
+    dispatchedOperations,
+    successfulOperations: metrics.success,
+    maxUndispatchedRatio,
+    admissionPressureDominant,
+  });
+  if (!dispatchBacklogGateDecision.passed) {
+    throw buildNodeJoinFailure(
+      'Expected dispatch backlog to stay below ' +
+        dispatchBacklogGateDecision.effectiveMaxUndispatchedRatio +
+        ' during node join: observed ' +
+        dispatchBacklogGateDecision.undispatchedRatio,
+      await buildFailureDetails(cluster, {
+        loadMetrics: metrics,
+        convergenceTiming: convergence,
+        newNodeId,
+        failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
+        dominantAssertion: DOMINANT_ASSERTION_DISPATCH_BACKLOG,
+      }),
+    );
+  }
+  const queueDelayP95Ms = numberOrZeroFailures(metrics?.queueDelay?.p95);
+  if (queueDelayP95Ms > maxQueueDelayP95Ms) {
+    throw buildNodeJoinFailure(
+      'Expected queue-delay p95 to stay below ' +
+        maxQueueDelayP95Ms +
+        'ms during node join: observed ' +
+        queueDelayP95Ms +
+        'ms',
+      await buildFailureDetails(cluster, {
+        loadMetrics: metrics,
+        convergenceTiming: convergence,
+        newNodeId,
+        failurePhase: FAILURE_PHASE_LOAD_VERIFICATION,
+        dominantAssertion: 'queue_delay_p95',
+      }),
+    );
+  }
+}
 
-  // 8. Assert cluster consistency after join + load.
+async function assertPostJoinQuiescedConvergence({
+  cluster,
+  postJoinConvergenceTimeoutMs,
+  expectedPostJoinNodes,
+  metrics,
+  previousConvergence,
+  newNodeId,
+}) {
+  let convergence = previousConvergence;
+  try {
+    convergence = await cluster.waitForConvergence({
+      settleTimeoutMs: postJoinConvergenceTimeoutMs,
+      quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+      targetVoterCount: expectedPostJoinNodes,
+    });
+  } catch (error) {
+    throw buildNodeJoinFailure(
+      error?.message || 'Cluster did not converge within SLO',
+      await buildFailureDetails(cluster, {
+        loadMetrics: metrics,
+        convergenceTiming: convergence,
+        newNodeId,
+        failurePhase: FAILURE_PHASE_CONVERGENCE,
+        dominantAssertion: 'convergence_timeout',
+        controlPlaneDiagnostics:
+          error?.diagnostics?.controlPlaneDiagnostics || null,
+      }),
+    );
+  }
+  if (convergence.settledAfterMs > postJoinConvergenceTimeoutMs) {
+    throw buildNodeJoinFailure(
+      'Cluster did not converge within SLO: ' +
+        convergence.settledAfterMs +
+        'ms',
+      await buildFailureDetails(cluster, {
+        loadMetrics: metrics,
+        convergenceTiming: convergence,
+        newNodeId,
+        failurePhase: FAILURE_PHASE_CONVERGENCE,
+        dominantAssertion: 'convergence_timeout',
+      }),
+    );
+  }
+  return convergence;
+}
+
+async function verifyPostJoinClusterConsistency({
+  cluster,
+  config,
+  metrics,
+  convergence,
+  newNodeId,
+}) {
   try {
     if (typeof cluster.waitForAllActive === 'function') {
       try {
         await cluster.waitForAllActive({
           mode: 'load',
-          timeoutMs: postJoinActiveTimeoutMs,
+          timeoutMs: config.postJoinActiveTimeoutMs,
         });
       } catch (_error) {
-        // Keep this gate best-effort. Final consistency convergence remains
-        // authoritative and tolerates transient publication lag.
+        // Final consistency convergence remains authoritative.
       }
     }
 
     await cluster.waitForConsistencyConvergence({
-      timeoutMs: consistencyTimeoutMs,
-      pollIntervalMs: consistencyPollIntervalMs,
-      forceRepairAfterMs: consistencyForceRepairAfterMs,
+      timeoutMs: config.consistencyTimeoutMs,
+      pollIntervalMs: config.consistencyPollIntervalMs,
+      forceRepairAfterMs: config.consistencyForceRepairAfterMs,
       tolerateActiveNodeSkew: true,
       maxActiveNodeSkew: 1,
       toleratePartitionSkew: true,
@@ -1096,7 +1067,7 @@ async function run(cluster, options = {}) {
       await buildFailureDetails(cluster, {
         loadMetrics: metrics,
         convergenceTiming: convergence,
-        newNodeId: newNode?.id || null,
+        newNodeId,
         failurePhase: FAILURE_PHASE_CONSISTENCY,
         dominantAssertion: 'consistency_convergence',
         controlPlaneDiagnostics:
@@ -1104,11 +1075,208 @@ async function run(cluster, options = {}) {
       }),
     );
   }
+}
+
+async function ensureNodeJoinBenchmarkTable(
+  seedNode,
+  effectiveLoadTableName,
+  clusterNodes,
+) {
+  if (!seedNode || typeof seedNode.query !== 'function') {
+    return null;
+  }
+  return ensureBenchmarkPartitioningTable(seedNode, {
+    tableName: effectiveLoadTableName,
+    requiredBootstrapVisibilityState:
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
+    queryNodes: clusterNodes,
+  });
+}
+
+function resolveRequiredBenchmarkReadyNodeCount(clusterNodes) {
+  const count = clusterNodes.length > ZERO_FAILURES ? clusterNodes.length : 1;
+  return Math.max(1, Math.min(count, MIN_BENCHMARK_READY_LOAD_NODES));
+}
+
+function createOptionalBenchmarkLoadAdmissionController({
+  cluster,
+  supportsBenchmarkAdmissionGating,
+  usedUngatedLoadNodeFallback,
+  effectiveLoadTableName,
+  tableId,
+  loadNodes,
+}) {
+  if (!supportsBenchmarkAdmissionGating || usedUngatedLoadNodeFallback) {
+    return null;
+  }
+  return createBenchmarkLoadAdmissionController(cluster, {
+    tableName: effectiveLoadTableName,
+    tableId,
+    initialReadyNodes: loadNodes,
+  });
+}
+
+async function tryWaitForPostJoinConvergence(
+  cluster,
+  postJoinConvergenceTimeoutMs,
+  expectedPostJoinNodes,
+) {
+  try {
+    return await cluster.waitForConvergence({
+      settleTimeoutMs: postJoinConvergenceTimeoutMs,
+      quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+      targetVoterCount: expectedPostJoinNodes,
+    });
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function stopLoadAndAdmissionController(
+  loadRun,
+  loadRunCompleted,
+  benchmarkLoadAdmissionController,
+) {
+  if (!loadRunCompleted && typeof loadRun.cancel === 'function') {
+    loadRun.cancel();
+  }
+  if (typeof benchmarkLoadAdmissionController?.stop === 'function') {
+    await benchmarkLoadAdmissionController.stop();
+  }
+}
+
+/**
+ * Run the node-join-under-load scenario.
+ *
+ * @param {Object} cluster - Cluster handle from the harness.
+ * @param {Object} [options]
+ */
+async function run(cluster, options = {}) {
+  const config = resolveNodeJoinScenarioRuntimeConfig(cluster, options);
+  const clusterNodes = resolveClusterNodes(cluster);
+  const seedNode = resolveQueryableSeedNode(clusterNodes);
+
+  await warmupNodeJoinLoadReadiness(
+    cluster,
+    config.loadReadinessStableWindowMs,
+    config.loadReadinessStabilizationTimeoutMs,
+  );
+
+  const ensuredBenchmarkTable = await ensureNodeJoinBenchmarkTable(
+    seedNode,
+    config.effectiveLoadTableName,
+    clusterNodes,
+  );
+  const tableId = ensuredBenchmarkTable ? ensuredBenchmarkTable.tableId : null;
+  const supportsBenchmarkAdmissionGating =
+    typeof cluster.waitForBenchmarkReadyLoadNodes === 'function' &&
+    typeof cluster.resolveBenchmarkReadyLoadNodes === 'function';
+  const {loadNodes, usedUngatedLoadNodeFallback} =
+    await resolveInitialNodeJoinLoadNodes({
+      cluster,
+      effectiveLoadTableName: config.effectiveLoadTableName,
+      tableId,
+      requiredBenchmarkReadyNodeCount:
+        resolveRequiredBenchmarkReadyNodeCount(clusterNodes),
+      loadReadinessStableWindowMs: config.loadReadinessStableWindowMs,
+      loadReadinessStabilizationTimeoutMs:
+        config.loadReadinessStabilizationTimeoutMs,
+    });
+
+  const benchmarkLoadAdmissionController =
+    createOptionalBenchmarkLoadAdmissionController({
+      cluster,
+      supportsBenchmarkAdmissionGating,
+      usedUngatedLoadNodeFallback,
+      effectiveLoadTableName: config.effectiveLoadTableName,
+      tableId,
+      loadNodes,
+    });
+  const dynamicLoadNodes = benchmarkLoadAdmissionController ?
+    benchmarkLoadAdmissionController.getNodes() :
+    loadNodes;
+  const effectiveLoadOpsPerSec = supportsBenchmarkAdmissionGating ?
+    resolveBenchmarkScaledLoadOpsPerSec(
+      config.loadOpsPerSec,
+      loadNodes.length,
+      clusterNodes.length,
+    ) :
+    config.loadOpsPerSec;
+
+  const loadRun = cluster.startLoad({
+    nodes: dynamicLoadNodes,
+    nodeResolver: benchmarkLoadAdmissionController ?
+      () => benchmarkLoadAdmissionController.getNodes() :
+      undefined,
+    opsPerSec: effectiveLoadOpsPerSec,
+    duration: config.loadDuration,
+    tableName: config.effectiveLoadTableName,
+    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+    adaptiveDispatchGuardrail: config.adaptiveDispatchGuardrail,
+  });
+  let newNodeId = null;
+  let convergence = null;
+  let metrics;
+  let loadRunCompleted = false;
+  try {
+    await sleep(config.preJoinSettleMs);
+
+    const newNode = await cluster.addNode({
+      waitForActive: false,
+    });
+    newNodeId = newNode ? newNode.id || null : null;
+    const expectedPostJoinNodes = Math.max(
+      CONVERGENCE_DEFAULTS.targetVoterCount,
+      resolveClusterNodes(cluster).length,
+    );
+
+    convergence = await tryWaitForPostJoinConvergence(
+      cluster,
+      config.postJoinConvergenceTimeoutMs,
+      expectedPostJoinNodes,
+    );
+
+    metrics = await loadRun.waitComplete();
+    loadRunCompleted = true;
+
+    await verifyNodeJoinLoadMetrics({
+      cluster,
+      metrics,
+      convergence,
+      newNodeId,
+      maxFailedOperations: config.maxFailedOperations,
+      maxUndispatchedRatio: config.maxUndispatchedRatio,
+      maxQueueDelayP95Ms: config.maxQueueDelayP95Ms,
+    });
+
+    convergence = await assertPostJoinQuiescedConvergence({
+      cluster,
+      postJoinConvergenceTimeoutMs: config.postJoinConvergenceTimeoutMs,
+      expectedPostJoinNodes,
+      metrics,
+      previousConvergence: convergence,
+      newNodeId,
+    });
+  } finally {
+    await stopLoadAndAdmissionController(
+      loadRun,
+      loadRunCompleted,
+      benchmarkLoadAdmissionController,
+    );
+  }
+
+  await verifyPostJoinClusterConsistency({
+    cluster,
+    config,
+    metrics,
+    convergence,
+    newNodeId,
+  });
 
   return {
     loadMetrics: metrics,
     convergenceTiming: convergence,
-    newNodeId: newNode?.id || null,
+    newNodeId,
   };
 }
 

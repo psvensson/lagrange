@@ -4,6 +4,8 @@ import * as priority from './failure-bundle-diagnostics-priority-recovery.js';
 const numberFromValue = Number;
 const numberIsSafeInteger = Number.isSafeInteger;
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arraySome = Function.call.bind(Array.prototype.some);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 const RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY =
   'restart_bootstrap_authority';
@@ -469,48 +471,55 @@ function resolveFinalConsistencyRootCauseClass(finalConsistency) {
   return ROOT_CAUSE_CLASS_UNKNOWN;
 }
 
-function resolveStructuredFinalConsistencyFailure(controlPlane) {
+function extractFinalConsistencyFailureCandidate(controlPlane) {
   const finalConsistency =
-    controlPlane?.finalConsistency &&
-    typeof controlPlane.finalConsistency === JS_OBJECT_TYPE &&
-    !Array.isArray(controlPlane.finalConsistency) ?
+    isRecord(controlPlane?.finalConsistency) &&
+    typeof controlPlane.finalConsistency === JS_OBJECT_TYPE ?
       controlPlane.finalConsistency :
       null;
-  const finalConsistencyReason = finalConsistency ?
-    String(
-      finalConsistency.reasonCode ||
-        finalConsistency.state ||
-        FINAL_CONSISTENCY_REASON_UNCLASSIFIED,
-    ).trim() :
-    null;
-  const mismatchReason = String(
-    controlPlane?.mismatch?.reasonCode || EMPTY_STRING,
-  ).trim();
-  const finalConsistencyCandidate = finalConsistencyReason ?
-    {
+  if (!finalConsistency) {
+    return null;
+  }
+  const finalConsistencyReason = stringTrim(String(
+    finalConsistency.reasonCode ||
+      finalConsistency.state ||
+      FINAL_CONSISTENCY_REASON_UNCLASSIFIED,
+  ));
+  return {
+    reasonCode: finalConsistencyReason,
+    rootCauseEvidence: {
+      ...finalConsistency,
       reasonCode: finalConsistencyReason,
-      rootCauseEvidence: {
-        ...finalConsistency,
-        reasonCode: finalConsistencyReason,
-      },
-    } :
-    null;
-  const mismatchCandidate =
-    !finalConsistencyCandidate && mismatchReason.length > ZERO ?
-      {
-        reasonCode: mismatchReason,
-        rootCauseEvidence: {reasonCode: mismatchReason},
-      } :
-      null;
-  const selectedCandidate = finalConsistencyCandidate || mismatchCandidate;
-  return selectedCandidate ?
-    {
-      dominantReason: selectedCandidate.reasonCode,
-      rootCauseClass: resolveFinalConsistencyRootCauseClass(
-        selectedCandidate.rootCauseEvidence,
-      ),
-    } :
-    null;
+    },
+  };
+}
+
+function extractMismatchFailureCandidate(controlPlane) {
+  const mismatchReason = stringTrim(String(
+    controlPlane?.mismatch?.reasonCode || EMPTY_STRING,
+  ));
+  if (mismatchReason.length === ZERO) {
+    return null;
+  }
+  return {
+    reasonCode: mismatchReason,
+    rootCauseEvidence: {reasonCode: mismatchReason},
+  };
+}
+
+function resolveStructuredFinalConsistencyFailure(controlPlane) {
+  const selectedCandidate =
+    extractFinalConsistencyFailureCandidate(controlPlane) ||
+    extractMismatchFailureCandidate(controlPlane);
+  if (!selectedCandidate) {
+    return null;
+  }
+  return {
+    dominantReason: selectedCandidate.reasonCode,
+    rootCauseClass: resolveFinalConsistencyRootCauseClass(
+      selectedCandidate.rootCauseEvidence,
+    ),
+  };
 }
 
 function resolveFinalConsistencyFailureFromMessage(entry) {
@@ -577,6 +586,20 @@ export function resolveStructuredControlPlaneQuiescenceFailure(diagnostics) {
   };
 }
 
+function hasPositiveConvergenceCountField(record, fields) {
+  return arraySome(
+    fields,
+    (field) => normalizeNonNegativeCount(record[field]) > ZERO,
+  );
+}
+
+function hasNonEmptyConvergenceStringListField(record, fields) {
+  return arraySome(
+    fields,
+    (field) => normalizeDistinctStringArray(record[field]).length > ZERO,
+  );
+}
+
 export function hasOpenPublicationOrPriorityRecoveryBlocker(publicationConvergence) {
   if (!isRecord(publicationConvergence)) {
     return false;
@@ -584,33 +607,21 @@ export function hasOpenPublicationOrPriorityRecoveryBlocker(publicationConvergen
   return (
     publicationConvergence.publicationPending === true ||
     hasPublicationMissingActiveNodeBlocker(publicationConvergence) ||
-    normalizeNonNegativeCount(publicationConvergence.pendingAckCount) > ZERO ||
-    normalizeNonNegativeCount(publicationConvergence.blockedNodeCount) > ZERO ||
     publicationConvergence.prioritySpreadPending === true ||
-    normalizeNonNegativeCount(
-      publicationConvergence.priorityRecoveryProgressClassCount,
-    ) > ZERO ||
-    normalizeNonNegativeCount(
-      publicationConvergence.priorityRecoverySemanticStateCount,
-    ) > ZERO ||
-    normalizeNonNegativeCount(
-      publicationConvergence.priorityRecoveryBlockedPartitionCount,
-    ) > ZERO ||
-    normalizeNonNegativeCount(
-      publicationConvergence.priorityRecoveryUnresolvedPartitionCount,
-    ) > ZERO ||
-    normalizeDistinctStringArray(
-      publicationConvergence.priorityRecoveryProgressClassIds,
-    ).length > ZERO ||
-    normalizeDistinctStringArray(
-      publicationConvergence.priorityRecoverySemanticStateIds,
-    ).length > ZERO ||
-    normalizeDistinctStringArray(
-      publicationConvergence.priorityRecoveryBlockedPartitionIds,
-    ).length > ZERO ||
-    normalizeDistinctStringArray(
-      publicationConvergence.priorityRecoveryUnresolvedPartitionIds,
-    ).length > ZERO
+    hasPositiveConvergenceCountField(publicationConvergence, [
+      'pendingAckCount',
+      'blockedNodeCount',
+      'priorityRecoveryProgressClassCount',
+      'priorityRecoverySemanticStateCount',
+      'priorityRecoveryBlockedPartitionCount',
+      'priorityRecoveryUnresolvedPartitionCount',
+    ]) ||
+    hasNonEmptyConvergenceStringListField(publicationConvergence, [
+      'priorityRecoveryProgressClassIds',
+      'priorityRecoverySemanticStateIds',
+      'priorityRecoveryBlockedPartitionIds',
+      'priorityRecoveryUnresolvedPartitionIds',
+    ])
   );
 }
 
@@ -647,22 +658,26 @@ export function isPublicationMissingActiveNodeReason(reason) {
   );
 }
 
+function asOptionalArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function collectBlockerReasonStringsFromSource(source) {
+  const record = source ?? {};
+  return normalizeDistinctStringArray([
+    ...asOptionalArray(record.publicationConvergenceGateReasons),
+    ...asOptionalArray(record.priorityRecoveryReasonCodes),
+    ...asOptionalArray(record.reasons),
+    ...asOptionalArray(record.reasonCodes),
+    ...asOptionalArray(record.gateReasons),
+    ...asOptionalArray(record.blockers),
+  ]);
+}
+
 export function resolvePublicationMissingActiveNodeReasonNodeIds(reasonSources = []) {
   const reasonNodeIds = [];
   for (const source of reasonSources) {
-    const reasons = normalizeDistinctStringArray([
-      ...(Array.isArray(source?.publicationConvergenceGateReasons) ?
-        source.publicationConvergenceGateReasons :
-        []),
-      ...(Array.isArray(source?.priorityRecoveryReasonCodes) ?
-        source.priorityRecoveryReasonCodes :
-        []),
-      ...(Array.isArray(source?.reasons) ? source.reasons : []),
-      ...(Array.isArray(source?.reasonCodes) ? source.reasonCodes : []),
-      ...(Array.isArray(source?.gateReasons) ? source.gateReasons : []),
-      ...(Array.isArray(source?.blockers) ? source.blockers : []),
-    ]);
-    for (const reason of reasons) {
+    for (const reason of collectBlockerReasonStringsFromSource(source)) {
       const normalizedReason = normalizeActiveGateBlockerReason(reason);
       if (
         !normalizedReason.startsWith(
@@ -725,23 +740,14 @@ function hasActiveGateSnapshotCoveragePending(publicationConvergence) {
 function collectPublicationMissingActiveNodeReasonCandidates(
   publicationConvergence,
 ) {
+  const convergence = publicationConvergence ?? {};
   const activeGateProgress =
-    publicationConvergence?.activeGateProgress ||
-    publicationConvergence?.activeGate?.progress ||
-    null;
+    (convergence.activeGateProgress || convergence.activeGate?.progress) ?? {};
   return normalizeDistinctStringArray([
-    ...(Array.isArray(publicationConvergence?.publicationConvergenceGateReasons) ?
-      publicationConvergence.publicationConvergenceGateReasons :
-      []),
-    ...(Array.isArray(publicationConvergence?.priorityRecoveryReasonCodes) ?
-      publicationConvergence.priorityRecoveryReasonCodes :
-      []),
-    ...(Array.isArray(activeGateProgress?.gateReasons) ?
-      activeGateProgress.gateReasons :
-      []),
-    ...(Array.isArray(activeGateProgress?.blockers) ?
-      activeGateProgress.blockers :
-      []),
+    ...asOptionalArray(convergence.publicationConvergenceGateReasons),
+    ...asOptionalArray(convergence.priorityRecoveryReasonCodes),
+    ...asOptionalArray(activeGateProgress.gateReasons),
+    ...asOptionalArray(activeGateProgress.blockers),
   ]).map((reason) => normalizeActiveGateBlockerReason(reason));
 }
 

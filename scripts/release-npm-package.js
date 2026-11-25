@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import {spawnSync} from 'node:child_process';
+import {verifyInstalledRuntime} from './npm-runtime-smoke.js';
+import {refuseUnderProbe} from '../src/test-helpers/probe-guard.js';
 
 import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {spawnGit} from './checks/git-invocation.js';
@@ -14,7 +16,7 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
-import {hostname, tmpdir} from 'node:os';
+import {tmpdir} from 'node:os';
 import {basename, dirname, join, resolve, sep} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
@@ -134,6 +136,9 @@ const MANIFEST_ERROR = Object.freeze({
   GIT_HEAD: 'candidate tarball must contain a full gitHead',
 });
 const DRY_RUN_ERROR = 'installed lagrange --dry-run did not complete';
+const EMBEDDED_DATA_DIRECTORY = 'embedded-data';
+const EMBEDDED_LOG_SUFFIX = '.runtime-smoke.log';
+const PACKAGE_PROBE_ACTION = 'npm packaging or installed consumer verification';
 const CLI_USAGE =
   'usage: release-npm-package.js verify [--output DIR] [--git-head SHA] ' +
   'or publish --tarball FILE --authorize-version VERSION [--git-head SHA] ' +
@@ -154,6 +159,7 @@ const RELEASE_OUTCOME = Object.freeze({
   IMPORT_FAILED: 'IMPORT_FAILED',
   BIN_FAILED: 'BIN_FAILED',
   CLI_FAILED: 'CLI_FAILED',
+  RUNTIME_FAILED: 'RUNTIME_FAILED',
   AUTH_UNAVAILABLE: 'AUTH_UNAVAILABLE',
   OWNERSHIP_DENIED: 'OWNERSHIP_DENIED',
   REGISTRY_UNAVAILABLE: 'REGISTRY_UNAVAILABLE',
@@ -322,6 +328,7 @@ function headCommit() {
 }
 
 async function buildNpmPackage(options = {}) {
+  refuseUnderProbe(PACKAGE_PROBE_ACTION);
   const packageJson = await validateWorkspaceManifest();
   const gitHead = resolveGitHead(options.gitHead);
   const outputDirectory = resolve(
@@ -392,37 +399,24 @@ function assertInstalledPath(actualPath, installedPackageRoot, label) {
 }
 
 async function verifyInstalledPackage(packed) {
+  refuseUnderProbe(PACKAGE_PROBE_ACTION);
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'lagrange-npm-install-'));
   const installDirectory = join(temporaryRoot, 'consumer');
   const cacheDirectory = join(temporaryRoot, 'npm-cache');
-  await Promise.all([
-    mkdir(installDirectory),
-    mkdir(cacheDirectory),
-  ]);
+  await Promise.all([mkdir(installDirectory), mkdir(cacheDirectory)]);
   try {
     await writeFile(join(installDirectory, PACKAGE_JSON_FILENAME), `${JSON.stringify({
-      name: CONSUMER_PACKAGE_NAME,
-      private: true,
-      type: MODULE_PACKAGE_TYPE,
+      name: CONSUMER_PACKAGE_NAME, private: true, type: MODULE_PACKAGE_TYPE,
     }, null, 2)}\n`, TEXT_ENCODING);
     const installArguments = [
-      COMMAND_ARGUMENT.NPM_INSTALL,
-      COMMAND_ARGUMENT.NPM_NO_AUDIT,
-      COMMAND_ARGUMENT.NPM_NO_FUND,
-      COMMAND_ARGUMENT.NPM_NO_PACKAGE_LOCK,
-      COMMAND_ARGUMENT.NPM_CACHE,
-      cacheDirectory,
-      packed.tarballPath,
+      COMMAND_ARGUMENT.NPM_INSTALL, COMMAND_ARGUMENT.NPM_NO_AUDIT,
+      COMMAND_ARGUMENT.NPM_NO_FUND, COMMAND_ARGUMENT.NPM_NO_PACKAGE_LOCK,
+      COMMAND_ARGUMENT.NPM_CACHE, cacheDirectory, packed.tarballPath,
     ];
     runChecked(
-      NPM_COMMAND,
-      installArguments,
-      {cwd: installDirectory},
-      RELEASE_OUTCOME.INSTALL_FAILED,
+      NPM_COMMAND, installArguments, {cwd: installDirectory}, RELEASE_OUTCOME.INSTALL_FAILED,
     );
-    const installedPackageRoot = await realpath(join(
-      installDirectory, 'node_modules', PACKAGE_NAME,
-    ));
+    const installedPackageRoot = await realpath(join(installDirectory, 'node_modules', PACKAGE_NAME));
     const resolutionScript = [
       'import {realpathSync} from \'node:fs\';',
       'import {sep} from \'node:path\';',
@@ -439,87 +433,48 @@ async function verifyInstalledPackage(packed) {
       'if (!(await service.readPlaybackViewer()).includes(\'<!doctype html>\')) process.exit(13);',
     ].join(' ');
     const resolutionArguments = [
-      COMMAND_ARGUMENT.NODE_MODULE_INPUT,
-      COMMAND_ARGUMENT.NODE_EVAL,
-      resolutionScript,
+      COMMAND_ARGUMENT.NODE_MODULE_INPUT, COMMAND_ARGUMENT.NODE_EVAL, resolutionScript,
     ];
     runChecked(
-      process.execPath,
-      resolutionArguments,
-      {cwd: installDirectory},
-      RELEASE_OUTCOME.IMPORT_FAILED,
+      process.execPath, resolutionArguments, {cwd: installDirectory}, RELEASE_OUTCOME.IMPORT_FAILED,
     );
     const binDirectory = join(installDirectory, 'node_modules', '.bin');
     const lagrangeBin = join(binDirectory, 'lagrange');
     const adminBin = join(binDirectory, 'lagrange-admin');
     await Promise.all([access(lagrangeBin), access(adminBin)]);
     const [lagrangeTarget, adminTarget] = await Promise.all([
-      realpath(lagrangeBin),
-      realpath(adminBin),
+      realpath(lagrangeBin), realpath(adminBin),
     ]);
-    assertInstalledPath(
-      lagrangeTarget,
-      installedPackageRoot,
-      INSTALL_PATH_LABEL.LAGRANGE,
-    );
-    assertInstalledPath(
-      adminTarget,
-      installedPackageRoot,
-      INSTALL_PATH_LABEL.ADMIN,
-    );
-    const versionOutput = runChecked(
-      lagrangeBin,
-      ['--version'],
-      {cwd: installDirectory},
-      RELEASE_OUTCOME.BIN_FAILED,
-    ).trim();
+    assertInstalledPath(lagrangeTarget, installedPackageRoot, INSTALL_PATH_LABEL.LAGRANGE);
+    assertInstalledPath(adminTarget, installedPackageRoot, INSTALL_PATH_LABEL.ADMIN);
+    const versionOutput = runChecked(lagrangeBin, ['--version'], {cwd: installDirectory}, RELEASE_OUTCOME.BIN_FAILED).trim();
     if (versionOutput !== `${PRODUCT_NAME} v${packed.version}`) {
-      throw new NpmReleaseError(
-        RELEASE_OUTCOME.BIN_FAILED,
-        `unexpected lagrange --version output: ${versionOutput}`,
-      );
+      throw new NpmReleaseError(RELEASE_OUTCOME.BIN_FAILED, `unexpected lagrange --version output: ${versionOutput}`);
     }
-    const adminVersionOutput = runChecked(
-      adminBin,
-      ['--version'],
-      {cwd: installDirectory},
-      RELEASE_OUTCOME.BIN_FAILED,
-    ).trim();
+    const adminVersionOutput = runChecked(adminBin, ['--version'], {cwd: installDirectory}, RELEASE_OUTCOME.BIN_FAILED).trim();
     if (adminVersionOutput !== `lagrange-admin version ${packed.version}`) {
-      throw new NpmReleaseError(
-        RELEASE_OUTCOME.BIN_FAILED,
-        `unexpected lagrange-admin --version output: ${adminVersionOutput}`,
-      );
+      throw new NpmReleaseError(RELEASE_OUTCOME.BIN_FAILED, `unexpected lagrange-admin --version output: ${adminVersionOutput}`);
     }
-    // A complete node configuration declares its host: this machine.
-    const dryRunOutput = runChecked(lagrangeBin, ['--dry-run', '--data-dir',
-      join(temporaryRoot, 'data')], {cwd: installDirectory,
-      env: {...process.env, NODE_HOST_ID: hostname()}}, RELEASE_OUTCOME.CLI_FAILED);
+    const dryRunOutput = runChecked(lagrangeBin, ['--dry-run', '--data-dir', join(temporaryRoot, 'data')],
+      {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
     if (!/Dry run completed/u.test(dryRunOutput)) {
-      throw new NpmReleaseError(
-        RELEASE_OUTCOME.CLI_FAILED,
-        DRY_RUN_ERROR,
-      );
+      throw new NpmReleaseError(RELEASE_OUTCOME.CLI_FAILED, DRY_RUN_ERROR);
     }
-    const serviceDirectory = join(
-      temporaryRoot,
-      COMMAND_ARGUMENT.SERVICE_SMOKE_DIR,
-    );
-    runChecked(lagrangeBin, [
-      COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
-      COMMAND_ARGUMENT.SERVICE_INIT,
-      serviceDirectory,
-    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
-    runChecked(lagrangeBin, [
-      COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
-      COMMAND_ARGUMENT.SERVICE_GENERATE,
-      serviceDirectory,
-    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
-    runChecked(lagrangeBin, [
-      COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
+    try {
+      await verifyInstalledRuntime(installDirectory,
+        join(temporaryRoot, EMBEDDED_DATA_DIRECTORY), packed.tarballPath + EMBEDDED_LOG_SUFFIX);
+    } catch (error) {
+      throw new NpmReleaseError(RELEASE_OUTCOME.RUNTIME_FAILED, error.message, error);
+    }
+    const serviceDirectory = join(temporaryRoot, COMMAND_ARGUMENT.SERVICE_SMOKE_DIR);
+    const serviceCommands = [
+      COMMAND_ARGUMENT.SERVICE_INIT, COMMAND_ARGUMENT.SERVICE_GENERATE,
       COMMAND_ARGUMENT.SERVICE_BUILD,
-      serviceDirectory,
-    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
+    ];
+    for (const subcmd of serviceCommands) {
+      runChecked(lagrangeBin, [COMMAND_ARGUMENT.SERVICE_SUBCOMMAND, subcmd, serviceDirectory],
+        {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
+    }
     return packed;
   } finally {
     await rm(temporaryRoot, {recursive: true, force: true});

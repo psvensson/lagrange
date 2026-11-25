@@ -2,6 +2,7 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {isReroutableWriteError} from '../constants/errors.js';
 import {
   classifySystemPartition,
+  resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
 import {
   QueryExecutorCanonicalLeaderRoutingMethods,
@@ -21,6 +22,67 @@ const {
   isRetryableControlPlaneError,
   normalizeParticipantRetryAfterMs,
 } = QUERY_EXECUTOR_SHARED;
+
+const CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    id: 'priority_deferred_widen_to_recovery_candidate',
+    when: Object.freeze({
+      isSystemTableWrite: true,
+      isPriorityControlPlaneWrite: true,
+      isRetryable: true,
+      isDeferredFailure: true,
+      isRemovalFencedFailure: false,
+    }),
+    state:
+      CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE,
+  }),
+  Object.freeze({
+    id: 'system_deferred_partition_retry',
+    when: Object.freeze({
+      isSystemTableWrite: true,
+      isDeferredFailure: true,
+      isRemovalFencedFailure: false,
+    }),
+    state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY,
+  }),
+  Object.freeze({
+    id: 'non_retryable_none',
+    when: Object.freeze({
+      isRetryable: false,
+    }),
+    state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE,
+  }),
+  Object.freeze({
+    id: 'retryable_widen_to_recovery_candidate',
+    when: Object.freeze({
+      isRetryable: true,
+    }),
+    state:
+      CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE,
+  }),
+]);
+
+function matchesControlPlaneWriteRetryRule(rule, normalizedFacts) {
+  return Object.entries(rule.when).every(
+    ([factKey, expectedValue]) => normalizedFacts[factKey] === expectedValue,
+  );
+}
+
+function evaluateControlPlaneWriteRetryDecision(facts = {}) {
+  const normalizedFacts = Object.freeze({
+    isSystemTableWrite: facts.isSystemTableWrite === true,
+    isPriorityControlPlaneWrite: facts.isPriorityControlPlaneWrite === true,
+    isRetryable: facts.isRetryable === true,
+    isDeferredFailure: facts.isDeferredFailure === true,
+    isRemovalFencedFailure: facts.isRemovalFencedFailure === true,
+  });
+  const matchedRule = CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE.find((rule) =>
+    matchesControlPlaneWriteRetryRule(rule, normalizedFacts),
+  );
+  return Object.freeze({
+    state: matchedRule.state,
+  });
+}
 
 class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRoutingMethods {
   /**
@@ -413,28 +475,15 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
    * @private
    */
   resolvePartitionTableName(partitionId) {
-    const partition = this.getPartitionRecord(partitionId);
-    const tableName =
-      partition?.[COLUMN.TABLE_NAME] ??
-      partition?.table_name ??
-      partition?.tableName ??
-      partition?.table_id ??
-      partition?.tableId ??
-      null;
+    const partitionRow = this.getPartitionRecord(partitionId);
+    const tableName = partitionRow?.[COLUMN.TABLE_NAME];
     if (
       typeof tableName === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
       tableName.length > 0
     ) {
       return tableName;
     }
-    if (
-      typeof partitionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      partitionId.length === 0
-    ) {
-      return null;
-    }
-    const fallbackTableName = partitionId.replace(/-p\d+$/, '');
-    return fallbackTableName.length > 0 ? fallbackTableName : null;
+    return resolvePartitionTableId({partitionId, partitionRow});
   }
 
   /**
@@ -450,12 +499,14 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     if (forRead) {
       return false;
     }
+    const partitionRow = this.getPartitionRecord(partitionId);
     const tableName = this.resolvePartitionTableName(partitionId);
-    if (
-      !SYSTEM_TABLE_NAMES.has(
+    const isSystemTable =
+      classifySystemPartition({partitionId, partitionRow}).systemTable ||
+      SYSTEM_TABLE_NAMES.has(
         String(tableName || QUERY_EXECUTOR_LITERAL.STRING_VALUE),
-      )
-    ) {
+      );
+    if (!isSystemTable) {
       return false;
     }
     return isRetryableControlPlaneError(failure);
@@ -486,47 +537,39 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     const retryAfterMs = normalizeParticipantRetryAfterMs(
       failure?.retryAfterMs,
     );
-    const deferredFailure =
+    const isDeferredFailure =
       failure?.deferRetry === true ||
       (Number.isFinite(retryAfterMs) && retryAfterMs > 0);
+    const partitionRow = this.getPartitionRecord(partitionId);
+    const partitionClassification = classifySystemPartition({
+      partitionId,
+      partitionRow,
+    });
     const tableName = this.resolvePartitionTableName(partitionId);
-    const systemTableWrite =
+    const isSystemTableWrite =
       !forRead &&
-      SYSTEM_TABLE_NAMES.has(
-        String(tableName || QUERY_EXECUTOR_LITERAL.STRING_VALUE),
-      );
-    const retryable = this.isRetryableControlPlaneWriteFailure(
+      (partitionClassification.systemTable ||
+        SYSTEM_TABLE_NAMES.has(
+          String(tableName || QUERY_EXECUTOR_LITERAL.STRING_VALUE),
+        ));
+    const isRetryable = this.isRetryableControlPlaneWriteFailure(
       partitionId,
       failure,
       forRead,
     );
-    const priorityControlPlaneWrite =
-      !forRead &&
-      classifySystemPartition({
-        partitionId,
-        partitionRow: this.getPartitionRecord(partitionId),
-      }).priorityControlPlane;
-    const removalFencedFailure =
+    const isPriorityControlPlaneWrite =
+      !forRead && partitionClassification.priorityControlPlane;
+    const isRemovalFencedFailure =
       typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
       failure.error.includes(ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL);
-    if (systemTableWrite && deferredFailure && !removalFencedFailure) {
-      if (priorityControlPlaneWrite && retryable) {
-        return this.buildControlPlaneWriteRetryDecision(
-          CONTROL_PLANE_WRITE_RETRY_DECISION_STATE
-            .WIDEN_TO_RECOVERY_CANDIDATE,
-        );
-      }
-      return this.buildControlPlaneWriteRetryDecision(
-        CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY,
-      );
-    }
-    if (!retryable) {
-      return this.buildControlPlaneWriteRetryDecision(
-        CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE,
-      );
-    }
     return this.buildControlPlaneWriteRetryDecision(
-      CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE,
+      evaluateControlPlaneWriteRetryDecision({
+        isSystemTableWrite,
+        isPriorityControlPlaneWrite,
+        isRetryable,
+        isDeferredFailure,
+        isRemovalFencedFailure,
+      }).state,
     );
   }
 
@@ -538,4 +581,8 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
    */
 }
 
-export {QueryExecutorWriteRetryRouting};
+export {
+  CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE,
+  QueryExecutorWriteRetryRouting,
+  evaluateControlPlaneWriteRetryDecision,
+};

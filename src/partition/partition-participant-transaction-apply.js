@@ -466,13 +466,17 @@ function runCommittedOperations(service, committed, operations, lockContext) {
       throw Object.freeze({commitLockConflict: true, lockConflict});
     }
     const result = runCarriedOperation(service, operation);
+    const statementResult = {
+      changes: result.changes,
+      lastInsertRowid: result.lastInsertRowid,
+    };
     recordCommittedStatementOutcome(service, {
       entryKey: operationOutcomeKeyOf(command.participantId, ordinal),
-      outcome: OUTCOME.APPLIED, index, term, result});
+      outcome: OUTCOME.APPLIED, index, term, result: statementResult});
     const event = captureCommittedOperationCdc(service, committed,
       {operation, result, ordinal});
     if (event !== null) events.push(event);
-    return result;
+    return statementResult;
   }))();
   return {results, events};
 }

@@ -63,6 +63,26 @@ const REMOVAL_COMPLETED_LOG_LINE = 'Replica removal completed';
 const FULL_LOGS_DIRNAME = '.full-logs';
 const NODE_LOG_FILENAME = 'node.ndjson';
 
+function collectRemovalReplicaIdsFromLogFile(logPath, removedReplicaIds) {
+  if (!fs.existsSync(logPath)) {
+    return;
+  }
+  for (const line of fs.readFileSync(logPath, 'utf8').split('\n')) {
+    if (!line.includes(REMOVAL_COMPLETED_LOG_LINE)) {
+      continue;
+    }
+    try {
+      const entry = JSON.parse(line);
+      const replicaId = String(entry.replicaId || '').trim();
+      if (replicaId.length > 0) {
+        removedReplicaIds.add(replicaId);
+      }
+    } catch {
+      // skip unparseable lines
+    }
+  }
+}
+
 function collectRemovalCompletedReplicaIds(snapshotsPath) {
   const runDir = path.dirname(path.dirname(snapshotsPath));
   const fullLogsRoot = path.join(runDir, FULL_LOGS_DIRNAME);
@@ -77,23 +97,7 @@ function collectRemovalCompletedReplicaIds(snapshotsPath) {
     }
     for (const node of fs.readdirSync(scenarioDir)) {
       const logPath = path.join(scenarioDir, node, NODE_LOG_FILENAME);
-      if (!fs.existsSync(logPath)) {
-        continue;
-      }
-      for (const line of fs.readFileSync(logPath, 'utf8').split('\n')) {
-        if (!line.includes(REMOVAL_COMPLETED_LOG_LINE)) {
-          continue;
-        }
-        try {
-          const entry = JSON.parse(line);
-          const replicaId = String(entry.replicaId || '').trim();
-          if (replicaId.length > 0) {
-            removedReplicaIds.add(replicaId);
-          }
-        } catch {
-          // skip unparseable lines
-        }
-      }
+      collectRemovalReplicaIdsFromLogFile(logPath, removedReplicaIds);
     }
   }
   return removedReplicaIds;

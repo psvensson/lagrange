@@ -4,6 +4,8 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
+import Ajv from 'ajv';
+
 import {
   hasConcreteText,
   isObjectRecord,
@@ -22,7 +24,109 @@ const DEFAULT_TABLE_DIRS = Object.freeze([
   'architecture/models/decision-tables',
 ]);
 const TABLE_SCHEMA = 'decision-table-v1';
+const DECISION_TABLE_SCHEMA_ID = 'lagrange.decision-table.v1';
+const JSON_SCHEMA_OBJECT_TYPE = 'object';
+const JSON_SCHEMA_ARRAY_TYPE = 'array';
+const JSON_SCHEMA_STRING_TYPE = 'string';
+const ADDITIONAL_PROPERTIES_KEYWORD = 'additionalProperties';
+const ROOT_FIELD_LABEL = 'decision table';
+const SLASH_SEPARATOR = '/';
+const DOT_SEPARATOR = '.';
 const WILDCARD = '*';
+const NON_EMPTY_STRING_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_STRING_TYPE,
+  minLength: 1,
+});
+const NAMED_VALUES_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['name', 'values']),
+  properties: Object.freeze({
+    name: NON_EMPTY_STRING_SCHEMA,
+    values: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: NON_EMPTY_STRING_SCHEMA,
+    }),
+  }),
+});
+const INVARIANT_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['id', 'statement']),
+  properties: Object.freeze({
+    id: NON_EMPTY_STRING_SCHEMA,
+    statement: NON_EMPTY_STRING_SCHEMA,
+  }),
+});
+const RULE_CONDITION_MAP_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  minProperties: 1,
+  additionalProperties: NON_EMPTY_STRING_SCHEMA,
+});
+const RULE_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['id', 'reason', 'invariantRefs', 'when', 'outcome']),
+  properties: Object.freeze({
+    id: NON_EMPTY_STRING_SCHEMA,
+    reason: NON_EMPTY_STRING_SCHEMA,
+    invariantRefs: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: NON_EMPTY_STRING_SCHEMA,
+    }),
+    when: RULE_CONDITION_MAP_SCHEMA,
+    outcome: RULE_CONDITION_MAP_SCHEMA,
+  }),
+});
+const DECISION_TABLE_JSON_SCHEMA = Object.freeze({
+  $id: DECISION_TABLE_SCHEMA_ID,
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze([
+    'schema',
+    'id',
+    'owner',
+    'boundary',
+    'inputs',
+    'outputs',
+    'invariants',
+    'rules',
+  ]),
+  properties: Object.freeze({
+    schema: Object.freeze({
+      type: JSON_SCHEMA_STRING_TYPE,
+      const: TABLE_SCHEMA,
+    }),
+    id: NON_EMPTY_STRING_SCHEMA,
+    owner: NON_EMPTY_STRING_SCHEMA,
+    boundary: NON_EMPTY_STRING_SCHEMA,
+    notes: NON_EMPTY_STRING_SCHEMA,
+    inputs: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: NAMED_VALUES_RECORD_SCHEMA,
+    }),
+    outputs: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: NAMED_VALUES_RECORD_SCHEMA,
+    }),
+    invariants: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: INVARIANT_RECORD_SCHEMA,
+    }),
+    rules: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: RULE_RECORD_SCHEMA,
+    }),
+  }),
+});
+const ajv = new Ajv({allErrors: true, strict: true});
+const validateDecisionTableSchema = ajv.compile(DECISION_TABLE_JSON_SCHEMA);
 const HELP_TEXT = [
   'Usage: npm run model:decision-tables -- [--json] [table.json ...]',
   '',
@@ -249,6 +353,41 @@ function validateCoverage(errors, filePath, table) {
   }
 }
 
+function formatSchemaInstancePath(instancePath) {
+  if (!instancePath) {
+    return ROOT_FIELD_LABEL;
+  }
+  const segments = instancePath.slice(1).split(SLASH_SEPARATOR);
+  let formatted = '';
+  for (const segment of segments) {
+    if (/^\d+$/u.test(segment)) {
+      formatted += `[${segment}]`;
+    } else {
+      formatted += formatted.length > 0 ? `${DOT_SEPARATOR}${segment}` : segment;
+    }
+  }
+  return formatted || ROOT_FIELD_LABEL;
+}
+
+function appendSchemaValidationErrors(errors, filePath, schemaErrors, beforeCount) {
+  const entries = Array.isArray(schemaErrors) ? schemaErrors : [];
+  for (const error of entries) {
+    if (error.keyword === ADDITIONAL_PROPERTIES_KEYWORD) {
+      const targetPath = formatSchemaInstancePath(error.instancePath);
+      errors.push(
+        `${filePath}: ${targetPath} contains unsupported property ` +
+        `${error.params.additionalProperty}.`,
+      );
+    }
+  }
+  if (errors.length === beforeCount) {
+    for (const error of entries) {
+      const targetPath = formatSchemaInstancePath(error.instancePath);
+      errors.push(`${filePath}: ${targetPath} ${error.message}.`);
+    }
+  }
+}
+
 function validateDecisionTable(filePath) {
   const relativeFilePath = relativeToCwd(filePath);
   const errors = [];
@@ -263,6 +402,8 @@ function validateDecisionTable(filePath) {
     errors.push(`${relativeFilePath}: decision table must be a JSON object.`);
     return {table: null, errors};
   }
+  const beforeCount = errors.length;
+  const schemaValid = validateDecisionTableSchema(table);
   requireConcreteField(errors, relativeFilePath, 'schema', table.schema);
   if (table.schema !== TABLE_SCHEMA) {
     errors.push(`${relativeFilePath}: schema must be ${TABLE_SCHEMA}.`);
@@ -281,6 +422,14 @@ function validateDecisionTable(filePath) {
     [];
   validateRuleShape(errors, relativeFilePath, table, inputNames, outputSpecs);
   validateCoverage(errors, relativeFilePath, table);
+  if (!schemaValid) {
+    appendSchemaValidationErrors(
+      errors,
+      relativeFilePath,
+      validateDecisionTableSchema.errors,
+      beforeCount,
+    );
+  }
   return {table, errors};
 }
 
@@ -316,7 +465,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 }
 
 export {
+  DECISION_TABLE_JSON_SCHEMA,
   TABLE_SCHEMA,
   validateDecisionTable,
+  validateDecisionTableSchema,
   validateDecisionTables,
 };

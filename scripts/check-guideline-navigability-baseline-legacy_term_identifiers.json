@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T19:11:15.865Z",
-  "rawViolationCount": 2522,
+  "generatedAt": "2026-11-25T10:44:29.754Z",
+  "rawViolationCount": 2519,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
@@ -4622,7 +4622,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 419,
+      "line": 414,
       "column": 38,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4631,7 +4631,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 427,
+      "line": 422,
       "column": 10,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4640,7 +4640,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 427,
+      "line": 422,
       "column": 21,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4649,7 +4649,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 428,
+      "line": 423,
       "column": 28,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4658,7 +4658,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 432,
+      "line": 427,
       "column": 33,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4667,7 +4667,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 444,
+      "line": 439,
       "column": 51,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4676,7 +4676,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 475,
+      "line": 470,
       "column": 12,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4685,7 +4685,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 477,
+      "line": 472,
       "column": 10,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4694,7 +4694,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 478,
+      "line": 473,
       "column": 14,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4703,7 +4703,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 478,
+      "line": 473,
       "column": 35,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4712,7 +4712,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 480,
+      "line": 475,
       "column": 30,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4721,7 +4721,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 481,
+      "line": 476,
       "column": 49,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -6161,7 +6161,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
-      "line": 81,
+      "line": 88,
       "column": 8,
       "functionName": "executeRead",
       "kind": "legacy_term_identifiers",
@@ -6170,7 +6170,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
-      "line": 87,
+      "line": 94,
       "column": 6,
       "functionName": "executeRead",
       "kind": "legacy_term_identifiers",
@@ -6179,7 +6179,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
-      "line": 200,
+      "line": 207,
       "column": 8,
       "functionName": "executeRead",
       "kind": "legacy_term_identifiers",
@@ -6782,7 +6782,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 138,
+      "line": 170,
       "column": 2,
       "functionName": "buildSystemMetadataMutationError",
       "kind": "legacy_term_identifiers",
@@ -6791,7 +6791,7 @@
     },
     {
       "filePath": "src/control-plane/owners/system-metadata-owner-base.js",
-      "line": 149,
+      "line": 181,
       "column": 12,
       "functionName": "buildSystemMetadataMutationError",
       "kind": "legacy_term_identifiers",
@@ -11795,7 +11795,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-generator.js",
-      "line": 663,
+      "line": 753,
       "column": 49,
       "functionName": "fetchInsertRow",
       "kind": "legacy_term_identifiers",
@@ -11804,7 +11804,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-generator.js",
-      "line": 668,
+      "line": 758,
       "column": 6,
       "functionName": "fetchInsertRow",
       "kind": "legacy_term_identifiers",
@@ -11849,7 +11849,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-parameterized-sql.js",
-      "line": 231,
+      "line": 147,
       "column": 2,
       "functionName": "fetchInsertRow",
       "kind": "legacy_term_identifiers",
@@ -11858,7 +11858,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-parameterized-sql.js",
-      "line": 238,
+      "line": 154,
       "column": 11,
       "functionName": "fetchInsertRow",
       "kind": "legacy_term_identifiers",
@@ -11867,7 +11867,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-parameterized-sql.js",
-      "line": 277,
+      "line": 193,
       "column": 9,
       "functionName": "fetchInsertRow",
       "kind": "legacy_term_identifiers",
@@ -16196,36 +16196,9 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 75,
+      "line": 137,
       "column": 13,
       "functionName": "getLeaderRecoveryCandidates",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 436,
-      "column": 10,
-      "functionName": "resolvePartitionTableName",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 437,
-      "column": 11,
-      "functionName": "resolvePartitionTableName",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 437,
-      "column": 42,
-      "functionName": "resolvePartitionTableName",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -17690,7 +17663,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-observation.js",
-      "line": 43,
+      "line": 45,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",

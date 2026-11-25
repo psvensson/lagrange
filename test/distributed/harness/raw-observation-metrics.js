@@ -135,7 +135,6 @@ function deriveRunTimingsSec(run, latencies) {
     workloadDrainSec,
     postVerifySec: diffSec(tMeasureEndMs, tEndMs),
     maxSingleTxnExecutionSec,
-    maxSingleTxnSec: maxSingleTxnExecutionSec,
     maxSingleRequestSec,
     partsSec: derivePartsSec(run, tReadyMs, tMeasureStartMs, warmupSec),
   };

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T19:11:15.847Z",
-  "rawViolationCount": 627,
+  "generatedAt": "2026-11-25T10:44:29.741Z",
+  "rawViolationCount": 614,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -2534,16 +2534,7 @@
     },
     {
       "filePath": "src/index-management/index-service-partition-methods.js",
-      "line": 19,
-      "column": 35,
-      "functionName": "isUniqueRequested",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/index-management/index-service-partition-methods.js",
-      "line": 55,
+      "line": 60,
       "column": 9,
       "functionName": "extractPartitionId",
       "kind": "row_field_alias_reads",
@@ -2552,7 +2543,7 @@
     },
     {
       "filePath": "src/index-management/index-service-partition-methods.js",
-      "line": 194,
+      "line": 234,
       "column": 23,
       "functionName": "dropSQLiteIndex",
       "kind": "row_field_alias_reads",
@@ -2561,7 +2552,7 @@
     },
     {
       "filePath": "src/index-management/index-service-partition-methods.js",
-      "line": 220,
+      "line": 260,
       "column": 22,
       "functionName": "createIndexOnPartition",
       "kind": "row_field_alias_reads",
@@ -2570,7 +2561,7 @@
     },
     {
       "filePath": "src/index-management/index-service-partition-methods.js",
-      "line": 299,
+      "line": 339,
       "column": 24,
       "functionName": "rebuildIndex",
       "kind": "row_field_alias_reads",
@@ -2579,7 +2570,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 237,
+      "line": 243,
       "column": 11,
       "functionName": "resolveTableIdFromEngine",
       "kind": "row_field_alias_reads",
@@ -2588,7 +2579,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 242,
+      "line": 248,
       "column": 11,
       "functionName": "resolveTableIdFromCache",
       "kind": "row_field_alias_reads",
@@ -2597,7 +2588,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 316,
+      "line": 315,
       "column": 23,
       "functionName": "validateIndexCreation",
       "kind": "row_field_alias_reads",
@@ -2606,7 +2597,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 330,
+      "line": 329,
       "column": 18,
       "functionName": "normalizeCreateIndexOptions",
       "kind": "row_field_alias_reads",
@@ -2615,7 +2606,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 336,
+      "line": 335,
       "column": 32,
       "functionName": "normalizeCreateIndexOptions",
       "kind": "row_field_alias_reads",
@@ -2651,7 +2642,7 @@
     },
     {
       "filePath": "src/index-management/index-service.js",
-      "line": 705,
+      "line": 706,
       "column": 21,
       "functionName": "getIndicesForTable",
       "kind": "row_field_alias_reads",
@@ -3272,7 +3263,7 @@
     },
     {
       "filePath": "src/partition/partition-service-remote-query-methods.js",
-      "line": 561,
+      "line": 564,
       "column": 6,
       "functionName": "resolveLocalActivePartitionVersion",
       "kind": "row_field_alias_reads",
@@ -3910,33 +3901,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 418,
-      "column": 6,
-      "functionName": "resolvePartitionTableName",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 419,
-      "column": 6,
-      "functionName": "resolvePartitionTableName",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 421,
-      "column": 6,
-      "functionName": "resolvePartitionTableName",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/query/sql-query-engine-bootstrap-routing-overlay.js",
       "line": 65,
       "column": 6,
@@ -4280,90 +4244,9 @@
     },
     {
       "filePath": "src/query/sql-query-engine-write-execution.js",
-      "line": 663,
+      "line": 668,
       "column": 10,
       "functionName": "runOwnedWriteAttempt",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-create-table.js",
-      "line": 61,
-      "column": 26,
-      "functionName": "assertDurableMetadataIdentity",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-create-table.js",
-      "line": 68,
-      "column": 6,
-      "functionName": "assertDurableMetadataIdentity",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 196,
-      "column": 15,
-      "functionName": "getPartitionKey",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-partition-provisioning.js",
-      "line": 124,
-      "column": 6,
-      "functionName": "buildInitialPartitionMetadataFromTableRecord",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-partition-provisioning.js",
-      "line": 132,
-      "column": 8,
-      "functionName": "buildInitialPartitionMetadataFromTableRecord",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 28,
-      "column": 18,
-      "functionName": "resolveTableId",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 42,
-      "column": 16,
-      "functionName": "resolveTablePolicyValue",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 63,
-      "column": 22,
-      "functionName": "resolvePartitionId",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-split-merge-coordination.js",
-      "line": 77,
-      "column": 27,
-      "functionName": "resolvePartitionSizeValue",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"

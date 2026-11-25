@@ -1,8 +1,8 @@
 /**
  * Table Creation Service - Split/merge coordination.
- * Owns system-cache attachment, table-policy and partition-size cache seeding,
- * change-driven split/merge evaluation triggers, and periodic evaluation
- * lifecycle on the partition split/merge manager.
+ * Owns system-cache attachment and collaborator validation, table-policy and
+ * partition-size cache seeding, change-driven split/merge evaluation triggers,
+ * and periodic evaluation lifecycle on the partition split/merge manager.
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
@@ -17,15 +17,35 @@ import {
   parseTablePartitionTransition,
 } from '../partition/partition-transition-row.js';
 
+const SYSTEM_CACHE_COLLABORATOR_LABEL = 'TableCreationService systemCache';
+const FIND_METHOD_NAME = 'find';
+
+function assertCallableCollaboratorMethod(collaborator, methodName, label) {
+  const candidate = collaborator?.[methodName];
+  if (typeof candidate !== 'function') {
+    throw new TypeError(`${label} must implement ${methodName}()`);
+  }
+}
+
+function validateSystemCacheCollaborator(cache) {
+  if (cache === null || cache === undefined) {
+    return null;
+  }
+  assertCallableCollaboratorMethod(
+    cache,
+    FIND_METHOD_NAME,
+    SYSTEM_CACHE_COLLABORATOR_LABEL,
+  );
+  return cache;
+}
 
 /**
  * Resolve canonical table ID from a row.
  * @param {Object} row
  * @return {string|null}
- * @private
  */
 function resolveTableId(row) {
-  const tableId = row?.table_id ?? row?.tableId ?? null;
+  const tableId = row?.table_id ?? null;
   return typeof tableId === TABLE_CREATION_SERVICE_LITERAL.STRING &&
     tableId.length > 0 ?
     tableId :
@@ -36,10 +56,9 @@ function resolveTableId(row) {
  * Resolve normalized table policy value from a row.
  * @param {Object} row
  * @return {string|null}
- * @private
  */
 function resolveTablePolicyValue(row) {
-  const value = row?.table_policies ?? row?.tablePolicies ?? null;
+  const value = row?.table_policies ?? null;
   if (value === null || value === undefined) {
     return null;
   }
@@ -57,10 +76,9 @@ function resolveTablePolicyValue(row) {
  * Resolve canonical partition ID from a row.
  * @param {Object} row
  * @return {string|null}
- * @private
  */
 function resolvePartitionId(row) {
-  const partitionId = row?.partition_id ?? row?.partitionId ?? null;
+  const partitionId = row?.partition_id ?? null;
   return typeof partitionId === TABLE_CREATION_SERVICE_LITERAL.STRING &&
     partitionId.length > 0 ?
     partitionId :
@@ -71,33 +89,185 @@ function resolvePartitionId(row) {
  * Resolve normalized partition size from a row.
  * @param {Object} row
  * @return {number|null}
- * @private
  */
 function resolvePartitionSizeValue(row) {
-  const sizeBytes = Number(row?.size_bytes ?? row?.sizeBytes);
+  const sizeBytes = Number(row?.size_bytes);
   return Number.isFinite(sizeBytes) && sizeBytes >= 0 ?
     sizeBytes :
     null;
 }
 
+function seedTablePolicyCache(service, cache) {
+  service.tablePolicyByTableId.clear();
+  const tableRows = cache.getAll(TABLES.TABLES);
+  if (!Array.isArray(tableRows)) {
+    return;
+  }
+  for (const row of tableRows) {
+    const tableId = resolveTableId(row);
+    const policyValue = resolveTablePolicyValue(row);
+    if (!tableId || policyValue === null) {
+      continue;
+    }
+    service.tablePolicyByTableId.set(tableId, policyValue);
+  }
+}
+
+function seedPartitionMetricsCache(service, cache) {
+  service.partitionSizeByPartitionId.clear();
+  const partitionRows = cache.getAll(TABLES.PARTITIONS);
+  if (!Array.isArray(partitionRows)) {
+    return;
+  }
+  for (const row of partitionRows) {
+    const partitionId = resolvePartitionId(row);
+    const partitionSize = resolvePartitionSizeValue(row);
+    if (!partitionId || partitionSize === null) {
+      continue;
+    }
+    service.partitionSizeByPartitionId.set(partitionId, partitionSize);
+  }
+}
+
+function attachCachePolicyListener(service) {
+  const cache = service.systemCache;
+  const manager = service.partitionSplitMergeManager;
+  if (
+    !cache ||
+    typeof cache.onCacheChange !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION ||
+    typeof cache.getAll !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION ||
+    !manager ||
+    (typeof manager.evaluateAllPartitions !==
+      TABLE_CREATION_SERVICE_LITERAL.FUNCTION &&
+      typeof manager.requestEvaluation !==
+        TABLE_CREATION_SERVICE_LITERAL.FUNCTION)
+  ) {
+    service.tablePolicyByTableId.clear();
+    service.partitionSizeByPartitionId.clear();
+    return;
+  }
+  seedTablePolicyCache(service, cache);
+  seedPartitionMetricsCache(service, cache);
+  service.cachePolicyChangeListener = (tableName, operation, record) => {
+    service.onSystemTableCacheChange(tableName, operation, record);
+  };
+  cache.onCacheChange(service.cachePolicyChangeListener);
+}
+
+function requestSplitMergeEvaluation(service, context = {}) {
+  const manager = service.partitionSplitMergeManager;
+  if (!manager) {
+    return;
+  }
+  if (
+    typeof manager.requestEvaluation ===
+    TABLE_CREATION_SERVICE_LITERAL.FUNCTION
+  ) {
+    manager.requestEvaluation(context);
+    return;
+  }
+  void service.evaluateSplitMergeLifecycle();
+}
+
+function requestOutstandingSplitProposalEvaluation(
+  service,
+  tableRow,
+  sourcePartitionId,
+) {
+  const proposal = describeOutstandingSplitProposal(
+    parseTablePartitionTransition(tableRow),
+    {tableId: resolveTableId(tableRow), nowMs: Date.now()},
+  );
+  if (
+    !proposal ||
+    (sourcePartitionId !== null && proposal.partitionId !== sourcePartitionId)
+  ) {
+    return;
+  }
+  requestSplitMergeEvaluation(service, {
+    reasonCode: SPLIT_MERGE_REASON.OUTSTANDING_SPLIT_PROPOSAL,
+    partitionId: proposal.partitionId,
+  });
+}
+
+function handleTablePolicyCacheChange(service, operation, record) {
+  const tableId = resolveTableId(record);
+  const policyValue = resolveTablePolicyValue(record);
+  if (!tableId || policyValue === null) {
+    return;
+  }
+  const previousPolicyValue = service.tablePolicyByTableId.get(tableId);
+  service.tablePolicyByTableId.set(tableId, policyValue);
+  if (previousPolicyValue === policyValue) {
+    return;
+  }
+  service.logger.debug(QUERY_LOG_MSG.TABLE_POLICY_CHANGE_TRIGGER_SPLIT_EVAL, {
+    tableId,
+    operation,
+  });
+  requestSplitMergeEvaluation(service, {
+    reasonCode: TABLE_CREATION_SERVICE_LITERAL.TABLE_POLICY_CHANGED,
+  });
+}
+
+function handlePartitionMetricsCacheChange(service, operation, record) {
+  const partitionId = resolvePartitionId(record);
+  const partitionSize = resolvePartitionSizeValue(record);
+  if (!partitionId || partitionSize === null) {
+    return;
+  }
+  const previousPartitionSize =
+    service.partitionSizeByPartitionId.get(partitionId);
+  service.partitionSizeByPartitionId.set(partitionId, partitionSize);
+  if (previousPartitionSize === partitionSize) {
+    return;
+  }
+  service.logger.debug(
+    QUERY_LOG_MSG.TABLE_PARTITION_SIZE_CHANGE_TRIGGER_SPLIT_EVAL,
+    {
+      partitionId,
+      operation,
+      previousPartitionSize,
+      partitionSize,
+    },
+  );
+  requestSplitMergeEvaluation(service, {
+    reasonCode: TABLE_CREATION_SERVICE_LITERAL.PARTITION_SIZE_CHANGED,
+    partitionId,
+  });
+}
+
+function startPeriodicSplitMergeEvaluation(service) {
+  const manager = service.partitionSplitMergeManager;
+  if (
+    !manager ||
+    typeof manager.startPeriodicEvaluation !==
+      TABLE_CREATION_SERVICE_LITERAL.FUNCTION
+  ) {
+    return;
+  }
+  manager.startPeriodicEvaluation();
+}
+
 const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
   /**
-   * Set the system cache.
-   * @param {Object} cache - System table cache.
+   * Set and validate the system cache collaborator.
+   * @param {Object|null} cache - System table cache.
    */
   setSystemCache(cache) {
-    if (this.systemCache === cache) {
+    const validatedCache = validateSystemCacheCollaborator(cache);
+    if (this.systemCache === validatedCache) {
       return;
     }
     this.detachCachePolicyListener();
-    this.systemCache = cache || null;
+    this.systemCache = validatedCache;
     this.schemaProvisioningJobRepository?.setSystemCache(this.systemCache);
-    this.attachCachePolicyListener();
+    attachCachePolicyListener(this);
   },
 
   /**
    * Set partition split/merge manager integration hook.
-   * @param {Object} manager - PartitionSplitMergeManager instance.
+   * @param {Object|null} manager - PartitionSplitMergeManager instance.
    */
   setPartitionSplitMergeManager(manager) {
     if (this.partitionSplitMergeManager === manager) {
@@ -106,43 +276,12 @@ const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
     this.detachCachePolicyListener();
     this.stopPeriodicSplitMergeEvaluation();
     this.partitionSplitMergeManager = manager || null;
-    this.startPeriodicSplitMergeEvaluation();
-    this.attachCachePolicyListener();
-  },
-
-  /**
-   * Attach cache listener that triggers split/merge evaluation when table
-   * policy values change.
-   * @private
-   */
-  attachCachePolicyListener() {
-    const cache = this.systemCache;
-    const manager = this.partitionSplitMergeManager;
-    if (
-      !cache ||
-      typeof cache.onCacheChange !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION ||
-      typeof cache.getAll !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION ||
-      !manager ||
-      (typeof manager.evaluateAllPartitions !==
-        TABLE_CREATION_SERVICE_LITERAL.FUNCTION &&
-        typeof manager.requestEvaluation !==
-          TABLE_CREATION_SERVICE_LITERAL.FUNCTION)
-    ) {
-      this.tablePolicyByTableId.clear();
-      this.partitionSizeByPartitionId.clear();
-      return;
-    }
-    this.seedTablePolicyCache(cache);
-    this.seedPartitionMetricsCache(cache);
-    this.cachePolicyChangeListener = (tableName, operation, record) => {
-      this.onSystemTableCacheChange(tableName, operation, record);
-    };
-    cache.onCacheChange(this.cachePolicyChangeListener);
+    startPeriodicSplitMergeEvaluation(this);
+    attachCachePolicyListener(this);
   },
 
   /**
    * Detach previously registered cache policy listener.
-   * @private
    */
   detachCachePolicyListener() {
     const cache = this.systemCache;
@@ -160,58 +299,10 @@ const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
   },
 
   /**
-   * Seed known table policy values from current cache rows.
-   * @param {Object} cache
-   * @private
-   */
-  seedTablePolicyCache(cache) {
-    this.tablePolicyByTableId.clear();
-    const tableRows = cache.getAll(TABLES.TABLES);
-    if (!Array.isArray(tableRows)) {
-      return;
-    }
-    for (const row of tableRows) {
-      const tableId = this.resolveTableId(row);
-      const policyValue = this.resolveTablePolicyValue(row);
-      if (!tableId || policyValue === null) {
-        continue;
-      }
-      this.tablePolicyByTableId.set(tableId, policyValue);
-    }
-  },
-
-  /**
-   * Seed known partition sizes from current cache rows.
-   * @param {Object} cache
-   * @private
-   */
-  seedPartitionMetricsCache(cache) {
-    this.partitionSizeByPartitionId.clear();
-    const partitionRows = cache.getAll(TABLES.PARTITIONS);
-    if (!Array.isArray(partitionRows)) {
-      return;
-    }
-    for (const row of partitionRows) {
-      const partitionId = this.resolvePartitionId(row);
-      const partitionSize = this.resolvePartitionSizeValue(row);
-      if (!partitionId || partitionSize === null) {
-        continue;
-      }
-      this.partitionSizeByPartitionId.set(partitionId, partitionSize);
-    }
-  },
-
-  resolveTableId,
-  resolveTablePolicyValue,
-  resolvePartitionId,
-  resolvePartitionSizeValue,
-
-  /**
    * Handle system cache change notifications.
    * @param {string} tableName
    * @param {string} operation
    * @param {Object} record
-   * @private
    */
   onSystemTableCacheChange(tableName, operation, record) {
     if (
@@ -221,131 +312,24 @@ const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
       return;
     }
     if (tableName === TABLES.TABLES) {
-      this.handleTablePolicyCacheChange(operation, record);
-      this.requestOutstandingSplitProposalEvaluation(record, null);
+      handleTablePolicyCacheChange(this, operation, record);
+      requestOutstandingSplitProposalEvaluation(this, record, null);
       return;
     }
     if (tableName === TABLES.PARTITIONS) {
-      this.handlePartitionMetricsCacheChange(operation, record);
-      this.requestOutstandingSplitProposalEvaluation(
-        this.systemCache?.get?.(TABLES.TABLES, this.resolveTableId(record)),
-        this.resolvePartitionId(record),
+      handlePartitionMetricsCacheChange(this, operation, record);
+      requestOutstandingSplitProposalEvaluation(
+        this,
+        this.systemCache?.get?.(TABLES.TABLES, resolveTableId(record)),
+        resolvePartitionId(record),
       );
     }
-  },
-
-  /**
-   * Wake the split/merge manager on the events that change an outstanding
-   * durable split proposal: the tables-row write of the proposal itself
-   * (sourcePartitionId null), and any row change of the proposal's source
-   * partition (its leader row becoming routable / changing hands).
-   * @param {Object|null} tableRow - The tables row.
-   * @param {string|null} sourcePartitionId - Changed partition, or null.
-   * @return {void}
-   * @private
-   */
-  requestOutstandingSplitProposalEvaluation(tableRow, sourcePartitionId) {
-    const proposal = describeOutstandingSplitProposal(
-      parseTablePartitionTransition(tableRow),
-      {tableId: this.resolveTableId(tableRow), nowMs: Date.now()},
-    );
-    if (!proposal ||
-        (sourcePartitionId !== null &&
-          proposal.partitionId !== sourcePartitionId)) {
-      return;
-    }
-    this.requestSplitMergeEvaluation({
-      reasonCode: SPLIT_MERGE_REASON.OUTSTANDING_SPLIT_PROPOSAL,
-      partitionId: proposal.partitionId,
-    });
-  },
-
-  /**
-   * Handle split/merge trigger decisions for table policy cache changes.
-   * @param {string} operation
-   * @param {Object} record
-   * @private
-   */
-  handleTablePolicyCacheChange(operation, record) {
-    const tableId = this.resolveTableId(record);
-    const policyValue = this.resolveTablePolicyValue(record);
-    if (!tableId || policyValue === null) {
-      return;
-    }
-    const previousPolicyValue = this.tablePolicyByTableId.get(tableId);
-    this.tablePolicyByTableId.set(tableId, policyValue);
-    if (previousPolicyValue === policyValue) {
-      return;
-    }
-    this.logger.debug(QUERY_LOG_MSG.TABLE_POLICY_CHANGE_TRIGGER_SPLIT_EVAL, {
-      tableId,
-      operation,
-    });
-    this.requestSplitMergeEvaluation({
-      reasonCode: TABLE_CREATION_SERVICE_LITERAL.TABLE_POLICY_CHANGED,
-    });
-  },
-
-  /**
-   * Handle split/merge trigger decisions for partition size cache changes.
-   * @param {string} operation
-   * @param {Object} record
-   * @private
-   */
-  handlePartitionMetricsCacheChange(operation, record) {
-    const partitionId = this.resolvePartitionId(record);
-    const partitionSize = this.resolvePartitionSizeValue(record);
-    if (!partitionId || partitionSize === null) {
-      return;
-    }
-    const previousPartitionSize =
-      this.partitionSizeByPartitionId.get(partitionId);
-    this.partitionSizeByPartitionId.set(partitionId, partitionSize);
-    if (previousPartitionSize === partitionSize) {
-      return;
-    }
-    this.logger.debug(
-      QUERY_LOG_MSG.TABLE_PARTITION_SIZE_CHANGE_TRIGGER_SPLIT_EVAL,
-      {
-        partitionId,
-        operation,
-        previousPartitionSize,
-        partitionSize,
-      },
-    );
-    this.requestSplitMergeEvaluation({
-      reasonCode: TABLE_CREATION_SERVICE_LITERAL.PARTITION_SIZE_CHANGED,
-      partitionId,
-    });
-  },
-
-  /**
-   * Request split/merge evaluation through the manager's canonical trigger
-   * path. Falls back to direct evaluation when the manager does not expose
-   * the coalesced request API yet.
-   * @param {Object} [context]
-   * @private
-   */
-  requestSplitMergeEvaluation(context = {}) {
-    const manager = this.partitionSplitMergeManager;
-    if (!manager) {
-      return;
-    }
-    if (
-      typeof manager.requestEvaluation ===
-      TABLE_CREATION_SERVICE_LITERAL.FUNCTION
-    ) {
-      manager.requestEvaluation(context);
-      return;
-    }
-    void this.evaluateSplitMergeLifecycle();
   },
 
   /**
    * Trigger policy-driven split/merge evaluation after table lifecycle
    * changes.
    * @return {Promise<void>}
-   * @private
    */
   async evaluateSplitMergeLifecycle() {
     const manager = this.partitionSplitMergeManager;
@@ -366,24 +350,7 @@ const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
   },
 
   /**
-   * Start periodic split/merge evaluation when supported by the manager.
-   * @private
-   */
-  startPeriodicSplitMergeEvaluation() {
-    const manager = this.partitionSplitMergeManager;
-    if (
-      !manager ||
-      typeof manager.startPeriodicEvaluation !==
-        TABLE_CREATION_SERVICE_LITERAL.FUNCTION
-    ) {
-      return;
-    }
-    manager.startPeriodicEvaluation();
-  },
-
-  /**
    * Stop periodic split/merge evaluation when supported by the manager.
-   * @private
    */
   stopPeriodicSplitMergeEvaluation() {
     const manager = this.partitionSplitMergeManager;
@@ -410,4 +377,7 @@ function defineTableCreationSplitMergeCoordination(serviceClass) {
   }
 }
 
-export {defineTableCreationSplitMergeCoordination};
+export {
+  assertCallableCollaboratorMethod,
+  defineTableCreationSplitMergeCoordination,
+};

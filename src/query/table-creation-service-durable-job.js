@@ -35,62 +35,57 @@ async function awaitCreateTableProjection(committed, abortSignal) {
   }
 }
 
-const TABLE_CREATION_DURABLE_JOB_METHODS = Object.freeze({
-  executeDurableSchemaProvisioningJob(ast, job, onMetadataCommitted = null) {
-    return this.executeCreateTableProvisioning(ast, {
-      onMetadataCommitted,
-      tableId: job.tableId,
-      partitionId: job.partitionId,
-      partitions: job.partitions || null,
-      globalIndex: job.globalIndex || null,
-      schemaJobId: job.jobId,
-      schemaOwnerFenceToken: job.ownerFenceToken,
-      assertProvisioningOwnership: job.assertOwnership,
-      timeoutBudget: null,
-      cancellationToken: this.schemaProvisioningCancellationToken,
-    });
-  },
-
-  async createTable(ast, options = {}) {
-    validateUserTableCreateIntent(ast);
-    let committed = null;
-    const result = await this.schemaProvisioningJobOwner.execute(
-      ast,
-      {
-        namespace: options.namespace,
-        timeoutBudget: options.timeoutBudget,
-      },
-      (job) => this.executeDurableSchemaProvisioningJob(ast, job,
-        (gateway, positions) => {
-          committed = {gateway, positions};
-        }),
-    );
-    if (
-      result?.provisioningDeadlineExpired !== true &&
-      result?.contractState !== OWNER_CONTRACT_STATE.PENDING
-    ) {
-      await awaitCreateTableProjection(committed, options.abortSignal);
-    }
-    return result;
-  },
-
-  resumeDurableProvisioningJobs() {
-    return this.schemaProvisioningJobOwner.resumeNonterminal(
-      (job) => this.executeDurableSchemaProvisioningJob(job.ast, job),
-    );
-  },
-});
-
-function defineTableCreationDurableJobMethod(serviceClass) {
-  for (const [methodName, method] of Object.entries(
-    TABLE_CREATION_DURABLE_JOB_METHODS,
-  )) {
-    Object.defineProperty(serviceClass.prototype, methodName, {
-      configurable: true,
-      value: method,
-      writable: true,
-    });
-  }
+function executeDurableSchemaProvisioningJob(
+  service,
+  ast,
+  job,
+  onMetadataCommitted = null,
+) {
+  return service.executeCreateTableProvisioning(ast, {
+    onMetadataCommitted,
+    tableId: job.tableId,
+    partitionId: job.partitionId,
+    partitions: job.partitions || null,
+    globalIndex: job.globalIndex || null,
+    schemaJobId: job.jobId,
+    schemaOwnerFenceToken: job.ownerFenceToken,
+    assertProvisioningOwnership: job.assertOwnership,
+    timeoutBudget: null,
+    cancellationToken: service.schemaProvisioningCancellationToken,
+  });
 }
 
-export {defineTableCreationDurableJobMethod};
+async function createTable(service, ast, options = {}) {
+  validateUserTableCreateIntent(ast);
+  let committed = null;
+  const result = await service.schemaProvisioningJobOwner.execute(
+    ast,
+    {
+      namespace: options.namespace,
+      timeoutBudget: options.timeoutBudget,
+    },
+    (job) => service.executeDurableSchemaProvisioningJob(ast, job,
+      (gateway, positions) => {
+        committed = {gateway, positions};
+      }),
+  );
+  if (
+    result?.provisioningDeadlineExpired !== true &&
+    result?.contractState !== OWNER_CONTRACT_STATE.PENDING
+  ) {
+    await awaitCreateTableProjection(committed, options.abortSignal);
+  }
+  return result;
+}
+
+function resumeDurableProvisioningJobs(service) {
+  return service.schemaProvisioningJobOwner.resumeNonterminal(
+    (job) => service.executeDurableSchemaProvisioningJob(job.ast, job),
+  );
+}
+
+export {
+  createTable,
+  executeDurableSchemaProvisioningJob,
+  resumeDurableProvisioningJobs,
+};

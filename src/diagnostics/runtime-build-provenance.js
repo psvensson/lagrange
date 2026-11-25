@@ -59,7 +59,6 @@ async function contentFacts(moduleDirectory) {
   const artifact = isSea() ? process.execPath : path.join(root, MAIN_BUNDLE);
   await stat(artifact);
   return Object.freeze({sourceDigest: manifest.sourceDigest,
-    shortSourceFingerprint: manifest.shortSourceFingerprint ?? null,
     manifestDigest: createHash(DIGEST).update(manifestBytes).digest(ENCODING),
     dependencyDigest: await measurePackagedDependencies(root),
     artifactDigest: await digestFile(artifact)});

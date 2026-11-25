@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {CLUSTER_ID_CONFIG_KEY} from '../../src/bootstrap/cluster-identity-constants.js';
@@ -103,6 +104,10 @@ test('Constants, reason codes, contracts, and validator helpers', async (t) => {
   );
   t.equal(ownerComputeDigest, computeCanonicalOperationDigest);
   t.equal(ownerValidateRequest, validateManagementV1OperationRequest);
+  const packageJson = JSON.parse(
+    fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+  );
+  t.equal(C.DEFAULT_RELEASE_VERSION, packageJson.version);
 });
 
 // Historical rows can carry a safety obligation without admitting forward

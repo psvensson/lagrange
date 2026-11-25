@@ -1063,7 +1063,7 @@ test('CREATE fails closed when durable intent persistence is unavailable',
   async (t) => {
     const service = new TableCreationService({
       systemCache: {find: () => null, getAll: () => []},
-      controlPlaneSystemTableGateway: {},
+      controlPlaneSystemTableGateway: null,
     });
     await t.rejects(
       service.createTable(createAst()),

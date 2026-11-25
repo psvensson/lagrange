@@ -43,28 +43,45 @@ import {
   FAILURE_SIGNAL_VALUE_SEPARATOR,
 } from './failure-bundle-classification-constants.js';
 
+const stringTrim = Function.call.bind(String.prototype.trim);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+
+function isPublicationDebtOpen({
+  pendingAckBlocked,
+  publicationNodeBlocked,
+  missingActiveNodeBlocked,
+  publicationPending,
+}) {
+  return (
+    pendingAckBlocked ||
+    publicationNodeBlocked ||
+    missingActiveNodeBlocked ||
+    publicationPending
+  );
+}
+
 function buildPublicationOwnerConvergenceBlockerEvidence({
   publicationConvergence,
   hasStartupReadinessBlocker,
   hasBlockingClosureRecord,
   hasPriorityRecoveryOwnerBlocker,
 }) {
+  const convergence = publicationConvergence ?? {};
   const missingActiveNodeBlocked =
     hasPublicationMissingActiveNodeBlocker(publicationConvergence);
   const pendingAckBlocked =
-    normalizeNonNegativeCount(publicationConvergence?.pendingAckCount) >
-    ZERO;
+    normalizeNonNegativeCount(convergence.pendingAckCount) > ZERO;
   const publicationNodeBlocked =
-    normalizeNonNegativeCount(publicationConvergence?.blockedNodeCount) >
-    ZERO;
+    normalizeNonNegativeCount(convergence.blockedNodeCount) > ZERO;
   const publicationPending =
-    publicationConvergence?.publicationPending === true &&
+    convergence.publicationPending === true &&
     missingActiveNodeBlocked !== true;
-  const publicationDebtOpen =
-    pendingAckBlocked ||
-    publicationNodeBlocked ||
-    missingActiveNodeBlocked ||
-    publicationPending;
+  const publicationDebtOpen = isPublicationDebtOpen({
+    pendingAckBlocked,
+    publicationNodeBlocked,
+    missingActiveNodeBlocked,
+    publicationPending,
+  });
   const prioritySpreadPendingBlocked =
     hasActiveGatePrioritySpreadPendingBlocker(publicationConvergence) &&
     hasPriorityRecoveryOwnerBlocker !== true;
@@ -212,6 +229,20 @@ function resolveActiveGateProgressClasses(publicationConvergence) {
       null;
 }
 
+function findFirstNonEmptySemanticStateKey(partitionIdsBySemanticState) {
+  if (!isRecord(partitionIdsBySemanticState)) {
+    return null;
+  }
+  for (const [semanticStateId, partitionIds] of Object.entries(
+    partitionIdsBySemanticState,
+  )) {
+    if (normalizeDistinctStringArray(partitionIds).length > ZERO) {
+      return semanticStateId;
+    }
+  }
+  return null;
+}
+
 function resolvePriorityRecoverySemanticStateSignal({
   publicationConvergence,
   dominantProgressWitness,
@@ -236,19 +267,13 @@ function resolvePriorityRecoverySemanticStateSignal({
   if (progressSemanticStateId) {
     return progressSemanticStateId;
   }
-  const partitionIdsBySemanticState = isRecord(
-    activeGateProgressClasses?.partitionIdsBySemanticState,
-  ) ?
-    activeGateProgressClasses.partitionIdsBySemanticState :
-    {};
-  for (const [semanticStateId, partitionIds] of Object.entries(
-    partitionIdsBySemanticState,
-  )) {
-    if (normalizeDistinctStringArray(partitionIds).length > ZERO) {
-      return semanticStateId;
-    }
-  }
-  return dominantProgressWitness?.semanticStateId || null;
+  return (
+    findFirstNonEmptySemanticStateKey(
+      activeGateProgressClasses?.partitionIdsBySemanticState,
+    ) ||
+    dominantProgressWitness?.semanticStateId ||
+    null
+  );
 }
 
 function resolvePriorityRecoveryProgressClassSignal({
@@ -277,53 +302,42 @@ function resolvePriorityRecoveryProgressClassSignal({
   );
 }
 
+function resolvePartitionIdFromPrimaryOrFallbackMap(
+  primaryMap,
+  fallbackMap,
+  key,
+) {
+  return (
+    resolvePriorityRecoveryPartitionIdFromMap(primaryMap, key) ||
+    resolveFirstPriorityRecoveryPartitionIdFromMap(primaryMap) ||
+    resolvePriorityRecoveryPartitionIdFromMap(fallbackMap, key) ||
+    null
+  );
+}
+
 function resolvePriorityRecoveryMappedPartitionSignal({
   publicationConvergence,
   dominantProgressWitness,
   progressClassId,
   semanticStateId,
 }) {
-  const directClassPartitionId = resolvePriorityRecoveryPartitionIdFromMap(
-    publicationConvergence?.priorityRecoveryBlockerPartitionIdsByReason,
-    progressClassId,
-  );
-  if (directClassPartitionId) {
-    return directClassPartitionId;
-  }
-  const directMappedClassPartitionId =
-    resolveFirstPriorityRecoveryPartitionIdFromMap(
-      publicationConvergence?.priorityRecoveryBlockerPartitionIdsByReason,
-    );
-  if (directMappedClassPartitionId) {
-    return directMappedClassPartitionId;
-  }
+  const convergence = publicationConvergence ?? {};
   const activeGateProgressClasses =
-    resolveActiveGateProgressClasses(publicationConvergence);
-  const progressClassPartitionId = resolvePriorityRecoveryPartitionIdFromMap(
-    activeGateProgressClasses?.partitionIdsByClass,
+    resolveActiveGateProgressClasses(publicationConvergence) ?? {};
+  const classPartitionId = resolvePartitionIdFromPrimaryOrFallbackMap(
+    convergence.priorityRecoveryBlockerPartitionIdsByReason,
+    activeGateProgressClasses.partitionIdsByClass,
     progressClassId,
   );
-  if (progressClassPartitionId) {
-    return progressClassPartitionId;
+  if (classPartitionId) {
+    return classPartitionId;
   }
-  const directSemanticPartitionId = resolvePriorityRecoveryPartitionIdFromMap(
-    publicationConvergence?.priorityRecoveryPartitionIdsBySemanticState,
+  const semanticPartitionId = resolvePartitionIdFromPrimaryOrFallbackMap(
+    convergence.priorityRecoveryPartitionIdsBySemanticState,
+    activeGateProgressClasses.partitionIdsBySemanticState,
     semanticStateId,
   );
-  if (directSemanticPartitionId) {
-    return directSemanticPartitionId;
-  }
-  const directMappedSemanticPartitionId =
-    resolveFirstPriorityRecoveryPartitionIdFromMap(
-      publicationConvergence?.priorityRecoveryPartitionIdsBySemanticState,
-    );
-  if (directMappedSemanticPartitionId) {
-    return directMappedSemanticPartitionId;
-  }
-  return resolvePriorityRecoveryPartitionIdFromMap(
-    activeGateProgressClasses?.partitionIdsBySemanticState,
-    semanticStateId,
-  ) || dominantProgressWitness?.partitionId || null;
+  return semanticPartitionId || dominantProgressWitness?.partitionId || null;
 }
 
 function resolvePriorityRecoveryBlockedPartitionSignal({
@@ -341,36 +355,29 @@ function resolvePriorityRecoveryBlockedPartitionSignal({
   if (mappedPartitionId) {
     return mappedPartitionId;
   }
+  const convergence = publicationConvergence ?? {};
   const directPartitionId =
     resolveFirstDistinctSignalValue(
-      publicationConvergence?.priorityRecoveryUnresolvedPartitionIds,
+      convergence.priorityRecoveryUnresolvedPartitionIds,
     ) ||
     resolveFirstDistinctSignalValue(
-      publicationConvergence?.priorityRecoveryBlockedPartitionIds,
+      convergence.priorityRecoveryBlockedPartitionIds,
     );
   if (directPartitionId) {
     return directPartitionId;
   }
   const activeGateProgressClasses =
-    resolveActiveGateProgressClasses(publicationConvergence);
-  const progressPartitionId = resolveFirstDistinctSignalValue(
-    activeGateProgressClasses?.blockedPartitionIds,
+    resolveActiveGateProgressClasses(publicationConvergence) ?? {};
+  return (
+    resolveFirstDistinctSignalValue(
+      activeGateProgressClasses.blockedPartitionIds,
+    ) ||
+    resolveFirstPriorityRecoveryPartitionIdFromMap(
+      activeGateProgressClasses.partitionIdsBySemanticState,
+    ) ||
+    dominantProgressWitness?.partitionId ||
+    null
   );
-  if (progressPartitionId) {
-    return progressPartitionId;
-  }
-  const partitionIdsBySemanticState = isRecord(
-    activeGateProgressClasses?.partitionIdsBySemanticState,
-  ) ?
-    activeGateProgressClasses.partitionIdsBySemanticState :
-    {};
-  for (const partitionIds of Object.values(partitionIdsBySemanticState)) {
-    const mappedPartitionId = resolveFirstDistinctSignalValue(partitionIds);
-    if (mappedPartitionId) {
-      return mappedPartitionId;
-    }
-  }
-  return dominantProgressWitness?.partitionId || null;
 }
 
 function resolvePriorityRecoveryUnresolvedPartitionSignal({
@@ -400,6 +407,41 @@ function resolvePriorityRecoveryUnresolvedPartitionSignal({
   return resolveFirstDistinctSignalValue(unresolvedPartitionIds);
 }
 
+function resolveReadinessPriorityPartitionSummary(
+  details,
+  publicationRecoveryGate,
+) {
+  if (isRecord(details.priorityPartitionSummary)) {
+    return details.priorityPartitionSummary;
+  }
+  if (isRecord(publicationRecoveryGate?.priorityPartitionSummary)) {
+    return publicationRecoveryGate.priorityPartitionSummary;
+  }
+  return null;
+}
+
+function buildReadinessPriorityRecoveryObservationMaps(
+  priorityRecoveryObservation,
+) {
+  return {
+    blockerPartitionIdsByReason: isRecord(
+      priorityRecoveryObservation?.priorityRecoveryBlockerPartitionIdsByReason,
+    ) ?
+      priorityRecoveryObservation.priorityRecoveryBlockerPartitionIdsByReason :
+      null,
+    partitionIdsBySemanticState: isRecord(
+      priorityRecoveryObservation?.priorityRecoveryPartitionIdsBySemanticState,
+    ) ?
+      priorityRecoveryObservation.priorityRecoveryPartitionIdsBySemanticState :
+      null,
+    partitionWitnesses: Array.isArray(
+      priorityRecoveryObservation?.priorityRecoveryPartitionWitnesses,
+    ) ?
+      priorityRecoveryObservation.priorityRecoveryPartitionWitnesses :
+      [],
+  };
+}
+
 function buildReadinessPriorityRecoveryBlockerEvidence({
   nodeId,
   reason,
@@ -410,51 +452,47 @@ function buildReadinessPriorityRecoveryBlockerEvidence({
   }
   const publicationRecoveryGate = isRecord(details.publicationRecoveryGate) ?
     details.publicationRecoveryGate :
-    null;
+    {};
   const priorityRecoveryObservation = isRecord(
     details.priorityRecoveryObservation,
   ) ?
     details.priorityRecoveryObservation :
-    null;
-  const priorityPartitionSummary =
-    isRecord(details.priorityPartitionSummary) ?
-      details.priorityPartitionSummary :
-      isRecord(publicationRecoveryGate?.priorityPartitionSummary) ?
-        publicationRecoveryGate.priorityPartitionSummary :
-        null;
+    {};
+  const priorityPartitionSummary = resolveReadinessPriorityPartitionSummary(
+    details,
+    publicationRecoveryGate,
+  );
   const closureWitness = isRecord(
-    publicationRecoveryGate?.priorityRecoveryClosureWitness,
+    publicationRecoveryGate.priorityRecoveryClosureWitness,
   ) ?
     publicationRecoveryGate.priorityRecoveryClosureWitness :
-    null;
+    {};
   const blockedPartitionIds = normalizeDistinctStringArray([
     ...normalizeDistinctStringArray(
-      priorityRecoveryObservation?.priorityRecoveryBlockedPartitionIds,
+      priorityRecoveryObservation.priorityRecoveryBlockedPartitionIds,
     ),
-    ...normalizeDistinctStringArray(closureWitness?.blockedPartitionIds),
+    ...normalizeDistinctStringArray(closureWitness.blockedPartitionIds),
     ...collectBlockedPartitionIdsFromSummary(priorityPartitionSummary),
   ]);
   const unresolvedPartitionIds = normalizeDistinctStringArray([
     ...normalizeDistinctStringArray(
-      priorityRecoveryObservation?.priorityRecoveryUnresolvedPartitionIds,
+      priorityRecoveryObservation.priorityRecoveryUnresolvedPartitionIds,
     ),
-    ...normalizeDistinctStringArray(closureWitness?.blockedPartitionIds),
+    ...normalizeDistinctStringArray(closureWitness.blockedPartitionIds),
   ]);
   const progressClassIds = normalizeDistinctStringArray(
-    priorityRecoveryObservation?.priorityRecoveryProgressClassIds,
+    priorityRecoveryObservation.priorityRecoveryProgressClassIds,
   );
   const unresolvedSemanticStateIds = normalizeDistinctStringArray([
     ...normalizeDistinctStringArray(
-      priorityRecoveryObservation?.priorityRecoverySemanticStateIds,
+      priorityRecoveryObservation.priorityRecoverySemanticStateIds,
     ),
-    ...normalizeDistinctStringArray(closureWitness?.unresolvedSemanticStateIds),
+    ...normalizeDistinctStringArray(closureWitness.unresolvedSemanticStateIds),
   ]);
   const reasonCodes = normalizeDistinctStringArray([
     ...normalizeDistinctStringArray(details.reasonCodes),
-    ...normalizeDistinctStringArray(
-      details.publicationGateReasonCodes,
-    ),
-    ...normalizeDistinctStringArray(publicationRecoveryGate?.reasonCodes),
+    ...normalizeDistinctStringArray(details.publicationGateReasonCodes),
+    ...normalizeDistinctStringArray(publicationRecoveryGate.reasonCodes),
   ]);
   if (
     blockedPartitionIds.length === ZERO &&
@@ -471,21 +509,9 @@ function buildReadinessPriorityRecoveryBlockerEvidence({
     unresolvedPartitionIds,
     progressClassIds,
     unresolvedSemanticStateIds,
-    blockerPartitionIdsByReason: isRecord(
-      priorityRecoveryObservation?.priorityRecoveryBlockerPartitionIdsByReason,
-    ) ?
-      priorityRecoveryObservation.priorityRecoveryBlockerPartitionIdsByReason :
-      null,
-    partitionIdsBySemanticState: isRecord(
-      priorityRecoveryObservation?.priorityRecoveryPartitionIdsBySemanticState,
-    ) ?
-      priorityRecoveryObservation.priorityRecoveryPartitionIdsBySemanticState :
-      null,
-    partitionWitnesses: Array.isArray(
-      priorityRecoveryObservation?.priorityRecoveryPartitionWitnesses,
-    ) ?
-      priorityRecoveryObservation.priorityRecoveryPartitionWitnesses :
-      [],
+    ...buildReadinessPriorityRecoveryObservationMaps(
+      priorityRecoveryObservation,
+    ),
     reasonCodes,
   };
 }
@@ -550,26 +576,27 @@ function hasPriorityRecoveryProgressBlocker(publicationConvergence) {
   );
 }
 
-function appendPriorityRecoveryProgressSignals({
+function appendPrefixedSignalIfPresent(signals, prefix, value) {
+  if (typeof value === 'string' && value.length > ZERO) {
+    signals.push(prefix + value);
+  }
+}
+
+function appendBasePublicationConvergenceSignals(
   signals,
   publicationConvergence,
-  dominantProgressWitness,
-}) {
+) {
   signals.push(
     FAILURE_SIGNAL_PENDING_ACK_COUNT_PREFIX +
       String(publicationConvergence.pendingAckCount),
     FAILURE_SIGNAL_BLOCKED_NODE_COUNT_PREFIX +
       String(publicationConvergence.blockedNodeCount),
   );
-  if (
-    typeof publicationConvergence.recoveryProtocolState === 'string' &&
-    publicationConvergence.recoveryProtocolState.length > ZERO
-  ) {
-    signals.push(
-      FAILURE_SIGNAL_RECOVERY_PROTOCOL_STATE_PREFIX +
-        publicationConvergence.recoveryProtocolState,
-    );
-  }
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_RECOVERY_PROTOCOL_STATE_PREFIX,
+    publicationConvergence.recoveryProtocolState,
+  );
   if (publicationConvergence.prioritySpreadPending === true) {
     signals.push(FAILURE_SIGNAL_PRIORITY_SPREAD_PENDING);
   }
@@ -604,73 +631,79 @@ function appendPriorityRecoveryProgressSignals({
         ),
     );
   }
+}
+
+function appendWitnessOwnershipSignals(signals, dominantProgressWitness) {
+  const witness = dominantProgressWitness ?? {};
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_PRIORITY_RECOVERY_OWNER_PREFIX,
+    witness.currentOwner,
+  );
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_PRIORITY_RECOVERY_BOUNDARY_PREFIX,
+    witness.blockingBoundary,
+  );
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_PRIORITY_RECOVERY_WAIT_MODE_PREFIX,
+    witness.waitMode,
+  );
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_PRIORITY_RECOVERY_NEXT_ACTION_PREFIX,
+    witness.nextRequiredAction,
+  );
+}
+
+function appendPriorityRecoveryProgressSignals({
+  signals,
+  publicationConvergence,
+  dominantProgressWitness,
+}) {
+  appendBasePublicationConvergenceSignals(signals, publicationConvergence);
   const progressClassId = resolvePriorityRecoveryProgressClassSignal({
     publicationConvergence,
     dominantProgressWitness,
   });
-  if (progressClassId) {
-    signals.push(
-      FAILURE_SIGNAL_PRIORITY_RECOVERY_PROGRESS_CLASS_PREFIX +
-        progressClassId,
-    );
-  }
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_PRIORITY_RECOVERY_PROGRESS_CLASS_PREFIX,
+    progressClassId,
+  );
   const semanticStateId = resolvePriorityRecoverySemanticStateSignal({
     publicationConvergence,
     dominantProgressWitness,
   });
-  if (semanticStateId) {
-    signals.push(
-      FAILURE_SIGNAL_PRIORITY_RECOVERY_SEMANTIC_STATE_PREFIX +
-        semanticStateId,
-    );
-  }
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_PRIORITY_RECOVERY_SEMANTIC_STATE_PREFIX,
+    semanticStateId,
+  );
   const blockedPartitionId = resolvePriorityRecoveryBlockedPartitionSignal({
     publicationConvergence,
     dominantProgressWitness,
     progressClassId,
     semanticStateId,
   });
-  if (blockedPartitionId) {
-    signals.push(
-      FAILURE_SIGNAL_PRIORITY_RECOVERY_PARTITION_PREFIX + blockedPartitionId,
-    );
-  }
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_PRIORITY_RECOVERY_PARTITION_PREFIX,
+    blockedPartitionId,
+  );
   const unresolvedPartitionId = resolvePriorityRecoveryUnresolvedPartitionSignal({
     publicationConvergence,
     dominantProgressWitness,
     progressClassId,
     semanticStateId,
   });
-  if (unresolvedPartitionId) {
-    signals.push(
-      FAILURE_SIGNAL_PRIORITY_RECOVERY_UNRESOLVED_PARTITION_PREFIX +
-        unresolvedPartitionId,
-    );
-  }
-  if (dominantProgressWitness?.currentOwner) {
-    signals.push(
-      FAILURE_SIGNAL_PRIORITY_RECOVERY_OWNER_PREFIX +
-        dominantProgressWitness.currentOwner,
-    );
-  }
-  if (dominantProgressWitness?.blockingBoundary) {
-    signals.push(
-      FAILURE_SIGNAL_PRIORITY_RECOVERY_BOUNDARY_PREFIX +
-        dominantProgressWitness.blockingBoundary,
-    );
-  }
-  if (dominantProgressWitness?.waitMode) {
-    signals.push(
-      FAILURE_SIGNAL_PRIORITY_RECOVERY_WAIT_MODE_PREFIX +
-        dominantProgressWitness.waitMode,
-    );
-  }
-  if (dominantProgressWitness?.nextRequiredAction) {
-    signals.push(
-      FAILURE_SIGNAL_PRIORITY_RECOVERY_NEXT_ACTION_PREFIX +
-        dominantProgressWitness.nextRequiredAction,
-    );
-  }
+  appendPrefixedSignalIfPresent(
+    signals,
+    FAILURE_SIGNAL_PRIORITY_RECOVERY_UNRESOLVED_PARTITION_PREFIX,
+    unresolvedPartitionId,
+  );
+  appendWitnessOwnershipSignals(signals, dominantProgressWitness);
 }
 
 function appendDominantPriorityRecoveryWitnessSignals(
@@ -730,6 +763,27 @@ function appendDominantPriorityRecoveryWitnessSignals(
   }
 }
 
+function matchesPriorityRecoveryPartitionWitness(
+  partitionWitness,
+  progressClassId,
+  semanticStateId,
+) {
+  const witness = partitionWitness ?? {};
+  const witnessSemanticStateId = stringTrim(
+    String(witness.semanticStateId || ''),
+  );
+  if (semanticStateId && witnessSemanticStateId === semanticStateId) {
+    return true;
+  }
+  const witnessProgressClassIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(witness.progressClassIds),
+    ...normalizeDistinctStringArray(witness.blockerReasonCodes),
+  ]);
+  return Boolean(
+    progressClassId && arrayIncludes(witnessProgressClassIds, progressClassId),
+  );
+}
+
 function resolveReadinessPriorityRecoveryWitnessPartitionSignal({
   readinessPriorityRecoveryBlocker,
   progressClassId,
@@ -740,35 +794,50 @@ function resolveReadinessPriorityRecoveryWitnessPartitionSignal({
   ) ?
     readinessPriorityRecoveryBlocker.partitionWitnesses :
     [];
+  let firstValidPartitionId = null;
   for (const partitionWitness of partitionWitnesses) {
     const partitionId = String(partitionWitness?.partitionId || '').trim();
     if (partitionId.length <= ZERO) {
       continue;
     }
-    const witnessSemanticStateId = String(
-      partitionWitness?.semanticStateId || '',
-    ).trim();
-    if (semanticStateId && witnessSemanticStateId === semanticStateId) {
-      return partitionId;
+    if (!firstValidPartitionId) {
+      firstValidPartitionId = partitionId;
     }
-    const witnessProgressClassIds = normalizeDistinctStringArray([
-      ...normalizeDistinctStringArray(partitionWitness?.progressClassIds),
-      ...normalizeDistinctStringArray(partitionWitness?.blockerReasonCodes),
-    ]);
     if (
-      progressClassId &&
-      witnessProgressClassIds.includes(progressClassId)
+      matchesPriorityRecoveryPartitionWitness(
+        partitionWitness,
+        progressClassId,
+        semanticStateId,
+      )
     ) {
       return partitionId;
     }
   }
-  for (const partitionWitness of partitionWitnesses) {
-    const partitionId = String(partitionWitness?.partitionId || '').trim();
-    if (partitionId.length > ZERO) {
-      return partitionId;
-    }
-  }
-  return null;
+  return firstValidPartitionId;
+}
+
+function resolveMappedReadinessPriorityRecoveryPartitionId(
+  blocker,
+  progressClassId,
+  semanticStateId,
+) {
+  return (
+    resolvePriorityRecoveryPartitionIdFromMap(
+      blocker.blockerPartitionIdsByReason,
+      progressClassId,
+    ) ||
+    resolveFirstPriorityRecoveryPartitionIdFromMap(
+      blocker.blockerPartitionIdsByReason,
+    ) ||
+    resolvePriorityRecoveryPartitionIdFromMap(
+      blocker.partitionIdsBySemanticState,
+      semanticStateId,
+    ) ||
+    resolveFirstPriorityRecoveryPartitionIdFromMap(
+      blocker.partitionIdsBySemanticState,
+    ) ||
+    null
+  );
 }
 
 function resolveReadinessPriorityRecoveryPartitionSignal({
@@ -776,50 +845,23 @@ function resolveReadinessPriorityRecoveryPartitionSignal({
   progressClassId,
   semanticStateId,
 }) {
-  const classPartitionId = resolvePriorityRecoveryPartitionIdFromMap(
-    readinessPriorityRecoveryBlocker?.blockerPartitionIdsByReason,
+  const blocker = readinessPriorityRecoveryBlocker ?? {};
+  const mappedPartitionId = resolveMappedReadinessPriorityRecoveryPartitionId(
+    blocker,
     progressClassId,
-  );
-  if (classPartitionId) {
-    return classPartitionId;
-  }
-  const mappedClassPartitionId = resolveFirstPriorityRecoveryPartitionIdFromMap(
-    readinessPriorityRecoveryBlocker?.blockerPartitionIdsByReason,
-  );
-  if (mappedClassPartitionId) {
-    return mappedClassPartitionId;
-  }
-  const semanticPartitionId = resolvePriorityRecoveryPartitionIdFromMap(
-    readinessPriorityRecoveryBlocker?.partitionIdsBySemanticState,
     semanticStateId,
   );
-  if (semanticPartitionId) {
-    return semanticPartitionId;
+  if (mappedPartitionId) {
+    return mappedPartitionId;
   }
-  const mappedSemanticPartitionId =
-    resolveFirstPriorityRecoveryPartitionIdFromMap(
-      readinessPriorityRecoveryBlocker?.partitionIdsBySemanticState,
-    );
-  if (mappedSemanticPartitionId) {
-    return mappedSemanticPartitionId;
-  }
-  const unresolvedPartitionId = resolveFirstDistinctSignalValue(
-    readinessPriorityRecoveryBlocker?.unresolvedPartitionIds,
-  );
-  if (unresolvedPartitionId) {
-    return unresolvedPartitionId;
-  }
-  const witnessPartitionId =
+  return (
+    resolveFirstDistinctSignalValue(blocker.unresolvedPartitionIds) ||
     resolveReadinessPriorityRecoveryWitnessPartitionSignal({
       readinessPriorityRecoveryBlocker,
       progressClassId,
       semanticStateId,
-    });
-  if (witnessPartitionId) {
-    return witnessPartitionId;
-  }
-  return resolveFirstDistinctSignalValue(
-    readinessPriorityRecoveryBlocker?.blockedPartitionIds,
+    }) ||
+    resolveFirstDistinctSignalValue(blocker.blockedPartitionIds)
   );
 }
 

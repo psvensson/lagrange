@@ -347,7 +347,7 @@ class ReplicaPlacementOwner {
     const cache = this.systemTableCache;
     const row = (isFunction(cache?.getShared) ?
       cache.getShared(TABLES.REPLICA_OPERATIONS, operationId) :
-      cache?.get?.(TABLES.REPLICA_OPERATIONS, operationId)) ??
+      null) ??
       readLedgerOperationRowById(this.ledgerPartitionService, operationId);
     if (row) this.seenRowSignatures.set(operationId, rowSignatureOf(row));
   }

@@ -218,6 +218,25 @@ export function loadManifest(root, manifestPath = PRIMARY_CLASS_MANIFEST_PATH) {
   return {ok: true, manifest: parsed, problems: []};
 }
 
+function collectManifestRuleDriftProblems(
+  root,
+  census,
+  seen,
+  validClasses,
+  classes,
+) {
+  const {classes: derived} = derivePrimaryClasses(root);
+  const driftProblems = [];
+  for (const testPath of census) {
+    if (seen.has(testPath) && validClasses.has(classes[testPath]) &&
+        derived[testPath] !== classes[testPath]) {
+      driftProblems.push(
+        `class drift for ${testPath}: manifest="${classes[testPath]}" rules="${derived[testPath]}"`);
+    }
+  }
+  return driftProblems;
+}
+
 // The fail-closed census: manifest vs live filesystem. Returns a list of
 // human-readable problems; an empty list means the manifest is the exact
 // primary-class census of the tree.
@@ -265,14 +284,15 @@ export function verifyManifest(root, manifest) {
 
   // Rule reproducibility: the stored class must be exactly what the rules
   // derive today. A hand-edited manifest entry fails closed here.
-  const {classes: derived} = derivePrimaryClasses(root);
-  for (const testPath of census) {
-    if (seen.has(testPath) && validClasses.has(classes[testPath]) &&
-        derived[testPath] !== classes[testPath]) {
-      problems.push(
-        `class drift for ${testPath}: manifest="${classes[testPath]}" rules="${derived[testPath]}"`);
-    }
-  }
+  problems.push(
+    ...collectManifestRuleDriftProblems(
+      root,
+      census,
+      seen,
+      validClasses,
+      classes,
+    ),
+  );
 
   const expectedDigest = manifestDigest(classes);
   if (manifest.digest !== expectedDigest) {

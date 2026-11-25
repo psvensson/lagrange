@@ -89,37 +89,67 @@ function isBenchmarkTableCreateTimeoutError(error) {
   return message.includes('timed out') || message.includes('deadline exceeded');
 }
 
+const RETRIABLE_BENCHMARK_TABLE_TIMEOUT_FRAGMENTS = Object.freeze([
+  'timed out waiting for partition leader service',
+  'timed out waiting for routable partition service',
+  'admin api query timed out for node',
+  'timed out waiting for partition service metadata',
+]);
+
+const RETRIABLE_BENCHMARK_TABLE_PROGRESS_FRAGMENTS = Object.freeze([
+  'unable to satisfy minimum routable provisioning cohort',
+  'control_plane_write_unhealthy',
+  'cluster_member_unhealthy',
+  'distributed operation failed due to participant failures',
+  'cannot start a transaction within a transaction',
+  'cannot commit - no transaction is active',
+  'transaction already active on this partition',
+  'no active service found for partition',
+  'no partitions available for table',
+  'connect econnrefused',
+  'connection refused',
+  BENCHMARK_TABLE_POLICY_OWNER_NOT_READY,
+]);
+
 function isRetriableBenchmarkTableProgressError(error) {
   const message = String(error?.message || error || '').toLowerCase();
   if (isBenchmarkTableCreateTimeoutError(error)) {
-    return (
-      message.includes('timed out waiting for partition leader service') ||
-      message.includes('timed out waiting for routable partition service') ||
-      message.includes('admin api query timed out for node') ||
-      message.includes('timed out waiting for partition service metadata')
+    return RETRIABLE_BENCHMARK_TABLE_TIMEOUT_FRAGMENTS.some((fragment) =>
+      message.includes(fragment),
     );
   }
   if (!message) {
     return false;
   }
+  if (message.includes('table') && message.includes('not found')) {
+    return true;
+  }
+  return RETRIABLE_BENCHMARK_TABLE_PROGRESS_FRAGMENTS.some((fragment) =>
+    message.includes(fragment),
+  );
+}
+
+function hasNonEmptyPartitionIds(partitionIds) {
   return (
-    message.includes(
-      'unable to satisfy minimum routable provisioning cohort',
-    ) ||
-    message.includes('control_plane_write_unhealthy') ||
-    message.includes('cluster_member_unhealthy') ||
-    message.includes(
-      'distributed operation failed due to participant failures',
-    ) ||
-    message.includes('cannot start a transaction within a transaction') ||
-    message.includes('cannot commit - no transaction is active') ||
-    message.includes('transaction already active on this partition') ||
-    message.includes('no active service found for partition') ||
-    message.includes('no partitions available for table') ||
-    (message.includes('table') && message.includes('not found')) ||
-    message.includes('connect econnrefused') ||
-    message.includes('connection refused') ||
-    message.includes(BENCHMARK_TABLE_POLICY_OWNER_NOT_READY)
+    Array.isArray(partitionIds) &&
+    partitionIds.some(
+      (partitionId) =>
+        typeof partitionId === 'string' && partitionId.length > ZERO,
+    )
+  );
+}
+
+function hasPositiveRowCount(section) {
+  return Number(section?.rowCount || ZERO) > ZERO;
+}
+
+function hasPartitionMetadataProgress(partitionsSection) {
+  if (!partitionsSection || typeof partitionsSection !== 'object') {
+    return false;
+  }
+  return (
+    hasPositiveRowCount(partitionsSection) ||
+    hasNonEmptyPartitionIds(partitionsSection.partitionIds)
   );
 }
 
@@ -127,20 +157,12 @@ function hasBenchmarkTableBootstrapProgress(metadataSnapshot) {
   if (!metadataSnapshot || typeof metadataSnapshot !== 'object') {
     return false;
   }
-  const tableRowCount = Number(metadataSnapshot?.tables?.rowCount || ZERO);
-  const partitionRowCount = Number(
-    metadataSnapshot?.partitions?.rowCount || ZERO,
-  );
-  const tableId = String(metadataSnapshot?.tableId || '').trim();
-  const partitionIds = Array.isArray(metadataSnapshot?.partitions?.partitionIds) ?
-    metadataSnapshot.partitions.partitionIds.filter(
-      (partitionId) =>
-        typeof partitionId === 'string' && partitionId.length > ZERO,
-    ) :
-    [];
+  const hasTableProgress =
+    hasPositiveRowCount(metadataSnapshot.tables) ||
+    String(metadataSnapshot.tableId || '').trim().length > ZERO;
   return (
-    (tableRowCount > ZERO || tableId.length > ZERO) &&
-    (partitionRowCount > ZERO || partitionIds.length > ZERO)
+    hasTableProgress &&
+    hasPartitionMetadataProgress(metadataSnapshot.partitions)
   );
 }
 
@@ -220,6 +242,14 @@ function createBenchmarkTableCreateAttempt(
   };
 }
 
+function normalizeStringOrNull(value) {
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeObjectOrNull(value) {
+  return value && typeof value === 'object' ? value : null;
+}
+
 function finalizeBenchmarkTableCreateAttempt(
   createAttempt,
   outcome,
@@ -229,16 +259,11 @@ function finalizeBenchmarkTableCreateAttempt(
   return {
     ...createAttempt,
     outcome,
-    isTimeout: error ? isBenchmarkTableCreateTimeoutError(error) : false,
+    isTimeout: Boolean(error && isBenchmarkTableCreateTimeoutError(error)),
     error: error ? String(error?.message || error) : null,
-    errorCode: typeof error?.code === 'string' ? error.code : null,
-    timeoutClass:
-      typeof error?.timeoutClass === 'string' ? error.timeoutClass : null,
-    timeoutClassification:
-      error?.timeoutClassification &&
-      typeof error.timeoutClassification === 'object' ?
-        error.timeoutClassification :
-        null,
+    errorCode: normalizeStringOrNull(error?.code),
+    timeoutClass: normalizeStringOrNull(error?.timeoutClass),
+    timeoutClassification: normalizeObjectOrNull(error?.timeoutClassification),
     completedAt,
     durationMs: Math.max(
       ZERO,
@@ -382,35 +407,31 @@ async function querySutTableId(nodeClient, systemTableReadNodes, tableName) {
   return tableMetadata.tableId;
 }
 
+function resolveFunctionOrDefault(fn, defaultFn = null) {
+  return typeof fn === 'function' ? fn : defaultFn;
+}
+
 function resolveScenarioOverrides(cluster) {
   const overrides = cluster?._scenarioOverrides?.postgresBaselineComparison;
   const hasInjectedLoadGenerator =
     typeof overrides?.createLoadGenerator === 'function';
-  const createPostgresPool =
-    typeof overrides?.createPostgresPool === 'function' ?
-      overrides.createPostgresPool :
-      (options) => new Pool(options);
-  const createLoadGenerator =
-    typeof overrides?.createLoadGenerator === 'function' ?
-      overrides.createLoadGenerator :
-      (nodes, options) => new LoadGenerator(nodes, options);
-  const getCdcTelemetryByNode =
-    typeof overrides?.getCdcTelemetryByNode === 'function' ?
-      overrides.getCdcTelemetryByNode :
-      null;
-  const phaseEventSink =
-    typeof overrides?.phaseEventSink === 'function' ?
-      overrides.phaseEventSink :
-      null;
   return {
-    createPostgresPool,
-    createLoadGenerator,
+    createPostgresPool: resolveFunctionOrDefault(
+      overrides?.createPostgresPool,
+      (options) => new Pool(options),
+    ),
+    createLoadGenerator: resolveFunctionOrDefault(
+      overrides?.createLoadGenerator,
+      (nodes, options) => new LoadGenerator(nodes, options),
+    ),
     semanticParityEnabled:
       hasInjectedLoadGenerator ?
         overrides?.semanticParityEnabled === true :
         true,
-    getCdcTelemetryByNode,
-    phaseEventSink,
+    getCdcTelemetryByNode: resolveFunctionOrDefault(
+      overrides?.getCdcTelemetryByNode,
+    ),
+    phaseEventSink: resolveFunctionOrDefault(overrides?.phaseEventSink),
     progressHeartbeatIntervalMs: resolveProgressHeartbeatIntervalMs(
       overrides?.progressHeartbeatIntervalMs,
     ),
@@ -525,19 +546,11 @@ function resolveNodeClientChannelPolicyOverrides(cluster) {
   return channelPolicies;
 }
 
-async function ensureSutBenchmarkTable(
-  nodeClient,
+function resolveBenchmarkTableCreateRetryBounds(
   systemTableReadNodes,
-  tableName,
   benchmarkConfig,
-  benchmarkTablePolicies,
-  options = {},
+  timing,
 ) {
-  const timing = resolveScenarioTiming(options.timing);
-  const createTableContext =
-    buildBenchmarkTableCreateNodeClientContext(benchmarkConfig);
-  const canonicalWriteNode =
-    resolveCanonicalSystemTableWriteNode(systemTableReadNodes);
   const createRetryTimeoutMs =
     Number.isInteger(benchmarkConfig?.readyTimeoutMs) &&
     benchmarkConfig.readyTimeoutMs > ZERO ?
@@ -557,11 +570,23 @@ async function ensureSutBenchmarkTable(
     benchmarkConfig.readyPollIntervalMs > ZERO ?
       benchmarkConfig.readyPollIntervalMs :
       BENCHMARK_DEFAULTS.readyPollIntervalMs;
-  const createRetryDeadlineMs = timing.now() + effectiveCreateRetryTimeoutMs;
-  let createAttempt = null;
-  let createResult;
+  return {
+    createRetryPollIntervalMs,
+    createRetryDeadlineMs: timing.now() + effectiveCreateRetryTimeoutMs,
+  };
+}
+
+async function createSutBenchmarkTableWithRetry({
+  nodeClient,
+  canonicalWriteNode,
+  tableName,
+  createTableContext,
+  createRetryDeadlineMs,
+  createRetryPollIntervalMs,
+  timing,
+}) {
   while (true) {
-    createAttempt = createBenchmarkTableCreateAttempt(
+    let createAttempt = createBenchmarkTableCreateAttempt(
       tableName,
       canonicalWriteNode.id,
       createTableContext,
@@ -578,10 +603,12 @@ async function ensureSutBenchmarkTable(
         BENCHMARK_TABLE_CREATE_OUTCOME_SUCCEEDED,
         null,
       );
-      createResult = {
-        nodeId: canonicalWriteNode.id,
+      return {
+        createAttempt,
+        createResult: {
+          nodeId: canonicalWriteNode.id,
+        },
       };
-      break;
     } catch (error) {
       createAttempt = await buildBenchmarkTableFailureAttempt({
         createAttempt,
@@ -590,14 +617,15 @@ async function ensureSutBenchmarkTable(
         tableName,
         error,
       });
-      const bootstrapProgressObserved = hasBenchmarkTableBootstrapProgress(
-        createAttempt?.metadataSnapshot,
-      );
-      if (bootstrapProgressObserved) {
-        createResult = {
-          nodeId: canonicalWriteNode.id,
+      if (
+        hasBenchmarkTableBootstrapProgress(createAttempt?.metadataSnapshot)
+      ) {
+        return {
+          createAttempt,
+          createResult: {
+            nodeId: canonicalWriteNode.id,
+          },
         };
-        break;
       }
       if (
         !isRetriableBenchmarkTableProgressError(error) ||
@@ -615,6 +643,38 @@ async function ensureSutBenchmarkTable(
       await timing.sleep(createRetryPollIntervalMs);
     }
   }
+}
+
+async function ensureSutBenchmarkTable(
+  nodeClient,
+  systemTableReadNodes,
+  tableName,
+  benchmarkConfig,
+  benchmarkTablePolicies,
+  options = {},
+) {
+  const timing = resolveScenarioTiming(options.timing);
+  const createTableContext =
+    buildBenchmarkTableCreateNodeClientContext(benchmarkConfig);
+  const canonicalWriteNode =
+    resolveCanonicalSystemTableWriteNode(systemTableReadNodes);
+  const {createRetryPollIntervalMs, createRetryDeadlineMs} =
+    resolveBenchmarkTableCreateRetryBounds(
+      systemTableReadNodes,
+      benchmarkConfig,
+      timing,
+    );
+  const created = await createSutBenchmarkTableWithRetry({
+    nodeClient,
+    canonicalWriteNode,
+    tableName,
+    createTableContext,
+    createRetryDeadlineMs,
+    createRetryPollIntervalMs,
+    timing,
+  });
+  let createAttempt = created.createAttempt;
+  const createResult = created.createResult;
 
   while (true) {
     try {
@@ -860,6 +920,59 @@ async function runBaselineSharedLoad({
   }
 }
 
+function buildLoadGeneratorTuningOptions({
+  nodeFailureThreshold,
+  nodeFailureCooldownMs,
+  loadQueryTimeoutMs,
+  loadNodeMaxInFlight,
+  maxPendingQueueDepth,
+  earlyRejectOnQueueFull,
+}) {
+  return {
+    ...(Number.isInteger(nodeFailureThreshold) && nodeFailureThreshold > ZERO ?
+      {nodeFailureThreshold} :
+      {}),
+    ...(Number.isInteger(nodeFailureCooldownMs) && nodeFailureCooldownMs > ZERO ?
+      {nodeFailureCooldownMs} :
+      {}),
+    ...(Number.isInteger(loadQueryTimeoutMs) && loadQueryTimeoutMs > ZERO ?
+      {queryTimeoutMs: loadQueryTimeoutMs} :
+      {}),
+    ...(Number.isInteger(loadNodeMaxInFlight) && loadNodeMaxInFlight > ZERO ?
+      {nodeMaxInFlight: loadNodeMaxInFlight} :
+      {}),
+    ...(Number.isInteger(maxPendingQueueDepth) && maxPendingQueueDepth >= ZERO ?
+      {maxPendingQueueDepth} :
+      {}),
+    ...(earlyRejectOnQueueFull === true ?
+      {earlyRejectOnQueueFull: true} :
+      {}),
+  };
+}
+
+function buildRoutedSutLoadNodes(
+  loadNodes,
+  nodeClient,
+  loadQueryTimeoutMs,
+  getRebalancingPressureMonitor,
+) {
+  const queryContext =
+    Number.isInteger(loadQueryTimeoutMs) && loadQueryTimeoutMs > ZERO ?
+      {timeoutMs: loadQueryTimeoutMs} :
+      {};
+  return loadNodes.map((node) => ({
+    id: node.id,
+    breakerOwner: LOAD_BREAKER_OWNER_NODE_CLIENT,
+    query: (sql) => {
+      const monitor = getRebalancingPressureMonitor();
+      if (monitor && typeof monitor.assertLoadNodeAdmitted === 'function') {
+        monitor.assertLoadNodeAdmitted(node.id);
+      }
+      return nodeClient.queryLoad(node, sql, [], queryContext);
+    },
+  }));
+}
+
 async function runSutSharedLoad({
   nodeClient,
   seedNode,
@@ -887,26 +1000,12 @@ async function runSutSharedLoad({
   semanticParityEnabled,
 }) {
   let rebalancingPressureMonitor = null;
-  const routedLoadNodes = loadNodes.map((node) => ({
-    id: node.id,
-    breakerOwner: LOAD_BREAKER_OWNER_NODE_CLIENT,
-    query: (sql) => {
-      if (
-        rebalancingPressureMonitor &&
-        typeof rebalancingPressureMonitor.assertLoadNodeAdmitted === 'function'
-      ) {
-        rebalancingPressureMonitor.assertLoadNodeAdmitted(node.id);
-      }
-      return nodeClient.queryLoad(
-        node,
-        sql,
-        [],
-        Number.isInteger(loadQueryTimeoutMs) && loadQueryTimeoutMs > ZERO ?
-          {timeoutMs: loadQueryTimeoutMs} :
-          {},
-      );
-    },
-  }));
+  const routedLoadNodes = buildRoutedSutLoadNodes(
+    loadNodes,
+    nodeClient,
+    loadQueryTimeoutMs,
+    () => rebalancingPressureMonitor,
+  );
   const loadGenerator = createLoadGenerator(routedLoadNodes, {
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
@@ -917,24 +1016,14 @@ async function runSutSharedLoad({
     sqlDialect: BENCHMARK_SQL_DIALECT.SQLITE,
     enforceSemanticOracle: semanticParityEnabled === true,
     trackAcknowledgedWrites: semanticParityEnabled === true,
-    ...(Number.isInteger(nodeFailureThreshold) && nodeFailureThreshold > ZERO ?
-      {nodeFailureThreshold} :
-      {}),
-    ...(Number.isInteger(nodeFailureCooldownMs) && nodeFailureCooldownMs > ZERO ?
-      {nodeFailureCooldownMs} :
-      {}),
-    ...(Number.isInteger(loadQueryTimeoutMs) && loadQueryTimeoutMs > ZERO ?
-      {queryTimeoutMs: loadQueryTimeoutMs} :
-      {}),
-    ...(Number.isInteger(loadNodeMaxInFlight) && loadNodeMaxInFlight > ZERO ?
-      {nodeMaxInFlight: loadNodeMaxInFlight} :
-      {}),
-    ...(Number.isInteger(maxPendingQueueDepth) && maxPendingQueueDepth >= ZERO ?
-      {maxPendingQueueDepth} :
-      {}),
-    ...(earlyRejectOnQueueFull === true ?
-      {earlyRejectOnQueueFull: true} :
-      {}),
+    ...buildLoadGeneratorTuningOptions({
+      nodeFailureThreshold,
+      nodeFailureCooldownMs,
+      loadQueryTimeoutMs,
+      loadNodeMaxInFlight,
+      maxPendingQueueDepth,
+      earlyRejectOnQueueFull,
+    }),
   });
   const loadRun = loadGenerator.start();
   const progressReporter = startLoadProgressReporter({
@@ -973,11 +1062,12 @@ async function runSutSharedLoad({
     loadError = error;
   } finally {
     progressReporter.stop();
+    const nodeIdStrings = loadNodes.map((node) => String(node?.id || ''));
     rebalancingPressure = rebalancingPressureMonitor ?
       await rebalancingPressureMonitor.stop() :
       buildLoadRebalancingPressureState({
-        monitoredNodeIds: loadNodes.map((node) => String(node?.id || '')),
-        admittedNodeIds: loadNodes.map((node) => String(node?.id || '')),
+        monitoredNodeIds: nodeIdStrings,
+        admittedNodeIds: nodeIdStrings,
       });
   }
   const criticalRebalancingState = buildRebalancingCriticalState(
@@ -1003,17 +1093,33 @@ async function runSutSharedLoad({
   };
 }
 
-async function attachSemanticParityReceipt({
-  loadRun,
-  metrics,
-  query,
-  tableName,
-  dialect,
-  enabled,
-}) {
-  if (enabled !== true) {
-    return metrics;
-  }
+function buildSemanticParityAccounting(metrics) {
+  const source = metrics && typeof metrics === 'object' ? metrics : {};
+  const rejectedByReason =
+    source.rejectedByReason && typeof source.rejectedByReason === 'object' ?
+      source.rejectedByReason :
+      {};
+  return {
+    offered: normalizeNonNegativeInteger(
+      source.offered ?? source.targetOperations,
+    ),
+    dispatched: normalizeNonNegativeInteger(source.dispatchedOperations),
+    correct: normalizeNonNegativeInteger(source.correct ?? source.success),
+    rejected: normalizeNonNegativeInteger(source.rejectedOperations),
+    timedOut: normalizeNonNegativeInteger(source.timedOut),
+    errored: normalizeNonNegativeInteger(source.errored),
+    queueOverflow: normalizeNonNegativeInteger(source.queueOverflow),
+    undispatched: normalizeNonNegativeInteger(source.undispatchedOperations),
+    cancelled: normalizeNonNegativeInteger(source.cancelled),
+    rejectedByReason: {
+      queueFull: normalizeNonNegativeInteger(rejectedByReason.queueFull),
+      flowControl: normalizeNonNegativeInteger(rejectedByReason.flowControl),
+      admission: normalizeNonNegativeInteger(rejectedByReason.admission),
+    },
+  };
+}
+
+function extractSemanticParityLoadRunEvidence(loadRun) {
   const execution =
     typeof loadRun?.getSemanticExecutionSnapshot === 'function' ?
       loadRun.getSemanticExecutionSnapshot() :
@@ -1025,34 +1131,27 @@ async function attachSemanticParityReceipt({
   if (!execution || execution.enforced !== true || !acknowledgedWrites) {
     throw new Error(BENCHMARK_SEMANTIC_RUNTIME_RECEIPT_MISSING);
   }
+  return {execution, acknowledgedWrites};
+}
+
+async function attachSemanticParityReceipt({
+  loadRun,
+  metrics,
+  query,
+  tableName,
+  dialect,
+  enabled,
+}) {
+  if (enabled !== true) {
+    return metrics;
+  }
+  const {execution, acknowledgedWrites} =
+    extractSemanticParityLoadRunEvidence(loadRun);
   const durability = await verifyBenchmarkAcknowledgedWrites({
     query,
     tableName,
     ids: acknowledgedWrites.ids,
   });
-  const rejectedByReason =
-    metrics?.rejectedByReason &&
-    typeof metrics.rejectedByReason === 'object' ?
-      metrics.rejectedByReason :
-      {};
-  const accounting = {
-    offered: normalizeNonNegativeInteger(
-      metrics?.offered ?? metrics?.targetOperations,
-    ),
-    dispatched: normalizeNonNegativeInteger(metrics?.dispatchedOperations),
-    correct: normalizeNonNegativeInteger(metrics?.correct ?? metrics?.success),
-    rejected: normalizeNonNegativeInteger(metrics?.rejectedOperations),
-    timedOut: normalizeNonNegativeInteger(metrics?.timedOut),
-    errored: normalizeNonNegativeInteger(metrics?.errored),
-    queueOverflow: normalizeNonNegativeInteger(metrics?.queueOverflow),
-    undispatched: normalizeNonNegativeInteger(metrics?.undispatchedOperations),
-    cancelled: normalizeNonNegativeInteger(metrics?.cancelled),
-    rejectedByReason: {
-      queueFull: normalizeNonNegativeInteger(rejectedByReason.queueFull),
-      flowControl: normalizeNonNegativeInteger(rejectedByReason.flowControl),
-      admission: normalizeNonNegativeInteger(rejectedByReason.admission),
-    },
-  };
   const semanticParity = buildBenchmarkSemanticReceipt({
     dialect,
     compiledOperations: execution.compiledOperations,
@@ -1060,7 +1159,7 @@ async function attachSemanticParityReceipt({
     successfulOperations: execution.successfulOperations,
     oracleFailures: execution.oracleFailures,
     resultSet: execution.resultSet,
-    accounting,
+    accounting: buildSemanticParityAccounting(metrics),
     durability,
   });
   if (semanticParity.status !== BENCHMARK_SEMANTIC_STATUS.PASS) {
@@ -1101,41 +1200,35 @@ function normalizeAdminQueryTraceTimestamp(value) {
   return Number.isFinite(value) ? Math.floor(value) : null;
 }
 
+function normalizeIntegerOrNull(value) {
+  return Number.isInteger(value) ? value : null;
+}
+
 function sanitizeAdminQueryTraceEntry(entry, fallbackNodeId) {
+  const source = entry && typeof entry === 'object' ? entry : {};
   const nodeId =
-    typeof entry?.nodeId === 'string' && entry.nodeId.length > ZERO ?
-      entry.nodeId :
+    typeof source.nodeId === 'string' && source.nodeId.length > ZERO ?
+      source.nodeId :
       fallbackNodeId;
   return {
     nodeId,
-    queryId: typeof entry?.queryId === 'string' ? entry.queryId : null,
-    lane: typeof entry?.lane === 'string' ? entry.lane : null,
-    requestType:
-      typeof entry?.requestType === 'string' ? entry.requestType : null,
-    operation: typeof entry?.operation === 'string' ? entry.operation : null,
-    statementPreview:
-      typeof entry?.statementPreview === 'string' ?
-        entry.statementPreview :
-        null,
-    statementFingerprint:
-      typeof entry?.statementFingerprint === 'string' ?
-        entry.statementFingerprint :
-        null,
-    timeoutMs: Number.isFinite(entry?.timeoutMs) ?
-      Math.floor(entry.timeoutMs) :
-      null,
-    startedAtMs: normalizeAdminQueryTraceTimestamp(entry?.startedAtMs),
-    socketReadyAtMs: normalizeAdminQueryTraceTimestamp(entry?.socketReadyAtMs),
-    sentAtMs: normalizeAdminQueryTraceTimestamp(entry?.sentAtMs),
-    resolvedAtMs: normalizeAdminQueryTraceTimestamp(entry?.resolvedAtMs),
-    timeoutAtMs: normalizeAdminQueryTraceTimestamp(entry?.timeoutAtMs),
-    erroredAtMs: normalizeAdminQueryTraceTimestamp(entry?.erroredAtMs),
-    durationMs: Number.isFinite(entry?.durationMs) ?
-      Math.floor(entry.durationMs) :
-      null,
-    rowCount: Number.isInteger(entry?.rowCount) ? entry.rowCount : null,
-    outcome: typeof entry?.outcome === 'string' ? entry.outcome : null,
-    error: typeof entry?.error === 'string' ? entry.error : null,
+    queryId: normalizeStringOrNull(source.queryId),
+    lane: normalizeStringOrNull(source.lane),
+    requestType: normalizeStringOrNull(source.requestType),
+    operation: normalizeStringOrNull(source.operation),
+    statementPreview: normalizeStringOrNull(source.statementPreview),
+    statementFingerprint: normalizeStringOrNull(source.statementFingerprint),
+    timeoutMs: normalizeAdminQueryTraceTimestamp(source.timeoutMs),
+    startedAtMs: normalizeAdminQueryTraceTimestamp(source.startedAtMs),
+    socketReadyAtMs: normalizeAdminQueryTraceTimestamp(source.socketReadyAtMs),
+    sentAtMs: normalizeAdminQueryTraceTimestamp(source.sentAtMs),
+    resolvedAtMs: normalizeAdminQueryTraceTimestamp(source.resolvedAtMs),
+    timeoutAtMs: normalizeAdminQueryTraceTimestamp(source.timeoutAtMs),
+    erroredAtMs: normalizeAdminQueryTraceTimestamp(source.erroredAtMs),
+    durationMs: normalizeAdminQueryTraceTimestamp(source.durationMs),
+    rowCount: normalizeIntegerOrNull(source.rowCount),
+    outcome: normalizeStringOrNull(source.outcome),
+    error: normalizeStringOrNull(source.error),
   };
 }
 

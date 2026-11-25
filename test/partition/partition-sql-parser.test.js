@@ -6,6 +6,7 @@ import {
   extractDataFromParameterizedSQL,
   extractDeleteDataFromSQL,
   extractInsertDataFromSQL,
+  extractInsertRowsFromSQL,
   extractUpdateDataFromSQL,
   hasSqlParameterPlaceholders,
 } from '../../src/partition/partition-sql-parser.js';
@@ -260,6 +261,75 @@ describe('partition-sql-parser', () => {
         config_key: 'probe.key',
         config_value: 'why?',
       },
+    );
+  });
+
+  it('extracts all rows from multi-tuple literal and parameterized INSERT/UPSERT', () => {
+    const literalRows = extractInsertRowsFromSQL(
+      'INSERT INTO config (config_key, config_value) VALUES (\'k1\', \'v1\'), (\'k2\', \'v2\')',
+      [],
+      'config',
+      null,
+      logger,
+    );
+    assert.deepStrictEqual(literalRows, [
+      {config_key: 'k1', config_value: 'v1'},
+      {config_key: 'k2', config_value: 'v2'},
+    ]);
+
+    const paramRows = extractInsertRowsFromSQL(
+      'INSERT OR REPLACE INTO config (config_key, config_value) VALUES (?, ?), (?, ?)',
+      ['k1', 'v1', 'k2', 'v2'],
+      'config',
+      null,
+      logger,
+    );
+    assert.deepStrictEqual(paramRows, [
+      {config_key: 'k1', config_value: 'v1'},
+      {config_key: 'k2', config_value: 'v2'},
+    ]);
+
+    assert.deepStrictEqual(
+      extractInsertRowsFromSQL(
+        'INSERT OR REPLACE INTO config (config_key, config_value) VALUES (?, ?), (?, ?)',
+        ['k1', 'v1'],
+        'config',
+        null,
+        logger,
+      ),
+      [],
+    );
+  });
+
+  it('evaluates scalar functions in WHERE and SET clauses for DELETE and UPDATE', () => {
+    assert.deepStrictEqual(
+      extractDataFromParameterizedSQL(
+        'DELETE FROM config WHERE config_key = lower(?)',
+        ['PROBE.KEY'],
+        'config',
+        PARTITION_SERVICE_OPERATION.DELETE,
+        logger,
+      ),
+      {config_key: 'probe.key'},
+    );
+
+    assert.deepStrictEqual(
+      extractDataFromParameterizedSQL(
+        'UPDATE config SET config_value = \'new\' WHERE config_key = lower(?)',
+        ['PROBE.KEY'],
+        'config',
+        PARTITION_SERVICE_OPERATION.UPDATE,
+        logger,
+      ),
+      {config_value: 'new', config_key: 'probe.key'},
+    );
+
+    assert.deepStrictEqual(
+      extractDeleteDataFromSQL(
+        'DELETE FROM config WHERE config_key = lower(\'PROBE.KEY\')',
+        logger,
+      ),
+      {config_key: 'probe.key'},
     );
   });
 });

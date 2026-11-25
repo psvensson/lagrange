@@ -231,15 +231,6 @@ class DebugMetadataStore {
   }
 
   /**
-   * Backward-compatible alias for updateSession.
-   * @param {Object} request
-   * @return {Promise<Object>}
-   */
-  async updateSessionEndpoint(request) {
-    return this.updateSession(request);
-  }
-
-  /**
    * Detach an existing session by updating status/endpoint metadata.
    * Session metadata remains SQL-owned for auditability.
    * @param {Object} request

@@ -613,6 +613,28 @@ function sameCoverageIdentity(left, right) {
     left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
 }
 
+function resolveFollowedCoverageSymlinkIdentity(root, absolute, isFinalComponent) {
+  if (isFinalComponent) return null;
+  // The target must stay within the repository: a symlinked ancestor
+  // pointing outside escapes and is rejected, while the publish worktree's
+  // node_modules link remaps back to its own canonical location.
+  let targetReal;
+  try {
+    targetReal = fs.realpathSync(absolute);
+  } catch {
+    return null;
+  }
+  const targetRelative = normalizePathThroughSymlinkedRoot(root, targetReal);
+  if (!isCanonicalGraphPath(targetRelative)) return null;
+  let followed;
+  try {
+    followed = fs.statSync(absolute, {bigint: true});
+  } catch {
+    return null;
+  }
+  return followed.isDirectory() ? followed : null;
+}
+
 function captureCoveragePathIdentity(root, coveredPath) {
   const segments = stringSplit(coveredPath, OWNER_DEBT.pathSeparator);
   let absolute = root;
@@ -623,41 +645,15 @@ function captureCoveragePathIdentity(root, coveredPath) {
     relative = relative ?
       `${relative}${OWNER_DEBT.pathSeparator}${segments[index]}` :
       segments[index];
+    const isFinalComponent = index === segments.length - 1;
     let identity = fs.lstatSync(absolute, {bigint: true});
     if (identity.isSymbolicLink()) {
-      // A symlinked intermediate directory whose target maps back to a
-      // canonical in-root location (the publish gate links node_modules
-      // into a temporary worktree) is a legitimate path to a live file:
-      // follow it so the liveness capture reads the same inode the
-      // producer hashed. A symlinked final component, or an ancestor whose
-      // target escapes the repository, is still rejected so coverage
-      // cannot smuggle a changing or foreign target through a stable
-      // logical name.
-      const isFinalComponent = index === segments.length - 1;
-      if (isFinalComponent) return {ok: false};
-      // The target must stay within the repository: a symlinked ancestor
-      // pointing outside (for example a coverage fixture linking to a temp
-      // directory) escapes and is rejected, while the publish worktree's
-      // node_modules link remaps back to its own canonical location.
-      let targetReal;
-      try {
-        targetReal = fs.realpathSync(absolute);
-      } catch {
-        return {ok: false};
-      }
-      const targetRelative = normalizePathThroughSymlinkedRoot(
-        root, targetReal);
-      if (!isCanonicalGraphPath(targetRelative)) return {ok: false};
-      let followed;
-      try {
-        followed = fs.statSync(absolute, {bigint: true});
-      } catch {
-        return {ok: false};
-      }
-      if (!followed.isDirectory()) return {ok: false};
+      // Follow symlinked intermediate directories that map back to a canonical
+      // in-root location while rejecting final-component or escaping symlinks.
+      const followed = resolveFollowedCoverageSymlinkIdentity(root, absolute, isFinalComponent);
+      if (!followed) return {ok: false};
       identity = followed;
     }
-    const isFinalComponent = index === segments.length - 1;
     if (isFinalComponent ? !identity.isFile() : !identity.isDirectory()) {
       return {ok: false};
     }

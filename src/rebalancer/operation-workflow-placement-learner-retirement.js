@@ -35,6 +35,8 @@ function verdict(state, fields = {}) {
 }
 
 const NO_PLACEMENT_ADMISSION = Object.freeze({state: LEARNER_RETIREMENT_OUTCOME.NOT_APPLICABLE});
+const MISSING_COMMITTED_CLEANUP_OWNERSHIP_ERROR =
+  'Learner retirement requires exact committed cleanup ownership';
 
 function scopedOperationAdmission(operation) {
   if (operation.type !== OperationType.REMOVE) return NO_PLACEMENT_ADMISSION;
@@ -248,7 +250,7 @@ async function routeBoundLearnerRetirement(owner, operation, handlerType, scoped
 async function completeOwnedLearnerRetirement(owner, operation, retirement) {
   if (retirement.state !== LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED ||
       !isScopedPlacementLearnerRetirement(operation)) {
-    throw new Error('Learner retirement requires exact committed cleanup ownership');
+    throw new Error(MISSING_COMMITTED_CLEANUP_OWNERSHIP_ERROR);
   }
   return owner.buildTerminalOperationDispatchResult(await owner.completeOperation(operation), {
     operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED,

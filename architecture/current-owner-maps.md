@@ -114,8 +114,6 @@ Current workflow ownership boundaries are:
   `src/rebalancer/operation-workflow-owner-effects.js`
 - Owner port executor boundary:
   `src/rebalancer/operation-workflow-owner-ports.js`
-- Compatibility entry point for existing workflow decision callers:
-  `src/rebalancer/operation-workflow-owner-decision.js`
 - Runtime evidence normalizer:
   `src/rebalancer/operation-workflow-owner-evidence.js`
 - Observation rule: publication, active-gate, readiness, diagnostics, and

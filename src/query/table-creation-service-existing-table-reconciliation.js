@@ -17,7 +17,12 @@ import {
   TABLE_CREATION_SERVICE_LITERAL,
   resolveTableCreationCompletion,
 } from './table-creation-service-completion.js';
-
+import {
+  decodeTableMetadataRecord,
+} from './table-creation-service-metadata-lookup.js';
+import {
+  buildInitialPartitionMetadataFromTableRecord,
+} from './table-creation-service-partition-provisioning.js';
 
 function parseExistingTableSchemaDefinition(existingTableRecord) {
   const raw = existingTableRecord?.schema_definition;
@@ -49,7 +54,8 @@ function buildRestoredPartitionMetadata(
   partitionId,
   explicitPartition,
 ) {
-  const baseMeta = service.buildInitialPartitionMetadataFromTableRecord(
+  const baseMeta = buildInitialPartitionMetadataFromTableRecord(
+    service,
     tableId,
     tableName,
     existingTableRecord,
@@ -84,7 +90,7 @@ async function restoreMissingPartitionRow(
   {tableId, tableName, existingTableRecord, partitionId, explicitPartition, options},
 ) {
   const gateway = service.getControlPlaneSystemTableGateway();
-  if (!gateway?.submitMutation) {
+  if (!gateway) {
     throw new Error(
       TABLE_CREATION_SERVICE_LITERAL.UNABLE_TO_RESTORE_MISSING_INITIAL_PARTITION_METADATA_FOR_TABLE +
         String(tableName || tableId),
@@ -175,16 +181,18 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
    * Re-run initial partition provisioning for existing CREATE TABLE IF NOT
    * EXISTS retries when metadata was created before provisioning finished.
    * @param {string} tableName
-   * @return {Promise<void>}
-   * @private
+   * @param {Object|null} [existingTable=null]
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
    */
   async reconcileExistingInitialPartition(
     tableName,
     existingTable = null,
     options = {},
   ) {
-    const existingTableRecord =
-      existingTable || (await this.findExistingTableRecord(tableName));
+    const existingTableRecord = existingTable ?
+      decodeTableMetadataRecord(existingTable) :
+      await this.findExistingTableRecord(tableName);
     const tableId = existingTableRecord?.table_id || null;
     if (!existingTableRecord || !tableId) {
       return {partitionMetadataCreated: false};
@@ -244,4 +252,7 @@ function defineTableCreationExistingTableReconciliation(serviceClass) {
   );
 }
 
-export {defineTableCreationExistingTableReconciliation};
+export {
+  EXISTING_TABLE_RECONCILIATION_METHODS,
+  defineTableCreationExistingTableReconciliation,
+};

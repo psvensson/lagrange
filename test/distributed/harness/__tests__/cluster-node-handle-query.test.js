@@ -25,6 +25,8 @@ import {
   registerClusterNodeHandleControlSnapshotTests,
 } from './cluster-node-handle-control-snapshot-test-cases.js';
 
+const arrayFind = Function.call.bind(Array.prototype.find);
+
 const TEST_ADMIN_HOST = '127.0.0.1';
 const TEST_ADMIN_PORT_ANY = 0;
 const TEST_CACHE_DUMP_MESSAGE_TYPE = 'cache_dump';
@@ -133,8 +135,10 @@ test('Unit: NodeHandle refuses to send after a shared handshake spends its reque
           sql: 'SELECT peer',
           timeoutMs: PEER_BUDGET_MS - elapsedMs,
         }]);
-        const expiry = node.getAdminQueryTraceSnapshot()
-          .find(({statementPreview}) => statementPreview === 'SELECT expired');
+        const expiry = arrayFind(
+          node.getAdminQueryTraceSnapshot(),
+          ({statementPreview}) => statementPreview === 'SELECT expired',
+        );
         assert.equal(expiry.outcome, 'timeout');
         assert.equal(expiry.sentAtMs, null);
         assert.equal(expiry.durationMs, elapsedMs);
@@ -168,8 +172,10 @@ test('Unit: NodeHandle rejects an actual delivered response after its original d
       assert.match(late.reason.message, /timed out/i);
       assert.equal(peer.status, 'fulfilled');
       assert.deepEqual(peer.value.rows, [{sql: 'SELECT peer'}]);
-      const expiry = node.getAdminQueryTraceSnapshot()
-        .find(({statementPreview}) => statementPreview === 'SELECT late');
+      const expiry = arrayFind(
+        node.getAdminQueryTraceSnapshot(),
+        ({statementPreview}) => statementPreview === 'SELECT late',
+      );
       assert.equal(expiry.outcome, 'timeout');
       assert.ok(Number.isFinite(expiry.sentAtMs));
       assert.equal(expiry.resolvedAtMs, null);

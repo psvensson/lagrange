@@ -6,6 +6,9 @@
     {
       "id": "npm-run-test-unused-prod",
       "command": "npm run test:unused:prod",
+      "scriptName": "test:unused:prod",
+      "staticAudit": true,
+      "priority": true,
       "inputs": [
         "knip.json",
         "package-lock.json",
@@ -17,6 +20,9 @@
     {
       "id": "npm-run-test-deps",
       "command": "npm run test:deps",
+      "scriptName": "test:deps",
+      "staticAudit": true,
+      "priority": true,
       "inputs": [
         "dependency-cruiser.config.cjs",
         "scripts/**",
@@ -27,6 +33,9 @@
     {
       "id": "npm-run-audit-file-size",
       "command": "npm run audit:file-size",
+      "scriptName": "audit:file-size",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "scripts/**",
         "src/**",
@@ -36,6 +45,9 @@
     {
       "id": "npm-run-test-complexity",
       "command": "npm run test:complexity",
+      "scriptName": "test:complexity",
+      "staticAudit": true,
+      "priority": true,
       "inputs": [
         "scripts/**",
         "src/**",
@@ -45,6 +57,9 @@
     {
       "id": "npm-run-test-complexity-cognitive",
       "command": "npm run test:complexity:cognitive",
+      "scriptName": "test:complexity:cognitive",
+      "staticAudit": true,
+      "priority": true,
       "inputs": [
         "scripts/**",
         "src/**",
@@ -54,6 +69,9 @@
     {
       "id": "npm-run-test-metadata-gateway-audit",
       "command": "npm run test:metadata-gateway:audit",
+      "scriptName": "test:metadata-gateway:audit",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "scripts/**",
         "src/**"
@@ -62,6 +80,9 @@
     {
       "id": "npm-run-audit-runtime-grammar",
       "command": "npm run audit:runtime-grammar",
+      "scriptName": "audit:runtime-grammar",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "architecture/**",
         "scripts/**",
@@ -71,6 +92,9 @@
     {
       "id": "npm-run-audit-operation-progress-authority",
       "command": "npm run audit:operation-progress-authority",
+      "scriptName": "audit:operation-progress-authority",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "scripts/**",
         "src/**"
@@ -79,6 +103,9 @@
     {
       "id": "npm-run-audit-service-portability-claims",
       "command": "npm run audit:service-portability-claims",
+      "scriptName": "audit:service-portability-claims",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "README.md",
         "docs/**",
@@ -90,6 +117,9 @@
     {
       "id": "npm-run-audit-current-capabilities",
       "command": "npm run audit:current-capabilities",
+      "scriptName": "audit:current-capabilities",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "README.md",
         "charts/**",
@@ -101,6 +131,9 @@
     {
       "id": "npm-run-audit-cli-docs",
       "command": "npm run audit:cli-docs",
+      "scriptName": "audit:cli-docs",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "AGENTS.md",
         "README.md",
@@ -112,6 +145,9 @@
     {
       "id": "npm-run-audit-closure-ledger",
       "command": "npm run audit:closure-ledger",
+      "scriptName": "audit:closure-ledger",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "scripts/**",
         "solve/epics/**",
@@ -122,6 +158,9 @@
     {
       "id": "npm-run-audit-no-kiro",
       "command": "npm run audit:no-kiro",
+      "scriptName": "audit:no-kiro",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "README.md",
         "docs/**",
@@ -134,6 +173,9 @@
     {
       "id": "npm-run-audit-no-legacy-naming",
       "command": "npm run audit:no-legacy-naming",
+      "scriptName": "audit:no-legacy-naming",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "CHANGELOG.md",
         "README.md",
@@ -147,6 +189,9 @@
     {
       "id": "npm-run-audit-no-legacy-consensus-references",
       "command": "npm run audit:no-legacy-consensus-references",
+      "scriptName": "audit:no-legacy-consensus-references",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "Dockerfile",
         "architecture/**",
@@ -163,6 +208,9 @@
     {
       "id": "npm-run-audit-impact-contracts",
       "command": "npm run audit:impact-contracts",
+      "scriptName": "audit:impact-contracts",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "architecture/**",
         "scripts/**",
@@ -175,6 +223,9 @@
     {
       "id": "npm-run-audit-shards",
       "command": "npm run audit:shards",
+      "scriptName": "audit:shards",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "scripts/**",
         "scripts/checks/test-primary-classification.js",
@@ -187,15 +238,68 @@
     {
       "id": "npm-run-audit-guidelines",
       "command": "npm run audit:guidelines",
+      "scriptName": "audit:guidelines",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "scripts/**",
         "src/**",
         "test/**"
+      ],
+      "subtasks": [
+        {
+          "scriptName": "audit:guideline:literals",
+          "extraArguments": [],
+          "priority": false
+        },
+        {
+          "scriptName": "audit:guideline:decision-boundaries",
+          "extraArguments": [],
+          "priority": false
+        },
+        {
+          "scriptName": "audit:guideline:boundary-mode-contracts",
+          "extraArguments": [],
+          "priority": false
+        },
+        {
+          "scriptName": "audit:guideline:hot-path-diagnostics",
+          "extraArguments": [],
+          "priority": false
+        },
+        {
+          "scriptName": "audit:guideline:deferred-outcomes",
+          "extraArguments": [],
+          "priority": false
+        },
+        {
+          "scriptName": "audit:guideline:silent-catch",
+          "extraArguments": [],
+          "priority": false
+        },
+        {
+          "scriptName": "audit:guideline:ambient-intrinsics",
+          "extraArguments": [],
+          "priority": false
+        },
+        {
+          "scriptName": "audit:style-terminal-vocabulary",
+          "extraArguments": [],
+          "priority": false
+        },
+        {
+          "scriptName": "audit:guideline:navigability",
+          "extraArguments": [],
+          "priority": false
+        }
       ]
     },
     {
       "id": "npm-run-audit-doc-audience",
       "command": "npm run audit:doc-audience",
+      "scriptName": "audit:doc-audience",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "AGENTS.md",
         "CLAUDE.md",
@@ -210,6 +314,9 @@
     {
       "id": "npm-run-audit-doc-ascii",
       "command": "npm run audit:doc-ascii",
+      "scriptName": "audit:doc-ascii",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "README.md",
         "architecture/**",
@@ -222,6 +329,9 @@
     {
       "id": "npm-run-audit-documentation-current",
       "command": "npm run audit:documentation-current",
+      "scriptName": "audit:documentation-current",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "AGENTS.md",
         "CHANGELOG.md",
@@ -242,6 +352,9 @@
     {
       "id": "npm-run-audit-source-owner-index",
       "command": "npm run audit:source-owner-index",
+      "scriptName": "audit:source-owner-index",
+      "staticAudit": false,
+      "priority": false,
       "inputs": [
         "package.json",
         "package-lock.json",
@@ -253,6 +366,9 @@
     {
       "id": "npm-run-audit-roadmap-authority",
       "command": "npm run audit:roadmap-authority",
+      "scriptName": "audit:roadmap-authority",
+      "staticAudit": true,
+      "priority": false,
       "inputs": [
         "README.md",
         "docs/**",
@@ -266,6 +382,10 @@
     {
       "id": "npm-run-steering-check",
       "command": "npm run steering:check",
+      "scriptName": "steering:check",
+      "staticAudit": true,
+      "priority": false,
+      "serialFirst": true,
       "inputs": [
         "docs/steering/**",
         "package.json",
@@ -273,8 +393,102 @@
       ]
     },
     {
+      "id": "npm-run-test-metrics",
+      "command": "npm run test:metrics",
+      "scriptName": "test:metrics",
+      "staticAudit": false,
+      "priority": true,
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ],
+      "subtasks": [
+        {
+          "scriptName": "test:duplication",
+          "extraArguments": [
+            "--",
+            "--target",
+            "test"
+          ],
+          "priority": true
+        },
+        {
+          "scriptName": "test:duplication",
+          "extraArguments": [
+            "--",
+            "--target",
+            "src+scripts"
+          ],
+          "priority": true
+        },
+        {
+          "scriptName": "test:cycles",
+          "extraArguments": [],
+          "priority": true
+        },
+        {
+          "scriptName": "test:complexity:cognitive",
+          "extraArguments": [],
+          "priority": true
+        }
+      ]
+    },
+    {
+      "id": "npm-run-lint",
+      "command": "npm run lint",
+      "scriptName": "lint",
+      "staticAudit": false,
+      "priority": true,
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-test-unused",
+      "command": "npm run test:unused",
+      "scriptName": "test:unused",
+      "staticAudit": false,
+      "priority": true,
+      "inputs": [
+        "knip.json",
+        "package-lock.json",
+        "package.json",
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-test-unused-ratchet",
+      "command": "npm run test:unused:ratchet",
+      "scriptName": "test:unused:ratchet",
+      "staticAudit": false,
+      "priority": true,
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-lint-scripts",
+      "command": "npm run lint:scripts",
+      "scriptName": "lint:scripts",
+      "staticAudit": false,
+      "priority": true,
+      "inputs": [
+        "scripts/**"
+      ]
+    },
+    {
       "id": "npm-run-test-static-postpush",
       "command": "npm run test:static:postpush",
+      "scriptName": "test:static:postpush",
+      "staticAudit": false,
+      "priority": false,
       "inputs": [
         "README.md",
         "docs/**",
@@ -287,6 +501,9 @@
     {
       "id": "npm-run-model-contracts",
       "command": "npm run model:contracts",
+      "scriptName": "model:contracts",
+      "staticAudit": false,
+      "priority": false,
       "inputs": [
         "architecture/**",
         "docs/specs/**",
@@ -297,6 +514,8 @@
     {
       "id": "node-scripts-checks-run-golden-capability-guard-scenarios-js",
       "command": "node scripts/checks/run-golden-capability-guard-scenarios.js",
+      "staticAudit": false,
+      "priority": false,
       "inputs": [
         "scripts/**",
         "src/**",
@@ -306,6 +525,8 @@
     {
       "id": "node-scripts-generate-global-owner-debt-inventory-js-refresh",
       "command": "node scripts/generate-global-owner-debt-inventory.js --refresh --refresh-import-graph-only --output test-output/analysis/owner-debt-live-inventory.json",
+      "staticAudit": false,
+      "priority": false,
       "inputs": [
         "scripts/**",
         "src/**",
@@ -315,6 +536,8 @@
     {
       "id": "node-scripts-checks-push-gate-change-proof-js",
       "command": "node scripts/checks/push-gate-change-proof.js",
+      "staticAudit": false,
+      "priority": false,
       "inputs": [
         "package-lock.json",
         "package.json",

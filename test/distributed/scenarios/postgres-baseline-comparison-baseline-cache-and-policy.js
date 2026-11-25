@@ -255,20 +255,30 @@ function isCacheEntryFresh(cachedAt, ttlMs) {
   return dateNow() - cachedAtMs <= ttlMs;
 }
 
+function resolveCacheLoadSkipReason(metadata, cacheIdentity, benchmarkConfig) {
+  if (metadata.enabled !== true) {
+    return BASELINE_CACHE_DISABLED_REASON;
+  }
+  if (benchmarkConfig.refreshBaselineMetrics === true) {
+    return BASELINE_CACHE_REFRESH_REASON;
+  }
+  if (!cacheIdentity?.path) {
+    return BASELINE_CACHE_MISS_REASON;
+  }
+  return null;
+}
+
 async function loadBaselineMetricsFromCache(cacheIdentity, benchmarkConfig) {
   const metadata = buildBaselineCacheMetadata(cacheIdentity, {
     enabled: benchmarkConfig.cacheBaselineMetrics === true,
   });
-  if (metadata.enabled !== true) {
-    metadata.reason = BASELINE_CACHE_DISABLED_REASON;
-    return {metrics: null, metadata};
-  }
-  if (benchmarkConfig.refreshBaselineMetrics === true) {
-    metadata.reason = BASELINE_CACHE_REFRESH_REASON;
-    return {metrics: null, metadata};
-  }
-  if (!cacheIdentity?.path) {
-    metadata.reason = BASELINE_CACHE_MISS_REASON;
+  const skipReason = resolveCacheLoadSkipReason(
+    metadata,
+    cacheIdentity,
+    benchmarkConfig,
+  );
+  if (skipReason) {
+    metadata.reason = skipReason;
     return {metrics: null, metadata};
   }
 
@@ -301,11 +311,10 @@ async function loadBaselineMetricsFromCache(cacheIdentity, benchmarkConfig) {
       buildBaselinePublicationEligibility(metrics);
     return {metrics, metadata};
   } catch (error) {
-    if (error?.code === 'ENOENT') {
-      metadata.reason = BASELINE_CACHE_MISS_REASON;
-      return {metrics: null, metadata};
-    }
-    metadata.reason = BASELINE_CACHE_INVALID_REASON;
+    metadata.reason =
+      error?.code === 'ENOENT' ?
+        BASELINE_CACHE_MISS_REASON :
+        BASELINE_CACHE_INVALID_REASON;
     return {metrics: null, metadata};
   }
 }
@@ -698,6 +707,22 @@ function formatAuthoritativeFallbackViolations(authoritativeFallbackResult) {
     .join('|');
 }
 
+function isNonNegativeIntegerThresholdExceeded(observed, threshold) {
+  return (
+    Number.isInteger(threshold) &&
+    threshold >= ZERO &&
+    observed > threshold
+  );
+}
+
+function isNonNegativeFiniteThresholdExceeded(observed, threshold) {
+  return (
+    Number.isFinite(threshold) &&
+    threshold >= ZERO &&
+    observed > threshold
+  );
+}
+
 function evaluateOverloadPolicy(loadMetrics, options = {}) {
   const strictOverloadPolicy = options.strictOverloadPolicy === true;
   const overloadPolicy =
@@ -709,9 +734,10 @@ function evaluateOverloadPolicy(loadMetrics, options = {}) {
   const violations = [];
 
   if (
-    Number.isInteger(overloadPolicy.maxRejectedOperations) &&
-    overloadPolicy.maxRejectedOperations >= ZERO &&
-    rejectedOperations > overloadPolicy.maxRejectedOperations
+    isNonNegativeIntegerThresholdExceeded(
+      rejectedOperations,
+      overloadPolicy.maxRejectedOperations,
+    )
   ) {
     violations.push({
       metric: 'rejectedOperations',
@@ -722,9 +748,10 @@ function evaluateOverloadPolicy(loadMetrics, options = {}) {
   }
 
   if (
-    Number.isFinite(overloadPolicy.maxQueueDelayP99Ms) &&
-    overloadPolicy.maxQueueDelayP99Ms >= ZERO &&
-    queueDelayP99Ms > overloadPolicy.maxQueueDelayP99Ms
+    isNonNegativeFiniteThresholdExceeded(
+      queueDelayP99Ms,
+      overloadPolicy.maxQueueDelayP99Ms,
+    )
   ) {
     violations.push({
       metric: 'queueDelayP99Ms',
@@ -763,33 +790,43 @@ function formatOverloadPolicyViolations(overloadPolicyResult) {
     .join('|');
 }
 
+function asPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ?
+    value :
+    {};
+}
+
+function normalizePerNodeLoadMetrics(perNodeInput) {
+  const perNode = {...asPlainObject(perNodeInput)};
+  for (const [nodeId, nodeMetrics] of Object.entries(perNode)) {
+    const nodeSample = asPlainObject(nodeMetrics);
+    const nodeRejectedByReason = asPlainObject(nodeSample.rejectedByReason);
+    perNode[nodeId] = {
+      ...nodeSample,
+      queuePressureSignals: normalizeLoadMetricNumber(
+        nodeSample.queuePressureSignals,
+      ),
+      rejected: normalizeLoadMetricNumber(nodeSample.rejected),
+      rejectedByReason: {
+        [LOAD_METRIC_REJECTED_REASON_QUEUE_FULL]: normalizeLoadMetricNumber(
+          nodeRejectedByReason[LOAD_METRIC_REJECTED_REASON_QUEUE_FULL],
+        ),
+      },
+    };
+  }
+  return perNode;
+}
+
 function normalizeLoadMetrics(loadMetrics) {
-  const normalizedLoadMetrics =
-    loadMetrics &&
-    typeof loadMetrics === 'object' &&
-    !Array.isArray(loadMetrics) ?
-      {...loadMetrics} :
-      {};
-  const latency =
-    normalizedLoadMetrics.latency &&
-    typeof normalizedLoadMetrics.latency === 'object' ?
-      normalizedLoadMetrics.latency :
-      {};
-  const queueDelay =
-    normalizedLoadMetrics.queueDelay &&
-    typeof normalizedLoadMetrics.queueDelay === 'object' ?
-      normalizedLoadMetrics.queueDelay :
-      {};
-  const rejectedByReason =
-    normalizedLoadMetrics.rejectedByReason &&
-    typeof normalizedLoadMetrics.rejectedByReason === 'object' ?
-      normalizedLoadMetrics.rejectedByReason :
-      {};
-  const undispatchedByReason =
-    normalizedLoadMetrics.undispatchedByReason &&
-    typeof normalizedLoadMetrics.undispatchedByReason === 'object' ?
-      normalizedLoadMetrics.undispatchedByReason :
-      {};
+  const normalizedLoadMetrics = {...asPlainObject(loadMetrics)};
+  const latency = asPlainObject(normalizedLoadMetrics.latency);
+  const queueDelay = asPlainObject(normalizedLoadMetrics.queueDelay);
+  const rejectedByReason = asPlainObject(
+    normalizedLoadMetrics.rejectedByReason,
+  );
+  const undispatchedByReason = asPlainObject(
+    normalizedLoadMetrics.undispatchedByReason,
+  );
 
   normalizedLoadMetrics.total = normalizeLoadMetricNumber(
     normalizedLoadMetrics.total,
@@ -896,35 +933,9 @@ function normalizeLoadMetrics(loadMetrics) {
       undispatchedByReason[LOAD_METRIC_UNDISPATCHED_REASON_CANCELLED],
     ),
   };
-  normalizedLoadMetrics.perNode =
-    normalizedLoadMetrics.perNode &&
-    typeof normalizedLoadMetrics.perNode === 'object' &&
-    !Array.isArray(normalizedLoadMetrics.perNode) ?
-      normalizedLoadMetrics.perNode :
-      {};
-  for (const [nodeId, nodeMetrics] of Object.entries(
+  normalizedLoadMetrics.perNode = normalizePerNodeLoadMetrics(
     normalizedLoadMetrics.perNode,
-  )) {
-    const nodeSample =
-      nodeMetrics && typeof nodeMetrics === 'object' ? nodeMetrics : {};
-    const nodeRejectedByReason =
-      nodeSample.rejectedByReason &&
-      typeof nodeSample.rejectedByReason === 'object' ?
-        nodeSample.rejectedByReason :
-        {};
-    normalizedLoadMetrics.perNode[nodeId] = {
-      ...nodeSample,
-      queuePressureSignals: normalizeLoadMetricNumber(
-        nodeSample.queuePressureSignals,
-      ),
-      rejected: normalizeLoadMetricNumber(nodeSample.rejected),
-      rejectedByReason: {
-        [LOAD_METRIC_REJECTED_REASON_QUEUE_FULL]: normalizeLoadMetricNumber(
-          nodeRejectedByReason[LOAD_METRIC_REJECTED_REASON_QUEUE_FULL],
-        ),
-      },
-    };
-  }
+  );
 
   return normalizedLoadMetrics;
 }
@@ -1131,36 +1142,35 @@ function formatLoadParityReasons(loadParity) {
     .join(', ');
 }
 
+function normalizePositiveIntegerOrNull(value) {
+  return Number.isInteger(value) && value > ZERO ? value : null;
+}
+
+function normalizeNonNegativeIntegerOrNull(value) {
+  return Number.isInteger(value) && value >= ZERO ? value : null;
+}
+
 function buildEffectiveAdmissionPolicy({
   benchmarkConfig,
   nodeClientPolicySnapshot,
   nodeClientChannelPolicyOverrides,
 }) {
-  const loadPolicy =
-    nodeClientPolicySnapshot?.[NODE_CLIENT_CHANNEL.LOAD] &&
-    typeof nodeClientPolicySnapshot[NODE_CLIENT_CHANNEL.LOAD] === 'object' ?
-      nodeClientPolicySnapshot[NODE_CLIENT_CHANNEL.LOAD] :
-      {};
-  const loadPolicyOverrides =
-    nodeClientChannelPolicyOverrides?.[NODE_CLIENT_CHANNEL.LOAD] &&
-    typeof nodeClientChannelPolicyOverrides[NODE_CLIENT_CHANNEL.LOAD] ===
-      'object' ?
-      nodeClientChannelPolicyOverrides[NODE_CLIENT_CHANNEL.LOAD] :
-      {};
-  const benchmarkLoadNodeMaxInFlight =
-    Number.isInteger(benchmarkConfig.loadNodeMaxInFlight) &&
-    benchmarkConfig.loadNodeMaxInFlight > ZERO ?
-      benchmarkConfig.loadNodeMaxInFlight :
-      null;
-  const overrideLoadNodeMaxInFlight =
-    Number.isInteger(loadPolicyOverrides.maxInFlightPerNode) &&
-    loadPolicyOverrides.maxInFlightPerNode > ZERO ?
-      loadPolicyOverrides.maxInFlightPerNode :
-      null;
+  const loadPolicy = asPlainObject(
+    nodeClientPolicySnapshot?.[NODE_CLIENT_CHANNEL.LOAD],
+  );
+  const loadPolicyOverrides = asPlainObject(
+    nodeClientChannelPolicyOverrides?.[NODE_CLIENT_CHANNEL.LOAD],
+  );
+  const benchmarkLoadNodeMaxInFlight = normalizePositiveIntegerOrNull(
+    benchmarkConfig.loadNodeMaxInFlight,
+  );
+  const overrideLoadNodeMaxInFlight = normalizePositiveIntegerOrNull(
+    loadPolicyOverrides.maxInFlightPerNode,
+  );
   const conflicts = [];
   if (
-    Number.isInteger(benchmarkLoadNodeMaxInFlight) &&
-    Number.isInteger(overrideLoadNodeMaxInFlight) &&
+    benchmarkLoadNodeMaxInFlight !== null &&
+    overrideLoadNodeMaxInFlight !== null &&
     benchmarkLoadNodeMaxInFlight !== overrideLoadNodeMaxInFlight
   ) {
     conflicts.push({
@@ -1179,47 +1189,29 @@ function buildEffectiveAdmissionPolicy({
       },
       channelOverrides: {
         loadMaxInFlightPerNode: overrideLoadNodeMaxInFlight,
-        loadTimeoutMs:
-          Number.isInteger(loadPolicyOverrides.timeoutMs) &&
-          loadPolicyOverrides.timeoutMs > ZERO ?
-            loadPolicyOverrides.timeoutMs :
-            null,
-        loadCircuitBreakerThreshold:
-          Number.isInteger(loadPolicyOverrides.circuitBreakerThreshold) &&
-          loadPolicyOverrides.circuitBreakerThreshold > ZERO ?
-            loadPolicyOverrides.circuitBreakerThreshold :
-            null,
-        loadCooldownMs:
-          Number.isInteger(loadPolicyOverrides.cooldownMs) &&
-          loadPolicyOverrides.cooldownMs > ZERO ?
-            loadPolicyOverrides.cooldownMs :
-            null,
+        loadTimeoutMs: normalizePositiveIntegerOrNull(
+          loadPolicyOverrides.timeoutMs,
+        ),
+        loadCircuitBreakerThreshold: normalizePositiveIntegerOrNull(
+          loadPolicyOverrides.circuitBreakerThreshold,
+        ),
+        loadCooldownMs: normalizePositiveIntegerOrNull(
+          loadPolicyOverrides.cooldownMs,
+        ),
       },
     },
     resolved: {
-      loadMaxInFlightPerNode:
-        Number.isInteger(loadPolicy.maxInFlightPerNode) &&
-        loadPolicy.maxInFlightPerNode > ZERO ?
-          loadPolicy.maxInFlightPerNode :
-          null,
-      loadTimeoutMs:
-        Number.isInteger(loadPolicy.timeoutMs) && loadPolicy.timeoutMs > ZERO ?
-          loadPolicy.timeoutMs :
-          null,
-      loadCircuitBreakerThreshold:
-        Number.isInteger(loadPolicy.circuitBreakerThreshold) &&
-        loadPolicy.circuitBreakerThreshold > ZERO ?
-          loadPolicy.circuitBreakerThreshold :
-          null,
-      loadCooldownMs:
-        Number.isInteger(loadPolicy.cooldownMs) && loadPolicy.cooldownMs > ZERO ?
-          loadPolicy.cooldownMs :
-          null,
-      loadRetryBudget:
-        Number.isInteger(loadPolicy.retryBudget) &&
-        loadPolicy.retryBudget >= ZERO ?
-          loadPolicy.retryBudget :
-          null,
+      loadMaxInFlightPerNode: normalizePositiveIntegerOrNull(
+        loadPolicy.maxInFlightPerNode,
+      ),
+      loadTimeoutMs: normalizePositiveIntegerOrNull(loadPolicy.timeoutMs),
+      loadCircuitBreakerThreshold: normalizePositiveIntegerOrNull(
+        loadPolicy.circuitBreakerThreshold,
+      ),
+      loadCooldownMs: normalizePositiveIntegerOrNull(loadPolicy.cooldownMs),
+      loadRetryBudget: normalizeNonNegativeIntegerOrNull(
+        loadPolicy.retryBudget,
+      ),
     },
     conflicts,
   };
@@ -1269,21 +1261,20 @@ function buildPreLoadRebalancingPressure(quiescenceResult, benchmarkConfig) {
 }
 
 function buildPostLoadDrainRebalancingPressure(postLoadDrain, benchmarkConfig) {
-  const partitionGroupInFlight = postLoadDrain?.partitionGroupInFlight || {};
+  const drain = asPlainObject(postLoadDrain);
+  const partitionGroupInFlight = asPlainObject(drain.partitionGroupInFlight);
   return {
-    status: String(postLoadDrain?.status || POST_LOAD_DRAIN_STATUS_FAILED),
-    mode: String(postLoadDrain?.mode || POST_LOAD_DRAIN_MODE_FAILED),
-    attempts: normalizeNonNegativeInteger(postLoadDrain?.attempts),
-    stableElapsedMs: normalizeNonNegativeInteger(
-      postLoadDrain?.stableElapsedMs,
-    ),
+    status: String(drain.status || POST_LOAD_DRAIN_STATUS_FAILED),
+    mode: String(drain.mode || POST_LOAD_DRAIN_MODE_FAILED),
+    attempts: normalizeNonNegativeInteger(drain.attempts),
+    stableElapsedMs: normalizeNonNegativeInteger(drain.stableElapsedMs),
     maxReplicaOpsInFlightThreshold: normalizeNonNegativeInteger(
       benchmarkConfig?.loadRebalanceMaxReplicaOpsInFlight,
     ),
     inFlightReplicaOps: sumPartitionGroupInFlight(partitionGroupInFlight),
     partitionGroupInFlight,
-    reasonHistogram: postLoadDrain?.reasonHistogram || {},
-    error: postLoadDrain?.error || null,
+    reasonHistogram: asPlainObject(drain.reasonHistogram),
+    error: drain.error || null,
   };
 }
 

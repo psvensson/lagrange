@@ -14,92 +14,43 @@ import {SQLParser} from '../../src/query/sql-parser.js';
 import {
   DistributedTransactionCoordinator,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
+import {DurableWorkflowCoordinator} from '../../src/workflow/durable-workflow-coordinator.js';
 import {
-  DurableWorkflowCoordinator,
-} from '../../src/workflow/durable-workflow-coordinator.js';
-import {
-  classifyTransactionStatement,
-  getDeterminismClassifierStats,
+  classifyTransactionStatement, getDeterminismClassifierStats,
 } from '../../src/partition/partition-transaction-determinism.js';
 import {
-  discardParticipantSessions,
-  inspectRetainedPreparedObligations,
-  resetParticipantRowKeyHistory,
+  discardParticipantSessions, inspectRetainedPreparedObligations, resetParticipantRowKeyHistory,
 } from '../../src/partition/partition-participant-transaction-session.js';
 import {
   PARTICIPANT_TRANSACTION_FAILURE_CODE,
 } from '../../src/partition/partition-participant-transaction-constants.js';
-import {
-  PARTITION_SERVICE_OPERATION,
-} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service-constants.js';
 import {cruise} from 'dependency-cruiser';
 import depcruiseConfig from '../../dependency-cruiser.config.cjs';
 import {
-  buildDecisionCommand,
-  buildDecisionRecord,
-  buildPrepareCommand,
-  operationsOf,
+  buildDecisionCommand, buildDecisionRecord, buildPrepareCommand, operationsOf,
 } from '../../src/partition/partition-participant-transaction-bytes.js';
 import {
-  readPartitionWriteGeneration,
-  resolveRetainedPreparedContradictionDisposition,
+  readPartitionWriteGeneration, resolveRetainedPreparedContradictionDisposition,
 } from '../../src/partition/partition-participant-transaction-store.js';
-import {
-  RaftRsDurableStore,
-} from '../../src/raft/raft-rs-durable-store.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
   createTransactionPersistenceGateway,
 } from '../test-helpers/transaction-persistence-gateway.js';
 import {
-  INSERT_SQL,
-  ROW,
-  ROW_2,
-  TABLE,
-  V3,
-  applyProposal,
-  awaitProposal,
-  beginMessage,
-  clearFixtureSingletons,
-  commitDecision,
-  commitMessage,
-  commitOrdinaryWrite,
-  durableAppliedIndex,
-  generationOf,
-  identityOf,
-  isDecisionCommand,
-  isPrepareCommand,
-  onFixtureLeader,
-  operationOf,
-  plantAppliedStateFailure,
-  prepareCommandOf,
-  prepareMessage,
-  queryMessage,
-  removeAppliedStateFailure,
-  resetFixtureSingletons,
-  resumeFixtureParticipantAdmission,
-  resumeFixtureParticipantGroupAdmission,
-  rowCount,
-  send,
-  shutdownAll,
-  startLeader,
-  startReplica,
+  INSERT_SQL, ROW, ROW_2, TABLE, V3, applyProposal, awaitProposal, beginMessage,
+  clearFixtureSingletons, commitDecision, commitMessage, commitOrdinaryWrite, durableAppliedIndex,
+  generationOf, identityOf, isDecisionCommand, isPrepareCommand, onFixtureLeader, operationOf,
+  plantAppliedStateFailure, prepareCommandOf, prepareMessage, queryMessage,
+  removeAppliedStateFailure, resetFixtureSingletons, resumeFixtureParticipantAdmission,
+  resumeFixtureParticipantGroupAdmission, rowCount, send, shutdownAll, startLeader, startReplica,
   temporaryDbPath,
 } from '../test-helpers/participant-transaction-fixture.js';
-
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
-const QUIET_LOGGER = Object.freeze({
-  debug() {},
-  info() {},
-  warn() {},
-  error() {},
-});
+const QUIET_LOGGER = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 
 function buildPrepareEvidence(partitionId) {
-  return {
-    preparedDigest: `digest-${partitionId}`.padEnd(64, '0'),
-    prepareIndex: 1,
-    prepareTerm: 1,
-  };
+  return {preparedDigest: `digest-${partitionId}`.padEnd(64, '0'), prepareIndex: 1, prepareTerm: 1};
 }
 
 test('Scenario A fast path: payment transaction breakdown tracer and Priority 1 bookkeeping reduction', async (t) => {
@@ -1032,52 +983,34 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     const remoteSibling1 = `${txHist1.transactionId}:p-remote-2`;
     const remoteSibling2 = `${txHist2.transactionId}:p-remote-2`;
     const canonicalCommitHist1 = buildDecisionRecord(
-      txHist1.transactionId,
-      V3.DECISION.COMMIT,
-      [
-        [txHist1.participantId, prepHist1.preparedDigest],
-        [remoteSibling1, '9'.repeat(64)],
-      ],
+      txHist1.transactionId, V3.DECISION.COMMIT,
+      [[txHist1.participantId, prepHist1.preparedDigest], [remoteSibling1, '9'.repeat(64)]],
     );
     const canonicalCommitHist2 = buildDecisionRecord(
-      txHist2.transactionId,
-      V3.DECISION.COMMIT,
+      txHist2.transactionId, V3.DECISION.COMMIT,
       [[txHist2.participantId, prepHist2.preparedDigest]],
     );
     const canonicalRollbackHist2 = buildDecisionRecord(
-      txHist2.transactionId,
-      V3.DECISION.ROLLBACK,
-      [
-        [txHist2.participantId, prepHist2.preparedDigest],
-        [remoteSibling2, null],
-      ],
+      txHist2.transactionId, V3.DECISION.ROLLBACK,
+      [[txHist2.participantId, prepHist2.preparedDigest], [remoteSibling2, null]],
     );
     const txHist1CommittedRow = {
-      transaction_id: txHist1.transactionId,
-      session_id: 'hist-sess-1',
-      status: 'COMMITTED',
-      transaction_mode: 'DISTRIBUTED',
-      participant_set_state: 'FROZEN',
-      commit_mode: 'TWO_PHASE',
-      frozen_participant_count: 2,
-      decision: canonicalCommitHist1.decision,
+      transaction_id: txHist1.transactionId, session_id: 'hist-sess-1', status: 'COMMITTED',
+      transaction_mode: 'DISTRIBUTED', participant_set_state: 'FROZEN', commit_mode: 'TWO_PHASE',
+      frozen_participant_count: 2, decision: canonicalCommitHist1.decision,
       decision_text: canonicalCommitHist1.decisionText,
       decision_digest: canonicalCommitHist1.decisionDigest,
-      created_at: 1000,
-      updated_at: 1000,
+      created_at: 1000, updated_at: 1000,
     };
 
     // History (a): Authoritative evidence is unavailable or incomplete (txHist2 record absent)
     // -> emit no disposition:
     const historyUnavailable = createImmutableCoordinatorHistory([txHist1CommittedRow]);
     const unavailableDisposition = resolveRetainedPreparedContradictionDisposition(
-      initialInspection,
-      historyUnavailable.lookup,
+      initialInspection, historyUnavailable.lookup,
     );
     assert.deepEqual(unavailableDisposition, {
-      resolvable: false,
-      reason: 'decision_evidence_unavailable',
-      orderedDecisions: [],
+      resolvable: false, reason: 'decision_evidence_unavailable', orderedDecisions: [],
     });
 
     // History (b): Independent immutable coordinator history where both canonical decisions
@@ -1085,28 +1018,19 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     const historyBothCommitted = createImmutableCoordinatorHistory([
       txHist1CommittedRow,
       {
-        transaction_id: txHist2.transactionId,
-        session_id: 'hist-sess-2',
-        status: 'COMMITTED',
-        transaction_mode: 'DISTRIBUTED',
-        participant_set_state: 'FROZEN',
-        commit_mode: 'TWO_PHASE',
-        frozen_participant_count: 1,
-        decision: canonicalCommitHist2.decision,
+        transaction_id: txHist2.transactionId, session_id: 'hist-sess-2', status: 'COMMITTED',
+        transaction_mode: 'DISTRIBUTED', participant_set_state: 'FROZEN', commit_mode: 'TWO_PHASE',
+        frozen_participant_count: 1, decision: canonicalCommitHist2.decision,
         decision_text: canonicalCommitHist2.decisionText,
         decision_digest: canonicalCommitHist2.decisionDigest,
-        created_at: 1000,
-        updated_at: 1000,
+        created_at: 1000, updated_at: 1000,
       },
     ]);
     const conflictingCommitDisposition = resolveRetainedPreparedContradictionDisposition(
-      initialInspection,
-      historyBothCommitted.lookup,
+      initialInspection, historyBothCommitted.lookup,
     );
     assert.deepEqual(conflictingCommitDisposition, {
-      resolvable: false,
-      reason: 'conflicting_committed_decisions',
-      orderedDecisions: [],
+      resolvable: false, reason: 'conflicting_committed_decisions', orderedDecisions: [],
     });
 
     // History (c): Independent immutable coordinator history with a genuine multiparticipant
@@ -1116,40 +1040,29 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     const historyCommitAndRollback = createImmutableCoordinatorHistory([
       txHist1CommittedRow,
       {
-        transaction_id: txHist2.transactionId,
-        session_id: 'hist-sess-2',
-        status: 'ABORTED',
-        transaction_mode: 'DISTRIBUTED',
-        participant_set_state: 'FROZEN',
-        commit_mode: 'TWO_PHASE',
-        frozen_participant_count: 2,
-        decision: canonicalRollbackHist2.decision,
+        transaction_id: txHist2.transactionId, session_id: 'hist-sess-2', status: 'ABORTED',
+        transaction_mode: 'DISTRIBUTED', participant_set_state: 'FROZEN', commit_mode: 'TWO_PHASE',
+        frozen_participant_count: 2, decision: canonicalRollbackHist2.decision,
         decision_text: canonicalRollbackHist2.decisionText,
         decision_digest: canonicalRollbackHist2.decisionDigest,
-        created_at: 1000,
-        updated_at: 1000,
+        created_at: 1000, updated_at: 1000,
       },
     ]);
     const disposition = resolveRetainedPreparedContradictionDisposition(
-      initialInspection,
-      historyCommitAndRollback.lookup,
+      initialInspection, historyCommitAndRollback.lookup,
     );
     assert.equal(disposition.resolvable, true);
     assert.equal(disposition.reason, null);
     assert.deepEqual(disposition.orderedDecisions, [
       {
-        participantId: txHist2.participantId,
-        transactionId: txHist2.transactionId,
-        decision: 'ROLLBACK',
-        preparedDigest: prepHist2.preparedDigest,
+        participantId: txHist2.participantId, transactionId: txHist2.transactionId,
+        decision: 'ROLLBACK', preparedDigest: prepHist2.preparedDigest,
         decisionText: canonicalRollbackHist2.decisionText,
         decisionDigest: canonicalRollbackHist2.decisionDigest,
       },
       {
-        participantId: txHist1.participantId,
-        transactionId: txHist1.transactionId,
-        decision: 'COMMIT',
-        preparedDigest: prepHist1.preparedDigest,
+        participantId: txHist1.participantId, transactionId: txHist1.transactionId,
+        decision: 'COMMIT', preparedDigest: prepHist1.preparedDigest,
         decisionText: canonicalCommitHist1.decisionText,
         decisionDigest: canonicalCommitHist1.decisionDigest,
       },
@@ -1487,4 +1400,59 @@ test('P2 (Review 2 Finding 3): pre-_partition_write_generation_history storage r
     clearFixtureSingletons();
     fs.rmSync(directory, {recursive: true, force: true});
   }
+});
+
+test('Finding 1B: promoted read-only ACTIVE persistence waits for all siblings and CAS-guards against clobbering PREPARED state', async (t) => {
+  const gateway = createTransactionPersistenceGateway();
+  t.after(() => gateway.db.close());
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    logger: QUIET_LOGGER,
+    controlPlaneSystemTableGateway: gateway,
+    autoStartDistributedTransactionRecovery: false,
+  });
+  t.after(() => engine.shutdown());
+  const coordinator = engine.transactionCoordinator;
+  coordinator.beginParticipant = async () => {};
+  coordinator.prepareParticipant = async (_s, pid) => buildPrepareEvidence(pid);
+  coordinator.commitParticipant = async () => {};
+  coordinator.rollbackParticipant = async () => {};
+
+  const p2Started = Promise.withResolvers();
+  const releaseP2 = Promise.withResolvers();
+  let failP1 = true;
+  let holdP2 = true;
+  const origSubmit = gateway.submitMutation.bind(gateway);
+  gateway.submitMutation = async (m, opts) => {
+    if (m.tableName === 'sql_transaction_participants' && m.row?.status === 'ACTIVE') {
+      if (m.row.partition_id === 'p1' && failP1) {
+        failP1 = false;
+        throw new Error('p1 ACTIVE failed');
+      }
+      if (m.row.partition_id === 'p2' && holdP2) {
+        holdP2 = false;
+        p2Started.resolve();
+        await releaseP2.promise;
+      }
+    }
+    return origSubmit(m, opts);
+  };
+
+  const begun = await coordinator.begin('f1b-fast');
+  await coordinator.executeReadStatement('f1b-fast', begun.transactionId, ({enlist}) => enlist(['p1', 'p2']));
+  let settled = false;
+  const writeP = coordinator.executeWriteStatement(
+    'f1b-fast',
+    {operationId: 'w-f1b', sql: 'UPDATE t SET v = 1', partitionIds: ['p1', 'p2']},
+    async () => ({success: true, affectedRows: 2}),
+  ).finally(() => {
+    settled = true;
+  });
+  await p2Started.promise;
+  await new Promise((r) => setImmediate(r));
+  assert.equal(settled, false);
+  releaseP2.resolve();
+  await assert.rejects(writeP, /p1 ACTIVE failed/u);
+  const committed = await coordinator.commit('f1b-fast');
+  assert.equal(committed.success, true);
 });

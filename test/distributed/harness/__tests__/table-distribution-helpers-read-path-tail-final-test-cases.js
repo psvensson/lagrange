@@ -1,3 +1,58 @@
+const arrayMap = Function.call.bind(Array.prototype.map);
+
+const CLUSTER_NODE_IDS = Object.freeze([
+  'seed-1',
+  'node-2',
+  'node-3',
+  'node-4',
+  'node-5',
+  'node-6',
+  'node-7',
+]);
+
+function createBootstrapPlanFixture({
+  activeServiceNodeIds,
+  resolveBenchmarkReadyLoadNodes,
+  TABLES_SQL_FRAGMENT,
+  PARTITIONS_SQL_FRAGMENT,
+  SERVICES_SQL_FRAGMENT,
+}) {
+  const clusterNodes = arrayMap(CLUSTER_NODE_IDS, (id) => ({id}));
+  const serviceRows = arrayMap(activeServiceNodeIds, (nodeId) => ({
+    partition_id: 'bench-p1',
+    node_id: nodeId,
+    status: 'active',
+  }));
+  const seedNode = {
+    id: 'seed-1',
+    async query(sql) {
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {rows: [{table_id: 'tbl-benchmark-events-1'}]};
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {rows: [{partition_id: 'bench-p1'}]};
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {rows: serviceRows};
+      }
+      return {rows: []};
+    },
+  };
+  const cluster = {
+    _config: {
+      benchmark: {
+        replicationFactor: 3,
+        readyPollIntervalMs: 5,
+        preloadRequiredStableMs: 0,
+      },
+    },
+    getNodes: () => clusterNodes,
+    resolveBenchmarkReadyLoadNodes: () =>
+      resolveBenchmarkReadyLoadNodes(clusterNodes),
+  };
+  return {clusterNodes, seedNode, cluster};
+}
+
 export function registerTableDistributionHelpersReadPathTailFinalTests({
   test,
   assert,
@@ -16,50 +71,12 @@ export function registerTableDistributionHelpersReadPathTailFinalTests({
   test('table-distribution-helpers promotes admission-ready routed nodes ' +
   'after the replica bootstrap quorum is established', async () => {
     let admissionSampleCount = 0;
-    const clusterNodes = [
-      {id: 'seed-1'},
-      {id: 'node-2'},
-      {id: 'node-3'},
-      {id: 'node-4'},
-      {id: 'node-5'},
-      {id: 'node-6'},
-      {id: 'node-7'},
-    ];
-    const seedNode = {
-      id: 'seed-1',
-      async query(sql) {
-        if (sql.includes(TABLES_SQL_FRAGMENT)) {
-          return {
-            rows: [{table_id: 'tbl-benchmark-events-1'}],
-          };
-        }
-        if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
-          return {
-            rows: [{partition_id: 'bench-p1'}],
-          };
-        }
-        if (sql.includes(SERVICES_SQL_FRAGMENT)) {
-          return {
-            rows: [
-              {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-              {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-              {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-            ],
-          };
-        }
-        return {rows: []};
-      },
-    };
-    const cluster = {
-      _config: {
-        benchmark: {
-          replicationFactor: 3,
-          readyPollIntervalMs: 5,
-          preloadRequiredStableMs: 0,
-        },
-      },
-      getNodes: () => clusterNodes,
-      resolveBenchmarkReadyLoadNodes: async () => {
+    const {seedNode, cluster} = createBootstrapPlanFixture({
+      activeServiceNodeIds: ['seed-1', 'node-2', 'node-3'],
+      TABLES_SQL_FRAGMENT,
+      PARTITIONS_SQL_FRAGMENT,
+      SERVICES_SQL_FRAGMENT,
+      resolveBenchmarkReadyLoadNodes: async (clusterNodes) => {
         admissionSampleCount += 1;
         if (admissionSampleCount <= 2) {
           return [clusterNodes[1]];
@@ -71,7 +88,7 @@ export function registerTableDistributionHelpersReadPathTailFinalTests({
           clusterNodes[5],
         ];
       },
-    };
+    });
 
     const plan = await createPartitioningBenchmarkLoadNodePlan(
       seedNode,
@@ -110,55 +127,18 @@ export function registerTableDistributionHelpersReadPathTailFinalTests({
 
   test('table-distribution-helpers can bootstrap on a majority-sized replica ' +
   'cohort before wider admission catches up', async () => {
-    const clusterNodes = [
-      {id: 'seed-1'},
-      {id: 'node-2'},
-      {id: 'node-3'},
-      {id: 'node-4'},
-      {id: 'node-5'},
-      {id: 'node-6'},
-      {id: 'node-7'},
-    ];
-    const seedNode = {
-      id: 'seed-1',
-      async query(sql) {
-        if (sql.includes(TABLES_SQL_FRAGMENT)) {
-          return {
-            rows: [{table_id: 'tbl-benchmark-events-1'}],
-          };
-        }
-        if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
-          return {
-            rows: [{partition_id: 'bench-p1'}],
-          };
-        }
-        if (sql.includes(SERVICES_SQL_FRAGMENT)) {
-          return {
-            rows: [
-              {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-              {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-            ],
-          };
-        }
-        return {rows: []};
-      },
-    };
-    const cluster = {
-      _config: {
-        benchmark: {
-          replicationFactor: 3,
-          readyPollIntervalMs: 5,
-          preloadRequiredStableMs: 0,
-        },
-      },
-      getNodes: () => clusterNodes,
-      resolveBenchmarkReadyLoadNodes: async () => [
+    const {seedNode, cluster} = createBootstrapPlanFixture({
+      activeServiceNodeIds: ['seed-1', 'node-2'],
+      TABLES_SQL_FRAGMENT,
+      PARTITIONS_SQL_FRAGMENT,
+      SERVICES_SQL_FRAGMENT,
+      resolveBenchmarkReadyLoadNodes: async (clusterNodes) => [
         clusterNodes[1],
         clusterNodes[3],
         clusterNodes[4],
         clusterNodes[5],
       ],
-    };
+    });
 
     const plan = await createPartitioningBenchmarkLoadNodePlan(
       seedNode,
@@ -201,49 +181,13 @@ export function registerTableDistributionHelpersReadPathTailFinalTests({
 
   test('table-distribution-helpers fails when the replica-bearing bootstrap ' +
   'quorum never stabilizes', async () => {
-    const clusterNodes = [
-      {id: 'seed-1'},
-      {id: 'node-2'},
-      {id: 'node-3'},
-      {id: 'node-4'},
-      {id: 'node-5'},
-      {id: 'node-6'},
-      {id: 'node-7'},
-    ];
-    const seedNode = {
-      id: 'seed-1',
-      async query(sql) {
-        if (sql.includes(TABLES_SQL_FRAGMENT)) {
-          return {
-            rows: [{table_id: 'tbl-benchmark-events-1'}],
-          };
-        }
-        if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
-          return {
-            rows: [{partition_id: 'bench-p1'}],
-          };
-        }
-        if (sql.includes(SERVICES_SQL_FRAGMENT)) {
-          return {
-            rows: [
-              {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-            ],
-          };
-        }
-        return {rows: []};
-      },
-    };
-    const cluster = {
-      _config: {
-        benchmark: {
-          replicationFactor: 3,
-          readyPollIntervalMs: 5,
-          preloadRequiredStableMs: 0,
-        },
-      },
-      getNodes: () => clusterNodes,
+    const {seedNode, cluster} = createBootstrapPlanFixture({
+      activeServiceNodeIds: ['seed-1'],
+      TABLES_SQL_FRAGMENT,
+      PARTITIONS_SQL_FRAGMENT,
+      SERVICES_SQL_FRAGMENT,
       resolveBenchmarkReadyLoadNodes: async () => [],
-    };
+    });
 
     await assert.rejects(
       createPartitioningBenchmarkLoadNodePlan(

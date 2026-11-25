@@ -45,43 +45,50 @@ function getSeedNode(nodes) {
   return nodes.find((node) => node.role === 'seed') || nodes[ZERO] || null;
 }
 
+function resolvePositiveIntegerOption(value, fallback) {
+  return Number.isInteger(value) && value > ZERO ? value : fallback;
+}
+
+function resolveNonEmptyStringOption(value, fallback) {
+  return typeof value === 'string' && value.length > ZERO ? value : fallback;
+}
+
+function resolveBenchmarkTablePoliciesOption(policies) {
+  return policies && typeof policies === 'object' ?
+    {
+      ...DEFAULT_BENCHMARK_TABLE_POLICIES,
+      ...policies,
+    } :
+    {...DEFAULT_BENCHMARK_TABLE_POLICIES};
+}
+
 function resolveScenarioConfig(cluster) {
   const benchmarkConfig = cluster?._config?.benchmark || {};
   return {
     expectedNodeCount: DEFAULT_EXPECTED_NODE_COUNT,
-    baselineLoadNodeCount:
-      Number.isInteger(benchmarkConfig.clients) &&
-        benchmarkConfig.clients > ZERO ?
-        benchmarkConfig.clients :
-        DEFAULT_BASELINE_LOAD_NODE_COUNT,
-    requiredSutLoadNodeCount:
-      Number.isInteger(benchmarkConfig.requiredSutLoadNodeCount) &&
-        benchmarkConfig.requiredSutLoadNodeCount > ZERO ?
-        benchmarkConfig.requiredSutLoadNodeCount :
-        DEFAULT_REQUIRED_SUT_LOAD_NODE_COUNT,
-    durationSeconds:
-      Number.isInteger(benchmarkConfig.durationSeconds) &&
-        benchmarkConfig.durationSeconds > ZERO ?
-        benchmarkConfig.durationSeconds :
-        DEFAULT_DURATION_SECONDS,
-    loadDuration:
-      typeof benchmarkConfig.loadDuration === 'string' &&
-        benchmarkConfig.loadDuration.length > ZERO ?
-        benchmarkConfig.loadDuration :
-        DEFAULT_LOAD_DURATION,
-    tableName:
-      typeof benchmarkConfig.tableName === 'string' &&
-        benchmarkConfig.tableName.length > ZERO ?
-        benchmarkConfig.tableName :
-        DEFAULT_TABLE_NAME,
-    benchmarkTablePolicies:
-      benchmarkConfig.benchmarkTablePolicies &&
-        typeof benchmarkConfig.benchmarkTablePolicies === 'object' ?
-        {
-          ...DEFAULT_BENCHMARK_TABLE_POLICIES,
-          ...benchmarkConfig.benchmarkTablePolicies,
-        } :
-        {...DEFAULT_BENCHMARK_TABLE_POLICIES},
+    baselineLoadNodeCount: resolvePositiveIntegerOption(
+      benchmarkConfig.clients,
+      DEFAULT_BASELINE_LOAD_NODE_COUNT,
+    ),
+    requiredSutLoadNodeCount: resolvePositiveIntegerOption(
+      benchmarkConfig.requiredSutLoadNodeCount,
+      DEFAULT_REQUIRED_SUT_LOAD_NODE_COUNT,
+    ),
+    durationSeconds: resolvePositiveIntegerOption(
+      benchmarkConfig.durationSeconds,
+      DEFAULT_DURATION_SECONDS,
+    ),
+    loadDuration: resolveNonEmptyStringOption(
+      benchmarkConfig.loadDuration,
+      DEFAULT_LOAD_DURATION,
+    ),
+    tableName: resolveNonEmptyStringOption(
+      benchmarkConfig.tableName,
+      DEFAULT_TABLE_NAME,
+    ),
+    benchmarkTablePolicies: resolveBenchmarkTablePoliciesOption(
+      benchmarkConfig.benchmarkTablePolicies,
+    ),
     minTotalPartitions: DEFAULT_MIN_TOTAL_PARTITIONS,
     minAdditionalPartitions: DEFAULT_MIN_ADDITIONAL_PARTITIONS,
     minDistinctReplicaNodes: DEFAULT_MIN_DISTINCT_REPLICA_NODES,
@@ -186,35 +193,37 @@ function buildPartitioningRebalanceAssessment(baselineResult, splitEvidence) {
   };
 }
 
+function formatComparedAgainstBaselineLabel(baseline) {
+  return Number.isInteger(baseline?.replicationFactor) &&
+    baseline.replicationFactor > ZERO ?
+    String(baseline.replicationFactor) + '-replica-postgres-baseline' :
+    'postgres-baseline';
+}
+
 function buildQueryServingAssessment(baselineResult) {
-  const benchmarkDetails = baselineResult?.details?.benchmark || {};
-  const comparison = baselineResult?.details?.comparison || {};
-  const baseline = baselineResult?.details?.baseline || {};
+  const details = baselineResult?.details || {};
+  const benchmarkDetails = details.benchmark || {};
+  const comparison = details.comparison || {};
   const throughputRatio = Number(
     comparison.throughputRatioSutToBaseline || ZERO,
   );
   const p99LatencyRatio = Number(
     comparison.p99LatencyRatioSutToBaselineAvg || ZERO,
   );
+  const throughputImproved = throughputRatio > 1;
+  const p99LatencyImprovedOrEqual =
+    p99LatencyRatio > ZERO && p99LatencyRatio <= 1;
 
   return {
     workload: benchmarkDetails.workload || null,
     operations: benchmarkDetails.operations || [],
     tableName: benchmarkDetails.tableName || null,
-    comparedAgainst:
-      Number.isInteger(baseline.replicationFactor) &&
-        baseline.replicationFactor > ZERO ?
-        String(baseline.replicationFactor) + '-replica-postgres-baseline' :
-        'postgres-baseline',
+    comparedAgainst: formatComparedAgainstBaselineLabel(details.baseline),
     throughputRatioSutToBaseline: throughputRatio,
     p99LatencyRatioSutToBaselineAvg: p99LatencyRatio,
-    throughputImproved: throughputRatio > 1,
-    p99LatencyImprovedOrEqual:
-      p99LatencyRatio > ZERO && p99LatencyRatio <= 1,
-    outperformedBaseline:
-      throughputRatio > 1 &&
-      p99LatencyRatio > ZERO &&
-      p99LatencyRatio <= 1,
+    throughputImproved,
+    p99LatencyImprovedOrEqual,
+    outperformedBaseline: throughputImproved && p99LatencyImprovedOrEqual,
   };
 }
 

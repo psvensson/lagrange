@@ -2,169 +2,66 @@
  * Runs eslint with the complexity rule and reports only complexity
  * violations, ignoring other lint errors.
  *
- * Default mode: fails if violations exceed the current baseline count.
+ * Default mode: fails if scan completeness fails, if any new violation
+ * identity appears, if any existing violation's complexity severity worsens,
+ * or if total violations exceed BASELINE_COUNT.
  * --strict mode: fails if any function exceeds the target threshold (12).
+ * --write-baseline mode: writes the current identity->severity map to
+ * scripts/baselines/complexity-ratchet-baseline.json.
  *
- * The baseline count should be ratcheted down as complex functions
- * are refactored. Update BASELINE_COUNT when violations are fixed.
+ * The baseline count and identity map should be ratcheted down as complex
+ * functions are refactored.
  */
 
-import {METRIC_REPORTS} from './metric-report-constants.js';
-import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import {LegacyESLint} from 'eslint/use-at-your-own-risk';
 
 import {
+  assertScanCompleteness,
   collectRuleViolations,
+  collectScanCompleteness,
+  evaluateIdentitySeverityRatchet,
 } from './metric-check-helpers.js';
-
+import {METRIC_REPORTS} from './metric-report-constants.js';
+import {
+  beginMetricMeasurement,
+  finishMetricMeasurement,
+} from './metric-report-provenance.js';
 
 const TARGET_THRESHOLD = 12;
 // Measured after the proof-integrity cutover. Ratchet DOWN only from here.
 // 2026-07-19: tightened 1855 -> 1847 (measured; taking the ratchet down per
 // the release-gate one-way-baseline rule).
-// 2026-08-10: tightened 1842 -> 1841 (six new-debt functions refactored
-// below the threshold; measured with the checker's tightening hint).
-// 2026-08-10: tightened 1841 -> 1839 (checkRebalance tail scheduling and
-// the topology-settling gate log-context extracted while landing
-// user-table-leader-placement-spread; one-way-baseline rule).
-// 2026-08-14: tightened 1839 -> 1838 after authoritative readiness-repair
-// permission moved into its canonical reconciler owner.
-// 2026-08-21: tightened 1838 -> 1831 after deleting the runtime compatibility
-// reconciler, consolidating rebalancer entity/read-model ownership, and
-// removing the duplicate heartbeat/reconcile ownership path.
-// 2026-08-21: tightened 1831 -> 1826 after retiring the bootstrap formation
-// placement/drain re-derivation and duplicate read-authority paths.
-// 2026-08-29: tightened 1824 -> 1823 after the release-branch ratchet repair
-// (active-gate evidence probes, formation-barrier snapshot projection,
-// formation-release contract identity, coordinator move request decoration).
-// 2026-09-04: tightened 1823 -> 1822 after liveness predicate extraction.
-// 2026-09-15: tightened 1822 -> 1820 after the priority-recovery planning-read
-// split retired both generic getPriorityRecoveryPlanningSnapshot methods and
-// the gateway queue-metadata, attribution execution-node assertion and
-// superseded host-fixpoint settler were extracted or removed.
-// 2026-09-19: tightened 1819 -> 1818 after the learner-promotion count check
-// moved its arithmetic into its own owner (measured with the checker's
-// tightening hint).
-// 2026-09-19: tightened 1818 -> 1817 after the lease sweeper's disconnect loop
-// became its own method (sweepExpiredLeases 13 -> 4), measured with the hint.
-// 2026-09-19: tightened 1817 -> 1816 after the learner promotion's in-flight
-// operation read lost its over-threshold method (spread-cure authorization
-// carrier), measured with the hint.
-// 2026-09-23: tightened 1816 -> 1814 on the checker's hint after the rs-raft
-// single-path cutover removed the write path's direct-execution branch and the
-// runtime owner's status shaping moved beside it.
-// 2026-09-24: tightened 1814 -> 1813 on the checker's hint after the ready
-// node's publication advancement read its published set from the snapshot
-// owner instead of normalizing the row itself (cutover seed parity).
-// 2026-09-25: tightened 1813 -> 1811 on the checker's hint after the REPLACE
-// owner deleted the replacement-leader retarget resolution (H-B', quest
-// replace-source-removal-owner).
-// 2026-09-26: tightened 1811 -> 1810 on the checker's hint on the O1
-// committed-read branch (the partition row branch of the creation stamp
-// deleted; the peer-cache reconcile's expected-peer loop extracted).
-// 2026-09-26: tightened 1810 -> 1805 on the hint (fix-f1: the per-leg
-// handoff evidence and escalation deleted).
-// 2026-09-26: tightened 1810 -> 1809 on the checker's hint (fix-f4: the
-// readiness service-row readers share one authoritative-read helper,
-// readAllNodeServiceRows drops below the threshold).
-// 2026-09-26 (integration 2): the two merged at the lower (1805), then
-// tightened to 1804 on the checker's hint.
-// 2026-09-28: tightened 1804 -> 1797 on the checker's hint (node lifecycle
-// owner: the dispatch node-state queue, deferred retry and in-write
-// follow-up branches deleted).
-// 2026-09-29: tightened 1797 -> 1796 on the checker's hint (census walker
-// split into named node predicates).
-// 2026-09-30: tightened 1796 -> 1795 on the checker's hint (the boot
-// lifecycle components no longer branch on a missing incarnation).
-// 2026-10-03: tightened 1795 -> 1773 on the checker's hint after the
-// origin/main ec63fbb00 merge and the native-append inference deletion.
-// 2026-10-04: tightened 1773 -> 1770 on the checker's hint after the
-// origin/main d60c30921 merge (consensus-cutover closeout tree).
-// 2026-10-04: tightened 1770 -> 1765 on the checker's hint after the
-// message-group MOVE_REPLICA selection and execution were deleted.
-// 2026-10-04: tightened 1765 -> 1764 on the checker's hint (the convergence
-// snapshot classifier's voter checks moved into convergence-voter-targets).
-// 2026-10-04 (quest/one-spread-authority): tightened 1770 -> 1767 on the
-// checker's hint after the one-spread-authority deletion (closure synthesis,
-// D9 ranking, D3 latch).
-// 2026-10-05: merge of quest/one-spread-authority keeps the lower value,
-// then tightened 1764 -> 1761 on the checker's hint for the merged tree.
-// 2026-10-05 (quest/pgwire-dml-row-counts): tightened 1761 -> 1760 on the
-// checker's hint (the PG-wire mapper's three `changes ?? rowCount ?? 0`
-// fallbacks became one call to the result-count owner).
-// 2026-10-05 (quest/group-retirement-as-a-unit): tightened 1770 -> 1769 on
-// the checker's hint (the group-retired tombstone record's text fields go
-// through one helper).
-// 2026-10-05: tightened 1769 -> 1768 on the checker's hint (the record
-// store's change functions and the split decoder extracted helpers).
-// 2026-10-05: tightened 1768 -> 1767 on the checker's hint (round 7: the
-// record store's turn and the SQLite witness world extracted helpers).
-// 2026-10-05: merge of quest/group-retirement-as-a-unit keeps the lower
-// value, then tightened 1760 -> 1757 on the checker's hint for the merged
-// tree (the merge persistence's same-owner re-sync left with the record
-// store redesign).
-// 2026-10-07: the composed identity admission extraction tightened the
-// combined bound from 1757 to 1756; the START owner extraction and removal
-// of its legacy inline handler tighten the combined bound from 1756 to 1755.
-// 2026-10-26: tightened 1755 -> 1751 on the checker's hint after composing
-// the admin admission chain and deleting NodeLifecycleService and the
-// obsolete benchmark partition repair/by-name paths.
-// 2026-10-26: tightened 1751 -> 1750 on the checker's hint after extracting
-// pre-kill marker and survivor owner-diagnostics helpers in
-// node-failure-rebalance.js.
-// 2026-10-26 (D4 window deletion): tightened 1750 -> 1749 on the checker's
-// hint after deleting the sliding-window replay and handshake catch-up in
-// partition-cdc-delivery.js.
-// 2026-10-26 (pkg-main-reconcile): tightened 1749 -> 1747 on the checker's
-// hint after refactoring W7 route witness, ControllableConsensusPort,
-// coordinator settlement command, and raft-rs operation port.
-// 2026-10-27 (retained-seed-original-handoff): tightened 1747 -> 1744 on the
-// checker's hint after splitting #validateMemberOpening in
-// raft-rs-original-allocation-preparation.js and CDC occurrence witness helpers.
-// 2026-10-27 (sql-ingress-hardening): tightened 1744 -> 1742 on the checker's
-// hint after extracting STAGE/PLAN dispatch helpers in
-// sql-query-engine-request-dispatch.js and remote write/DDL helpers.
-// 2026-10-27 (sn1-tx1-freshmg-composition): tightened 1742 -> 1739 on the
-// checker's hint after composing SN1 snapshot/compaction, TX1 admission, and
-// FreshMG source-removal fence.
-// 2026-10-28 (v0.2.6 release convergence): tightened 1739 -> 1738 on the
-// checker's hint after extracting seed node registration row construction in
-// bootstrap-service-control-plane-runtime-methods.js.
-// 2026-10-31: tightened 1738 -> 1737 on the checker's hint.
-// 2026-10-31 (developer-journey-and-measured-comparisons): tightened 1737 -> 1735
-// on the checker's hint after decomposing comparison renderers and route resolvers.
-// 2026-11-01 (comparative-benchmark-evidence-repair): tightened 1735 -> 1731 on
-// the checker's hint after restoring ownership in the benchmark chain (campaign
-// runner, workload call site, identity inspection, readiness, durability proof).
-// 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 1731 -> 1728 on the checker's hint.
-// 2026-11-03 (quest serve-eligibility-committed-epoch-read attempt 2): tightened 1728 -> 1727 on the checker's hint.
-// 2026-11-03 (composed-05-comparison-readiness): tightened 1727 -> 1721 on the checker's hint.
-// 2026-11-04 (composed-05-comparison-readiness): tightened 1721 -> 1720 on the checker's hint.
-// 2026-11-06 (required-entity-operation-observation): tightened 1720 -> 1719
-// on the checker hint after deleting alternate required-read adaptation.
-// 2026-11-07: tightened 1719 -> 1718 -> 1715 -> 1714 on the checker hint after unifying the
-// priority-recovery planning-answer reader and decomposing reconcile/routing helpers.
-// 2026-11-08: tightened 1714 -> 1712 -> 1711 on the checker hint after removing safety-row and
-// publication-scope fallbacks and decomposing formation priority-spread completeness checks.
-// 2026-11-08 (state-read-named-defaults): tightened 1731 -> 1714 on its own
-// branch; merged into the stream at the lower 1711, then 1711 -> 1699 on the
-// checker's hint (the merged tree).
-// 2026-11-09 (candidate-integration): tightened 1699 -> 1698 on the checker hint.
-// 2026-11-14 (formation-ready-lease-independent-of-spread): tightened 1698 -> 1695 on the checker hint.
-// 2026-11-17 (complexity-ratchet-closure): tightened 1695 -> 1692 on the checker hint.
-// 2026-11-17 (test-guard-alignment): tightened 1692 -> 1691 on the checker hint.
-// 2026-11-17 (fix-j small follow-ups): tightened 1691 -> 1689 on the checker hint.
-// 2026-11-18 (integration-20261118): tightened 1689 -> 1688 on the checker hint
-// (the merged tree of fixes H, J, M, B2 and WP-K, WP-D, WP-B, WP0, WP1).
-// 2026-11-19: tightened 1688 -> 1680 on the checker's hint after composing K2, WP-E, WP-V, Removal, Raft, and SeedCPU repairs.
-const BASELINE_COUNT = 1680;
+// 2026-11-19: tightened 1688 -> 1680 on the checker's hint after composing K2,
+// WP-E, WP-V, Removal, Raft, and SeedCPU repairs.
+// 2026-11-25: anchored identity+severity baseline map and tightened
+// 1680 -> 1597 in scripts/baselines/complexity-ratchet-baseline.json after
+// refactoring 165+ functions across test/distributed/ and src/, and promoted
+// test:complexity to a blocking CI structural regression gate.
+const BASELINE_COUNT = 1597;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
+const WRITE_BASELINE_FLAG = '--write-baseline';
 const ARG_SEPARATOR = '--';
 const LOCAL_STR_TEST_GITKEEP = 'test/.gitkeep';
 const LOCAL_STR_COMPLEXITY = 'complexity';
 const LOCAL_STR_ERROR = 'error';
+const ANALYZER_ESLINT = 'eslint';
+const UTF8_ENCODING = 'utf8';
+const JSON_INDENT = 2;
+const ZERO_COUNT = 0;
+const EXIT_FAILURE = 1;
+const BASELINE_RELATIVE_PATH =
+  'scripts/baselines/complexity-ratchet-baseline.json';
+const HEADER_NEW_COMPLEXITY = 'New complexity violations';
+const HEADER_WORSENED_COMPLEXITY = 'Worsened complexity violations';
+const HEADER_REMOVED_COMPLEXITY_FAILURE =
+  'Removed complexity violations (cannot offset new/worsened violations)';
+const HEADER_REMOVED_COMPLEXITY_BASELINE =
+  'Removed complexity baseline identities';
+const HEADER_IMPROVED_COMPLEXITY = 'Improved complexity violations';
 const DEFAULT_LINT_TARGETS = METRIC_REPORTS.complexity.targets;
 const REPORT_RELATIVE_PATH = METRIC_REPORTS.complexity.reportPath;
 const SCOPED_REPORT_RELATIVE_PATH =
@@ -173,6 +70,7 @@ const PRINT_LIMIT = 40;
 const FILTERED_FLAGS = new Set([
   STRICT_FLAG,
   SCOPED_FLAG,
+  WRITE_BASELINE_FLAG,
   ARG_SEPARATOR,
 ]);
 const ESLINT_OVERRIDE_CONFIG = {
@@ -189,16 +87,18 @@ const ESLINT_OVERRIDE_CONFIG = {
     [LOCAL_STR_COMPLEXITY]: [LOCAL_STR_ERROR, TARGET_THRESHOLD],
   },
 };
+
 const args = process.argv.slice(2);
 const strict = args.includes(STRICT_FLAG);
 const scoped = args.includes(SCOPED_FLAG);
+const writeBaseline = args.includes(WRITE_BASELINE_FLAG);
 const scopedTargets = args.filter((arg) => !FILTERED_FLAGS.has(arg));
 
-if (scoped && scopedTargets.length === 0) {
+if (scoped && scopedTargets.length === ZERO_COUNT) {
   console.error(
     'Usage: npm run test:complexity:scoped -- <file-or-directory> [...]',
   );
-  process.exit(1);
+  process.exit(EXIT_FAILURE);
 }
 
 const lintTargets = scoped ? scopedTargets : DEFAULT_LINT_TARGETS;
@@ -214,12 +114,19 @@ const eslint = new LegacyESLint({
   useEslintrc: false,
   overrideConfig: ESLINT_OVERRIDE_CONFIG,
 });
-const measurement = beginMetricMeasurement('complexity', {
-  targets: lintTargets, reportPath: reportRelativePath,
+const measurement = beginMetricMeasurement(LOCAL_STR_COMPLEXITY, {
+  targets: lintTargets,
+  reportPath: reportRelativePath,
 });
 const results = await eslint.lintFiles(lintTargets);
-const violations = collectRuleViolations(results, LOCAL_STR_COMPLEXITY);
+const scanCompleteness = collectScanCompleteness(results, {
+  ruleId: LOCAL_STR_COMPLEXITY,
+  targets: lintTargets,
+  analyzer: ANALYZER_ESLINT,
+});
+assertScanCompleteness(scanCompleteness, LOCAL_STR_COMPLEXITY);
 
+const violations = collectRuleViolations(results, LOCAL_STR_COMPLEXITY);
 const count = violations.length;
 
 finishMetricMeasurement(measurement, {
@@ -228,11 +135,12 @@ finishMetricMeasurement(measurement, {
   scoped,
   targets: lintTargets,
   count,
+  scanCompleteness,
   violations,
 });
 
 function printViolations(entries) {
-  for (const violation of entries.slice(0, PRINT_LIMIT)) {
+  for (const violation of entries.slice(ZERO_COUNT, PRINT_LIMIT)) {
     console.log(
       `${violation.filePath}:${violation.line}:${violation.column} ` +
       `${violation.message}`,
@@ -246,14 +154,77 @@ function printViolations(entries) {
   }
 }
 
-if (strict) {
-  if (count > 0) {
+function printIdentityViolations(header, entries, includeBaseline = false) {
+  if (entries.length === ZERO_COUNT) {
+    return;
+  }
+  console.log(`\n${header} (${entries.length}):`);
+  for (const entry of entries.slice(ZERO_COUNT, PRINT_LIMIT)) {
+    const severityNote = includeBaseline ?
+      `complexity ${entry.baselineSeverity} -> ${entry.severity}` :
+      `complexity ${entry.severity}`;
+    console.log(
+      `  ${entry.identity} (${entry.filePath}:${entry.line}:${entry.column}, ` +
+      `${severityNote})`,
+    );
+  }
+  if (entries.length > PRINT_LIMIT) {
+    console.log(`  ... ${entries.length - PRINT_LIMIT} more.`);
+  }
+}
+
+function printIdentityList(header, identities) {
+  if (identities.length === ZERO_COUNT) {
+    return;
+  }
+  console.log(`\n${header} (${identities.length}):`);
+  for (const identity of identities.slice(ZERO_COUNT, PRINT_LIMIT)) {
+    console.log(`  ${identity}`);
+  }
+  if (identities.length > PRINT_LIMIT) {
+    console.log(`  ... ${identities.length - PRINT_LIMIT} more.`);
+  }
+}
+
+function readBaselineEntries(baselineFilePath) {
+  if (!fs.existsSync(baselineFilePath)) {
+    console.error(
+      `Complexity baseline file is missing: ${BASELINE_RELATIVE_PATH}.`,
+    );
+    process.exit(EXIT_FAILURE);
+  }
+  return JSON.parse(fs.readFileSync(baselineFilePath, UTF8_ENCODING));
+}
+
+function writeBaselineEntries(baselineFilePath, currentEntries) {
+  fs.mkdirSync(path.dirname(baselineFilePath), {recursive: true});
+  fs.writeFileSync(
+    baselineFilePath,
+    `${JSON.stringify(currentEntries, null, JSON_INDENT)}\n`,
+    UTF8_ENCODING,
+  );
+  console.log(
+    `Wrote ${Object.keys(currentEntries).length} complexity baseline ` +
+    `entries to ${BASELINE_RELATIVE_PATH}.`,
+  );
+}
+
+const baselineFilePath = path.resolve(process.cwd(), BASELINE_RELATIVE_PATH);
+
+if (writeBaseline) {
+  const ratchet = evaluateIdentitySeverityRatchet({
+    violations,
+    baselineEntries: {},
+  });
+  writeBaselineEntries(baselineFilePath, ratchet.currentEntries);
+} else if (strict) {
+  if (count > ZERO_COUNT) {
     console.log(
       `Complexity violations (threshold: ${TARGET_THRESHOLD}):\n`,
     );
     printViolations(violations);
     console.log(`\n${count} violation(s) found.`);
-    process.exit(1);
+    process.exit(EXIT_FAILURE);
   }
   console.log(
     `No complexity violations (threshold: ${TARGET_THRESHOLD}).`,
@@ -263,24 +234,62 @@ if (strict) {
     `Scoped complexity ratchet: ${count} violation(s) in ` +
     `${lintTargets.length} target(s) (threshold: ${TARGET_THRESHOLD}).`,
   );
-  if (count > 0) {
+  if (count > ZERO_COUNT) {
     printViolations(violations);
   }
   console.log(`Saved complexity report to ${reportRelativePath}.`);
 } else {
-  if (count > BASELINE_COUNT) {
+  const baselineEntries = readBaselineEntries(baselineFilePath);
+  const ratchet = evaluateIdentitySeverityRatchet({
+    violations,
+    baselineEntries,
+  });
+  const hasNew = ratchet.newViolations.length > ZERO_COUNT;
+  const hasWorsened = ratchet.worsenedViolations.length > ZERO_COUNT;
+  const exceedsCount = count > BASELINE_COUNT;
+
+  if (hasNew || hasWorsened || exceedsCount) {
     console.log(
-      `Complexity ratchet FAILED: ${count} violations ` +
-      `exceeds baseline of ${BASELINE_COUNT}.\n`,
+      `Complexity ratchet FAILED: ${count}/${BASELINE_COUNT} violations ` +
+      `(${ratchet.newViolations.length} new, ` +
+      `${ratchet.worsenedViolations.length} worsened, ` +
+      `${ratchet.removedIdentities.length} removed).`,
     );
-    printViolations(violations);
-    process.exit(1);
+    printIdentityViolations(HEADER_NEW_COMPLEXITY, ratchet.newViolations);
+    printIdentityViolations(
+      HEADER_WORSENED_COMPLEXITY,
+      ratchet.worsenedViolations,
+      true,
+    );
+    printIdentityList(
+      HEADER_REMOVED_COMPLEXITY_FAILURE,
+      ratchet.removedIdentities,
+    );
+    process.exit(EXIT_FAILURE);
   }
+
   console.log(
     `Complexity ratchet OK: ${count}/${BASELINE_COUNT} ` +
-    `violations (threshold: ${TARGET_THRESHOLD}).`,
+    `violations (threshold: ${TARGET_THRESHOLD}, ` +
+    `analyzedFiles: ${scanCompleteness.analyzedFiles}).`,
   );
   console.log(`Saved complexity report to ${reportRelativePath}.`);
+  if (ratchet.removedIdentities.length > ZERO_COUNT ||
+      ratchet.improvedViolations.length > ZERO_COUNT) {
+    printIdentityList(
+      HEADER_REMOVED_COMPLEXITY_BASELINE,
+      ratchet.removedIdentities,
+    );
+    printIdentityViolations(
+      HEADER_IMPROVED_COMPLEXITY,
+      ratchet.improvedViolations,
+      true,
+    );
+    console.log(
+      `Run \`node scripts/check-complexity.js ${WRITE_BASELINE_FLAG}\` ` +
+      `to tighten ${BASELINE_RELATIVE_PATH}.`,
+    );
+  }
   if (count < BASELINE_COUNT) {
     console.log(
       `Baseline can be tightened from ${BASELINE_COUNT} ` +

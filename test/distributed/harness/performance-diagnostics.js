@@ -146,7 +146,23 @@ function summarizeNumberSeries(values) {
   };
 }
 
-function buildWritePhaseBreakdown(raftProposeRows) {
+function pushIfNonNegativeNumber(target, rawValue) {
+  const value = normalizeNonNegativeNumber(rawValue);
+  if (value !== null) {
+    target.push(value);
+  }
+}
+
+function compareWritePhaseBreakdownEntries(left, right) {
+  const leftTotal = normalizeNonNegativeNumber(left?.total) || ZERO;
+  const rightTotal = normalizeNonNegativeNumber(right?.total) || ZERO;
+  if (leftTotal !== rightTotal) {
+    return rightTotal - leftTotal;
+  }
+  return String(left?.phase || '').localeCompare(String(right?.phase || ''));
+}
+
+function collectWritePhaseDurationsByField(raftProposeRows) {
   const phaseDurationByField = new Map();
   let aggregateTotalMs = ZERO;
 
@@ -156,28 +172,31 @@ function buildWritePhaseBreakdown(raftProposeRows) {
 
   for (const row of raftProposeRows) {
     const phaseTiming = row?.writePhaseTimingMs;
-    const timing = phaseTiming && typeof phaseTiming === 'object' ?
-      phaseTiming :
-      null;
-    if (!timing) {
+    if (!phaseTiming || typeof phaseTiming !== 'object') {
       continue;
     }
 
     const rowTotalMs = normalizeNonNegativeNumber(
-      timing[WRITE_PHASE_FIELD_TOTAL_MS],
+      phaseTiming[WRITE_PHASE_FIELD_TOTAL_MS],
     ) ??
       normalizeNonNegativeNumber(row?.durationMs) ??
       ZERO;
     aggregateTotalMs += rowTotalMs;
 
     for (const field of WRITE_PHASE_FIELDS) {
-      const value = normalizeNonNegativeNumber(timing[field]);
-      if (value === null) {
-        continue;
-      }
-      phaseDurationByField.get(field).push(value);
+      pushIfNonNegativeNumber(phaseDurationByField.get(field), phaseTiming[field]);
     }
   }
+
+  return {
+    phaseDurationByField,
+    aggregateTotalMs,
+  };
+}
+
+function buildWritePhaseBreakdown(raftProposeRows) {
+  const {phaseDurationByField, aggregateTotalMs} =
+    collectWritePhaseDurationsByField(raftProposeRows);
 
   const breakdown = [];
   for (const field of WRITE_PHASE_FIELDS) {
@@ -195,14 +214,7 @@ function buildWritePhaseBreakdown(raftProposeRows) {
     });
   }
 
-  breakdown.sort((left, right) => {
-    const leftTotal = normalizeNonNegativeNumber(left?.total) || ZERO;
-    const rightTotal = normalizeNonNegativeNumber(right?.total) || ZERO;
-    if (leftTotal !== rightTotal) {
-      return rightTotal - leftTotal;
-    }
-    return String(left?.phase || '').localeCompare(String(right?.phase || ''));
-  });
+  breakdown.sort(compareWritePhaseBreakdownEntries);
 
   return {
     aggregateTotalMs,
@@ -221,17 +233,15 @@ function summarizeWritePath(raftProposeRows) {
   let acknowledgedSamples = ZERO;
 
   for (const row of raftProposeRows) {
-    const duration = normalizeNonNegativeNumber(row?.durationMs);
-    if (duration !== null) {
-      durations.push(duration);
-    }
-    if (row?.isLeader === true) {
+    const sample = row ?? {};
+    pushIfNonNegativeNumber(durations, sample.durationMs);
+    if (sample.isLeader === true) {
       leaderSamples += ONE;
     }
-    if (row?.forwarded === true) {
+    if (sample.forwarded === true) {
       forwardedSamples += ONE;
     }
-    if (row?.acknowledged === true) {
+    if (sample.acknowledged === true) {
       acknowledgedSamples += ONE;
     }
   }
@@ -242,9 +252,7 @@ function summarizeWritePath(raftProposeRows) {
     leaderSamples,
     forwardedSamples,
     acknowledgedSamples,
-    acknowledgedRate: raftProposeRows.length > ZERO ?
-      acknowledgedSamples / raftProposeRows.length :
-      null,
+    acknowledgedRate: acknowledgedSamples / raftProposeRows.length,
     durationMs: summarizeNumberSeries(durations),
     phaseBreakdown: phaseBreakdown.phases,
     phaseTotalReferenceMs: phaseBreakdown.aggregateTotalMs,
@@ -262,19 +270,11 @@ function summarizeTransportDeliver(transportRows) {
   let acknowledgedSamples = ZERO;
 
   for (const row of transportRows) {
-    const duration = normalizeNonNegativeNumber(row?.durationMs);
-    const queueWait = normalizeNonNegativeNumber(row?.queueWaitMs);
-    const queueDepth = normalizeNonNegativeNumber(row?.queueDepth);
-    if (duration !== null) {
-      durationValues.push(duration);
-    }
-    if (queueWait !== null) {
-      queueWaitValues.push(queueWait);
-    }
-    if (queueDepth !== null) {
-      queueDepthValues.push(queueDepth);
-    }
-    if (row?.acknowledged === true) {
+    const sample = row ?? {};
+    pushIfNonNegativeNumber(durationValues, sample.durationMs);
+    pushIfNonNegativeNumber(queueWaitValues, sample.queueWaitMs);
+    pushIfNonNegativeNumber(queueDepthValues, sample.queueDepth);
+    if (sample.acknowledged === true) {
       acknowledgedSamples += ONE;
     }
   }
@@ -282,9 +282,7 @@ function summarizeTransportDeliver(transportRows) {
   return {
     sampleCount: transportRows.length,
     acknowledgedSamples,
-    acknowledgedRate: transportRows.length > ZERO ?
-      acknowledgedSamples / transportRows.length :
-      null,
+    acknowledgedRate: acknowledgedSamples / transportRows.length,
     durationMs: summarizeNumberSeries(durationValues),
     queueWaitMs: summarizeNumberSeries(queueWaitValues),
     queueDepth: summarizeNumberSeries(queueDepthValues),

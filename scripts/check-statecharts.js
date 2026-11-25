@@ -4,6 +4,8 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
+import Ajv from 'ajv';
+
 import {
   hasConcreteText,
   isObjectRecord,
@@ -22,6 +24,106 @@ const DEFAULT_STATECHART_DIRS = Object.freeze([
   'architecture/models/statecharts',
 ]);
 const STATECHART_SCHEMA = 'statechart-v1';
+const STATECHART_SCHEMA_ID = 'lagrange.statechart.v1';
+const JSON_SCHEMA_OBJECT_TYPE = 'object';
+const JSON_SCHEMA_ARRAY_TYPE = 'array';
+const JSON_SCHEMA_STRING_TYPE = 'string';
+const ADDITIONAL_PROPERTIES_KEYWORD = 'additionalProperties';
+const ROOT_FIELD_LABEL = 'statechart';
+const SLASH_SEPARATOR = '/';
+const DOT_SEPARATOR = '.';
+const NON_EMPTY_STRING_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_STRING_TYPE,
+  minLength: 1,
+});
+const STATE_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['id', 'description']),
+  properties: Object.freeze({
+    id: NON_EMPTY_STRING_SCHEMA,
+    description: NON_EMPTY_STRING_SCHEMA,
+  }),
+});
+const TRANSITION_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['from', 'event', 'to', 'evidence']),
+  properties: Object.freeze({
+    from: NON_EMPTY_STRING_SCHEMA,
+    event: NON_EMPTY_STRING_SCHEMA,
+    to: NON_EMPTY_STRING_SCHEMA,
+    evidence: NON_EMPTY_STRING_SCHEMA,
+  }),
+});
+const FORBIDDEN_TRANSITION_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['from', 'event', 'to', 'reason']),
+  properties: Object.freeze({
+    from: NON_EMPTY_STRING_SCHEMA,
+    event: NON_EMPTY_STRING_SCHEMA,
+    to: NON_EMPTY_STRING_SCHEMA,
+    reason: NON_EMPTY_STRING_SCHEMA,
+  }),
+});
+const INVARIANT_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['id', 'statement']),
+  properties: Object.freeze({
+    id: NON_EMPTY_STRING_SCHEMA,
+    statement: NON_EMPTY_STRING_SCHEMA,
+  }),
+});
+const STATECHART_JSON_SCHEMA = Object.freeze({
+  $id: STATECHART_SCHEMA_ID,
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze([
+    'schema',
+    'id',
+    'initial',
+    'states',
+    'terminalStates',
+    'transitions',
+    'invariants',
+  ]),
+  properties: Object.freeze({
+    schema: Object.freeze({
+      type: JSON_SCHEMA_STRING_TYPE,
+      const: STATECHART_SCHEMA,
+    }),
+    id: NON_EMPTY_STRING_SCHEMA,
+    initial: NON_EMPTY_STRING_SCHEMA,
+    states: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: STATE_RECORD_SCHEMA,
+    }),
+    terminalStates: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: NON_EMPTY_STRING_SCHEMA,
+    }),
+    transitions: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: TRANSITION_RECORD_SCHEMA,
+    }),
+    forbiddenTransitions: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      items: FORBIDDEN_TRANSITION_RECORD_SCHEMA,
+    }),
+    invariants: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: INVARIANT_RECORD_SCHEMA,
+    }),
+  }),
+});
+const ajv = new Ajv({allErrors: true, strict: true});
+const validateStatechartSchema = ajv.compile(STATECHART_JSON_SCHEMA);
 const HELP_TEXT = [
   'Usage: npm run model:statecharts -- [--json] [statechart.json ...]',
   '',
@@ -227,6 +329,41 @@ function validateForbiddenTransitions(errors, filePath, statechart) {
   }
 }
 
+function formatSchemaInstancePath(instancePath) {
+  if (!instancePath) {
+    return ROOT_FIELD_LABEL;
+  }
+  const segments = instancePath.slice(1).split(SLASH_SEPARATOR);
+  let formatted = '';
+  for (const segment of segments) {
+    if (/^\d+$/u.test(segment)) {
+      formatted += `[${segment}]`;
+    } else {
+      formatted += formatted.length > 0 ? `${DOT_SEPARATOR}${segment}` : segment;
+    }
+  }
+  return formatted || ROOT_FIELD_LABEL;
+}
+
+function appendSchemaValidationErrors(errors, filePath, schemaErrors, beforeCount) {
+  const entries = Array.isArray(schemaErrors) ? schemaErrors : [];
+  for (const error of entries) {
+    if (error.keyword === ADDITIONAL_PROPERTIES_KEYWORD) {
+      const targetPath = formatSchemaInstancePath(error.instancePath);
+      errors.push(
+        `${filePath}: ${targetPath} contains unsupported property ` +
+        `${error.params.additionalProperty}.`,
+      );
+    }
+  }
+  if (errors.length === beforeCount) {
+    for (const error of entries) {
+      const targetPath = formatSchemaInstancePath(error.instancePath);
+      errors.push(`${filePath}: ${targetPath} ${error.message}.`);
+    }
+  }
+}
+
 function validateStatechart(filePath) {
   const relativeFilePath = relativeToCwd(filePath);
   const errors = [];
@@ -241,6 +378,8 @@ function validateStatechart(filePath) {
     errors.push(`${relativeFilePath}: statechart must be a JSON object.`);
     return {statechart: null, errors};
   }
+  const beforeCount = errors.length;
+  const schemaValid = validateStatechartSchema(statechart);
   requireConcreteField(errors, relativeFilePath, 'schema', statechart.schema);
   if (statechart.schema !== STATECHART_SCHEMA) {
     errors.push(`${relativeFilePath}: schema must be ${STATECHART_SCHEMA}.`);
@@ -252,6 +391,14 @@ function validateStatechart(filePath) {
   validateTransitionShape(errors, relativeFilePath, statechart, stateIds);
   validateGraph(errors, relativeFilePath, statechart, stateIds);
   validateForbiddenTransitions(errors, relativeFilePath, statechart);
+  if (!schemaValid) {
+    appendSchemaValidationErrors(
+      errors,
+      relativeFilePath,
+      validateStatechartSchema.errors,
+      beforeCount,
+    );
+  }
   return {statechart, errors};
 }
 
@@ -287,7 +434,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 }
 
 export {
+  STATECHART_JSON_SCHEMA,
   STATECHART_SCHEMA,
   validateStatechart,
+  validateStatechartSchema,
   validateStatecharts,
 };

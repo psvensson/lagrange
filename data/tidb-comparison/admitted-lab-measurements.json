@@ -4440,7 +4440,6 @@
               "workloadDrainSec": 241.96,
               "postVerifySec": 35.88,
               "maxSingleTxnExecutionSec": 14.496,
-              "maxSingleTxnSec": 14.496,
               "maxSingleRequestSec": 222.242,
               "partsSec": {
                 "loadAndCases1To2Sec": 69.54,
@@ -5266,7 +5265,6 @@
               "workloadDrainSec": 19.81,
               "postVerifySec": 11.46,
               "maxSingleTxnExecutionSec": 0.051,
-              "maxSingleTxnSec": 0.051,
               "maxSingleRequestSec": 0.052,
               "partsSec": {
                 "loadAndCases1To2Sec": 4.74,
@@ -7475,7 +7473,6 @@
               "workloadDrainSec": 19.81,
               "postVerifySec": 5.58,
               "maxSingleTxnExecutionSec": 0.044,
-              "maxSingleTxnSec": 0.044,
               "maxSingleRequestSec": 0.045,
               "partsSec": {
                 "loadAndCases1To2Sec": 4.22,
@@ -9570,7 +9567,6 @@
               "workloadDrainSec": 19.81,
               "postVerifySec": 11.93,
               "maxSingleTxnExecutionSec": 0.109,
-              "maxSingleTxnSec": 0.109,
               "maxSingleRequestSec": 0.11,
               "partsSec": {
                 "loadAndCases1To2Sec": 5.35,

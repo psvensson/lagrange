@@ -224,7 +224,7 @@ documentClass: generated
 - [publication-recovery-observation-evidence-normalizers.js](publication-recovery-observation-evidence-normalizers.js) - No leading comment; first export: hasClosedUnknownNoDebtPublicationGate. (importers: one)
 - [publication-recovery-pressure-evidence.js](publication-recovery-pressure-evidence.js) - No leading comment; first export: hasPublicationRecoveryPressureDeferredEvidence. (importers: few)
 - [publication-recovery-priority-spread.js](publication-recovery-priority-spread.js) - No leading comment; first export: buildPrioritySpreadDecision. (importers: many)
-- [publication-recovery-state-machine.js](publication-recovery-state-machine.js) - No leading comment; first export: PUBLICATION_RECOVERY_EVIDENCE_FLAG. (importers: few)
+- [publication-recovery-state-machine.js](publication-recovery-state-machine.js) - No leading comment; first export: PUBLICATION_RECOVERY_EVIDENCE_FLAG. (importers: many)
 - [publication-recovery-stream-evidence.js](publication-recovery-stream-evidence.js) - No leading comment; first export: buildPendingAckEvidence. (importers: few)
 - [published-membership-epoch-reading.js](published-membership-epoch-reading.js) - Published membership epoch reading - the single decode from a planning answer's `publishedPlanningEpoch` (or a... (importers: few)
 - [read-model-contract.js](read-model-contract.js) - Read-Model Contract - Canonical read-model source declarations for control-plane decisions. (importers: many)

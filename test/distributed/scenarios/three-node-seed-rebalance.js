@@ -105,27 +105,31 @@ function sleep(delayMs) {
  * @param {boolean} [options.allowEmpty]
  * @return {Promise<Array<Object>>}
  */
+async function queryActiveServicesFromNode(node, sql, mergedRows, queryErrors) {
+  if (!node || typeof node.query !== 'function') {
+    return;
+  }
+  try {
+    const servicesResult = await node.query(sql);
+    const rows = Array.isArray(servicesResult?.rows) ?
+      servicesResult.rows :
+      [];
+    mergedRows.push(...rows);
+  } catch (error) {
+    queryErrors.push(
+      String(node.id || 'unknown-node') + ': ' +
+      String(error?.message || error),
+    );
+  }
+}
+
 async function queryActiveServicesAcrossNodes(nodes, sql, options = {}) {
   const allowEmpty = options.allowEmpty === true;
   const mergedRows = [];
   const queryErrors = [];
 
   for (const node of nodes) {
-    if (!node || typeof node.query !== 'function') {
-      continue;
-    }
-    try {
-      const servicesResult = await node.query(sql);
-      const rows = Array.isArray(servicesResult?.rows) ?
-        servicesResult.rows :
-        [];
-      mergedRows.push(...rows);
-    } catch (error) {
-      queryErrors.push(
-        String(node.id || 'unknown-node') + ': ' +
-        String(error?.message || error),
-      );
-    }
+    await queryActiveServicesFromNode(node, sql, mergedRows, queryErrors);
   }
 
   if (mergedRows.length > 0 || allowEmpty) {

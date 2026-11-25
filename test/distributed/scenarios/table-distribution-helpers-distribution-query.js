@@ -168,13 +168,31 @@ const {
  * @param {string} [options.tableName]
  * @return {Promise<Object>}
  */
-async function queryTableDistribution(seedNode, options = {}) {
+function assertSeedNodeQueryable(seedNode) {
   assert.ok(
     seedNode &&
       (typeof seedNode.query === 'function' ||
         typeof seedNode.queryWithTimeout === 'function'),
     'queryTableDistribution requires a seed node with query capability',
   );
+}
+
+function isDeferredTableDistributionError(error) {
+  return (
+    isRetryableControlPlaneProgressError(error) ||
+    isTimeoutShapedError(error)
+  );
+}
+
+/**
+ * Query the current partition + replica distribution for a single table.
+ * @param {Object} seedNode
+ * @param {Object} [options]
+ * @param {string} [options.tableName]
+ * @return {Promise<Object>}
+ */
+async function queryTableDistribution(seedNode, options = {}) {
+  assertSeedNodeQueryable(seedNode);
 
   const {tableName} = resolveTableDistributionQueryConfig(options);
   const queryNodes = resolveControlQueryNodes(seedNode, options);
@@ -211,10 +229,7 @@ async function queryTableDistribution(seedNode, options = {}) {
       }
     } catch (error) {
       lastError = error;
-      if (
-        isRetryableControlPlaneProgressError(error) ||
-        isTimeoutShapedError(error)
-      ) {
+      if (isDeferredTableDistributionError(error)) {
         deferredDistribution = buildDeferredTableDistributionSnapshot(
           tableName,
           error,
@@ -222,11 +237,8 @@ async function queryTableDistribution(seedNode, options = {}) {
       }
     }
   }
-  if (bestDistribution) {
-    return bestDistribution;
-  }
-  if (deferredDistribution) {
-    return deferredDistribution;
+  if (bestDistribution || deferredDistribution) {
+    return bestDistribution || deferredDistribution;
   }
   throw lastError || new Error('no_table_distribution_query_nodes_available');
 }
@@ -487,20 +499,7 @@ function finalizeTableDistributionSnapshot(snapshot, tableName) {
   };
 }
 
-function summarizeTableDistributionTopology(partitionRows, serviceRows) {
-  if (!Array.isArray(partitionRows) || partitionRows.length === ZERO) {
-    return {
-      replicaNodeIds: new Set(),
-      replicasByPartition: new Map(),
-      serviceCount: ZERO,
-      topologyState: TOPOLOGY_STATE_OPAQUE,
-      topologySignature: 'partitions:missing',
-      opaquePartitionCount: ZERO,
-      invalidPartitionCount: ZERO,
-      leaderServiceMissingPartitionCount: ZERO,
-      overReplicatedPartitionCount: ZERO,
-    };
-  }
+function indexPartitionServiceRows(serviceRows) {
   const replicaNodeIds = new Set();
   const replicasByPartition = new Map();
   const partitionServiceRows = new Map();
@@ -523,16 +522,106 @@ function summarizeTableDistributionTopology(partitionRows, serviceRows) {
     }
     partitionServiceRows.get(partitionId).push(row);
   }
+  return {
+    replicaNodeIds,
+    replicasByPartition,
+    partitionServiceRows,
+    serviceCount,
+  };
+}
 
-  let opaquePartitionCount = ZERO;
-  let invalidPartitionCount = ZERO;
-  let leaderServiceMissingPartitionCount = ZERO;
-  let overReplicatedPartitionCount = ZERO;
-  const topologySignatureParts = [];
+function classifySinglePartitionReplicaTopology(partitionId, topology, stats) {
+  const desiredCountText = String(topology.desiredReplicaCount || ZERO);
+  if (topology.overTargetReplicaCount === true) {
+    stats.invalidPartitionCount += 1;
+    stats.overReplicatedPartitionCount += 1;
+    stats.topologySignatureParts.push(
+      partitionId +
+        ':' +
+        TOPOLOGY_REASON_ABOVE_TARGET_REPLICA_COUNT +
+        ':' +
+        topology.observedReplicaCount +
+        '/' +
+        desiredCountText,
+    );
+    return;
+  }
+  if (topology.lastErrorCode === TOPOLOGY_REASON_LEADER_SERVICE_MISSING) {
+    stats.invalidPartitionCount += 1;
+    stats.leaderServiceMissingPartitionCount += 1;
+    stats.topologySignatureParts.push(
+      partitionId +
+        ':' +
+        TOPOLOGY_REASON_LEADER_SERVICE_MISSING +
+        ':' +
+        topology.observedReplicaCount +
+        '/' +
+        desiredCountText,
+    );
+    return;
+  }
+  if (topology.topologyState === TOPOLOGY_STATE_OPAQUE) {
+    stats.opaquePartitionCount += 1;
+    stats.topologySignatureParts.push(
+      partitionId +
+        ':' +
+        TOPOLOGY_STATE_OPAQUE +
+        ':' +
+        topology.observedReplicaCount,
+    );
+    return;
+  }
+  stats.topologySignatureParts.push(
+    partitionId +
+      ':' +
+      TOPOLOGY_STATE_ROUTABLE +
+      ':' +
+      topology.observedReplicaCount,
+  );
+}
 
-  for (const partitionRow of Array.isArray(partitionRows) ?
-    partitionRows :
-    []) {
+function resolveAggregateTopologyState(
+  invalidPartitionCount,
+  opaquePartitionCount,
+) {
+  if (invalidPartitionCount > ZERO) {
+    return TOPOLOGY_STATE_INVALID;
+  }
+  return opaquePartitionCount > ZERO ?
+    TOPOLOGY_STATE_OPAQUE :
+    TOPOLOGY_STATE_ROUTABLE;
+}
+
+function summarizeTableDistributionTopology(partitionRows, serviceRows) {
+  if (!Array.isArray(partitionRows) || partitionRows.length === ZERO) {
+    return {
+      replicaNodeIds: new Set(),
+      replicasByPartition: new Map(),
+      serviceCount: ZERO,
+      topologyState: TOPOLOGY_STATE_OPAQUE,
+      topologySignature: 'partitions:missing',
+      opaquePartitionCount: ZERO,
+      invalidPartitionCount: ZERO,
+      leaderServiceMissingPartitionCount: ZERO,
+      overReplicatedPartitionCount: ZERO,
+    };
+  }
+  const {
+    replicaNodeIds,
+    replicasByPartition,
+    partitionServiceRows,
+    serviceCount,
+  } = indexPartitionServiceRows(serviceRows);
+
+  const stats = {
+    opaquePartitionCount: ZERO,
+    invalidPartitionCount: ZERO,
+    leaderServiceMissingPartitionCount: ZERO,
+    overReplicatedPartitionCount: ZERO,
+    topologySignatureParts: [],
+  };
+
+  for (const partitionRow of partitionRows) {
     const partitionId = firstStringField(
       partitionRow,
       'partition_id',
@@ -541,79 +630,409 @@ function summarizeTableDistributionTopology(partitionRows, serviceRows) {
     if (!partitionId) {
       continue;
     }
-    const rowsForPartition = partitionServiceRows.get(partitionId) || [];
     const topology = evaluatePartitionReplicaTopology({
       partitionRow,
-      serviceRows: rowsForPartition,
+      serviceRows: partitionServiceRows.get(partitionId) || [],
       requireLeaderNodeId: false,
       requiresAddress: false,
     });
-    if (topology.overTargetReplicaCount === true) {
-      invalidPartitionCount += 1;
-      overReplicatedPartitionCount += 1;
-      topologySignatureParts.push(
-        partitionId +
-          ':' +
-          TOPOLOGY_REASON_ABOVE_TARGET_REPLICA_COUNT +
-          ':' +
-          topology.observedReplicaCount +
-          '/' +
-          String(topology.desiredReplicaCount || ZERO),
-      );
-      continue;
-    }
-    if (topology.lastErrorCode === TOPOLOGY_REASON_LEADER_SERVICE_MISSING) {
-      invalidPartitionCount += 1;
-      leaderServiceMissingPartitionCount += 1;
-      topologySignatureParts.push(
-        partitionId +
-          ':' +
-          TOPOLOGY_REASON_LEADER_SERVICE_MISSING +
-          ':' +
-          topology.observedReplicaCount +
-          '/' +
-          String(topology.desiredReplicaCount || ZERO),
-      );
-      continue;
-    }
-    if (topology.topologyState === TOPOLOGY_STATE_OPAQUE) {
-      opaquePartitionCount += 1;
-      topologySignatureParts.push(
-        partitionId +
-          ':' +
-          TOPOLOGY_STATE_OPAQUE +
-          ':' +
-          topology.observedReplicaCount,
-      );
-      continue;
-    }
-    topologySignatureParts.push(
-      partitionId +
-        ':' +
-        TOPOLOGY_STATE_ROUTABLE +
-        ':' +
-        topology.observedReplicaCount,
-    );
+    classifySinglePartitionReplicaTopology(partitionId, topology, stats);
   }
-
-  const topologyState =
-    invalidPartitionCount > ZERO ?
-      TOPOLOGY_STATE_INVALID :
-      opaquePartitionCount > ZERO ?
-        TOPOLOGY_STATE_OPAQUE :
-        TOPOLOGY_STATE_ROUTABLE;
 
   return {
     replicaNodeIds,
     replicasByPartition,
     serviceCount,
-    topologyState,
-    topologySignature: topologySignatureParts.sort().join('|'),
-    opaquePartitionCount,
-    invalidPartitionCount,
-    leaderServiceMissingPartitionCount,
-    overReplicatedPartitionCount,
+    topologyState: resolveAggregateTopologyState(
+      stats.invalidPartitionCount,
+      stats.opaquePartitionCount,
+    ),
+    topologySignature: stats.topologySignatureParts.sort().join('|'),
+    opaquePartitionCount: stats.opaquePartitionCount,
+    invalidPartitionCount: stats.invalidPartitionCount,
+    leaderServiceMissingPartitionCount:
+      stats.leaderServiceMissingPartitionCount,
+    overReplicatedPartitionCount: stats.overReplicatedPartitionCount,
   };
+}
+
+/**
+ * Wait until a table has grown by additional partitions and its replicas are
+ * spread across enough distinct nodes.
+ * @param {Object} seedNode
+ * @param {Object} [options]
+ * @param {string} [options.tableName]
+ * @param {number} [options.timeoutMs]
+ * @param {number} [options.pollIntervalMs]
+ * @param {number} [options.minAdditionalPartitions]
+ * @param {number} [options.minDistinctReplicaNodes]
+ * @return {Promise<Object>}
+ */
+function nonNegativeMetricValue(value) {
+  return Math.max(ZERO, Number(value || ZERO));
+}
+
+function buildTopLoadPressureNodesSummary(perNodeInput) {
+  const perNode =
+    perNodeInput && typeof perNodeInput === 'object' ? perNodeInput : {};
+  return Object.entries(perNode)
+    .map(([nodeId, nodeMetrics]) => {
+      const nodeWaitReasons =
+        nodeMetrics?.waitReasons && typeof nodeMetrics.waitReasons === 'object' ?
+          nodeMetrics.waitReasons :
+          {};
+      const nodeSlotUnavailable = nonNegativeMetricValue(
+        nodeWaitReasons.nodeSlotUnavailable,
+      );
+      const timeoutWaits = nonNegativeMetricValue(nodeWaitReasons.timeoutWaits);
+      const retryableControlPlanePressure = nonNegativeMetricValue(
+        nodeWaitReasons.retryableControlPlanePressure,
+      );
+      return {
+        nodeId,
+        nodeSlotUnavailable,
+        timeoutWaits,
+        retryableControlPlanePressure,
+        pressureScore:
+          nodeSlotUnavailable + timeoutWaits + retryableControlPlanePressure,
+      };
+    })
+    .filter((entry) => entry.pressureScore > ZERO)
+    .sort(
+      (left, right) =>
+        right.pressureScore - left.pressureScore ||
+        right.timeoutWaits - left.timeoutWaits ||
+        String(left.nodeId).localeCompare(String(right.nodeId)),
+    )
+    .slice(ZERO, 3)
+    .map(
+      (entry) =>
+        String(entry.nodeId) +
+        '(nodeSlotUnavailable=' +
+        entry.nodeSlotUnavailable +
+        ', timeoutWaits=' +
+        entry.timeoutWaits +
+        ', retryableControlPlanePressure=' +
+        entry.retryableControlPlanePressure +
+        ')',
+    );
+}
+
+function resolveStallReplicaNodeCount(context) {
+  return nonNegativeMetricValue(
+    context.latest?.replicaNodeCount || context.baseline?.replicaNodeCount,
+  );
+}
+
+function buildLoadStallErrorMessage(metrics, noProgressMs, context) {
+  const source = metrics && typeof metrics === 'object' ? metrics : {};
+  const waitReasons =
+    source.waitReasons && typeof source.waitReasons === 'object' ?
+      source.waitReasons :
+      {};
+  const topPressureNodes = buildTopLoadPressureNodesSummary(source.perNode);
+  const topNodesSummary =
+    topPressureNodes.length > ZERO ? topPressureNodes.join('; ') : 'none';
+  return (
+    'Load phase stalled with no successful progress while waiting for ' +
+    'partition growth. phase=' +
+    String(context.phase || 'growth') +
+    ', success=' +
+    nonNegativeMetricValue(source.success) +
+    ', failed=' +
+    nonNegativeMetricValue(source.failed) +
+    ', dispatchedOperations=' +
+    nonNegativeMetricValue(source.dispatchedOperations) +
+    ', nodeSlotUnavailable=' +
+    nonNegativeMetricValue(waitReasons.nodeSlotUnavailable) +
+    ', timeoutWaits=' +
+    nonNegativeMetricValue(waitReasons.timeoutWaits) +
+    ', retryableControlPlanePressure=' +
+    nonNegativeMetricValue(waitReasons.retryableControlPlanePressure) +
+    ', rejectedOperations=' +
+    nonNegativeMetricValue(source.rejectedOperations) +
+    ', opsPerSec=' +
+    nonNegativeMetricValue(source.opsPerSec).toFixed(2) +
+    ', noProgressMs=' +
+    noProgressMs +
+    ', partitionSamples=' +
+    nonNegativeMetricValue(context.sampleCount) +
+    ', additionalPartitions=' +
+    nonNegativeMetricValue(context.additionalPartitionCount) +
+    ', replicaNodeCount=' +
+    resolveStallReplicaNodeCount(context) +
+    ', lastQueryError=' +
+    String(context.lastQueryError || 'none') +
+    ', topPressureNodes=' +
+    topNodesSummary
+  );
+}
+
+function buildPartitionGrowthDiagnosticPayload({
+  tableName,
+  failureMode,
+  baseline,
+  latestDistribution,
+  additionalPartitionCount,
+  sampleCount,
+  transientQueryErrors,
+  lastQueryError,
+}) {
+  return {
+    tableName,
+    failureMode,
+    baselinePartitionCount: nonNegativeMetricValue(baseline?.partitionCount),
+    currentPartitionCount: nonNegativeMetricValue(
+      latestDistribution?.partitionCount,
+    ),
+    additionalPartitionCount: nonNegativeMetricValue(additionalPartitionCount),
+    replicaNodeCount: nonNegativeMetricValue(
+      latestDistribution?.replicaNodeCount,
+    ),
+    serviceCount: nonNegativeMetricValue(latestDistribution?.serviceCount),
+    topologyState: String(latestDistribution?.topologyState || 'unknown'),
+    invalidPartitionCount: nonNegativeMetricValue(
+      latestDistribution?.invalidPartitionCount,
+    ),
+    leaderServiceMissingPartitionCount: nonNegativeMetricValue(
+      latestDistribution?.leaderServiceMissingPartitionCount,
+    ),
+    overReplicatedPartitionCount: nonNegativeMetricValue(
+      latestDistribution?.overReplicatedPartitionCount,
+    ),
+    sampleCount: nonNegativeMetricValue(sampleCount),
+    transientQueryErrors: nonNegativeMetricValue(transientQueryErrors),
+    lastQueryError: String(lastQueryError || 'none'),
+  };
+}
+
+function buildTopologyStallError({
+  tableName,
+  failureMode,
+  latestDistribution,
+  noProgressMs,
+  context,
+}) {
+  const diag = buildPartitionGrowthDiagnosticPayload({
+    tableName,
+    failureMode,
+    baseline: context.baseline,
+    latestDistribution,
+    additionalPartitionCount: context.additionalPartitionCount,
+    sampleCount: context.sampleCount,
+    transientQueryErrors: context.transientQueryErrors,
+    lastQueryError: context.lastQueryError,
+  });
+  const error = new Error(
+    'Table distribution topology stalled in an invalid state while waiting ' +
+      'for "' +
+      tableName +
+      '". failureMode=' +
+      failureMode +
+      ', topologyState=' +
+      diag.topologyState +
+      ', invalidPartitionCount=' +
+      diag.invalidPartitionCount +
+      ', leaderServiceMissingPartitionCount=' +
+      diag.leaderServiceMissingPartitionCount +
+      ', overReplicatedPartitionCount=' +
+      diag.overReplicatedPartitionCount +
+      ', serviceCount=' +
+      diag.serviceCount +
+      ', replicaNodeCount=' +
+      diag.replicaNodeCount +
+      ', noProgressMs=' +
+      noProgressMs +
+      ', sampleCount=' +
+      diag.sampleCount +
+      ', lastQueryError=' +
+      diag.lastQueryError,
+  );
+  error.diagnostics = {
+    partitionGrowth: diag,
+  };
+  return error;
+}
+
+function formatPlannerDiagnosticsSuffix(plannerDiagnostics) {
+  if (!plannerDiagnostics) {
+    return '';
+  }
+  return (
+    ', selectedNodeIds=' +
+    formatPlannerNodeIds(plannerDiagnostics.selectedNodeIds) +
+    ', readyReplicaNodeIds=' +
+    formatPlannerNodeIds(plannerDiagnostics.readyReplicaNodeIds) +
+    ', admissionReadyNodeIds=' +
+    formatPlannerNodeIds(plannerDiagnostics.admissionReadyNodeIds) +
+    ', readinessReasonHistogram=' +
+    formatPlannerHistogram(plannerDiagnostics.readinessReasonHistogram) +
+    ', convergenceStateHistogram=' +
+    formatPlannerHistogram(plannerDiagnostics.convergenceStateHistogram)
+  );
+}
+
+function buildPartitionGrowthTimeoutError({
+  tableName,
+  minAdditionalPartitions,
+  minDistinctReplicaNodes,
+  baseline,
+  latest,
+  additionalPartitionCount,
+  sampleCount,
+  transientQueryErrors,
+  lastQueryError,
+  plannerDiagnostics,
+}) {
+  const failureMode = resolvePartitionGrowthFailureMode({
+    additionalPartitionCount,
+    minAdditionalPartitions,
+    replicaNodeCount: latest.replicaNodeCount,
+    minDistinctReplicaNodes,
+    topologyState: latest.topologyState,
+    leaderServiceMissingPartitionCount:
+      latest.leaderServiceMissingPartitionCount,
+    overReplicatedPartitionCount: latest.overReplicatedPartitionCount,
+    plannerDiagnostics,
+  });
+  const diag = buildPartitionGrowthDiagnosticPayload({
+    tableName,
+    failureMode,
+    baseline,
+    latestDistribution: latest,
+    additionalPartitionCount,
+    sampleCount,
+    transientQueryErrors,
+    lastQueryError,
+  });
+  const error = new Error(
+    'Timed out waiting for table "' +
+      tableName +
+      '" to add at least ' +
+      minAdditionalPartitions +
+      ' partitions and spread replicas to at least ' +
+      minDistinctReplicaNodes +
+      ' nodes. Baseline=' +
+      baseline.partitionCount +
+      ', latest=' +
+      latest.partitionCount +
+      ', additionalSeen=' +
+      additionalPartitionCount +
+      ', spread=' +
+      latest.replicaNodeCount +
+      ', samples=' +
+      sampleCount +
+      ', serviceCount=' +
+      diag.serviceCount +
+      ', transientQueryErrors=' +
+      transientQueryErrors +
+      ', lastQueryError=' +
+      diag.lastQueryError +
+      ', failureMode=' +
+      failureMode +
+      ', topologyState=' +
+      diag.topologyState +
+      ', leaderServiceMissingPartitionCount=' +
+      diag.leaderServiceMissingPartitionCount +
+      ', overReplicatedPartitionCount=' +
+      diag.overReplicatedPartitionCount +
+      formatPlannerDiagnosticsSuffix(plannerDiagnostics),
+  );
+  error.diagnostics = {
+    partitionGrowth: diag,
+    ...(plannerDiagnostics ? {partitioningPlanner: plannerDiagnostics} : {}),
+  };
+  return error;
+}
+
+function resolveGrowthStallMonitorOptions(options, timeoutMs) {
+  const loadProgress =
+    options.loadProgress &&
+    typeof options.loadProgress === 'object' &&
+    typeof options.loadProgress.getMetrics === 'function' ?
+      options.loadProgress :
+      null;
+  const loadProgressNoProgressTimeoutMs =
+    Number.isFinite(loadProgress?.noProgressTimeoutMs) &&
+    loadProgress.noProgressTimeoutMs > ZERO ?
+      Math.floor(loadProgress.noProgressTimeoutMs) :
+      ZERO;
+  const topologyNoProgressTimeoutMs =
+    Number.isFinite(options.topologyNoProgressTimeoutMs) &&
+    options.topologyNoProgressTimeoutMs > ZERO ?
+      Math.floor(options.topologyNoProgressTimeoutMs) :
+      Math.min(TABLE_DISTRIBUTION_TOPOLOGY_STALL_TIMEOUT_MS, timeoutMs);
+  return {
+    loadProgress,
+    loadProgressNoProgressTimeoutMs,
+    topologyNoProgressTimeoutMs,
+  };
+}
+
+async function waitForBaselineTableDistribution({
+  seedNode,
+  tableName,
+  options,
+  deadline,
+  pollIntervalMs,
+  runLoopContinueChecks,
+}) {
+  let baseline = null;
+  let transientQueryErrors = 0;
+  let lastQueryError = null;
+  while (!baseline && Date.now() <= deadline) {
+    try {
+      baseline = await queryTableDistribution(seedNode, {
+        tableName,
+        queryNodes: options.queryNodes,
+        fallbackNodes: options.fallbackNodes,
+      });
+      lastQueryError = null;
+    } catch (error) {
+      transientQueryErrors += 1;
+      lastQueryError = String(error?.message || error);
+      await runLoopContinueChecks({
+        phase: 'baseline',
+        baseline,
+        latest: baseline,
+        sampleCount: ZERO,
+        additionalPartitionCount: ZERO,
+        transientQueryErrors,
+        lastQueryError,
+      });
+      if (Date.now() >= deadline) {
+        break;
+      }
+      await sleep(pollIntervalMs);
+    }
+  }
+
+  assert.ok(
+    baseline,
+    'Timed out waiting for baseline table distribution for "' +
+      tableName +
+      '", transientQueryErrors=' +
+      transientQueryErrors +
+      ', lastQueryError=' +
+      String(lastQueryError || 'none'),
+  );
+  assert.ok(
+    baseline.partitionCount > ZERO,
+    'No partitions found for table "' + tableName + '"',
+  );
+  return {baseline, transientQueryErrors, lastQueryError};
+}
+
+function recordAdditionalPartitions(
+  latestPartitionIds,
+  baselinePartitionIds,
+  additionalPartitionIds,
+) {
+  for (const partitionId of latestPartitionIds) {
+    if (!baselinePartitionIds.has(partitionId)) {
+      additionalPartitionIds.add(partitionId);
+    }
+  }
 }
 
 /**
@@ -638,43 +1057,32 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
   } = resolvePartitionGrowthAndSpreadScenarioConfig(options);
 
   const deadline = Date.now() + timeoutMs;
-  const loadProgress =
-    options.loadProgress &&
-    typeof options.loadProgress === 'object' &&
-    typeof options.loadProgress.getMetrics === 'function' ?
-      options.loadProgress :
-      null;
-  const loadProgressNoProgressTimeoutMs =
-    Number.isFinite(loadProgress?.noProgressTimeoutMs) &&
-    loadProgress.noProgressTimeoutMs > ZERO ?
-      Math.floor(loadProgress.noProgressTimeoutMs) :
-      ZERO;
-  const topologyNoProgressTimeoutMs =
-    Number.isFinite(options.topologyNoProgressTimeoutMs) &&
-    options.topologyNoProgressTimeoutMs > ZERO ?
-      Math.floor(options.topologyNoProgressTimeoutMs) :
-      Math.min(TABLE_DISTRIBUTION_TOPOLOGY_STALL_TIMEOUT_MS, timeoutMs);
+  const {
+    loadProgress,
+    loadProgressNoProgressTimeoutMs,
+    topologyNoProgressTimeoutMs,
+  } = resolveGrowthStallMonitorOptions(options, timeoutMs);
   let highestSuccessfulLoadOperationCount = -1;
   let lastHealthyLoadAtMs = Date.now();
   let lastInvalidTopologySignature = null;
   let lastInvalidTopologyAtMs = Date.now();
+
   const maybeAbortForLoadStall = (context = {}) => {
     if (!loadProgress || loadProgressNoProgressTimeoutMs <= ZERO) {
       return;
     }
     const metrics = loadProgress.getMetrics();
-    const success = Math.max(ZERO, Number(metrics?.success || ZERO));
-    const failed = Math.max(ZERO, Number(metrics?.failed || ZERO));
-    const dispatchedOperations = Math.max(
-      ZERO,
-      Number(metrics?.dispatchedOperations || ZERO),
+    const success = nonNegativeMetricValue(metrics?.success);
+    const dispatchedOperations = nonNegativeMetricValue(
+      metrics?.dispatchedOperations,
     );
-    if (success > highestSuccessfulLoadOperationCount) {
-      highestSuccessfulLoadOperationCount = success;
-      lastHealthyLoadAtMs = Date.now();
-      return;
-    }
-    if (dispatchedOperations <= success) {
+    if (
+      success > highestSuccessfulLoadOperationCount ||
+      dispatchedOperations <= success
+    ) {
+      if (success > highestSuccessfulLoadOperationCount) {
+        highestSuccessfulLoadOperationCount = success;
+      }
       lastHealthyLoadAtMs = Date.now();
       return;
     }
@@ -682,111 +1090,15 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
     if (noProgressMs < loadProgressNoProgressTimeoutMs) {
       return;
     }
-    const waitReasons =
-      metrics?.waitReasons && typeof metrics.waitReasons === 'object' ?
-        metrics.waitReasons :
-        {};
-    const topPressureNodes = Object.entries(
-      metrics?.perNode && typeof metrics.perNode === 'object' ?
-        metrics.perNode :
-        {},
-    )
-      .map(([nodeId, nodeMetrics]) => {
-        const nodeWaitReasons =
-          nodeMetrics?.waitReasons &&
-          typeof nodeMetrics.waitReasons === 'object' ?
-            nodeMetrics.waitReasons :
-            {};
-        const nodeSlotUnavailable = Math.max(
-          ZERO,
-          Number(nodeWaitReasons.nodeSlotUnavailable || ZERO),
-        );
-        const timeoutWaits = Math.max(
-          ZERO,
-          Number(nodeWaitReasons.timeoutWaits || ZERO),
-        );
-        const retryableControlPlanePressure = Math.max(
-          ZERO,
-          Number(nodeWaitReasons.retryableControlPlanePressure || ZERO),
-        );
-        return {
-          nodeId,
-          nodeSlotUnavailable,
-          timeoutWaits,
-          retryableControlPlanePressure,
-          pressureScore:
-            nodeSlotUnavailable + timeoutWaits + retryableControlPlanePressure,
-        };
-      })
-      .filter((entry) => entry.pressureScore > ZERO)
-      .sort(
-        (left, right) =>
-          right.pressureScore - left.pressureScore ||
-          right.timeoutWaits - left.timeoutWaits ||
-          String(left.nodeId).localeCompare(String(right.nodeId)),
-      )
-      .slice(ZERO, 3)
-      .map(
-        (entry) =>
-          String(entry.nodeId) +
-          '(nodeSlotUnavailable=' +
-          entry.nodeSlotUnavailable +
-          ', timeoutWaits=' +
-          entry.timeoutWaits +
-          ', retryableControlPlanePressure=' +
-          entry.retryableControlPlanePressure +
-          ')',
-      );
-    throw new Error(
-      'Load phase stalled with no successful progress while waiting for ' +
-        'partition growth. phase=' +
-        String(context.phase || 'growth') +
-        ', success=' +
-        success +
-        ', failed=' +
-        failed +
-        ', dispatchedOperations=' +
-        dispatchedOperations +
-        ', nodeSlotUnavailable=' +
-        Math.max(ZERO, Number(waitReasons.nodeSlotUnavailable || ZERO)) +
-        ', timeoutWaits=' +
-        Math.max(ZERO, Number(waitReasons.timeoutWaits || ZERO)) +
-        ', retryableControlPlanePressure=' +
-        Math.max(
-          ZERO,
-          Number(waitReasons.retryableControlPlanePressure || ZERO),
-        ) +
-        ', rejectedOperations=' +
-        Math.max(ZERO, Number(metrics?.rejectedOperations || ZERO)) +
-        ', opsPerSec=' +
-        Math.max(ZERO, Number(metrics?.opsPerSec || ZERO)).toFixed(2) +
-        ', noProgressMs=' +
-        noProgressMs +
-        ', partitionSamples=' +
-        Number(context.sampleCount || ZERO) +
-        ', additionalPartitions=' +
-        Number(context.additionalPartitionCount || ZERO) +
-        ', replicaNodeCount=' +
-        Number(
-          context.latest?.replicaNodeCount ||
-            context.baseline?.replicaNodeCount ||
-            ZERO,
-        ) +
-        ', lastQueryError=' +
-        String(context.lastQueryError || 'none') +
-        ', topPressureNodes=' +
-        (topPressureNodes.length > ZERO ? topPressureNodes.join('; ') : 'none'),
-    );
+    throw new Error(buildLoadStallErrorMessage(metrics, noProgressMs, context));
   };
+
   const maybeAbortForTopologyStall = (context = {}) => {
     const latestDistribution =
       context.latest && typeof context.latest === 'object' ?
         context.latest :
         null;
-    if (
-      !latestDistribution ||
-      latestDistribution.topologyState !== TOPOLOGY_STATE_INVALID
-    ) {
+    if (latestDistribution?.topologyState !== TOPOLOGY_STATE_INVALID) {
       lastInvalidTopologySignature = null;
       lastInvalidTopologyAtMs = Date.now();
       return;
@@ -815,133 +1127,43 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
         options.plannerDiagnosticsResolver,
       ),
     });
-    const error = new Error(
-      'Table distribution topology stalled in an invalid state while waiting ' +
-        'for "' +
-        tableName +
-        '". failureMode=' +
-        failureMode +
-        ', topologyState=' +
-        String(latestDistribution.topologyState || 'unknown') +
-        ', invalidPartitionCount=' +
-        Number(latestDistribution.invalidPartitionCount || ZERO) +
-        ', leaderServiceMissingPartitionCount=' +
-        Number(latestDistribution.leaderServiceMissingPartitionCount || ZERO) +
-        ', overReplicatedPartitionCount=' +
-        Number(latestDistribution.overReplicatedPartitionCount || ZERO) +
-        ', serviceCount=' +
-        Number(latestDistribution.serviceCount || ZERO) +
-        ', replicaNodeCount=' +
-        Number(latestDistribution.replicaNodeCount || ZERO) +
-        ', noProgressMs=' +
-        noProgressMs +
-        ', sampleCount=' +
-        Number(context.sampleCount || ZERO) +
-        ', lastQueryError=' +
-        String(context.lastQueryError || 'none'),
-    );
-    error.diagnostics = {
-      partitionGrowth: {
-        tableName,
-        failureMode,
-        baselinePartitionCount: Number(
-          context.baseline?.partitionCount || ZERO,
-        ),
-        currentPartitionCount: Number(
-          latestDistribution.partitionCount || ZERO,
-        ),
-        additionalPartitionCount: Number(
-          context.additionalPartitionCount || ZERO,
-        ),
-        replicaNodeCount: Number(latestDistribution.replicaNodeCount || ZERO),
-        serviceCount: Number(latestDistribution.serviceCount || ZERO),
-        topologyState: String(latestDistribution.topologyState || 'unknown'),
-        invalidPartitionCount: Number(
-          latestDistribution.invalidPartitionCount || ZERO,
-        ),
-        leaderServiceMissingPartitionCount: Number(
-          latestDistribution.leaderServiceMissingPartitionCount || ZERO,
-        ),
-        overReplicatedPartitionCount: Number(
-          latestDistribution.overReplicatedPartitionCount || ZERO,
-        ),
-        sampleCount: Number(context.sampleCount || ZERO),
-        transientQueryErrors: Number(context.transientQueryErrors || ZERO),
-        lastQueryError: String(context.lastQueryError || 'none'),
-      },
-    };
-    throw error;
+    throw buildTopologyStallError({
+      tableName,
+      failureMode,
+      latestDistribution,
+      noProgressMs,
+      context,
+    });
   };
-  let baseline = null;
-  let transientQueryErrors = 0;
-  let lastQueryError = null;
-  while (!baseline && Date.now() <= deadline) {
-    try {
-      baseline = await queryTableDistribution(seedNode, {
-        tableName,
-        queryNodes: options.queryNodes,
-        fallbackNodes: options.fallbackNodes,
-      });
-      lastQueryError = null;
-    } catch (error) {
-      transientQueryErrors += 1;
-      lastQueryError = String(error?.message || error);
-      if (typeof options.assertContinue === 'function') {
-        await options.assertContinue({
-          phase: 'baseline',
-          tableName,
-          deadlineMs: deadline,
-          baseline,
-          latest: baseline,
-          sampleCount: ZERO,
-          additionalPartitionCount: ZERO,
-          transientQueryErrors,
-          lastQueryError,
-          minAdditionalPartitions,
-          minDistinctReplicaNodes,
-        });
-      }
-      maybeAbortForLoadStall({
-        phase: 'baseline',
+
+  const runLoopContinueChecks = async (context) => {
+    if (typeof options.assertContinue === 'function') {
+      await options.assertContinue({
+        ...context,
         tableName,
         deadlineMs: deadline,
-        baseline,
-        latest: baseline,
-        sampleCount: ZERO,
-        additionalPartitionCount: ZERO,
-        transientQueryErrors,
-        lastQueryError,
+        minAdditionalPartitions,
+        minDistinctReplicaNodes,
       });
-      maybeAbortForTopologyStall({
-        phase: 'baseline',
-        baseline,
-        latest: baseline,
-        sampleCount: ZERO,
-        additionalPartitionCount: ZERO,
-        transientQueryErrors,
-        lastQueryError,
-      });
-      if (Date.now() >= deadline) {
-        break;
-      }
-      await sleep(pollIntervalMs);
     }
-  }
+    maybeAbortForLoadStall({
+      ...context,
+      tableName,
+      deadlineMs: deadline,
+    });
+    maybeAbortForTopologyStall(context);
+  };
 
-  assert.ok(
-    baseline,
-    'Timed out waiting for baseline table distribution for "' +
-      tableName +
-      '"' +
-      ', transientQueryErrors=' +
-      transientQueryErrors +
-      ', lastQueryError=' +
-      String(lastQueryError || 'none'),
-  );
-  assert.ok(
-    baseline.partitionCount > ZERO,
-    'No partitions found for table "' + tableName + '"',
-  );
+  const initial = await waitForBaselineTableDistribution({
+    seedNode,
+    tableName,
+    options,
+    deadline,
+    pollIntervalMs,
+    runLoopContinueChecks,
+  });
+  const {baseline} = initial;
+  let {transientQueryErrors, lastQueryError} = initial;
 
   const baselinePartitionIds = new Set(baseline.partitionIds);
   const additionalPartitionIds = new Set();
@@ -957,36 +1179,15 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
       });
       sampleCount += 1;
       lastQueryError = null;
+      recordAdditionalPartitions(
+        latest.partitionIds,
+        baselinePartitionIds,
+        additionalPartitionIds,
+      );
     } catch (error) {
       transientQueryErrors += 1;
       lastQueryError = String(error?.message || error);
-      if (typeof options.assertContinue === 'function') {
-        await options.assertContinue({
-          phase: 'growth',
-          tableName,
-          deadlineMs: deadline,
-          baseline,
-          latest,
-          sampleCount,
-          additionalPartitionCount: additionalPartitionIds.size,
-          transientQueryErrors,
-          lastQueryError,
-          minAdditionalPartitions,
-          minDistinctReplicaNodes,
-        });
-      }
-      maybeAbortForLoadStall({
-        phase: 'growth',
-        tableName,
-        deadlineMs: deadline,
-        baseline,
-        latest,
-        sampleCount,
-        additionalPartitionCount: additionalPartitionIds.size,
-        transientQueryErrors,
-        lastQueryError,
-      });
-      maybeAbortForTopologyStall({
+      await runLoopContinueChecks({
         phase: 'growth',
         baseline,
         latest,
@@ -1002,40 +1203,7 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
       continue;
     }
 
-    for (const partitionId of latest.partitionIds) {
-      if (baselinePartitionIds.has(partitionId)) {
-        continue;
-      }
-      additionalPartitionIds.add(partitionId);
-    }
-
-    if (typeof options.assertContinue === 'function') {
-      await options.assertContinue({
-        phase: 'growth',
-        tableName,
-        deadlineMs: deadline,
-        baseline,
-        latest,
-        sampleCount,
-        additionalPartitionCount: additionalPartitionIds.size,
-        transientQueryErrors,
-        lastQueryError,
-        minAdditionalPartitions,
-        minDistinctReplicaNodes,
-      });
-    }
-    maybeAbortForLoadStall({
-      phase: 'growth',
-      tableName,
-      deadlineMs: deadline,
-      baseline,
-      latest,
-      sampleCount,
-      additionalPartitionCount: additionalPartitionIds.size,
-      transientQueryErrors,
-      lastQueryError,
-    });
-    maybeAbortForTopologyStall({
+    await runLoopContinueChecks({
       phase: 'growth',
       baseline,
       latest,
@@ -1045,11 +1213,11 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
       lastQueryError,
     });
 
-    const growthSatisfied =
-      additionalPartitionIds.size >= minAdditionalPartitions;
-    const spreadSatisfied = latest.replicaNodeCount >= minDistinctReplicaNodes;
-    const topologySatisfied = latest.topologyState !== TOPOLOGY_STATE_INVALID;
-    if (growthSatisfied && spreadSatisfied && topologySatisfied) {
+    if (
+      additionalPartitionIds.size >= minAdditionalPartitions &&
+      latest.replicaNodeCount >= minDistinctReplicaNodes &&
+      latest.topologyState !== TOPOLOGY_STATE_INVALID
+    ) {
       return {
         tableName,
         sampleCount,
@@ -1070,87 +1238,20 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
     await sleep(pollIntervalMs);
   }
 
-  const plannerDiagnostics = resolvePartitioningPlannerDiagnosticsSnapshot(
-    options.plannerDiagnosticsResolver,
-  );
-  const failureMode = resolvePartitionGrowthFailureMode({
-    additionalPartitionCount: additionalPartitionIds.size,
+  throw buildPartitionGrowthTimeoutError({
+    tableName,
     minAdditionalPartitions,
-    replicaNodeCount: latest.replicaNodeCount,
     minDistinctReplicaNodes,
-    topologyState: latest.topologyState,
-    leaderServiceMissingPartitionCount:
-      latest.leaderServiceMissingPartitionCount,
-    overReplicatedPartitionCount: latest.overReplicatedPartitionCount,
-    plannerDiagnostics,
+    baseline,
+    latest,
+    additionalPartitionCount: additionalPartitionIds.size,
+    sampleCount,
+    transientQueryErrors,
+    lastQueryError,
+    plannerDiagnostics: resolvePartitioningPlannerDiagnosticsSnapshot(
+      options.plannerDiagnosticsResolver,
+    ),
   });
-  const error = new Error(
-    'Timed out waiting for table "' +
-      tableName +
-      '" to add at least ' +
-      minAdditionalPartitions +
-      ' partitions and spread replicas to at least ' +
-      minDistinctReplicaNodes +
-      ' nodes. Baseline=' +
-      baseline.partitionCount +
-      ', latest=' +
-      latest.partitionCount +
-      ', additionalSeen=' +
-      additionalPartitionIds.size +
-      ', spread=' +
-      latest.replicaNodeCount +
-      ', samples=' +
-      sampleCount +
-      ', serviceCount=' +
-      Number(latest.serviceCount || ZERO) +
-      ', transientQueryErrors=' +
-      transientQueryErrors +
-      ', lastQueryError=' +
-      String(lastQueryError || 'none') +
-      ', failureMode=' +
-      failureMode +
-      ', topologyState=' +
-      String(latest.topologyState || 'unknown') +
-      ', leaderServiceMissingPartitionCount=' +
-      Number(latest.leaderServiceMissingPartitionCount || ZERO) +
-      ', overReplicatedPartitionCount=' +
-      Number(latest.overReplicatedPartitionCount || ZERO) +
-      (plannerDiagnostics ?
-        ', selectedNodeIds=' +
-          formatPlannerNodeIds(plannerDiagnostics.selectedNodeIds) +
-          ', readyReplicaNodeIds=' +
-          formatPlannerNodeIds(plannerDiagnostics.readyReplicaNodeIds) +
-          ', admissionReadyNodeIds=' +
-          formatPlannerNodeIds(plannerDiagnostics.admissionReadyNodeIds) +
-          ', readinessReasonHistogram=' +
-          formatPlannerHistogram(plannerDiagnostics.readinessReasonHistogram) +
-          ', convergenceStateHistogram=' +
-          formatPlannerHistogram(plannerDiagnostics.convergenceStateHistogram) :
-        ''),
-  );
-  error.diagnostics = {
-    partitionGrowth: {
-      tableName,
-      failureMode,
-      baselinePartitionCount: baseline.partitionCount,
-      currentPartitionCount: latest.partitionCount,
-      additionalPartitionCount: additionalPartitionIds.size,
-      replicaNodeCount: latest.replicaNodeCount,
-      serviceCount: Number(latest.serviceCount || ZERO),
-      topologyState: String(latest.topologyState || 'unknown'),
-      leaderServiceMissingPartitionCount: Number(
-        latest.leaderServiceMissingPartitionCount || ZERO,
-      ),
-      overReplicatedPartitionCount: Number(
-        latest.overReplicatedPartitionCount || ZERO,
-      ),
-      sampleCount,
-      transientQueryErrors,
-      lastQueryError: String(lastQueryError || 'none'),
-    },
-    ...(plannerDiagnostics ? {partitioningPlanner: plannerDiagnostics} : {}),
-  };
-  throw error;
 }
 
 async function waitForPostSplitConsistencyConvergence(cluster, options = {}) {

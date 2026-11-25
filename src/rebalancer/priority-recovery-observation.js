@@ -13,6 +13,8 @@ const {
   normalizePriorityRecoveryOperationPartitionId,
 } = SHARED;
 
+const NO_PLANNING_DECISION_SNAPSHOT = null;
+
 const PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_STATE = Object.freeze({
   RETAIN_INPUT_OPERATIONS: 'retain_input_operations',
   USE_AUTHORITATIVE_OBSERVATION: 'use_authoritative_observation',
@@ -378,7 +380,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       !planningSnapshot ||
       typeof planningSnapshot !== 'object'
     ) {
-      return null;
+      return NO_PLANNING_DECISION_SNAPSHOT;
     }
     const operationRecords = (Array.isArray(operations) ? operations : [])
       .filter((operation) => {

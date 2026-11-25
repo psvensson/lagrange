@@ -474,6 +474,7 @@ test('restart cache recovery filters already-terminal rows and authoritative rec
     ]);
     const cache = {
       getAll: (tableName) => cacheTables.has(tableName) ? gateway.rows(tableName) : [],
+      find: () => [],
     };
     const engine = new SQLQueryEngine({
       controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
@@ -698,5 +699,179 @@ test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert 
     releaseRoRollback.resolve();
     const committed = await commitPromise;
     assert.equal(committed.success, true);
+    assert.deepEqual(roRollbacks, ['p-ro']);
+  });
+
+test('Finding 1B: parallel ACTIVE persistence waits for all siblings before releasing session queue, CAS-guards upsertParticipant rollback against PREPARED state, and deduplicates overlapped read-only release on status persist failure',
+  async (t) => {
+    const gateway = createTransactionPersistenceGateway();
+    t.after(() => gateway.db.close());
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      logger,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    t.after(() => engine.shutdown());
+    const coordinator = engine.transactionCoordinator;
+
+    const p2ActiveStarted = deferred();
+    const releaseP2Active = deferred();
+    let failP1ActiveOnce = true;
+    let blockP2ActiveOnce = true;
+    let failCommittedStatusOnce = false;
+    const baseSubmit = gateway.submitMutation.bind(gateway);
+    gateway.submitMutation = async (mutation, options) => {
+      if (mutation.tableName === 'sql_transaction_participants' &&
+          mutation.row?.status === 'ACTIVE') {
+        if (mutation.row.partition_id === 'p1' && failP1ActiveOnce) {
+          failP1ActiveOnce = false;
+          throw new Error('p1 ACTIVE persistence failed');
+        }
+        if (mutation.row.partition_id === 'p2' && blockP2ActiveOnce) {
+          blockP2ActiveOnce = false;
+          p2ActiveStarted.resolve();
+          await releaseP2Active.promise;
+        }
+      }
+      if (failCommittedStatusOnce &&
+          mutation.tableName === 'sql_transactions' &&
+          mutation.data?.status === 'COMMITTED') {
+        failCommittedStatusOnce = false;
+        throw new Error('COMMITTED status persistence failed');
+      }
+      return baseSubmit(mutation, options);
+    };
+
+    const preparedPartitions = [];
+    coordinator.beginParticipant = async () => {};
+    coordinator.prepareParticipant = async (_s, partitionId) => {
+      preparedPartitions.push(partitionId);
+      return {
+        preparedDigest: `digest-${partitionId}`.padEnd(64, '0'),
+        prepareIndex: 1,
+        prepareTerm: 1,
+      };
+    };
+    coordinator.commitParticipant = async () => {};
+
+    const roReleaseStarted = deferred();
+    const releaseRoRollback = deferred();
+    const roRollbacks = [];
+    coordinator.rollbackParticipant = async (_s, partitionId) => {
+      roRollbacks.push(partitionId);
+      roReleaseStarted.resolve();
+      await releaseRoRollback.promise;
+    };
+
+    const begun = await coordinator.begin('f1b-tx');
+    assert.equal(begun.success, true);
+    await coordinator.executeReadStatement(
+      'f1b-tx',
+      begun.transactionId,
+      async ({enlist}) => enlist(['p1', 'p2', 'p-ro']),
+    );
+
+    // 1. Write promotes p1 and p2 from readOnlyParticipants; p1 ACTIVE persist rejects immediately while p2 is delayed.
+    let writeSettled = false;
+    const writePromise = coordinator.executeWriteStatement(
+      'f1b-tx',
+      {
+        operationId: 'op-f1b-1',
+        sql: 'UPDATE t SET v = 1',
+        partitionIds: ['p1', 'p2'],
+      },
+      async () => ({success: true, affectedRows: 2}),
+    ).finally(() => {
+      writeSettled = true;
+    });
+
+    await p2ActiveStarted.promise;
+    let p2ActiveReleased = false;
+    let queuedProbeRan = false;
+    let commitStartedBeforeP2Settled = false;
+    const queuedProbe = coordinator.runTransactionOperation('f1b-tx', async () => {
+      commitStartedBeforeP2Settled = !p2ActiveReleased;
+      queuedProbeRan = true;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      writeSettled,
+      false,
+      'executeWriteStatement must hold the session queue until delayed sibling p2 ACTIVE persistence settles',
+    );
+    assert.equal(
+      queuedProbeRan,
+      false,
+      'next queued session operation must not start while p2 ACTIVE persistence is still in flight',
+    );
+
+    p2ActiveReleased = true;
+    releaseP2Active.resolve();
+    await assert.rejects(writePromise, /p1 ACTIVE persistence failed/u);
+    await queuedProbe;
+    assert.equal(queuedProbeRan, true);
+    assert.equal(commitStartedBeforeP2Settled, false);
+
+    // 2. Even if a delayed upsertParticipant(ACTIVE) rejects after a participant advanced to PREPARED,
+    // upsertParticipant must not clobber PREPARED back to stale ACTIVE.
+    const tx = coordinator.workflowCoordinator.getWorkflowByOwnerKey('f1b-tx');
+    const staleActiveGate = deferred();
+    const origPersistParticipant = coordinator.workflowCoordinator.persistParticipant;
+    let interceptStaleP2 = true;
+    coordinator.workflowCoordinator.persistParticipant = async (participant) => {
+      if (interceptStaleP2 &&
+          participant.partitionId === 'p2' &&
+          participant.status === 'ACTIVE') {
+        interceptStaleP2 = false;
+        await staleActiveGate.promise;
+        throw new Error('late stale ACTIVE persistence rejection');
+      }
+      return origPersistParticipant(participant);
+    };
+    const lateStaleActiveUpsert = coordinator.workflowCoordinator.upsertParticipant(
+      tx.workflowId,
+      {
+        ...tx.participants.get('p2'),
+        status: 'ACTIVE',
+        lastError: null,
+        updatedAt: coordinator.now(),
+      },
+    );
+
+    // Advance p2 to PREPARED during commit, then reject the late stale ACTIVE upsert before decision recording:
+    const origPrepare = coordinator.prepareParticipant;
+    coordinator.prepareParticipant = async (s, partitionId, identity) => {
+      const evidence = await origPrepare(s, partitionId, identity);
+      if (partitionId === 'p2') {
+        queueMicrotask(async () => {
+          staleActiveGate.resolve();
+        });
+      }
+      return evidence;
+    };
+
+    // 3. Also test overlapped read-only release when setTransactionStatus(COMMITTED) rejects:
+    failCommittedStatusOnce = true;
+    const failedStatusCommitPromise = coordinator.commit('f1b-tx');
+    await assert.rejects(lateStaleActiveUpsert, /late stale ACTIVE persistence rejection/u);
+    await roReleaseStarted.promise;
+    // Allow in-flight p-ro rollback to complete after COMMITTED status update has already rejected:
+    releaseRoRollback.resolve();
+    await assert.rejects(failedStatusCommitPromise, /COMMITTED status persistence failed/u);
+    assert.deepEqual(
+      roRollbacks,
+      ['p-ro'],
+      'overlapped read-only release must settle before commitOwned catch and never duplicate p-ro rollback',
+    );
+    assert.equal(
+      tx.participants.get('p2').status,
+      'COMMITTED',
+      'late stale ACTIVE rejection must not overwrite advanced participant state or cause TRANSACTION_RECOVERY_INCOMPLETE',
+    );
+
+    // Retrying commit completes cleanly to COMMITTED:
+    const finalCommit = await coordinator.commit('f1b-tx');
+    assert.equal(finalCommit.success, true);
     assert.deepEqual(roRollbacks, ['p-ro']);
   });

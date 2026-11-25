@@ -20,6 +20,7 @@ import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import Ajv from 'ajv';
 import {
   changedRecords,
   resolvedCheckRange,
@@ -43,106 +44,15 @@ const stringSlice = Function.call.bind(String.prototype.slice);
 const stringMatchAll = Function.call.bind(String.prototype.matchAll);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 
+const REPOSITORY_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../..',
+);
 const NPM_BINARY = 'npm';
 const NPM_RUN_ARGUMENTS = Object.freeze(['run', '-s']);
 const FAST_FAIL_FLAG = '--fast-fail';
 const CHAIN_FLAG = '--chain';
 const CHAIN_SCRIPT_PATTERN = /npm run (?:-s )?([A-Za-z0-9:_-]+)/gu;
-const STEERING_CHECK_SCRIPT = 'steering:check';
-const METRICS_COMPOSITE_SCRIPT = 'test:metrics';
-const GUIDELINES_COMPOSITE_SCRIPT = 'audit:guidelines';
-const DUPLICATION_SCRIPT = 'test:duplication';
-const DUPLICATION_SOURCE_ARGUMENTS = Object.freeze([
-  '--',
-  '--target',
-  'src+scripts',
-]);
-const DUPLICATION_TEST_ARGUMENTS = Object.freeze([
-  '--',
-  '--target',
-  'test',
-]);
-const COMPOSITE_SUBTASKS = Object.freeze({
-  [METRICS_COMPOSITE_SCRIPT]: Object.freeze([
-    Object.freeze({
-      extraArguments: DUPLICATION_TEST_ARGUMENTS,
-      priority: true,
-      scriptName: DUPLICATION_SCRIPT,
-    }),
-    Object.freeze({
-      extraArguments: DUPLICATION_SOURCE_ARGUMENTS,
-      priority: true,
-      scriptName: DUPLICATION_SCRIPT,
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: true,
-      scriptName: 'test:cycles',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: true,
-      scriptName: 'test:complexity:cognitive',
-    }),
-  ]),
-  [GUIDELINES_COMPOSITE_SCRIPT]: Object.freeze([
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:guideline:literals',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:guideline:decision-boundaries',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:guideline:boundary-mode-contracts',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:guideline:hot-path-diagnostics',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:guideline:deferred-outcomes',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:guideline:silent-catch',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:guideline:ambient-intrinsics',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:style-terminal-vocabulary',
-    }),
-    Object.freeze({
-      extraArguments: Object.freeze([]),
-      priority: false,
-      scriptName: 'audit:guideline:navigability',
-    }),
-  ]),
-});
-const PRIORITY_AUDIT_SCRIPTS = Object.freeze([
-  'lint',
-  'test:deps',
-  'test:unused',
-  'test:unused:ratchet',
-  'test:complexity',
-  'test:complexity:cognitive',
-  'test:unused:prod',
-  'lint:scripts',
-]);
 const MAXIMUM_PARALLEL_AUDITS = 8;
 const MAXIMUM_HEAVY_PARALLEL_AUDITS = 4;
 const SERIAL_PARALLEL_AUDITS = 1;
@@ -168,12 +78,146 @@ const FAILURE_TAIL =
 // declared inputs the pushed range did not touch proves the same bytes it
 // proved last time (gate-work-consolidation). With no range to compare
 // against, every audit runs - an unknown range is not an unchanged tree.
+// Canonical static audit ordering in proof-obligations.json preserves
+// 'audit:impact-contracts' before 'audit:shards' and runs serialFirst
+// obligations ('steering:check') before launching parallel workers.
 const PROOF_OBLIGATIONS_PATH = 'test/manifests/proof-obligations.json';
+const PROOF_OBLIGATIONS_SCHEMA_ID = 'lagrange.proof-obligations.v1';
+const PROOF_OBLIGATIONS_REGISTRY_ID = 'proof-obligations';
+const PROOF_OBLIGATIONS_SCHEMA_VERSION = 1;
+const JSON_SCHEMA_OBJECT_TYPE = 'object';
+const JSON_SCHEMA_ARRAY_TYPE = 'array';
+const JSON_SCHEMA_STRING_TYPE = 'string';
+const JSON_SCHEMA_BOOLEAN_TYPE = 'boolean';
+const JSON_SCHEMA_INTEGER_TYPE = 'integer';
+const INVALID_PROOF_OBLIGATIONS_ERROR =
+  'Invalid proof-obligations registry schema';
+const NON_EMPTY_STRING_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_STRING_TYPE,
+  minLength: 1,
+});
+const SUBTASK_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['scriptName', 'extraArguments', 'priority']),
+  properties: Object.freeze({
+    scriptName: NON_EMPTY_STRING_SCHEMA,
+    extraArguments: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      items: NON_EMPTY_STRING_SCHEMA,
+    }),
+    priority: Object.freeze({type: JSON_SCHEMA_BOOLEAN_TYPE}),
+  }),
+});
+const OBLIGATION_RECORD_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['id', 'command', 'inputs']),
+  properties: Object.freeze({
+    id: NON_EMPTY_STRING_SCHEMA,
+    command: NON_EMPTY_STRING_SCHEMA,
+    scriptName: NON_EMPTY_STRING_SCHEMA,
+    staticAudit: Object.freeze({type: JSON_SCHEMA_BOOLEAN_TYPE}),
+    priority: Object.freeze({type: JSON_SCHEMA_BOOLEAN_TYPE}),
+    serialFirst: Object.freeze({type: JSON_SCHEMA_BOOLEAN_TYPE}),
+    wholeTree: Object.freeze({type: JSON_SCHEMA_BOOLEAN_TYPE}),
+    inputs: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: NON_EMPTY_STRING_SCHEMA,
+    }),
+    subtasks: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: SUBTASK_RECORD_SCHEMA,
+    }),
+  }),
+});
+const PROOF_OBLIGATIONS_JSON_SCHEMA = Object.freeze({
+  $id: PROOF_OBLIGATIONS_SCHEMA_ID,
+  type: JSON_SCHEMA_OBJECT_TYPE,
+  additionalProperties: false,
+  required: Object.freeze(['schemaVersion', 'id', 'contract', 'obligations']),
+  properties: Object.freeze({
+    schemaVersion: Object.freeze({
+      type: JSON_SCHEMA_INTEGER_TYPE,
+      const: PROOF_OBLIGATIONS_SCHEMA_VERSION,
+    }),
+    id: Object.freeze({
+      type: JSON_SCHEMA_STRING_TYPE,
+      const: PROOF_OBLIGATIONS_REGISTRY_ID,
+    }),
+    contract: NON_EMPTY_STRING_SCHEMA,
+    obligations: Object.freeze({
+      type: JSON_SCHEMA_ARRAY_TYPE,
+      minItems: 1,
+      items: OBLIGATION_RECORD_SCHEMA,
+    }),
+  }),
+});
+const ajv = new Ajv({allErrors: true, strict: true});
+const validateProofObligationsSchema = ajv.compile(PROOF_OBLIGATIONS_JSON_SCHEMA);
 const NPM_RUN_PREFIX = 'npm run ';
 const PATTERN_SUFFIX = '/**';
 const SKIP_LABEL = 'SKIP';
 const SKIP_REASON = ' (no declared input changed in ';
 const SKIP_REASON_TAIL = ')\n';
+
+function freezeSubtaskRecord(subtask) {
+  return Object.freeze({
+    extraArguments: Object.freeze([...subtask.extraArguments]),
+    priority: subtask.priority === true,
+    scriptName: subtask.scriptName,
+  });
+}
+
+function deriveStaticAuditConfiguration(registry) {
+  const staticAuditScripts = [];
+  const priorityAuditScripts = [];
+  const serialFirstAuditScripts = [];
+  const compositeSubtasks = Object.create(null);
+  for (const obligation of registry.obligations) {
+    const scriptName = obligation.scriptName;
+    if (typeof scriptName !== 'string') continue;
+    if (obligation.staticAudit === true) {
+      arrayPush(staticAuditScripts, scriptName);
+    }
+    if (obligation.priority === true) {
+      arrayPush(priorityAuditScripts, scriptName);
+    }
+    if (obligation.serialFirst === true) {
+      arrayPush(serialFirstAuditScripts, scriptName);
+    }
+    if (Array.isArray(obligation.subtasks)) {
+      compositeSubtasks[scriptName] = Object.freeze(
+        arrayMap(obligation.subtasks, freezeSubtaskRecord),
+      );
+    }
+  }
+  return Object.freeze({
+    compositeSubtasks: Object.freeze(compositeSubtasks),
+    priorityAuditScripts: Object.freeze(priorityAuditScripts),
+    registry,
+    serialFirstAuditScripts: Object.freeze(serialFirstAuditScripts),
+    staticAuditScripts: Object.freeze(staticAuditScripts),
+  });
+}
+
+function loadProofObligationsRegistry(root = REPOSITORY_ROOT) {
+  const registryPath = path.join(root, PROOF_OBLIGATIONS_PATH);
+  const registry = JSON.parse(fs.readFileSync(registryPath, UTF_EIGHT_ENCODING));
+  if (!validateProofObligationsSchema(registry)) {
+    throw new Error(INVALID_PROOF_OBLIGATIONS_ERROR);
+  }
+  return deriveStaticAuditConfiguration(registry);
+}
+
+const DEFAULT_AUDIT_CONFIGURATION = loadProofObligationsRegistry();
+const COMPOSITE_SUBTASKS = DEFAULT_AUDIT_CONFIGURATION.compositeSubtasks;
+const PRIORITY_AUDIT_SCRIPTS = DEFAULT_AUDIT_CONFIGURATION.priorityAuditScripts;
+const SERIAL_FIRST_AUDIT_SCRIPTS =
+  DEFAULT_AUDIT_CONFIGURATION.serialFirstAuditScripts;
+const STATIC_AUDIT_SCRIPTS = DEFAULT_AUDIT_CONFIGURATION.staticAuditScripts;
 
 function isValidObligationRecord(obligation) {
   if (typeof obligation.command !== 'string') return false;
@@ -262,32 +306,6 @@ function rangeChangedPaths(root) {
   return semanticPaths(changedRecords({root, base: range.base}));
 }
 
-const STATIC_AUDIT_SCRIPTS = Object.freeze([
-  'test:unused:prod',
-  'test:deps',
-  'audit:file-size',
-  'test:complexity',
-  'test:complexity:cognitive',
-  'test:metadata-gateway:audit',
-  'audit:runtime-grammar',
-  'audit:operation-progress-authority',
-  'audit:service-portability-claims',
-  'audit:current-capabilities',
-  'audit:cli-docs',
-  'audit:closure-ledger',
-  'audit:no-kiro',
-  'audit:no-legacy-naming',
-  'audit:no-legacy-consensus-references',
-  'audit:impact-contracts',
-  'audit:shards',
-  'audit:guidelines',
-  'audit:doc-audience',
-  'audit:doc-ascii',
-  'audit:documentation-current',
-  'audit:roadmap-authority',
-  'steering:check',
-]);
-
 function resolveChainScripts(argv) {
   const flagIndex = arrayIndexOf(argv, CHAIN_FLAG);
   if (flagIndex < 0) return null;
@@ -354,7 +372,7 @@ function expandAuditTasks(owed) {
   const taskCounts = arrayFill(new Array(owed.length), 0);
   for (let parentIndex = 0; parentIndex < owed.length; parentIndex += 1) {
     const scriptName = owed[parentIndex];
-    if (scriptName === STEERING_CHECK_SCRIPT) continue;
+    if (arrayIncludes(SERIAL_FIRST_AUDIT_SCRIPTS, scriptName)) continue;
     const subtasks = COMPOSITE_SUBTASKS[scriptName];
     if (subtasks) {
       taskCounts[parentIndex] = subtasks.length;
@@ -421,20 +439,33 @@ function nextTaskForWorker(heavy, regular, isHeavyWorker) {
   return arrayShift(regular);
 }
 
+async function runSerialFirstAudits(owed, subResultsByParent, fastFail) {
+  for (const serialScript of SERIAL_FIRST_AUDIT_SCRIPTS) {
+    const serialIndex = arrayIndexOf(owed, serialScript);
+    if (serialIndex < 0) continue;
+    const serialResult = await runLeafAudit(serialScript);
+    subResultsByParent[serialIndex] = [serialResult];
+    if (shouldAbortFastFail(fastFail, serialResult)) {
+      flushAuditOutput(serialResult);
+      return [serialResult];
+    }
+  }
+  return null;
+}
+
 async function executeOwedAudits(owed, fastFail) {
   const {heavy, regular, taskCounts} = expandAuditTasks(owed);
   const subResultsByParent = arrayMap(
     taskCounts,
     (count) => new Array(count),
   );
-  const steeringIndex = arrayIndexOf(owed, STEERING_CHECK_SCRIPT);
-  if (steeringIndex >= 0) {
-    const steeringResult = await runLeafAudit(STEERING_CHECK_SCRIPT);
-    subResultsByParent[steeringIndex] = [steeringResult];
-    if (shouldAbortFastFail(fastFail, steeringResult)) {
-      flushAuditOutput(steeringResult);
-      return [steeringResult];
-    }
+  const abortedSerialResult = await runSerialFirstAudits(
+    owed,
+    subResultsByParent,
+    fastFail,
+  );
+  if (abortedSerialResult) {
+    return abortedSerialResult;
   }
   const totalTasks = heavy.length + regular.length;
   const workerLimit = fastFail ?
@@ -541,4 +572,15 @@ if (isDirectInvocation()) {
 
 // Exported for the witness that proves the skip decision: a registry nothing
 // can test is a registry nobody should trust.
-export {auditIsOwed, inputMatches, skippingIsAdmissible};
+export {
+  COMPOSITE_SUBTASKS,
+  PRIORITY_AUDIT_SCRIPTS,
+  PROOF_OBLIGATIONS_JSON_SCHEMA,
+  SERIAL_FIRST_AUDIT_SCRIPTS,
+  STATIC_AUDIT_SCRIPTS,
+  auditIsOwed,
+  inputMatches,
+  loadProofObligationsRegistry,
+  skippingIsAdmissible,
+  validateProofObligationsSchema,
+};

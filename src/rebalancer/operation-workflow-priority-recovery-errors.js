@@ -76,6 +76,8 @@ async function isPriorityRecoverySupersessionCurrent(owner, operation, failure) 
  * @param {Object|null} priorityRecoveryContext
  * @returns {Promise<Object|null>}
  */
+const NO_SUPERSEDED_TARGET_FAILURE = null;
+
 async function getPriorityRecoverySupersededTargetFailureFromContext(
   context,
   operation,
@@ -86,12 +88,12 @@ async function getPriorityRecoverySupersededTargetFailureFromContext(
     !priorityRecoveryContext ||
     typeof priorityRecoveryContext !== 'object'
   ) {
-    return null;
+    return NO_SUPERSEDED_TARGET_FAILURE;
   }
 
   const targetNodeId = String(operation?.targetNodeId || '').trim();
   if (targetNodeId.length === 0) {
-    return null;
+    return NO_SUPERSEDED_TARGET_FAILURE;
   }
 
   const targetReadiness = context.controlPlaneReadinessService.getNodeReadinessSync(
@@ -108,7 +110,7 @@ async function getPriorityRecoverySupersededTargetFailureFromContext(
       observeTarget: () => context.observePriorityRecoveryTarget(operation),
     });
   if (!supersededTargetDecision.isFailure) {
-    return null;
+    return NO_SUPERSEDED_TARGET_FAILURE;
   }
 
   return buildPriorityRecoverySupersededTargetFailure(

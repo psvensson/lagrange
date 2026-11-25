@@ -80,110 +80,105 @@ const {
   summarizeInvariantBreaches,
 } = POSTGRES_BASELINE_COMPARISON_DISCOVERY_READINESS_BUNDLE;
 
+function resolveCanonicalDiscoveryNodeReadiness(snapshot, nodeId, options = {}) {
+  const enforceCanonicalRouteReadiness =
+    options.enforceCanonicalRouteReadiness === true;
+  const enforceCanonicalVersionedReadiness =
+    options.enforceCanonicalVersionedReadiness === true;
+  const readiness = findServiceReplicaReadinessFromDiscovery(
+    snapshot,
+    NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+    NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+    nodeId,
+  );
+  const canonicalDiscoveryReadinessState =
+    buildCanonicalDiscoveryReadinessState(readiness);
+  const canonicalReadiness = evaluateCanonicalVersionedReadiness({
+    adminQueryable: options.adminQueryable !== false,
+    routingReady: readiness?.[DISCOVERY_READINESS_FIELD_ROUTING_READY] === true,
+    topologyReady:
+      readiness?.[DISCOVERY_READINESS_FIELD_TOPOLOGY_READY] === true,
+    schemaReady: readiness?.[DISCOVERY_READINESS_FIELD_SCHEMA_READY] === true,
+    requireTopologyReady: enforceCanonicalVersionedReadiness ?
+      options.requireTopologyReady !== false :
+      options.requireTopologyReady === true,
+    allowSchemaReadyFallback: enforceCanonicalRouteReadiness === true,
+    requiredSchemaVersion: options.requiredSchemaVersion,
+    appliedSchemaVersion: extractAppliedSchemaVersionFromReadiness(readiness),
+  });
+  return {
+    ...canonicalReadiness,
+    discoveryReasons:
+      canonicalDiscoveryReadinessState?.discoveryReasons || [],
+    readinessState: canonicalDiscoveryReadinessState,
+  };
+}
+
+function resolveBenchmarkDiscoveryNodeReadiness(
+  snapshot,
+  nodeId,
+  options = {},
+) {
+  const normalizedNodeId = String(nodeId || '');
+  const benchmarkAdmission = findServiceReplicaBenchmarkAdmissionFromDiscovery(
+    snapshot,
+    NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+    NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+    nodeId,
+  );
+  const admissionEvaluation =
+    evaluateDiscoveryReplicaBenchmarkAdmission(benchmarkAdmission);
+  if (admissionEvaluation) {
+    recordAdmissionRuntimeOwnership(
+      options.admissionRuntimeOwnership,
+      'readinessGate',
+      normalizedNodeId,
+      DISCOVERY_ADMISSION_SOURCE.RUNTIME,
+    );
+    return {
+      ready: admissionEvaluation.ready === true,
+      reasons: admissionEvaluation.ready ? [] : admissionEvaluation.reasons,
+    };
+  }
+  const readiness = findServiceReplicaReadinessFromDiscovery(
+    snapshot,
+    NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+    NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+    nodeId,
+  );
+  recordAdmissionRuntimeOwnership(
+    options.admissionRuntimeOwnership,
+    'readinessGate',
+    normalizedNodeId,
+    readiness && typeof readiness === 'object' ?
+      DISCOVERY_ADMISSION_SOURCE.LEGACY :
+      DISCOVERY_ADMISSION_SOURCE.MISSING,
+  );
+  const readinessEvaluation = evaluateDiscoveryReplicaReadiness(readiness, {
+    requireCanonicalBenchmarkReadiness: true,
+  });
+  const ready =
+    readinessEvaluation.ready &&
+    readinessEvaluation.readinessState?.topologyReady === true;
+  return {
+    ready,
+    reasons: ready ? [] : readinessEvaluation.reasons,
+  };
+}
+
 function resolveNodeReadinessFromServiceDiscovery(
   snapshot,
   nodeId,
   options = {},
 ) {
-  const enforceCanonicalRouteReadiness =
-    options.enforceCanonicalRouteReadiness === true;
-  const enforceCanonicalVersionedReadiness =
-    options.enforceCanonicalVersionedReadiness === true;
-  if (enforceCanonicalVersionedReadiness || enforceCanonicalRouteReadiness) {
-    const readiness = findServiceReplicaReadinessFromDiscovery(
-      snapshot,
-      NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
-      NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
-      nodeId,
-    );
-    const canonicalDiscoveryReadinessState =
-      buildCanonicalDiscoveryReadinessState(readiness);
-    const routingReady =
-      readiness?.[DISCOVERY_READINESS_FIELD_ROUTING_READY] === true;
-    const topologyReady =
-      readiness?.[DISCOVERY_READINESS_FIELD_TOPOLOGY_READY] === true;
-    const schemaReady =
-      readiness?.[DISCOVERY_READINESS_FIELD_SCHEMA_READY] === true;
-    const appliedSchemaVersion =
-      extractAppliedSchemaVersionFromReadiness(readiness);
-    const canonicalReadiness = evaluateCanonicalVersionedReadiness({
-      adminQueryable: options.adminQueryable !== false,
-      routingReady,
-      topologyReady,
-      schemaReady,
-      requireTopologyReady: enforceCanonicalVersionedReadiness ?
-        options.requireTopologyReady !== false :
-        options.requireTopologyReady === true,
-      allowSchemaReadyFallback: enforceCanonicalRouteReadiness === true,
-      requiredSchemaVersion: options.requiredSchemaVersion,
-      appliedSchemaVersion,
-    });
-    return {
-      ...canonicalReadiness,
-      discoveryReasons:
-        canonicalDiscoveryReadinessState?.discoveryReasons || [],
-      readinessState: canonicalDiscoveryReadinessState,
-    };
+  if (
+    options.enforceCanonicalVersionedReadiness === true ||
+    options.enforceCanonicalRouteReadiness === true
+  ) {
+    return resolveCanonicalDiscoveryNodeReadiness(snapshot, nodeId, options);
   }
-
-  const enforceBenchmarkReadiness = options.enforceBenchmarkReadiness === true;
-  if (enforceBenchmarkReadiness) {
-    const benchmarkAdmission =
-      findServiceReplicaBenchmarkAdmissionFromDiscovery(
-        snapshot,
-        NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
-        NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
-        nodeId,
-      );
-    const admissionEvaluation =
-      evaluateDiscoveryReplicaBenchmarkAdmission(benchmarkAdmission);
-    if (admissionEvaluation) {
-      recordAdmissionRuntimeOwnership(
-        options.admissionRuntimeOwnership,
-        'readinessGate',
-        String(nodeId || ''),
-        DISCOVERY_ADMISSION_SOURCE.RUNTIME,
-      );
-      return admissionEvaluation.ready ?
-        {
-          ready: true,
-          reasons: [],
-        } :
-        {
-          ready: false,
-          reasons: admissionEvaluation.reasons,
-        };
-    }
-    const readiness = findServiceReplicaReadinessFromDiscovery(
-      snapshot,
-      NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
-      NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
-      nodeId,
-    );
-    recordAdmissionRuntimeOwnership(
-      options.admissionRuntimeOwnership,
-      'readinessGate',
-      String(nodeId || ''),
-      readiness && typeof readiness === 'object' ?
-        DISCOVERY_ADMISSION_SOURCE.LEGACY :
-        DISCOVERY_ADMISSION_SOURCE.MISSING,
-    );
-    const readinessEvaluation = evaluateDiscoveryReplicaReadiness(readiness, {
-      requireCanonicalBenchmarkReadiness: true,
-    });
-    if (
-      readinessEvaluation.ready &&
-      readinessEvaluation.readinessState?.topologyReady === true
-    ) {
-      return {
-        ready: true,
-        reasons: [],
-      };
-    }
-    return {
-      ready: false,
-      reasons: readinessEvaluation.reasons,
-    };
+  if (options.enforceBenchmarkReadiness === true) {
+    return resolveBenchmarkDiscoveryNodeReadiness(snapshot, nodeId, options);
   }
 
   const selection = resolveSutLoadNodeSelectionFromDiscovery(snapshot);
@@ -195,18 +190,13 @@ function resolveNodeReadinessFromServiceDiscovery(
   }
   const excludedReadinessReasons =
     selection.excludedReadinessByNodeId?.[nodeId];
-  if (
-    Array.isArray(excludedReadinessReasons) &&
-    excludedReadinessReasons.length > ZERO
-  ) {
-    return {
-      ready: false,
-      reasons: excludedReadinessReasons,
-    };
-  }
   return {
     ready: false,
-    reasons: [DISCOVERY_READINESS_REASON_NOT_SELECTED_BY_DISCOVERY],
+    reasons:
+      Array.isArray(excludedReadinessReasons) &&
+      excludedReadinessReasons.length > ZERO ?
+        excludedReadinessReasons :
+        [DISCOVERY_READINESS_REASON_NOT_SELECTED_BY_DISCOVERY],
   };
 }
 
@@ -326,6 +316,43 @@ function summarizeDiscoverySourceError(error) {
   return truncateDiscoveryErrorMessage(summary);
 }
 
+function normalizeNodeReasonListMap(inputMap) {
+  if (!inputMap || typeof inputMap !== 'object') {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(inputMap).map(([nodeId, reasons]) => [
+      String(nodeId),
+      Array.isArray(reasons) ? reasons.map((reason) => String(reason)) : [],
+    ]),
+  );
+}
+
+function normalizeDiscoverySourceResults(sourceResults) {
+  if (!Array.isArray(sourceResults)) {
+    return [];
+  }
+  return sourceResults.map((sourceResult) => ({
+    ...sourceResult,
+    discoveredNodeIds: Array.isArray(sourceResult?.discoveredNodeIds) ?
+      [...sourceResult.discoveredNodeIds] :
+      [],
+    excludedReadinessByNodeId: normalizeNodeReasonListMap(
+      sourceResult?.excludedReadinessByNodeId,
+    ),
+  }));
+}
+
+function cloneNodeAdmissionTraceMap(traceMap) {
+  return traceMap && typeof traceMap === 'object' ?
+    globalThis.structuredClone(traceMap) :
+    {};
+}
+
+function copyArrayOrEmpty(values) {
+  return Array.isArray(values) ? [...values] : [];
+}
+
 function buildSutLoadDiscoveryDiagnostics(options = {}) {
   const gateReason =
     typeof options.gateReason === 'string' && options.gateReason.length > ZERO ?
@@ -341,63 +368,18 @@ function buildSutLoadDiscoveryDiagnostics(options = {}) {
         options.requiredReachableNodeCount :
         ONE,
     gateReason,
-    discoveredNodeIds: Array.isArray(options.discoveredNodeIds) ?
-      [...options.discoveredNodeIds] :
-      [],
-    candidateNodeIds: Array.isArray(options.candidateNodeIds) ?
-      [...options.candidateNodeIds] :
-      [],
-    reachableNodeIds: Array.isArray(options.reachableNodeIds) ?
-      [...options.reachableNodeIds] :
-      [],
-    sourceResults: Array.isArray(options.sourceResults) ?
-      options.sourceResults.map((sourceResult) => ({
-        ...sourceResult,
-        discoveredNodeIds: Array.isArray(sourceResult?.discoveredNodeIds) ?
-          [...sourceResult.discoveredNodeIds] :
-          [],
-        excludedReadinessByNodeId:
-            sourceResult?.excludedReadinessByNodeId &&
-            typeof sourceResult.excludedReadinessByNodeId === 'object' ?
-              Object.fromEntries(
-                Object.entries(sourceResult.excludedReadinessByNodeId).map(
-                  ([nodeId, reasons]) => [
-                    String(nodeId),
-                    Array.isArray(reasons) ?
-                      reasons.map((reason) => String(reason)) :
-                      [],
-                  ],
-                ),
-              ) :
-              {},
-      })) :
-      [],
+    discoveredNodeIds: copyArrayOrEmpty(options.discoveredNodeIds),
+    candidateNodeIds: copyArrayOrEmpty(options.candidateNodeIds),
+    reachableNodeIds: copyArrayOrEmpty(options.reachableNodeIds),
+    sourceResults: normalizeDiscoverySourceResults(options.sourceResults),
     [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
-      options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] &&
-      typeof options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] ===
-        'object' ?
-        Object.fromEntries(
-          Object.entries(
-            options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID],
-          ).map(([nodeId, reasons]) => [
-            String(nodeId),
-            Array.isArray(reasons) ?
-              reasons.map((reason) => String(reason)) :
-              [],
-          ]),
-        ) :
-        {},
+      normalizeNodeReasonListMap(
+        options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID],
+      ),
     [DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID]:
-      options[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] &&
-      typeof options[
-        DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID
-      ] === 'object' ?
-        globalThis.structuredClone(
-          options[
-            DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID
-          ],
-        ) :
-        {},
+      cloneNodeAdmissionTraceMap(
+        options[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID],
+      ),
     elapsedMs: Number.isFinite(options.elapsedMs) ?
       Math.max(ZERO, Math.floor(options.elapsedMs)) :
       ZERO,
@@ -462,6 +444,123 @@ function aggregateDiscoveryReadinessExclusionReasonCountsByNodeId(
   return reasonCounts;
 }
 
+function resolveNonEmptyStringOrFallback(value, fallback) {
+  return typeof value === 'string' && value.length > ZERO ? value : fallback;
+}
+
+function formatNodeReasonsEntry(nodeId, reasons, fallbackReason = 'unknown') {
+  const reasonList =
+    Array.isArray(reasons) && reasons.length > ZERO ?
+      reasons.join('|') :
+      fallbackReason;
+  return String(nodeId) + ':' + reasonList;
+}
+
+function formatNodeReasonsMap(reasonsByNodeId, separator, fallbackReason) {
+  if (!reasonsByNodeId || typeof reasonsByNodeId !== 'object') {
+    return '';
+  }
+  return Object.entries(reasonsByNodeId)
+    .map(([nodeId, reasons]) =>
+      formatNodeReasonsEntry(nodeId, reasons, fallbackReason),
+    )
+    .join(separator);
+}
+
+function formatDiscoveredServiceTarget(source, sourceNodeIds) {
+  const serviceId = resolveNonEmptyStringOrFallback(
+    source.serviceId,
+    'unknown-service',
+  );
+  const protocol = resolveNonEmptyStringOrFallback(
+    source.protocol,
+    'unknown-protocol',
+  );
+  return '=' + serviceId + '@' + protocol + ':' + sourceNodeIds.join('|');
+}
+
+function formatDiscoverySourceResultEntry(sourceResult) {
+  const source =
+    sourceResult && typeof sourceResult === 'object' ? sourceResult : {};
+  const nodeId = resolveNonEmptyStringOrFallback(
+    source.nodeId,
+    DISCOVERY_UNKNOWN_NODE_ID,
+  );
+  const status = resolveNonEmptyStringOrFallback(
+    source.status,
+    DISCOVERY_SOURCE_STATUS_EMPTY,
+  );
+  const scope = resolveNonEmptyStringOrFallback(source.scope, null);
+  const statusWithScope = scope ? status + '@' + scope : status;
+  if (status === DISCOVERY_SOURCE_STATUS_ERROR) {
+    return (
+      nodeId + ':' + statusWithScope + '=' + String(source.error || 'unknown')
+    );
+  }
+  const excludedReadiness = formatNodeReasonsMap(
+    source.excludedReadinessByNodeId,
+    ',',
+    'unknown',
+  );
+  const excludedSuffix =
+    excludedReadiness.length > ZERO ?
+      '[excluded=' + excludedReadiness + ']' :
+      '';
+  const sourceNodeIds = Array.isArray(source.discoveredNodeIds) ?
+    source.discoveredNodeIds :
+    [];
+  const targetSuffix =
+    sourceNodeIds.length > ZERO ?
+      formatDiscoveredServiceTarget(source, sourceNodeIds) :
+      '';
+  return nodeId + ':' + statusWithScope + targetSuffix + excludedSuffix;
+}
+
+function resolveDiagnosticsExclusionsAndCounts(diagnostics) {
+  const existingExclusions =
+    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID];
+  const excludedReadinessByNodeId =
+    existingExclusions && typeof existingExclusions === 'object' ?
+      existingExclusions :
+      aggregateDiscoveryReadinessExclusionsByNodeId(diagnostics);
+  const existingCounts =
+    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE];
+  const exclusionReasonCountsByNode =
+    existingCounts && typeof existingCounts === 'object' ?
+      existingCounts :
+      aggregateDiscoveryReadinessExclusionReasonCountsByNodeId(
+        excludedReadinessByNodeId,
+      );
+  return {
+    excludedReadinessByNodeId,
+    exclusionReasonCountsByNode,
+  };
+}
+
+function formatAdmissionStateTraceSummary(nodeAdmissionTraceByNodeId) {
+  if (
+    !nodeAdmissionTraceByNodeId ||
+    typeof nodeAdmissionTraceByNodeId !== 'object'
+  ) {
+    return '';
+  }
+  return Object.entries(nodeAdmissionTraceByNodeId)
+    .map(([nodeId, trace]) => {
+      const state = resolveNonEmptyStringOrFallback(
+        trace?.derivedState,
+        'unknown',
+      );
+      return String(nodeId) + ':' + state;
+    })
+    .join(DISCOVERY_DIAGNOSTIC_NODE_REASON_SEPARATOR);
+}
+
+function appendIfNonEmpty(targetList, prefix, value) {
+  if (typeof value === 'string' && value.length > ZERO) {
+    targetList.push(prefix + value);
+  }
+}
+
 function formatSutLoadDiscoveryDiagnostics(diagnostics) {
   if (!diagnostics || typeof diagnostics !== 'object') {
     return '';
@@ -480,149 +579,27 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
   const sourceResults = Array.isArray(diagnostics.sourceResults) ?
     diagnostics.sourceResults :
     [];
-  const probeReadinessByNodeId =
-    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] &&
-    typeof diagnostics[
-      DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID
-    ] === 'object' ?
-      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] :
-      {};
-  const excludedReadinessByNodeId =
-    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID] &&
-    typeof diagnostics[
-      DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID
-    ] === 'object' ?
-      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID] :
-      aggregateDiscoveryReadinessExclusionsByNodeId(diagnostics);
-  const exclusionReasonCountsByNode =
-    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE] &&
-    typeof diagnostics[
-      DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE
-    ] === 'object' ?
-      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE] :
-      aggregateDiscoveryReadinessExclusionReasonCountsByNodeId(
-        excludedReadinessByNodeId,
-      );
-  const nodeAdmissionTraceByNodeId =
-    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] &&
-    typeof diagnostics[
-      DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID
-    ] === 'object' ?
-      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] :
-      {};
+  const {excludedReadinessByNodeId, exclusionReasonCountsByNode} =
+    resolveDiagnosticsExclusionsAndCounts(diagnostics);
   const sourceSummary = sourceResults
-    .map((sourceResult) => {
-      const nodeId =
-        typeof sourceResult?.nodeId === 'string' &&
-        sourceResult.nodeId.length > ZERO ?
-          sourceResult.nodeId :
-          DISCOVERY_UNKNOWN_NODE_ID;
-      const status =
-        typeof sourceResult?.status === 'string' &&
-        sourceResult.status.length > ZERO ?
-          sourceResult.status :
-          DISCOVERY_SOURCE_STATUS_EMPTY;
-      const scope =
-        typeof sourceResult?.scope === 'string' &&
-        sourceResult.scope.length > ZERO ?
-          sourceResult.scope :
-          null;
-      const statusWithScope = scope ? status + '@' + scope : status;
-      const excludedReadiness =
-        sourceResult?.excludedReadinessByNodeId &&
-        typeof sourceResult.excludedReadinessByNodeId === 'object' ?
-          Object.entries(sourceResult.excludedReadinessByNodeId)
-            .map(([nodeId, reasons]) => {
-              const reasonList =
-                  Array.isArray(reasons) && reasons.length > ZERO ?
-                    reasons.join('|') :
-                    'unknown';
-              return String(nodeId) + ':' + reasonList;
-            })
-            .join(',') :
-          '';
-      if (status === DISCOVERY_SOURCE_STATUS_ERROR) {
-        return (
-          nodeId +
-          ':' +
-          statusWithScope +
-          '=' +
-          String(sourceResult?.error || 'unknown')
-        );
-      }
-      const sourceNodeIds = Array.isArray(sourceResult?.discoveredNodeIds) ?
-        sourceResult.discoveredNodeIds :
-        [];
-      if (sourceNodeIds.length > ZERO) {
-        const serviceId =
-          typeof sourceResult?.serviceId === 'string' &&
-          sourceResult.serviceId.length > ZERO ?
-            sourceResult.serviceId :
-            'unknown-service';
-        const protocol =
-          typeof sourceResult?.protocol === 'string' &&
-          sourceResult.protocol.length > ZERO ?
-            sourceResult.protocol :
-            'unknown-protocol';
-        const baseSummary =
-          nodeId +
-          ':' +
-          statusWithScope +
-          '=' +
-          serviceId +
-          '@' +
-          protocol +
-          ':' +
-          sourceNodeIds.join('|');
-        if (excludedReadiness.length > ZERO) {
-          return baseSummary + '[excluded=' + excludedReadiness + ']';
-        }
-        return baseSummary;
-      }
-      if (excludedReadiness.length > ZERO) {
-        return (
-          nodeId +
-          ':' +
-          statusWithScope +
-          '[excluded=' +
-          excludedReadiness +
-          ']'
-        );
-      }
-      return nodeId + ':' + statusWithScope;
-    })
+    .map((sourceResult) => formatDiscoverySourceResultEntry(sourceResult))
     .join(';');
-  const probeSummary = Object.entries(probeReadinessByNodeId)
-    .map(([nodeId, reasons]) => {
-      const reasonList =
-        Array.isArray(reasons) && reasons.length > ZERO ?
-          reasons.join('|') :
-          DISCOVERY_PROBE_REASON_ADMIN_NOT_READY;
-      return String(nodeId) + ':' + reasonList;
-    })
-    .join(';');
-  const excludedNodeSummary = Object.entries(excludedReadinessByNodeId)
-    .map(([nodeId, reasons]) => {
-      const reasonList =
-        Array.isArray(reasons) && reasons.length > ZERO ?
-          reasons.join('|') :
-          'unknown';
-      return String(nodeId) + ':' + reasonList;
-    })
-    .join(DISCOVERY_DIAGNOSTIC_NODE_REASON_SEPARATOR);
+  const probeSummary = formatNodeReasonsMap(
+    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID],
+    ';',
+    DISCOVERY_PROBE_REASON_ADMIN_NOT_READY,
+  );
+  const excludedNodeSummary = formatNodeReasonsMap(
+    excludedReadinessByNodeId,
+    DISCOVERY_DIAGNOSTIC_NODE_REASON_SEPARATOR,
+    'unknown',
+  );
   const excludedReasonCountSummary = Object.entries(exclusionReasonCountsByNode)
     .map(([reason, count]) => String(reason) + ':' + String(count))
     .join(DISCOVERY_DIAGNOSTIC_REASON_COUNT_SEPARATOR);
-  const admissionStateSummary = Object.entries(nodeAdmissionTraceByNodeId)
-    .map(([nodeId, trace]) => {
-      const state =
-        typeof trace?.derivedState === 'string' &&
-        trace.derivedState.length > ZERO ?
-          trace.derivedState :
-          'unknown';
-      return String(nodeId) + ':' + state;
-    })
-    .join(DISCOVERY_DIAGNOSTIC_NODE_REASON_SEPARATOR);
+  const admissionStateSummary = formatAdmissionStateTraceSummary(
+    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID],
+  );
   const diagnosticsSummary = [
     'attempts=' + String(attempts),
     'timedOut=' + String(diagnostics.timedOut === true),
@@ -631,34 +608,29 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
     'discovered=' +
       (discoveredNodeIds.length > ZERO ? discoveredNodeIds.join('|') : 'none'),
   ];
-  if (
-    typeof diagnostics.gateReason === 'string' &&
-    diagnostics.gateReason.length > ZERO
-  ) {
-    diagnosticsSummary.push('gateReason=' + diagnostics.gateReason);
-  }
-  if (sourceSummary.length > ZERO) {
-    diagnosticsSummary.push('sources=' + sourceSummary);
-  }
-  if (probeSummary.length > ZERO) {
-    diagnosticsSummary.push(DISCOVERY_DIAGNOSTIC_PREFIX_PROBES + probeSummary);
-  }
+  appendIfNonEmpty(diagnosticsSummary, 'gateReason=', diagnostics.gateReason);
+  appendIfNonEmpty(diagnosticsSummary, 'sources=', sourceSummary);
+  appendIfNonEmpty(
+    diagnosticsSummary,
+    DISCOVERY_DIAGNOSTIC_PREFIX_PROBES,
+    probeSummary,
+  );
   diagnosticsSummary.push(
     DISCOVERY_DIAGNOSTIC_PREFIX_EXCLUSION_COUNTS +
       (excludedReasonCountSummary.length > ZERO ?
         excludedReasonCountSummary :
         'none'),
   );
-  if (admissionStateSummary.length > ZERO) {
-    diagnosticsSummary.push(
-      DISCOVERY_DIAGNOSTIC_PREFIX_ADMISSION_STATES + admissionStateSummary,
-    );
-  }
-  if (excludedNodeSummary.length > ZERO) {
-    diagnosticsSummary.push(
-      DISCOVERY_DIAGNOSTIC_PREFIX_EXCLUDED_NODES + excludedNodeSummary,
-    );
-  }
+  appendIfNonEmpty(
+    diagnosticsSummary,
+    DISCOVERY_DIAGNOSTIC_PREFIX_ADMISSION_STATES,
+    admissionStateSummary,
+  );
+  appendIfNonEmpty(
+    diagnosticsSummary,
+    DISCOVERY_DIAGNOSTIC_PREFIX_EXCLUDED_NODES,
+    excludedNodeSummary,
+  );
   return diagnosticsSummary.join(', ');
 }
 
@@ -703,26 +675,19 @@ function buildStrictParityGate(options = {}) {
     options.parity && typeof options.parity === 'object' ?
       options.parity :
       null;
-  const parityStatus =
-    typeof parity?.status === 'string' && parity.status.length > ZERO ?
-      parity.status :
-      null;
+  const parityStatus = resolveNonEmptyStringOrFallback(parity?.status, null);
   const reasonCodes = Array.isArray(parity?.reasons) ?
     parity.reasons.map((reason) => String(reason)) :
     [];
-  const mismatch = parityStatus === LOAD_PARITY_STATUS_MISMATCHED;
-  const status =
-    strictParity && mismatch ?
-      DISCOVERY_GATE_STATUS_FAILED :
-      DISCOVERY_GATE_STATUS_PASSED;
-  const reason =
-    strictParity && mismatch ? STRICT_PARITY_REASON_MISMATCH : null;
+  const failed = strictParity && parityStatus === LOAD_PARITY_STATUS_MISMATCHED;
 
   return {
     strictParity,
     parityStatus,
-    status,
-    reason,
+    status: failed ?
+      DISCOVERY_GATE_STATUS_FAILED :
+      DISCOVERY_GATE_STATUS_PASSED,
+    reason: failed ? STRICT_PARITY_REASON_MISMATCH : null,
     reasonCodes,
   };
 }
@@ -908,40 +873,45 @@ function buildInternalSignalCounts(
   };
 }
 
+function collectSignalThresholdBreachesForSeverity(
+  severity,
+  thresholdsByClass,
+  observedCountsByClass,
+  breaches,
+) {
+  for (const [signalClass, threshold] of Object.entries(
+    thresholdsByClass || {},
+  )) {
+    const observedCount = Number(observedCountsByClass?.[signalClass] || ZERO);
+    if (observedCount >= threshold) {
+      breaches.push({
+        severity,
+        signalClass,
+        threshold,
+        observedCount,
+      });
+    }
+  }
+}
+
 function evaluateInternalSignalThresholds(counts, thresholdPolicy) {
   const policy =
     thresholdPolicy && typeof thresholdPolicy === 'object' ?
       thresholdPolicy :
       resolveInternalSignalThresholds({});
   const breaches = [];
-  for (const [signalClass, threshold] of Object.entries(
-    policy.errorsByClass || {},
-  )) {
-    const observedCount = Number(counts?.errorsByClass?.[signalClass] || ZERO);
-    if (observedCount >= threshold) {
-      breaches.push({
-        severity: 'error',
-        signalClass,
-        threshold,
-        observedCount,
-      });
-    }
-  }
-  for (const [signalClass, threshold] of Object.entries(
-    policy.warningsByClass || {},
-  )) {
-    const observedCount = Number(
-      counts?.warningsByClass?.[signalClass] || ZERO,
-    );
-    if (observedCount >= threshold) {
-      breaches.push({
-        severity: 'warning',
-        signalClass,
-        threshold,
-        observedCount,
-      });
-    }
-  }
+  collectSignalThresholdBreachesForSeverity(
+    'error',
+    policy.errorsByClass,
+    counts?.errorsByClass,
+    breaches,
+  );
+  collectSignalThresholdBreachesForSeverity(
+    'warning',
+    policy.warningsByClass,
+    counts?.warningsByClass,
+    breaches,
+  );
   return {
     failOnThresholdBreach: policy.failOnThresholdBreach === true,
     breached: breaches.length > ZERO,
@@ -974,8 +944,16 @@ function createEmptySaturationCounters() {
   };
 }
 
-function buildSaturationCounters(options = {}) {
-  const counters = createEmptySaturationCounters();
+function recordSaturationPatternsForText(counters, text, increment) {
+  if (SATURATION_PATTERN_CDC_FORWARD_TIMEOUT.test(text)) {
+    counters.cdcForwardTimeoutCount += increment;
+  }
+  if (SATURATION_PATTERN_SYSTEM_TABLE_QUERY_TIMEOUT.test(text)) {
+    counters.systemTableQueryTimeoutCount += increment;
+  }
+}
+
+function collectSaturationMessages(options = {}) {
   const messages = [];
   const distinctErrors = Array.isArray(options?.loadMetrics?.distinctErrors) ?
     options.loadMetrics.distinctErrors :
@@ -989,14 +967,13 @@ function buildSaturationCounters(options = {}) {
   for (const signalMessage of internalSignalMessages) {
     messages.push(String(signalMessage));
   }
+  return messages;
+}
 
-  for (const message of messages) {
-    if (SATURATION_PATTERN_CDC_FORWARD_TIMEOUT.test(message)) {
-      counters.cdcForwardTimeoutCount += ONE;
-    }
-    if (SATURATION_PATTERN_SYSTEM_TABLE_QUERY_TIMEOUT.test(message)) {
-      counters.systemTableQueryTimeoutCount += ONE;
-    }
+function buildSaturationCounters(options = {}) {
+  const counters = createEmptySaturationCounters();
+  for (const message of collectSaturationMessages(options)) {
+    recordSaturationPatternsForText(counters, message, ONE);
   }
 
   const reasonHistogram =
@@ -1005,12 +982,7 @@ function buildSaturationCounters(options = {}) {
       {};
   for (const [reason, count] of Object.entries(reasonHistogram)) {
     const normalizedCount = Math.max(ONE, normalizeNonNegativeInteger(count));
-    if (SATURATION_PATTERN_CDC_FORWARD_TIMEOUT.test(reason)) {
-      counters.cdcForwardTimeoutCount += normalizedCount;
-    }
-    if (SATURATION_PATTERN_SYSTEM_TABLE_QUERY_TIMEOUT.test(reason)) {
-      counters.systemTableQueryTimeoutCount += normalizedCount;
-    }
+    recordSaturationPatternsForText(counters, reason, normalizedCount);
     if (
       reason.includes(QUIESCENCE_REASON_SNAPSHOT_QUERY_ERROR_PREFIX) ||
       reason.includes('|probe_error=')

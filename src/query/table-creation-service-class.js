@@ -11,21 +11,83 @@ import {NUM} from '../constants/index.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {QUERY_SUBSYSTEM} from './query-constants.js';
 import {CancellationToken} from './cancellation-token.js';
-import {defineTableCreationCreateTableMethod} from './table-creation-service-create-table.js';
-import {defineTableCreationDurableJobMethod} from './table-creation-service-durable-job.js';
+import {executeCreateTableProvisioning} from './table-creation-service-create-table.js';
+import {
+  createTable,
+  executeDurableSchemaProvisioningJob,
+  resumeDurableProvisioningJobs,
+} from './table-creation-service-durable-job.js';
 import {SchemaProvisioningJobOwner} from './schema-provisioning-job-owner.js';
 import {SchemaProvisioningJobRepository} from './schema-provisioning-job-repository.js';
-
-import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
-import {defineTableCreationSplitMergeCoordination} from './table-creation-service-split-merge-coordination.js';
-import {defineTableCreationPartitionProvisioning} from './table-creation-service-partition-provisioning.js';
-import {defineTableCreationSchemaDerivation} from './table-creation-service-schema-derivation.js';
-import {defineTableCreationMetadataLookup} from './table-creation-service-metadata-lookup.js';
-import {defineTableCreationExistingTableReconciliation} from './table-creation-service-existing-table-reconciliation.js';
-import {defineTableCreationResultProjection} from './table-creation-service-result-projection.js';
+import {
+  assertCallableCollaboratorMethod,
+  defineTableCreationSplitMergeCoordination,
+} from './table-creation-service-split-merge-coordination.js';
+import {
+  buildInitialPartitionMetadataFromTableRecord,
+  provisionInitialPartition,
+  resolveDefaultMinimumRoutableReplicaCount,
+} from './table-creation-service-partition-provisioning.js';
+import {
+  buildSchemaDefinition,
+  derivePartitionKey,
+  normalizeDataType,
+} from './table-creation-service-schema-derivation.js';
+import {
+  findExistingPartitionRecord,
+  findExistingTableRecord,
+  getPartitionKey,
+  getPartitionRecord,
+  getTableRecord,
+  getTableSchema,
+  tableExists,
+} from './table-creation-service-metadata-lookup.js';
+import {
+  EXISTING_TABLE_RECONCILIATION_METHODS,
+} from './table-creation-service-existing-table-reconciliation.js';
+import {
+  isPartitionField,
+  stripPartitionDetails,
+  validatePrimaryKey,
+} from './table-creation-service-result-projection.js';
 
 const SCHEMA_PROVISIONING_SHUTDOWN_REASON =
   'Schema provisioning cancelled during shutdown';
+const GATEWAY_COLLABORATOR_LABEL =
+  'TableCreationService controlPlaneSystemTableGateway';
+const QUORUM_CALLBACK_LABEL =
+  'TableCreationService calculateQuorumReplicaCount';
+const PROVISIONER_CALLBACK_LABEL =
+  'TableCreationService partitionProvisioner';
+const READ_ROWS_METHOD_NAME = 'readRows';
+const SUBMIT_MUTATION_METHOD_NAME = 'submitMutation';
+
+function validateControlPlaneGatewayCollaborator(gateway) {
+  if (gateway === null || gateway === undefined) {
+    return null;
+  }
+  assertCallableCollaboratorMethod(
+    gateway,
+    READ_ROWS_METHOD_NAME,
+    GATEWAY_COLLABORATOR_LABEL,
+  );
+  assertCallableCollaboratorMethod(
+    gateway,
+    SUBMIT_MUTATION_METHOD_NAME,
+    GATEWAY_COLLABORATOR_LABEL,
+  );
+  return gateway;
+}
+
+function resolveOptionalCallback(callback, label) {
+  if (callback === null || callback === undefined) {
+    return null;
+  }
+  if (typeof callback !== 'function') {
+    throw new TypeError(`${label} must be a function when provided`);
+  }
+  return callback;
+}
 
 /**
  * TableCreationService handles table creation with automatic partition key
@@ -43,17 +105,21 @@ class TableCreationService {
   constructor(options = {}) {
     this.systemCache = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway ||
-      createControlPlaneRuntimeBundle({
-        getCdcIntegrationService: () => this.cdcIntegrationService,
-        getSystemTableCache: () => this.systemCache,
-      }).controlPlaneSystemTableGateway;
+    this.controlPlaneSystemTableGateway = null;
+    this.schemaProvisioningJobRepository = null;
+    const defaultGateway =
+      options.controlPlaneSystemTableGateway !== undefined ?
+        options.controlPlaneSystemTableGateway :
+        createControlPlaneRuntimeBundle({
+          getCdcIntegrationService: () => this.cdcIntegrationService,
+          getSystemTableCache: () => this.systemCache,
+        }).controlPlaneSystemTableGateway;
+    this.setControlPlaneSystemTableGateway(defaultGateway);
     this.schemaProvisioningJobRepository =
       options.schemaProvisioningJobRepository ||
       new SchemaProvisioningJobRepository({
         gateway: this.controlPlaneSystemTableGateway,
-        systemCache: options.systemCache || null,
+        systemCache: null,
       });
     this.schemaProvisioningJobOwner =
       options.schemaProvisioningJobOwner || new SchemaProvisioningJobOwner({
@@ -72,18 +138,15 @@ class TableCreationService {
     this.tablePolicyByTableId = new Map();
     this.partitionSizeByPartitionId = new Map();
     this.cachePolicyChangeListener = null;
-    this.calculateQuorumReplicaCount =
-      typeof options.calculateQuorumReplicaCount ===
-      TABLE_CREATION_SERVICE_LITERAL.FUNCTION ?
-        options.calculateQuorumReplicaCount :
-        null;
-    this.partitionProvisioner =
-      typeof options.partitionProvisioner ===
-      TABLE_CREATION_SERVICE_LITERAL.FUNCTION ?
-        options.partitionProvisioner :
-        null;
+    this.calculateQuorumReplicaCount = resolveOptionalCallback(
+      options.calculateQuorumReplicaCount,
+      QUORUM_CALLBACK_LABEL,
+    );
+    this.partitionProvisioner = resolveOptionalCallback(
+      options.partitionProvisioner,
+      PROVISIONER_CALLBACK_LABEL,
+    );
 
-    // Configuration
     const config = ConfigurationManager.getInstance();
     this.defaultReplicaCount =
       config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || NUM.THREE;
@@ -120,9 +183,16 @@ class TableCreationService {
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
   }
+
+  /**
+   * Set and validate the control-plane system-table gateway collaborator.
+   * @param {Object|null} controlPlaneSystemTableGateway
+   */
   setControlPlaneSystemTableGateway(controlPlaneSystemTableGateway) {
-    this.controlPlaneSystemTableGateway =
-      controlPlaneSystemTableGateway || null;
+    const validatedGateway = validateControlPlaneGatewayCollaborator(
+      controlPlaneSystemTableGateway,
+    );
+    this.controlPlaneSystemTableGateway = validatedGateway;
     this.schemaProvisioningJobRepository?.setGateway(
       this.controlPlaneSystemTableGateway,
     );
@@ -130,13 +200,13 @@ class TableCreationService {
 
   /**
    * Set initial table partition provisioning callback.
-   * @param {Function} provisioner - Provisioning callback.
+   * @param {Function|null} provisioner - Provisioning callback.
    */
   setPartitionProvisioner(provisioner) {
-    this.partitionProvisioner =
-      typeof provisioner === TABLE_CREATION_SERVICE_LITERAL.FUNCTION ?
-        provisioner :
-        null;
+    this.partitionProvisioner = resolveOptionalCallback(
+      provisioner,
+      PROVISIONER_CALLBACK_LABEL,
+    );
   }
 
   /**
@@ -151,18 +221,113 @@ class TableCreationService {
     this.detachCachePolicyListener();
     this.stopPeriodicSplitMergeEvaluation();
   }
+
   getControlPlaneSystemTableGateway() {
     return this.controlPlaneSystemTableGateway;
   }
+
+  derivePartitionKey(primaryKey) {
+    return derivePartitionKey(primaryKey);
+  }
+
+  buildSchemaDefinition(columnsOrAst, tableConstraints = [], primaryKey = null) {
+    return buildSchemaDefinition(columnsOrAst, tableConstraints, primaryKey);
+  }
+
+  normalizeDataType(dataType) {
+    return normalizeDataType(dataType);
+  }
+
+  validatePrimaryKey(ast) {
+    return validatePrimaryKey(ast);
+  }
+
+  stripPartitionDetails(result) {
+    return stripPartitionDetails(result);
+  }
+
+  isPartitionField(fieldName) {
+    return isPartitionField(fieldName);
+  }
+
+  tableExists(tableName) {
+    return tableExists(this, tableName);
+  }
+
+  findExistingTableRecord(tableName) {
+    return findExistingTableRecord(this, tableName);
+  }
+
+  findExistingPartitionRecord(partitionId) {
+    return findExistingPartitionRecord(this, partitionId);
+  }
+
+  getTableRecord(tableName) {
+    return getTableRecord(this, tableName);
+  }
+
+  getPartitionRecord(partitionId) {
+    return getPartitionRecord(this, partitionId);
+  }
+
+  getPartitionKey(tableName) {
+    return getPartitionKey(this, tableName);
+  }
+
+  getTableSchema(tableName) {
+    return getTableSchema(this, tableName);
+  }
+
+  provisionInitialPartition(context) {
+    return provisionInitialPartition(this, context);
+  }
+
+  resolveDefaultMinimumRoutableReplicaCount(replicaCount) {
+    return resolveDefaultMinimumRoutableReplicaCount(this, replicaCount);
+  }
+
+  buildInitialPartitionMetadataFromTableRecord(
+    tableId,
+    tableName,
+    existingTableRecord = null,
+  ) {
+    return buildInitialPartitionMetadataFromTableRecord(
+      this,
+      tableId,
+      tableName,
+      existingTableRecord,
+    );
+  }
+
+  executeCreateTableProvisioning(ast, options = {}) {
+    return executeCreateTableProvisioning(this, ast, options);
+  }
+
+  executeDurableSchemaProvisioningJob(ast, job, onMetadataCommitted = null) {
+    return executeDurableSchemaProvisioningJob(
+      this,
+      ast,
+      job,
+      onMetadataCommitted,
+    );
+  }
+
+  createTable(ast, options = {}) {
+    return createTable(this, ast, options);
+  }
+
+  resumeDurableProvisioningJobs() {
+    return resumeDurableProvisioningJobs(this);
+  }
 }
 
-defineTableCreationSplitMergeCoordination(TableCreationService);
-defineTableCreationPartitionProvisioning(TableCreationService);
-defineTableCreationSchemaDerivation(TableCreationService);
-defineTableCreationMetadataLookup(TableCreationService);
-defineTableCreationExistingTableReconciliation(TableCreationService);
-defineTableCreationResultProjection(TableCreationService);
-defineTableCreationCreateTableMethod(TableCreationService);
-defineTableCreationDurableJobMethod(TableCreationService);
+Object.assign(
+  TableCreationService.prototype,
+  EXISTING_TABLE_RECONCILIATION_METHODS,
+);
 
-export {TableCreationService};
+defineTableCreationSplitMergeCoordination(TableCreationService);
+
+export {
+  TableCreationService,
+};

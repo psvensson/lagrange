@@ -17,6 +17,9 @@ import {classifyScenarioVerdict} from './validation-matrix.js';
 import {scenarioOutcomeOf} from './scenario-outcome.js';
 import {CERTIFICATION_NOT_REQUESTED} from './scenario-certification.js';
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+
 /** Indentation for JSON output. */
 const JSON_INDENT = 2;
 const ZERO = 0;
@@ -138,58 +141,60 @@ const SCORE_HIGH = 80;
 const SCORE_MEDIUM = 60;
 const SCORE_LOW = 40;
 
-/**
- * Build a scenario entry from a name and result object.
- * Includes load metrics (latency percentiles, throughput) when present.
- * @param {string} scenarioName
- * @param {Object} result
- * @returns {Object} Scenario entry for the report
- */
-function buildScenarioEntry(scenarioName, result) {
-  const normalizedDetails = normalizeScenarioDetails(result.details);
-  const priorityRecoveryObservation =
+function resolvePriorityRecoveryObservationFromResult(result) {
+  return (
     result.priorityRecoveryObservation ||
-    result.details?.diagnostics?.controlPlaneDiagnostics
-      ?.priorityRecoveryObservation ||
+    result.details?.diagnostics?.controlPlaneDiagnostics?.priorityRecoveryObservation ||
     result.details?.diagnostics?.priorityRecoveryObservation ||
-    null;
-  const invariantBreaches = resolveScenarioInvariantBreaches(result, normalizedDetails);
-  const verdictObj = classifyScenarioVerdict({
-    ...result,
-    invariantBreaches,
-  });
-  const entry = {
-    scenario: scenarioName,
-    passed: Boolean(result.passed),
-    // passed | failed | refused (not run): a refused scenario keeps
-    // passed:false for pass/fail-only readers and is named here.
-    outcome: scenarioOutcomeOf(result),
+    null
+  );
+}
+
+function resolveScenarioExampleResults(result) {
+  if (result.exampleResults) {
+    return result.exampleResults;
+  }
+  if (result.details && typeof result.details === 'object' && result.details.exampleResults) {
+    return result.details.exampleResults;
+  }
+  return null;
+}
+
+function buildCoreScenarioOutcomeFields(scenarioName, result, verdictObj) {
+  return {
+    scenario: scenarioName, passed: Boolean(result.passed), outcome: scenarioOutcomeOf(result),
     refusal: result.refusal || null,
-    // The certification verdict of a --certify run, else the explicit
-    // statement that this entry is not certification evidence.
     certification: result.certification || CERTIFICATION_NOT_REQUESTED,
-    verdict: verdictObj.verdict,
-    verdictReason: verdictObj.reason,
-    duration: result.duration || 0,
-    clusterSize: normalizeClusterSize(result.clusterSize),
+    verdict: verdictObj.verdict, verdictReason: verdictObj.reason,
+    duration: result.duration || 0, clusterSize: normalizeClusterSize(result.clusterSize),
     startedAt: result.startedAt || null,
+  };
+}
+
+function buildScenarioArtifactFields(result) {
+  return {
     convergenceTiming: result.convergenceTiming || null,
     analysisSummary: result.analysisSummary || null,
-    error: result.error || null,
-    stackTrace: result.stackTrace || null,
-    logs: result.logs || null,
-    playback: result.playback || null,
-    trace: result.trace || null,
+    error: result.error || null, stackTrace: result.stackTrace || null,
+    logs: result.logs || null, playback: result.playback || null, trace: result.trace || null,
+  };
+}
+
+function buildScenarioAssertionFields(result) {
+  return {
     traceAssertion: result.traceAssertion || null,
     cleanlinessAssertion: result.cleanlinessAssertion || null,
-    memoryLeak: result.memoryLeak || null,
-    memoryLeakAssertion: result.memoryLeakAssertion || null,
+    memoryLeak: result.memoryLeak || null, memoryLeakAssertion: result.memoryLeakAssertion || null,
     performanceDiagnostics: result.performanceDiagnostics || null,
-    details: normalizedDetails,
-    invariantBreaches,
+  };
+}
+
+function buildScenarioClassificationAndGateFields(
+  result, normalizedDetails, invariantBreaches, priorityRecoveryObservation,
+) {
+  return {
+    details: normalizedDetails, invariantBreaches,
     failureClassification: result.failureClassification || null,
-    // CL-030/CL-031: harness-level failure classification + unexpected-exit
-    // evidence must survive into the report (the gate classifier reads them).
     classification: result.classification || null,
     unexpectedNodeExits: result.unexpectedNodeExits || null,
     publicationConvergence: result.publicationConvergence || null,
@@ -198,33 +203,29 @@ function buildScenarioEntry(scenarioName, result) {
       buildPriorityRecoveryProgressSummary(priorityRecoveryObservation),
     stabilityGates: result.stabilityGates || null,
     decisionArtifactsByNodeId: result.decisionArtifactsByNodeId || null,
-    // The full-log capture owner's per-node verdict (assessCaptureCompleteness,
-    // naming its quietBound), carried for the failure bundle's coverage.
     captureCompletenessByNodeId: result.captureCompletenessByNodeId || null,
   };
+}
 
-  if (result.exampleResults) {
-    entry.exampleResults = result.exampleResults;
-  } else if (result.details &&
-    typeof result.details === 'object' &&
-    result.details.exampleResults) {
-    entry.exampleResults = result.details.exampleResults;
-  } else {
-    entry.exampleResults = null;
-  }
-
-  entry.loadMetrics = result.loadMetrics ?
-    buildLoadMetricsEntry(result.loadMetrics) : null;
-
-  entry.performanceMeasurement = buildPerformanceMeasurementEntry(
-    result,
-    entry.loadMetrics,
-  );
-
+function buildScenarioEntry(scenarioName, result) {
+  const normalizedDetails = normalizeScenarioDetails(result.details);
+  const priorityRecoveryObservation = resolvePriorityRecoveryObservationFromResult(result);
+  const invariantBreaches = resolveScenarioInvariantBreaches(result, normalizedDetails);
+  const verdictObj = classifyScenarioVerdict({...result, invariantBreaches});
+  const entry = {
+    ...buildCoreScenarioOutcomeFields(scenarioName, result, verdictObj),
+    ...buildScenarioArtifactFields(result),
+    ...buildScenarioAssertionFields(result),
+    ...buildScenarioClassificationAndGateFields(
+      result, normalizedDetails, invariantBreaches, priorityRecoveryObservation,
+    ),
+    exampleResults: resolveScenarioExampleResults(result),
+  };
+  entry.loadMetrics = result.loadMetrics ? buildLoadMetricsEntry(result.loadMetrics) : null;
+  entry.performanceMeasurement = buildPerformanceMeasurementEntry(result, entry.loadMetrics);
   entry.bottleneckEstimate = buildBottleneckEstimate(entry.loadMetrics);
   entry.partitionHotspots = buildPartitionHotspots(entry);
   entry.optimizationPriorities = buildOptimizationPriorities(entry);
-
   return entry;
 }
 
@@ -300,41 +301,35 @@ function normalizeObject(value) {
   return {...value};
 }
 
+function cloneInvariantBreachSummary(breaches) {
+  if (
+    !breaches ||
+    typeof breaches !== 'object' ||
+    !Array.isArray(breaches.failing)
+  ) {
+    return null;
+  }
+  return {
+    ...breaches,
+    failing: [...breaches.failing],
+    hardBreaches: Array.isArray(breaches.hardBreaches) ?
+      [...breaches.hardBreaches] :
+      [],
+    softBreaches: Array.isArray(breaches.softBreaches) ?
+      [...breaches.softBreaches] :
+      [],
+  };
+}
+
 function resolveScenarioInvariantBreaches(result, normalizedDetails) {
-  const explicitBreaches = result?.invariantBreaches;
-  if (explicitBreaches &&
-      typeof explicitBreaches === 'object' &&
-      Array.isArray(explicitBreaches.failing)) {
-    return {
-      ...explicitBreaches,
-      failing: [...explicitBreaches.failing],
-      hardBreaches: Array.isArray(explicitBreaches.hardBreaches) ?
-        [...explicitBreaches.hardBreaches] :
-        [],
-      softBreaches: Array.isArray(explicitBreaches.softBreaches) ?
-        [...explicitBreaches.softBreaches] :
-        [],
-    };
-  }
-
-  const verificationBreaches = normalizedDetails?.verification?.invariantBreaches;
-  if (verificationBreaches &&
-      typeof verificationBreaches === 'object' &&
-      Array.isArray(verificationBreaches.failing)) {
-    return {
-      ...verificationBreaches,
-      failing: [...verificationBreaches.failing],
-      hardBreaches: Array.isArray(verificationBreaches.hardBreaches) ?
-        [...verificationBreaches.hardBreaches] :
-        [],
-      softBreaches: Array.isArray(verificationBreaches.softBreaches) ?
-        [...verificationBreaches.softBreaches] :
-        [],
-    };
-  }
-
-  return summarizeInvariantBreaches(
-    normalizedDetails?.diagnostics?.rootCauseBundle?.invariants,
+  return (
+    cloneInvariantBreachSummary(result?.invariantBreaches) ||
+    cloneInvariantBreachSummary(
+      normalizedDetails?.verification?.invariantBreaches,
+    ) ||
+    summarizeInvariantBreaches(
+      normalizedDetails?.diagnostics?.rootCauseBundle?.invariants,
+    )
   );
 }
 
@@ -350,11 +345,38 @@ function buildPerformanceMeasurementEntry(result, loadMetrics) {
     invalidReason = PERFORMANCE_INVALID_REASON_CORRECTNESS_FAILED;
   }
   return {
-    available,
-    validForComparison,
-    invalidReason,
-    observedOpsPerSec,
-    observedP99LatencyMs,
+    available, validForComparison, invalidReason, observedOpsPerSec, observedP99LatencyMs,
+  };
+}
+
+function extractBottleneckSignalScores(loadMetrics) {
+  const waitReasons = normalizeObject(loadMetrics.waitReasons);
+  const nodeAdmissionBlocked =
+    normalizeFiniteNumber(waitReasons[LOAD_METRICS_WAIT_REASON_NODE_ADMISSION_BLOCKED]) || ZERO;
+  const retryableControlPlanePressure = normalizeFiniteNumber(
+    waitReasons[LOAD_METRICS_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE],
+  ) || ZERO;
+  const nodeSlotUnavailable =
+    normalizeFiniteNumber(waitReasons[LOAD_METRICS_WAIT_REASON_NODE_SLOT_UNAVAILABLE]) || ZERO;
+  const timeoutWaits =
+    normalizeFiniteNumber(waitReasons[LOAD_METRICS_WAIT_REASON_TIMEOUT_WAITS]) || ZERO;
+  const targetOperations =
+    normalizeFiniteNumber(loadMetrics[LOAD_METRICS_FIELD_TARGET_OPERATIONS]) || ZERO;
+  const undispatchedOperations =
+    normalizeFiniteNumber(loadMetrics[LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS]) || ZERO;
+  const undispatchedRatio = targetOperations > ZERO ?
+    undispatchedOperations / targetOperations : ZERO;
+  const queueDelayP95Ms =
+    normalizeFiniteNumber(loadMetrics[LOAD_METRICS_FIELD_QUEUE_DELAY]?.p95) || ZERO;
+  const admissionScore = nodeAdmissionBlocked + retryableControlPlanePressure;
+  const queueScore = undispatchedOperations + Math.round(queueDelayP95Ms / 10);
+  const timeoutScore = timeoutWaits;
+  const nodeSlotScore = nodeSlotUnavailable;
+  const dominantScore = Math.max(admissionScore, queueScore, timeoutScore, nodeSlotScore);
+  return {
+    nodeAdmissionBlocked, retryableControlPlanePressure, nodeSlotUnavailable, timeoutWaits,
+    undispatchedOperations, undispatchedRatio, queueDelayP95Ms,
+    admissionScore, queueScore, timeoutScore, nodeSlotScore, dominantScore,
   };
 }
 
@@ -362,96 +384,49 @@ function buildBottleneckEstimate(loadMetrics) {
   if (!loadMetrics || typeof loadMetrics !== 'object' || Array.isArray(loadMetrics)) {
     return null;
   }
+  const scores = extractBottleneckSignalScores(loadMetrics);
 
-  const waitReasons = loadMetrics?.waitReasons &&
-    typeof loadMetrics.waitReasons === 'object' &&
-    !Array.isArray(loadMetrics.waitReasons) ?
-    loadMetrics.waitReasons :
-    {};
-  const nodeAdmissionBlocked = normalizeFiniteNumber(
-    waitReasons[LOAD_METRICS_WAIT_REASON_NODE_ADMISSION_BLOCKED],
-  ) || ZERO;
-  const retryableControlPlanePressure = normalizeFiniteNumber(
-    waitReasons[LOAD_METRICS_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE],
-  ) || ZERO;
-  const nodeSlotUnavailable = normalizeFiniteNumber(
-    waitReasons[LOAD_METRICS_WAIT_REASON_NODE_SLOT_UNAVAILABLE],
-  ) || ZERO;
-  const timeoutWaits = normalizeFiniteNumber(
-    waitReasons[LOAD_METRICS_WAIT_REASON_TIMEOUT_WAITS],
-  ) || ZERO;
-  const targetOperations =
-    normalizeFiniteNumber(loadMetrics?.[LOAD_METRICS_FIELD_TARGET_OPERATIONS]) ||
-    ZERO;
-  const undispatchedOperations =
-    normalizeFiniteNumber(
-      loadMetrics?.[LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS],
-    ) || ZERO;
-  const undispatchedRatio = targetOperations > ZERO ?
-    undispatchedOperations / targetOperations :
-    ZERO;
-  const queueDelayP95Ms = normalizeFiniteNumber(
-    loadMetrics?.[LOAD_METRICS_FIELD_QUEUE_DELAY]?.p95,
-  ) || ZERO;
-
-  const admissionScore =
-    nodeAdmissionBlocked + retryableControlPlanePressure;
-  const queueScore =
-    undispatchedOperations + Math.round(queueDelayP95Ms / 10);
-  const timeoutScore = timeoutWaits;
-  const nodeSlotScore = nodeSlotUnavailable;
-  const dominantScore = Math.max(
-    admissionScore,
-    queueScore,
-    timeoutScore,
-    nodeSlotScore,
-  );
-
-  if (dominantScore <= ZERO) {
+  if (scores.dominantScore <= ZERO) {
     return {
       kind: 'mixed_or_unknown',
       primaryEvidence: {
-        attemptErrors: normalizeFiniteNumber(
-          loadMetrics?.[LOAD_METRICS_FIELD_ATTEMPT_ERRORS],
-        ) || ZERO,
+        attemptErrors:
+          normalizeFiniteNumber(loadMetrics[LOAD_METRICS_FIELD_ATTEMPT_ERRORS]) || ZERO,
       },
       likelyWaitingTimeSource: 'insufficient_signal',
     };
   }
 
-  if (queueScore >= admissionScore &&
-      queueScore >= timeoutScore &&
-      queueScore >= nodeSlotScore) {
+  if (scores.queueScore >= scores.dominantScore) {
     return {
       kind: 'dispatch_queue_backlog',
       primaryEvidence: {
-        undispatchedOperations,
-        undispatchedRatio,
-        queueDelayP95Ms,
+        undispatchedOperations: scores.undispatchedOperations,
+        undispatchedRatio: scores.undispatchedRatio,
+        queueDelayP95Ms: scores.queueDelayP95Ms,
       },
       likelyWaitingTimeSource: 'dispatch_queue',
     };
   }
 
-  if (admissionScore >= timeoutScore &&
-      admissionScore >= nodeSlotScore) {
+  if (scores.admissionScore >= scores.dominantScore) {
     return {
       kind: 'admission_pressure',
       primaryEvidence: {
         waitReason: LOAD_METRICS_WAIT_REASON_NODE_ADMISSION_BLOCKED,
-        count: nodeAdmissionBlocked,
-        retryableControlPlanePressure,
+        count: scores.nodeAdmissionBlocked,
+        retryableControlPlanePressure: scores.retryableControlPlanePressure,
       },
       likelyWaitingTimeSource: 'admission_backoff',
     };
   }
 
-  if (nodeSlotScore >= timeoutScore) {
+  if (scores.nodeSlotScore >= scores.timeoutScore) {
     return {
       kind: 'node_slot_saturation',
       primaryEvidence: {
         waitReason: LOAD_METRICS_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
-        count: nodeSlotUnavailable,
+        count: scores.nodeSlotUnavailable,
       },
       likelyWaitingTimeSource: 'per_node_bulkhead',
     };
@@ -460,8 +435,7 @@ function buildBottleneckEstimate(loadMetrics) {
   return {
     kind: 'timeout_limited',
     primaryEvidence: {
-      waitReason: LOAD_METRICS_WAIT_REASON_TIMEOUT_WAITS,
-      count: timeoutWaits,
+      waitReason: LOAD_METRICS_WAIT_REASON_TIMEOUT_WAITS, count: scores.timeoutWaits,
     },
     likelyWaitingTimeSource: 'query_timeout',
   };
@@ -469,50 +443,27 @@ function buildBottleneckEstimate(loadMetrics) {
 
 function resolvePerformanceMeasurement(entry) {
   const measurement = entry?.performanceMeasurement;
-  if (measurement &&
-      typeof measurement === 'object' &&
-      !Array.isArray(measurement)) {
+  if (measurement && typeof measurement === 'object' && !Array.isArray(measurement)) {
     return {
       available: measurement.available === true,
       validForComparison: measurement.validForComparison === true,
       invalidReason: measurement.invalidReason || null,
       observedOpsPerSec: normalizeFiniteNumber(measurement.observedOpsPerSec),
-      observedP99LatencyMs:
-        normalizeFiniteNumber(measurement.observedP99LatencyMs),
+      observedP99LatencyMs: normalizeFiniteNumber(measurement.observedP99LatencyMs),
     };
   }
-
-  const observedOpsPerSec = normalizeFiniteNumber(entry?.loadMetrics?.opsPerSec);
-  const observedP99LatencyMs = normalizeFiniteNumber(entry?.loadMetrics?.latency?.p99);
-  const available = observedOpsPerSec !== null || observedP99LatencyMs !== null;
-  return {
-    available,
-    validForComparison: entry?.passed === true && available,
-    invalidReason: available ?
-      (entry?.passed === true ? null : PERFORMANCE_INVALID_REASON_CORRECTNESS_FAILED) :
-      PERFORMANCE_INVALID_REASON_METRICS_UNAVAILABLE,
-    observedOpsPerSec,
-    observedP99LatencyMs,
-  };
+  return buildPerformanceMeasurementEntry(entry, entry?.loadMetrics);
 }
 
 function normalizeParityDetails(parity) {
   if (!parity || typeof parity !== 'object' || Array.isArray(parity)) {
-    return {
-      status: PARITY_STATUS_UNKNOWN,
-      reasons: [],
-      configured: {},
-      effective: {},
-    };
+    return {status: PARITY_STATUS_UNKNOWN, reasons: [], configured: {}, effective: {}};
   }
   return {
     ...parity,
     status: typeof parity.status === 'string' && parity.status ?
-      parity.status :
-      PARITY_STATUS_UNKNOWN,
-    reasons: Array.isArray(parity.reasons) ?
-      [...parity.reasons] :
-      [],
+      parity.status : PARITY_STATUS_UNKNOWN,
+    reasons: Array.isArray(parity.reasons) ? [...parity.reasons] : [],
     configured: normalizeObject(parity.configured),
     effective: normalizeObject(parity.effective),
   };
@@ -520,19 +471,13 @@ function normalizeParityDetails(parity) {
 
 function normalizeEffectiveAdmissionPolicy(policy) {
   if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
-    return {
-      resolved: {},
-      sources: {},
-      conflicts: [],
-    };
+    return {resolved: {}, sources: {}, conflicts: []};
   }
   return {
     ...policy,
     resolved: normalizeObject(policy.resolved),
     sources: normalizeObject(policy.sources),
-    conflicts: Array.isArray(policy.conflicts) ?
-      [...policy.conflicts] :
-      [],
+    conflicts: Array.isArray(policy.conflicts) ? [...policy.conflicts] : [],
   };
 }
 
@@ -547,84 +492,71 @@ function normalizeDiagnosticsCoverage(coverage) {
   return {
     ...coverage,
     status: typeof coverage.status === 'string' && coverage.status ?
-      coverage.status :
-      DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE,
+      coverage.status : DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE,
     reason: typeof coverage.reason === 'string' && coverage.reason ?
-      coverage.reason :
-      DIAGNOSTICS_COVERAGE_REASON_NOT_REPORTED,
+      coverage.reason : DIAGNOSTICS_COVERAGE_REASON_NOT_REPORTED,
     sampleCount: normalizeFiniteNumber(coverage.sampleCount) || ZERO,
   };
 }
 
-/**
- * Normalize load metrics while preserving additive observability fields.
- * @param {Object} loadMetrics
- * @returns {Object}
- */
-function buildLoadMetricsEntry(loadMetrics) {
-  const latency = normalizeLatencyMetrics(loadMetrics?.latency);
-  const normalized = {
-    total: normalizeFiniteNumber(loadMetrics?.total) || ZERO,
-    success: normalizeFiniteNumber(loadMetrics?.success) || ZERO,
-    failed: normalizeFiniteNumber(loadMetrics?.failed) || ZERO,
-    errors: normalizeFiniteNumber(loadMetrics?.errors) || ZERO,
-    latency,
-    opsPerSec: normalizeFiniteNumber(loadMetrics?.opsPerSec) || ZERO,
+function buildCoreLoadMetricsFields(source) {
+  return {
+    total: normalizeFiniteNumber(source.total) || ZERO,
+    success: normalizeFiniteNumber(source.success) || ZERO,
+    failed: normalizeFiniteNumber(source.failed) || ZERO,
+    errors: normalizeFiniteNumber(source.errors) || ZERO,
+    latency: normalizeLatencyMetrics(source.latency),
+    opsPerSec: normalizeFiniteNumber(source.opsPerSec) || ZERO,
     [LOAD_METRICS_FIELD_ATTEMPT_ERRORS]:
-      normalizeFiniteNumber(loadMetrics?.[LOAD_METRICS_FIELD_ATTEMPT_ERRORS]) ||
-      ZERO,
-    [LOAD_METRICS_FIELD_QUEUE_DELAY]: normalizeQueueDelayMetrics(
-      loadMetrics?.[LOAD_METRICS_FIELD_QUEUE_DELAY],
-    ),
-    [LOAD_METRICS_FIELD_DISTINCT_ERRORS]: Array.isArray(
-      loadMetrics?.[LOAD_METRICS_FIELD_DISTINCT_ERRORS],
-    ) ?
-      [...loadMetrics[LOAD_METRICS_FIELD_DISTINCT_ERRORS]] :
-      [],
-    [LOAD_METRICS_FIELD_TARGET_OPERATIONS]:
-      normalizeFiniteNumber(loadMetrics?.[LOAD_METRICS_FIELD_TARGET_OPERATIONS]) ||
-      ZERO,
-    [LOAD_METRICS_FIELD_DISPATCHED_OPERATIONS]:
-      normalizeFiniteNumber(
-        loadMetrics?.[LOAD_METRICS_FIELD_DISPATCHED_OPERATIONS],
-      ) || ZERO,
-    [LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS]:
-      normalizeFiniteNumber(
-        loadMetrics?.[LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS],
-      ) || ZERO,
-    [LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON]:
-      normalizeUndispatchedReasonMetrics(
-        loadMetrics?.[LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON],
-      ),
-    [LOAD_METRICS_FIELD_WAIT_REASONS]: normalizeWaitReasonMetrics(
-      loadMetrics?.[LOAD_METRICS_FIELD_WAIT_REASONS],
-    ),
-    [LOAD_METRICS_FIELD_PER_NODE]: normalizePerNodeMetrics(
-      loadMetrics?.[LOAD_METRICS_FIELD_PER_NODE],
-    ),
+      normalizeFiniteNumber(source[LOAD_METRICS_FIELD_ATTEMPT_ERRORS]) || ZERO,
   };
-  if (loadMetrics && typeof loadMetrics === 'object') {
-    for (const [field, value] of Object.entries(loadMetrics)) {
-      if (Object.hasOwn(normalized, field)) {
-        continue;
-      }
-      if (value === undefined) {
-        continue;
-      }
+}
+
+function buildExtendedLoadMetricsFields(source) {
+  return {
+    [LOAD_METRICS_FIELD_QUEUE_DELAY]:
+      normalizeQueueDelayMetrics(source[LOAD_METRICS_FIELD_QUEUE_DELAY]),
+    [LOAD_METRICS_FIELD_DISTINCT_ERRORS]:
+      Array.isArray(source[LOAD_METRICS_FIELD_DISTINCT_ERRORS]) ?
+        [...source[LOAD_METRICS_FIELD_DISTINCT_ERRORS]] : [],
+    [LOAD_METRICS_FIELD_TARGET_OPERATIONS]:
+      normalizeFiniteNumber(source[LOAD_METRICS_FIELD_TARGET_OPERATIONS]) || ZERO,
+    [LOAD_METRICS_FIELD_DISPATCHED_OPERATIONS]:
+      normalizeFiniteNumber(source[LOAD_METRICS_FIELD_DISPATCHED_OPERATIONS]) || ZERO,
+    [LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS]:
+      normalizeFiniteNumber(source[LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS]) || ZERO,
+    [LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON]:
+      normalizeUndispatchedReasonMetrics(source[LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON]),
+    [LOAD_METRICS_FIELD_WAIT_REASONS]:
+      normalizeWaitReasonMetrics(source[LOAD_METRICS_FIELD_WAIT_REASONS]),
+    [LOAD_METRICS_FIELD_PER_NODE]: normalizePerNodeMetrics(source[LOAD_METRICS_FIELD_PER_NODE]),
+  };
+}
+
+function copyAdditiveLoadMetricFields(loadMetrics, normalized) {
+  if (!loadMetrics || typeof loadMetrics !== 'object') {
+    return;
+  }
+  for (const [field, value] of Object.entries(loadMetrics)) {
+    if (!Object.hasOwn(normalized, field) && value !== undefined) {
       normalized[field] = cloneAdditiveMetricValue(value);
     }
   }
+}
+
+function buildLoadMetricsEntry(loadMetrics) {
+  const source = loadMetrics ?? {};
+  const normalized = {
+    ...buildCoreLoadMetricsFields(source),
+    ...buildExtendedLoadMetricsFields(source),
+  };
+  copyAdditiveLoadMetricFields(loadMetrics, normalized);
   return normalized;
 }
 
 function normalizeLatencyMetrics(latency) {
   if (!latency || typeof latency !== 'object') {
-    return {
-      avg: ZERO,
-      p50: ZERO,
-      p95: ZERO,
-      p99: ZERO,
-    };
+    return {avg: ZERO, p50: ZERO, p95: ZERO, p99: ZERO};
   }
   return {
     avg: normalizeFiniteNumber(latency.avg) || ZERO,
@@ -636,13 +568,7 @@ function normalizeLatencyMetrics(latency) {
 
 function normalizeQueueDelayMetrics(queueDelay) {
   if (!queueDelay || typeof queueDelay !== 'object') {
-    return {
-      avg: ZERO,
-      p50: ZERO,
-      p95: ZERO,
-      p99: ZERO,
-      max: ZERO,
-    };
+    return {avg: ZERO, p50: ZERO, p95: ZERO, p99: ZERO, max: ZERO};
   }
   return {
     avg: normalizeFiniteNumber(queueDelay.avg) || ZERO,
@@ -723,307 +649,319 @@ function cloneAdditiveMetricValue(value) {
   return value;
 }
 
-function buildOptimizationPriorities(scenarioEntry) {
-  const priorities = [];
-  const benchmarkDetails = resolveBenchmarkDetails(scenarioEntry.details);
-  const comparison = benchmarkDetails?.comparison || null;
-  const convergence = benchmarkDetails?.convergence ||
-    scenarioEntry?.convergenceTiming ||
-    null;
-  const loadMetrics = scenarioEntry?.loadMetrics || null;
-  const memoryLeak = scenarioEntry?.memoryLeak || null;
-  const analysisSummary = scenarioEntry?.analysisSummary || null;
-  const partitionHotspots = Array.isArray(scenarioEntry?.partitionHotspots) ?
-    scenarioEntry.partitionHotspots :
-    [];
-
-  const throughputRatio = normalizeFiniteNumber(
-    comparison?.throughputRatioSutToBaseline,
-  );
+function buildThroughputGapPriority(comparison) {
+  const throughputRatio = normalizeFiniteNumber(comparison?.throughputRatioSutToBaseline);
   const sutOpsPerSec = normalizeFiniteNumber(comparison?.sutOpsPerSec);
   const baselineTps = normalizeFiniteNumber(comparison?.baselineTps);
-  if (throughputRatio !== null &&
-    sutOpsPerSec !== null &&
-    baselineTps !== null) {
-    if (throughputRatio < THROUGHPUT_RATIO_MEDIUM) {
-      const rating = scoreThroughputRatio(throughputRatio);
-      priorities.push({
-        component: COMPONENT_REPLICATION_WRITE_PATH,
-        signal: SIGNAL_BASELINE_THROUGHPUT_GAP,
-        priority: rating.priority,
-        score: rating.score,
-        reason:
-          'System throughput is significantly below baseline under identical workload.',
-        evidence: {
-          throughputRatioSutToBaseline: throughputRatio,
-          sutOpsPerSec,
-          baselineTps,
-        },
-      });
-    }
+  if (
+    throughputRatio === null || sutOpsPerSec === null || baselineTps === null ||
+    throughputRatio >= THROUGHPUT_RATIO_MEDIUM
+  ) {
+    return null;
   }
+  const rating = scoreThroughputRatio(throughputRatio);
+  return {
+    component: COMPONENT_REPLICATION_WRITE_PATH, signal: SIGNAL_BASELINE_THROUGHPUT_GAP,
+    priority: rating.priority, score: rating.score,
+    reason: 'System throughput is significantly below baseline under identical workload.',
+    evidence: {throughputRatioSutToBaseline: throughputRatio, sutOpsPerSec, baselineTps},
+  };
+}
 
-  const latencyRatio = normalizeFiniteNumber(
-    comparison?.p99LatencyRatioSutToBaselineAvg,
-  );
+function buildLatencyGapPriority(comparison) {
+  const latencyRatio = normalizeFiniteNumber(comparison?.p99LatencyRatioSutToBaselineAvg);
   const sutP99LatencyMs = normalizeFiniteNumber(comparison?.sutP99LatencyMs);
-  const baselineLatencyAvgMs = normalizeFiniteNumber(
-    comparison?.baselineLatencyAvgMs,
-  );
-  if (latencyRatio !== null &&
-    sutP99LatencyMs !== null &&
-    baselineLatencyAvgMs !== null) {
-    if (latencyRatio > LATENCY_RATIO_MEDIUM) {
-      const rating = scoreLatencyRatio(latencyRatio);
-      priorities.push({
-        component: COMPONENT_TAIL_LATENCY_PATH,
-        signal: SIGNAL_BASELINE_LATENCY_GAP,
-        priority: rating.priority,
-        score: rating.score,
-        reason:
-          'Tail latency is significantly higher than baseline and dominates user-visible delays.',
-        evidence: {
-          p99LatencyRatioSutToBaselineAvg: latencyRatio,
-          sutP99LatencyMs,
-          baselineLatencyAvgMs,
-        },
-      });
-    }
+  const baselineLatencyAvgMs = normalizeFiniteNumber(comparison?.baselineLatencyAvgMs);
+  if (
+    latencyRatio === null || sutP99LatencyMs === null || baselineLatencyAvgMs === null ||
+    latencyRatio <= LATENCY_RATIO_MEDIUM
+  ) {
+    return null;
   }
+  const rating = scoreLatencyRatio(latencyRatio);
+  return {
+    component: COMPONENT_TAIL_LATENCY_PATH, signal: SIGNAL_BASELINE_LATENCY_GAP,
+    priority: rating.priority, score: rating.score,
+    reason:
+      'Tail latency is significantly higher than baseline and dominates user-visible delays.',
+    evidence: {
+      p99LatencyRatioSutToBaselineAvg: latencyRatio, sutP99LatencyMs, baselineLatencyAvgMs,
+    },
+  };
+}
 
+function buildInternalTailLatencyPriority(loadMetrics) {
   const p50 = normalizeFiniteNumber(loadMetrics?.latency?.p50);
   const p99 = normalizeFiniteNumber(loadMetrics?.latency?.p99);
-  if (p50 !== null && p99 !== null && p50 > ZERO) {
-    const internalTailRatio = p99 / p50;
-    if (internalTailRatio > INTERNAL_TAIL_RATIO_MEDIUM) {
-      const rating = scoreInternalTailRatio(internalTailRatio);
-      priorities.push({
-        component: COMPONENT_TAIL_LATENCY_PATH,
-        signal: SIGNAL_INTERNAL_TAIL_LATENCY,
-        priority: rating.priority,
-        score: rating.score,
-        reason:
-          'Large p99/p50 spread indicates queueing or lock contention on slow-path operations.',
-        evidence: {
-          p50LatencyMs: p50,
-          p99LatencyMs: p99,
-          p99ToP50Ratio: internalTailRatio,
-        },
-      });
-    }
+  if (p50 === null || p99 === null || p50 <= ZERO) {
+    return null;
   }
+  const internalTailRatio = p99 / p50;
+  if (internalTailRatio <= INTERNAL_TAIL_RATIO_MEDIUM) {
+    return null;
+  }
+  const rating = scoreInternalTailRatio(internalTailRatio);
+  return {
+    component: COMPONENT_TAIL_LATENCY_PATH, signal: SIGNAL_INTERNAL_TAIL_LATENCY,
+    priority: rating.priority, score: rating.score,
+    reason:
+      'Large p99/p50 spread indicates queueing or lock contention on slow-path operations.',
+    evidence: {p50LatencyMs: p50, p99LatencyMs: p99, p99ToP50Ratio: internalTailRatio},
+  };
+}
 
+function buildConvergenceSettlePriority(convergence) {
   const settledAfterMs = normalizeFiniteNumber(convergence?.settledAfterMs);
-  if (settledAfterMs !== null &&
-    settledAfterMs > CONVERGENCE_SETTLE_TIME_MEDIUM_MS) {
-    const rating = settledAfterMs > CONVERGENCE_SETTLE_TIME_HIGH_MS ?
-      {priority: PRIORITY_HIGH, score: SCORE_HIGH} :
-      {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
-    priorities.push({
-      component: COMPONENT_CONVERGENCE_CONTROL_PLANE,
-      signal: SIGNAL_CONVERGENCE_SETTLE_TIME,
-      priority: rating.priority,
-      score: rating.score,
-      reason:
-        'Convergence delay suggests extra work in replica movement, ' +
-        'promotion, or membership updates.',
-      evidence: {
-        settledAfterMs,
-        leaderChanges: normalizeFiniteNumber(convergence?.leaderChanges),
-      },
-    });
+  if (settledAfterMs === null || settledAfterMs <= CONVERGENCE_SETTLE_TIME_MEDIUM_MS) {
+    return null;
   }
+  const rating = settledAfterMs > CONVERGENCE_SETTLE_TIME_HIGH_MS ?
+    {priority: PRIORITY_HIGH, score: SCORE_HIGH} :
+    {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
+  return {
+    component: COMPONENT_CONVERGENCE_CONTROL_PLANE, signal: SIGNAL_CONVERGENCE_SETTLE_TIME,
+    priority: rating.priority, score: rating.score,
+    reason:
+      'Convergence delay suggests extra work in replica movement, ' +
+      'promotion, or membership updates.',
+    evidence: {settledAfterMs, leaderChanges: normalizeFiniteNumber(convergence?.leaderChanges)},
+  };
+}
 
-  const maxOverTargetMs = normalizeFiniteNumber(
-    convergence?.maxOverTargetMs,
-  );
-  if (maxOverTargetMs !== null &&
-    maxOverTargetMs > OVER_TARGET_DURATION_MEDIUM_MS) {
-    const rating = maxOverTargetMs > OVER_TARGET_DURATION_HIGH_MS ?
-      {priority: PRIORITY_HIGH, score: SCORE_HIGH} :
-      {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
-    priorities.push({
-      component: COMPONENT_CONVERGENCE_CONTROL_PLANE,
-      signal: SIGNAL_OVER_TARGET_VOTER_DURATION,
-      priority: rating.priority,
-      score: rating.score,
-      reason:
-        'Over-target voter windows indicate delayed learner demotion ' +
-        'or replica operation completion.',
-      evidence: {
-        maxOverTargetMs,
-      },
-    });
+function buildOverTargetDurationPriority(convergence) {
+  const maxOverTargetMs = normalizeFiniteNumber(convergence?.maxOverTargetMs);
+  if (maxOverTargetMs === null || maxOverTargetMs <= OVER_TARGET_DURATION_MEDIUM_MS) {
+    return null;
   }
+  const rating = maxOverTargetMs > OVER_TARGET_DURATION_HIGH_MS ?
+    {priority: PRIORITY_HIGH, score: SCORE_HIGH} :
+    {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
+  return {
+    component: COMPONENT_CONVERGENCE_CONTROL_PLANE, signal: SIGNAL_OVER_TARGET_VOTER_DURATION,
+    priority: rating.priority, score: rating.score,
+    reason:
+      'Over-target voter windows indicate delayed learner demotion ' +
+      'or replica operation completion.',
+    evidence: {maxOverTargetMs},
+  };
+}
 
-  if (partitionHotspots.length > ZERO) {
-    const primaryHotspot = partitionHotspots[ZERO];
-    const primaryScore = normalizeFiniteNumber(primaryHotspot?.hotspotScore) || ZERO;
-    if (primaryScore > ZERO) {
-      priorities.push({
-        component: COMPONENT_CONVERGENCE_CONTROL_PLANE,
-        signal: SIGNAL_PARTITION_HOTSPOTS,
-        priority: primaryScore >= SCORE_HIGH ? PRIORITY_HIGH : PRIORITY_MEDIUM,
-        score: Math.min(SCORE_CRITICAL, Math.max(SCORE_MEDIUM, primaryScore)),
-        reason:
-          'Per-partition diagnostics indicate localized membership churn ' +
-          'and operation pressure on specific partitions.',
-        evidence: {
-          hotspotCount: partitionHotspots.length,
-          topPartitionId: primaryHotspot?.partitionId || null,
-          topPartitionScore: primaryScore,
-          topPartitionOverTargetMs:
-            normalizeFiniteNumber(primaryHotspot?.overTargetMs) || ZERO,
-          topPartitionExcessVoters:
-            normalizeFiniteNumber(primaryHotspot?.excessVoters) || ZERO,
-        },
-      });
-    }
+function buildPartitionHotspotPriority(partitionHotspots) {
+  if (partitionHotspots.length === ZERO) {
+    return null;
   }
+  const primaryHotspot = partitionHotspots[ZERO] ?? {};
+  const primaryScore = normalizeFiniteNumber(primaryHotspot.hotspotScore) || ZERO;
+  if (primaryScore <= ZERO) {
+    return null;
+  }
+  return {
+    component: COMPONENT_CONVERGENCE_CONTROL_PLANE, signal: SIGNAL_PARTITION_HOTSPOTS,
+    priority: primaryScore >= SCORE_HIGH ? PRIORITY_HIGH : PRIORITY_MEDIUM,
+    score: Math.min(SCORE_CRITICAL, Math.max(SCORE_MEDIUM, primaryScore)),
+    reason:
+      'Per-partition diagnostics indicate localized membership churn ' +
+      'and operation pressure on specific partitions.',
+    evidence: {
+      hotspotCount: partitionHotspots.length,
+      topPartitionId: primaryHotspot.partitionId || null,
+      topPartitionScore: primaryScore,
+      topPartitionOverTargetMs: normalizeFiniteNumber(primaryHotspot.overTargetMs) || ZERO,
+      topPartitionExcessVoters: normalizeFiniteNumber(primaryHotspot.excessVoters) || ZERO,
+    },
+  };
+}
 
-  const targetOperations = normalizeFiniteNumber(
-    loadMetrics?.targetOperations,
-  ) || ZERO;
-  const undispatchedOperations = normalizeFiniteNumber(
-    loadMetrics?.undispatchedOperations,
-  ) || ZERO;
+function buildQueuePressurePriority(loadMetrics) {
+  const metrics = loadMetrics ?? {};
+  const targetOperations =
+    normalizeFiniteNumber(metrics.targetOperations) || ZERO;
+  const undispatchedOperations =
+    normalizeFiniteNumber(metrics.undispatchedOperations) || ZERO;
   const undispatchedRatio = targetOperations > ZERO ?
     undispatchedOperations / targetOperations :
     null;
-  const queueDelayP95Ms = normalizeFiniteNumber(loadMetrics?.queueDelay?.p95);
-  const queueDelayP99Ms = normalizeFiniteNumber(loadMetrics?.queueDelay?.p99);
-  if ((undispatchedRatio !== null &&
-      undispatchedRatio >= QUEUE_UNDISPATCHED_RATIO_MEDIUM) ||
-      (queueDelayP95Ms !== null &&
-      queueDelayP95Ms >= QUEUE_DELAY_P95_MEDIUM_MS)) {
-    const rating = scoreQueuePressure(
+  const queueDelayP95Ms = normalizeFiniteNumber(metrics.queueDelay?.p95);
+  const queueDelayP99Ms = normalizeFiniteNumber(metrics.queueDelay?.p99);
+  const hasUndispatchedPressure =
+    undispatchedRatio !== null &&
+    undispatchedRatio >= QUEUE_UNDISPATCHED_RATIO_MEDIUM;
+  const hasQueueDelayPressure =
+    queueDelayP95Ms !== null &&
+    queueDelayP95Ms >= QUEUE_DELAY_P95_MEDIUM_MS;
+  if (!hasUndispatchedPressure && !hasQueueDelayPressure) {
+    return null;
+  }
+  const rating = scoreQueuePressure(undispatchedRatio, queueDelayP95Ms);
+  return {
+    component: COMPONENT_REPLICATION_WRITE_PATH,
+    signal: SIGNAL_DISPATCH_QUEUE_PRESSURE,
+    priority: rating.priority,
+    score: rating.score,
+    reason:
+      'Dispatch backlog and queue delay indicate scheduler pressure and insufficient load completion capacity.',
+    evidence: {
+      targetOperations,
+      undispatchedOperations,
       undispatchedRatio,
       queueDelayP95Ms,
-    );
-    priorities.push({
-      component: COMPONENT_REPLICATION_WRITE_PATH,
-      signal: SIGNAL_DISPATCH_QUEUE_PRESSURE,
-      priority: rating.priority,
-      score: rating.score,
-      reason:
-        'Dispatch backlog and queue delay indicate scheduler pressure and insufficient load completion capacity.',
-      evidence: {
-        targetOperations,
-        undispatchedOperations,
-        undispatchedRatio,
-        queueDelayP95Ms,
-        queueDelayP99Ms,
-      },
-    });
-  }
+      queueDelayP99Ms,
+    },
+  };
+}
 
+function sumAdmissionSignalCount(perNodeMetrics) {
   let admissionSignalCount = ZERO;
-  const perNodeMetrics = loadMetrics?.perNode &&
-    typeof loadMetrics.perNode === 'object' ?
-    loadMetrics.perNode :
-    {};
-  for (const nodeMetrics of Object.values(perNodeMetrics)) {
-    admissionSignalCount += normalizeFiniteNumber(
-      nodeMetrics?.admissionSignals,
-    ) || ZERO;
+  for (const nodeMetrics of Object.values(normalizeObject(perNodeMetrics))) {
+    admissionSignalCount +=
+      normalizeFiniteNumber(nodeMetrics?.admissionSignals) || ZERO;
   }
-  const attemptErrors = normalizeFiniteNumber(loadMetrics?.attemptErrors) || ZERO;
-  const totalAttempts = (normalizeFiniteNumber(loadMetrics?.total) || ZERO) +
-    attemptErrors;
+  return admissionSignalCount;
+}
+
+function buildAdmissionPressurePriority(loadMetrics, benchmarkDetails) {
+  const metrics = loadMetrics ?? {};
+  const admissionSignalCount = sumAdmissionSignalCount(metrics.perNode);
+  const attemptErrors = normalizeFiniteNumber(metrics.attemptErrors) || ZERO;
+  const totalAttempts =
+    (normalizeFiniteNumber(metrics.total) || ZERO) + attemptErrors;
   const admissionSignalRatio = totalAttempts > ZERO ?
     admissionSignalCount / totalAttempts :
     null;
-  if ((admissionSignalRatio !== null &&
-      admissionSignalRatio >= ADMISSION_SIGNAL_RATIO_MEDIUM) ||
-      admissionSignalCount >= ADMISSION_SIGNAL_COUNT_MEDIUM) {
-    const rating = scoreAdmissionPressure(
-      admissionSignalRatio,
+  const hasRatioPressure =
+    admissionSignalRatio !== null &&
+    admissionSignalRatio >= ADMISSION_SIGNAL_RATIO_MEDIUM;
+  if (
+    !hasRatioPressure &&
+    admissionSignalCount < ADMISSION_SIGNAL_COUNT_MEDIUM
+  ) {
+    return null;
+  }
+  const rating = scoreAdmissionPressure(
+    admissionSignalRatio,
+    admissionSignalCount,
+  );
+  return {
+    component: COMPONENT_ERROR_RETRY_PATH,
+    signal: SIGNAL_ADMISSION_THROTTLING_PRESSURE,
+    priority: rating.priority,
+    score: rating.score,
+    reason:
+      'Admission throttling signals dominate retries and cap realized throughput.',
+    evidence: {
       admissionSignalCount,
-    );
-    priorities.push({
-      component: COMPONENT_ERROR_RETRY_PATH,
-      signal: SIGNAL_ADMISSION_THROTTLING_PRESSURE,
-      priority: rating.priority,
-      score: rating.score,
-      reason:
-        'Admission throttling signals dominate retries and cap realized throughput.',
-      evidence: {
-        admissionSignalCount,
-        admissionSignalRatio,
-        attemptErrors,
-        totalAttempts,
-        loadMaxInFlightPerNode: normalizeFiniteNumber(
-          benchmarkDetails?.effectiveAdmissionPolicy?.resolved?.loadMaxInFlightPerNode,
-        ),
-      },
-    });
-  }
+      admissionSignalRatio,
+      attemptErrors,
+      totalAttempts,
+      loadMaxInFlightPerNode: normalizeFiniteNumber(
+        benchmarkDetails?.effectiveAdmissionPolicy?.resolved
+          ?.loadMaxInFlightPerNode,
+      ),
+    },
+  };
+}
 
-  const totalLoadOps = normalizeFiniteNumber(loadMetrics?.total) || ZERO;
-  const failedLoadOps = normalizeFiniteNumber(loadMetrics?.failed) || ZERO;
-  const erroredLoadOps = normalizeFiniteNumber(loadMetrics?.errors) || ZERO;
-  if (totalLoadOps > ZERO) {
-    const failureRate = (failedLoadOps + erroredLoadOps) / totalLoadOps;
-    if (failureRate > LOAD_FAILURE_RATE_MEDIUM) {
-      const rating = failureRate > LOAD_FAILURE_RATE_HIGH ?
-        {priority: PRIORITY_HIGH, score: SCORE_HIGH} :
-        {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
-      priorities.push({
-        component: COMPONENT_ERROR_RETRY_PATH,
-        signal: SIGNAL_LOAD_FAILURE_RATE,
-        priority: rating.priority,
-        score: rating.score,
-        reason:
-          'Observed request failures suggest expensive retries or transient routing instability.',
-        evidence: {
-          total: totalLoadOps,
-          failed: failedLoadOps,
-          errors: erroredLoadOps,
-          failureRate,
-        },
-      });
-    }
+function buildLoadFailureRatePriority(loadMetrics) {
+  const metrics = loadMetrics ?? {};
+  const totalLoadOps = normalizeFiniteNumber(metrics.total) || ZERO;
+  if (totalLoadOps <= ZERO) {
+    return null;
   }
-
-  if (memoryLeak?.leakDetected === true) {
-    priorities.push({
-      component: COMPONENT_MEMORY_LIFECYCLE,
-      signal: SIGNAL_MEMORY_LEAK,
-      priority: PRIORITY_CRITICAL,
-      score: SCORE_CRITICAL,
-      reason:
-        'Leak signal detected in sustained sampling and should be treated as release-blocking.',
-      evidence: {
-        leakingNodeCount: normalizeFiniteNumber(memoryLeak?.leakingNodeCount) ||
-          ZERO,
-        leakingNodes: Array.isArray(memoryLeak?.leakingNodes) ?
-          memoryLeak.leakingNodes :
-          [],
-      },
-    });
+  const failedLoadOps = normalizeFiniteNumber(metrics.failed) || ZERO;
+  const erroredLoadOps = normalizeFiniteNumber(metrics.errors) || ZERO;
+  const failureRate = (failedLoadOps + erroredLoadOps) / totalLoadOps;
+  if (failureRate <= LOAD_FAILURE_RATE_MEDIUM) {
+    return null;
   }
+  const rating = failureRate > LOAD_FAILURE_RATE_HIGH ?
+    {priority: PRIORITY_HIGH, score: SCORE_HIGH} :
+    {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
+  return {
+    component: COMPONENT_ERROR_RETRY_PATH,
+    signal: SIGNAL_LOAD_FAILURE_RATE,
+    priority: rating.priority,
+    score: rating.score,
+    reason:
+      'Observed request failures suggest expensive retries or transient routing instability.',
+    evidence: {
+      total: totalLoadOps,
+      failed: failedLoadOps,
+      errors: erroredLoadOps,
+      failureRate,
+    },
+  };
+}
 
+function buildMemoryLeakPriority(memoryLeak) {
+  if (memoryLeak?.leakDetected !== true) {
+    return null;
+  }
+  return {
+    component: COMPONENT_MEMORY_LIFECYCLE,
+    signal: SIGNAL_MEMORY_LEAK,
+    priority: PRIORITY_CRITICAL,
+    score: SCORE_CRITICAL,
+    reason:
+      'Leak signal detected in sustained sampling and should be treated as release-blocking.',
+    evidence: {
+      leakingNodeCount:
+        normalizeFiniteNumber(memoryLeak.leakingNodeCount) || ZERO,
+      leakingNodes: Array.isArray(memoryLeak.leakingNodes) ?
+        memoryLeak.leakingNodes :
+        [],
+    },
+  };
+}
+
+function buildLogAnomaliesPriority(analysisSummary) {
   const anomalyCount = normalizeFiniteNumber(analysisSummary?.anomaly_count);
-  if (anomalyCount !== null && anomalyCount >= ANOMALY_COUNT_MEDIUM) {
-    const rating = anomalyCount >= ANOMALY_COUNT_HIGH ?
-      {priority: PRIORITY_HIGH, score: SCORE_HIGH} :
-      {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
-    priorities.push({
-      component: COMPONENT_ANOMALY_HOTSPOTS,
-      signal: SIGNAL_LOG_ANOMALIES,
-      priority: rating.priority,
-      score: rating.score,
-      reason:
-        'Detected structured anomalies in logs; addressing these often ' +
-        'removes hidden throughput drag.',
-      evidence: {
-        anomalyCount,
-        anomalyTypes: Array.isArray(analysisSummary?.anomaly_types) ?
-          analysisSummary.anomaly_types :
-          [],
-      },
-    });
+  if (anomalyCount === null || anomalyCount < ANOMALY_COUNT_MEDIUM) {
+    return null;
   }
+  const rating = anomalyCount >= ANOMALY_COUNT_HIGH ?
+    {priority: PRIORITY_HIGH, score: SCORE_HIGH} :
+    {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
+  return {
+    component: COMPONENT_ANOMALY_HOTSPOTS,
+    signal: SIGNAL_LOG_ANOMALIES,
+    priority: rating.priority,
+    score: rating.score,
+    reason:
+      'Detected structured anomalies in logs; addressing these often ' +
+      'removes hidden throughput drag.',
+    evidence: {
+      anomalyCount,
+      anomalyTypes: Array.isArray(analysisSummary?.anomaly_types) ?
+        analysisSummary.anomaly_types :
+        [],
+    },
+  };
+}
+
+function buildOptimizationPriorities(scenarioEntry) {
+  const entry = scenarioEntry ?? {};
+  const benchmarkDetails = resolveBenchmarkDetails(entry.details);
+  const comparison = benchmarkDetails?.comparison || null;
+  const convergence =
+    benchmarkDetails?.convergence || entry.convergenceTiming || null;
+  const loadMetrics = entry.loadMetrics || null;
+  const partitionHotspots = Array.isArray(entry.partitionHotspots) ?
+    entry.partitionHotspots :
+    [];
+
+  const priorities = arrayFilter([
+    buildThroughputGapPriority(comparison),
+    buildLatencyGapPriority(comparison),
+    buildInternalTailLatencyPriority(loadMetrics),
+    buildConvergenceSettlePriority(convergence),
+    buildOverTargetDurationPriority(convergence),
+    buildPartitionHotspotPriority(partitionHotspots),
+    buildQueuePressurePriority(loadMetrics),
+    buildAdmissionPressurePriority(loadMetrics, benchmarkDetails),
+    buildLoadFailureRatePriority(loadMetrics),
+    buildMemoryLeakPriority(entry.memoryLeak),
+    buildLogAnomaliesPriority(entry.analysisSummary),
+  ], Boolean);
 
   if (priorities.length === ZERO) {
     return null;
@@ -1073,13 +1011,15 @@ function resolveBenchmarkDetails(details) {
 }
 
 function resolveConvergenceDiagnostics(scenarioEntry) {
-  const benchmarkDetails = resolveBenchmarkDetails(scenarioEntry?.details);
+  const entry = scenarioEntry ?? {};
+  const details = entry.details ?? {};
+  const benchmarkDetails = resolveBenchmarkDetails(entry.details) ?? {};
   const candidates = [
-    scenarioEntry?.details?.diagnostics,
-    scenarioEntry?.details?.convergenceDiagnostics,
-    scenarioEntry?.convergenceTiming?.diagnostics,
-    benchmarkDetails?.convergenceDiagnostics,
-    benchmarkDetails?.convergence?.diagnostics,
+    details.diagnostics,
+    details.convergenceDiagnostics,
+    entry.convergenceTiming?.diagnostics,
+    benchmarkDetails.convergenceDiagnostics,
+    benchmarkDetails.convergence?.diagnostics,
   ];
   for (const candidate of candidates) {
     if (candidate && typeof candidate === 'object') {
@@ -1089,19 +1029,53 @@ function resolveConvergenceDiagnostics(scenarioEntry) {
   return null;
 }
 
+function buildSinglePartitionHotspot(
+  partitionId,
+  partitionMembership,
+  overTargetDurations,
+  operationsByPartition,
+) {
+  const membership = partitionMembership[partitionId] || {};
+  const overTargetMs =
+    normalizeFiniteNumber(overTargetDurations[partitionId]) || ZERO;
+  const voterCount = normalizeFiniteNumber(membership.voterCount) || ZERO;
+  const targetVoterCount =
+    normalizeFiniteNumber(membership.targetVoterCount) || ZERO;
+  const excessVoters = Math.max(ZERO, voterCount - targetVoterCount);
+  const replicaCount = Array.isArray(membership.replicas) ?
+    membership.replicas.length :
+    ZERO;
+  const operations = operationsByPartition.get(partitionId) || [];
+  const operationSampleCount = operations.length;
+  const hotspotScore = Math.round(
+    overTargetMs +
+    (excessVoters * 1000) +
+    (operationSampleCount * 50),
+  );
+  return {
+    partitionId: String(partitionId),
+    hotspotScore,
+    overTargetMs,
+    voterCount,
+    targetVoterCount,
+    excessVoters,
+    leader: membership.leader || null,
+    replicaCount,
+    operationSampleCount,
+    recentOperations: operations.slice(
+      ZERO,
+      PARTITION_HOTSPOT_RECENT_OP_LIMIT,
+    ),
+  };
+}
+
 function buildPartitionHotspots(scenarioEntry) {
   const diagnostics = resolveConvergenceDiagnostics(scenarioEntry);
   if (!diagnostics) {
     return null;
   }
-  const partitionMembership = diagnostics.partitionMembership &&
-    typeof diagnostics.partitionMembership === 'object' ?
-    diagnostics.partitionMembership :
-    {};
-  const overTargetDurations = diagnostics.overTargetDurations &&
-    typeof diagnostics.overTargetDurations === 'object' ?
-    diagnostics.overTargetDurations :
-    {};
+  const partitionMembership = normalizeObject(diagnostics.partitionMembership);
+  const overTargetDurations = normalizeObject(diagnostics.overTargetDurations);
   const operationsByPartition = groupOperationHistoryByPartition(
     diagnostics.operationHistory,
   );
@@ -1115,40 +1089,16 @@ function buildPartitionHotspots(scenarioEntry) {
     return null;
   }
 
-  const hotspots = [];
-  for (const partitionId of [...partitionIds].sort()) {
-    const membership = partitionMembership[partitionId] || {};
-    const overTargetMs = normalizeFiniteNumber(overTargetDurations[partitionId]) ||
-      ZERO;
-    const voterCount = normalizeFiniteNumber(membership.voterCount) || ZERO;
-    const targetVoterCount = normalizeFiniteNumber(membership.targetVoterCount) || ZERO;
-    const excessVoters = Math.max(ZERO, voterCount - targetVoterCount);
-    const replicaCount = Array.isArray(membership.replicas) ?
-      membership.replicas.length :
-      ZERO;
-    const operations = operationsByPartition.get(partitionId) || [];
-    const operationSampleCount = operations.length;
-    const hotspotScore = Math.round(
-      overTargetMs +
-      (excessVoters * 1000) +
-      (operationSampleCount * 50),
-    );
-    hotspots.push({
-      partitionId: String(partitionId),
-      hotspotScore,
-      overTargetMs,
-      voterCount,
-      targetVoterCount,
-      excessVoters,
-      leader: membership.leader || null,
-      replicaCount,
-      operationSampleCount,
-      recentOperations: operations.slice(
-        ZERO,
-        PARTITION_HOTSPOT_RECENT_OP_LIMIT,
+  const hotspots = arrayMap(
+    [...partitionIds].sort(),
+    (partitionId) =>
+      buildSinglePartitionHotspot(
+        partitionId,
+        partitionMembership,
+        overTargetDurations,
+        operationsByPartition,
       ),
-    });
-  }
+  );
 
   hotspots.sort(comparePartitionHotspots);
   return hotspots.slice(ZERO, PARTITION_HOTSPOT_LIMIT);
@@ -1179,13 +1129,14 @@ function groupOperationHistoryByPartition(operationHistory) {
 }
 
 function normalizeOperationRow(row) {
+  const source = row ?? {};
   return {
-    operationId: row?.operationId || null,
-    type: row?.type || null,
-    status: row?.status || null,
-    fromNodeId: row?.fromNodeId || null,
-    toNodeId: row?.toNodeId || null,
-    at: row?.at || null,
+    operationId: source.operationId || null,
+    type: source.type || null,
+    status: source.status || null,
+    fromNodeId: source.fromNodeId || null,
+    toNodeId: source.toNodeId || null,
+    at: source.at || null,
   };
 }
 
@@ -1201,18 +1152,21 @@ function parseTimestampMs(value) {
 }
 
 function comparePartitionHotspots(left, right) {
-  const leftScore = normalizeFiniteNumber(left?.hotspotScore) || ZERO;
-  const rightScore = normalizeFiniteNumber(right?.hotspotScore) || ZERO;
+  const leftItem = left ?? {};
+  const rightItem = right ?? {};
+  const leftScore = normalizeFiniteNumber(leftItem.hotspotScore) || ZERO;
+  const rightScore = normalizeFiniteNumber(rightItem.hotspotScore) || ZERO;
   if (leftScore !== rightScore) {
     return rightScore - leftScore;
   }
-  const leftOverTargetMs = normalizeFiniteNumber(left?.overTargetMs) || ZERO;
-  const rightOverTargetMs = normalizeFiniteNumber(right?.overTargetMs) || ZERO;
+  const leftOverTargetMs = normalizeFiniteNumber(leftItem.overTargetMs) || ZERO;
+  const rightOverTargetMs =
+    normalizeFiniteNumber(rightItem.overTargetMs) || ZERO;
   if (leftOverTargetMs !== rightOverTargetMs) {
     return rightOverTargetMs - leftOverTargetMs;
   }
-  return String(left?.partitionId || COMPONENT_UNKNOWN)
-    .localeCompare(String(right?.partitionId || COMPONENT_UNKNOWN));
+  return String(leftItem.partitionId || COMPONENT_UNKNOWN)
+    .localeCompare(String(rightItem.partitionId || COMPONENT_UNKNOWN));
 }
 
 function normalizeFiniteNumber(value) {
@@ -1291,24 +1245,34 @@ function scoreAdmissionPressure(admissionSignalRatio, admissionSignalCount) {
   return {priority: PRIORITY_MEDIUM, score: SCORE_MEDIUM};
 }
 
-function compareOptimizationPriority(left, right) {
-  const leftScore = normalizeFiniteNumber(left?.score) || ZERO;
-  const rightScore = normalizeFiniteNumber(right?.score) || ZERO;
+function compareOptimizationPriorityNumericRank(leftItem, rightItem) {
+  const leftScore = normalizeFiniteNumber(leftItem.score) || ZERO;
+  const rightScore = normalizeFiniteNumber(rightItem.score) || ZERO;
   if (leftScore !== rightScore) {
     return rightScore - leftScore;
   }
-  const leftOrder = PRIORITY_ORDER[left?.priority] || ZERO;
-  const rightOrder = PRIORITY_ORDER[right?.priority] || ZERO;
-  if (leftOrder !== rightOrder) {
-    return rightOrder - leftOrder;
+  const leftOrder = PRIORITY_ORDER[leftItem.priority] || ZERO;
+  const rightOrder = PRIORITY_ORDER[rightItem.priority] || ZERO;
+  return rightOrder - leftOrder;
+}
+
+function compareOptimizationPriority(left, right) {
+  const leftItem = left ?? {};
+  const rightItem = right ?? {};
+  const numericDelta = compareOptimizationPriorityNumericRank(
+    leftItem,
+    rightItem,
+  );
+  if (numericDelta !== ZERO) {
+    return numericDelta;
   }
-  const leftComponent = String(left?.component || COMPONENT_UNKNOWN);
-  const rightComponent = String(right?.component || COMPONENT_UNKNOWN);
+  const leftComponent = String(leftItem.component || COMPONENT_UNKNOWN);
+  const rightComponent = String(rightItem.component || COMPONENT_UNKNOWN);
   if (leftComponent !== rightComponent) {
     return leftComponent.localeCompare(rightComponent);
   }
-  const leftSignal = String(left?.signal || COMPONENT_UNKNOWN);
-  const rightSignal = String(right?.signal || COMPONENT_UNKNOWN);
+  const leftSignal = String(leftItem.signal || COMPONENT_UNKNOWN);
+  const rightSignal = String(rightItem.signal || COMPONENT_UNKNOWN);
   return leftSignal.localeCompare(rightSignal);
 }
 
@@ -1404,6 +1368,35 @@ const REPORT_DEGRADED_ATTRIBUTION_ARRAY_SCAN_LIMIT = 64;
 // node-side 8MiB payload-attribution threshold), not only past the entry cap.
 const REPORT_DEGRADED_ATTRIBUTION_DESCEND_BYTES = 8 * 1024 * 1024;
 
+function buildArrayDroppedFieldAttribution(value, bytes, depth) {
+  let largestIndex = -1;
+  let largestBytes = -1;
+  const scanCount = Math.min(
+    value.length,
+    REPORT_DEGRADED_ATTRIBUTION_ARRAY_SCAN_LIMIT,
+  );
+  for (let i = 0; i < scanCount; i++) {
+    const elementBytes = measureSerializedBytes(value[i]);
+    if (
+      elementBytes === REPORT_DEGRADED_FIELD_UNSERIALIZABLE ||
+      elementBytes > largestBytes
+    ) {
+      largestBytes = elementBytes === REPORT_DEGRADED_FIELD_UNSERIALIZABLE ?
+        Number.MAX_SAFE_INTEGER :
+        elementBytes;
+      largestIndex = i;
+    }
+  }
+  return {
+    totalBytes: bytes,
+    arrayLength: value.length,
+    largestElementIndex: largestIndex,
+    largestElement: largestIndex >= 0 ?
+      buildDroppedFieldAttribution(value[largestIndex], depth + 1) :
+      null,
+  };
+}
+
 function buildDroppedFieldAttribution(value, depth = 0) {
   const bytes = measureSerializedBytes(value);
   const oversized =
@@ -1418,32 +1411,7 @@ function buildDroppedFieldAttribution(value, depth = 0) {
     return bytes;
   }
   if (Array.isArray(value)) {
-    let largestIndex = -1;
-    let largestBytes = -1;
-    const scanCount = Math.min(
-      value.length,
-      REPORT_DEGRADED_ATTRIBUTION_ARRAY_SCAN_LIMIT,
-    );
-    for (let i = 0; i < scanCount; i++) {
-      const elementBytes = measureSerializedBytes(value[i]);
-      if (
-        elementBytes === REPORT_DEGRADED_FIELD_UNSERIALIZABLE ||
-        elementBytes > largestBytes
-      ) {
-        largestBytes = elementBytes === REPORT_DEGRADED_FIELD_UNSERIALIZABLE ?
-          Number.MAX_SAFE_INTEGER :
-          elementBytes;
-        largestIndex = i;
-      }
-    }
-    return {
-      totalBytes: bytes,
-      arrayLength: value.length,
-      largestElementIndex: largestIndex,
-      largestElement: largestIndex >= 0 ?
-        buildDroppedFieldAttribution(value[largestIndex], depth + 1) :
-        null,
-    };
+    return buildArrayDroppedFieldAttribution(value, bytes, depth);
   }
   const members = {};
   for (const [key, member] of Object.entries(value)) {
@@ -1503,6 +1471,42 @@ function degradeReportForSerialization(report) {
   return {...report, scenarios: degradedScenarios};
 }
 
+function serializeReportWithDegradation(report) {
+  try {
+    return {
+      finalReport: report,
+      serializedReport: JSON.stringify(report, null, JSON_INDENT),
+    };
+  } catch (serializationError) {
+    console.warn(
+      '[harness] WARNING: report serialization failed ' +
+      `(${String(serializationError?.message || serializationError)}); ` +
+      'degrading oversized scenario entries',
+    );
+    let degradedReport = degradeReportForSerialization(report);
+    try {
+      return {
+        finalReport: degradedReport,
+        serializedReport: JSON.stringify(degradedReport, null, JSON_INDENT),
+      };
+    } catch {
+      // The sum of under-cap entries can still exceed the limit:
+      // degrade every entry unconditionally.
+      degradedReport = {
+        ...report,
+        scenarios: arrayMap(
+          Array.isArray(report.scenarios) ? report.scenarios : [],
+          degradeScenarioEntryForSerialization,
+        ),
+      };
+      return {
+        finalReport: degradedReport,
+        serializedReport: JSON.stringify(degradedReport, null, JSON_INDENT),
+      };
+    }
+  }
+}
+
 class ReportWriter {
   /**
    * @param {string} outputPath - File path for the JSON report
@@ -1549,10 +1553,9 @@ class ReportWriter {
     };
 
     for (const [key, value] of Object.entries(normalizedExtra)) {
-      if (key === 'metadata') {
-        continue;
+      if (key !== 'metadata') {
+        report[key] = value;
       }
-      report[key] = value;
     }
 
     if (Object.keys(reportMetadata).length > ZERO) {
@@ -1561,33 +1564,10 @@ class ReportWriter {
 
     const dir = dirname(this.outputPath);
     await mkdir(dir, {recursive: true});
-    let serializedReport;
-    try {
-      serializedReport = JSON.stringify(report, null, JSON_INDENT);
-    } catch (serializationError) {
-      console.warn(
-        '[harness] WARNING: report serialization failed ' +
-        `(${String(serializationError?.message || serializationError)}); ` +
-        'degrading oversized scenario entries',
-      );
-      let degradedReport = degradeReportForSerialization(report);
-      try {
-        serializedReport = JSON.stringify(degradedReport, null, JSON_INDENT);
-      } catch {
-        // The sum of under-cap entries can still exceed the limit:
-        // degrade every entry unconditionally.
-        degradedReport = {
-          ...report,
-          scenarios: (Array.isArray(report.scenarios) ?
-            report.scenarios : []).map(degradeScenarioEntryForSerialization),
-        };
-        serializedReport = JSON.stringify(degradedReport, null, JSON_INDENT);
-      }
-      await writeFile(this.outputPath, serializedReport, 'utf8');
-      return degradedReport;
-    }
+    const {finalReport, serializedReport} =
+      serializeReportWithDegradation(report);
     await writeFile(this.outputPath, serializedReport, 'utf8');
-    return report;
+    return finalReport;
   }
 }
 

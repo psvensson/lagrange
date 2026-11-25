@@ -864,7 +864,7 @@ describe('readiness summary and canonical history outcome accounting', () => {
     assert.equal(validateVersionedProgressionRecord(progression), progression);
     assert.throws(
       () => validateVersionedProgressionRecord({
-        lab3NodeProgression: [{...built, formationSec: 0}],
+        lab3NodeRuns: [{...built, formationSec: 0}],
       }),
       /formationSec <= 0/u,
     );
@@ -926,7 +926,6 @@ describe('readiness summary and canonical history outcome accounting', () => {
     };
     const metrics = deriveRunMetrics(run);
     assert.equal(metrics.timingsSec.maxSingleTxnExecutionSec, 14.496);
-    assert.equal(metrics.timingsSec.maxSingleTxnSec, 14.496);
     assert.equal(metrics.timingsSec.maxSingleRequestSec, 222.242);
     assert.deepEqual(metrics.timingsSec.partsSec, {
       loadAndCases1To2Sec: 70,

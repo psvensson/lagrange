@@ -45,6 +45,33 @@ function sleep(delayMs) {
   });
 }
 
+function resolveSustainedLoadDuration(cluster) {
+  const configuredDuration = cluster?._config?.load?.defaultDuration;
+  return typeof configuredDuration === 'string' &&
+    configuredDuration.length > 0 ?
+    configuredDuration :
+    LOAD_DEFAULTS.defaultDuration;
+}
+
+async function warmupLoadReadinessStability(cluster) {
+  if (typeof cluster.waitForLoadReadinessStability !== 'function') {
+    return;
+  }
+  try {
+    await cluster.waitForLoadReadinessStability({
+      stableWindowMs: LOAD_READINESS_STABLE_WINDOW_MS,
+      timeoutMs: LOAD_READINESS_TIMEOUT_MS,
+    });
+  } catch (_error) {
+    // Keep warmup best-effort so throughput assertions can measure
+    // sustained behavior even when one node starts in transient degradation.
+    process.stderr.write(
+      'sustained-write-throughput: load readiness warmup skipped ' +
+      '(best-effort): ' + String(_error?.message || _error) + '\n',
+    );
+  }
+}
+
 /**
  * Run the sustained-write-throughput scenario.
  *
@@ -54,27 +81,8 @@ async function run(cluster, options = {}) {
   // Honor the configured load duration (e.g. local-memory-soak.json
   // "1800s") so the configured warmup plus analysis window can complete;
   // fall back to the harness default when the config does not override it.
-  const configuredDuration = cluster?._config?.load?.defaultDuration;
-  const loadDuration = typeof configuredDuration === 'string' &&
-    configuredDuration.length > 0 ?
-    configuredDuration :
-    LOAD_DEFAULTS.defaultDuration;
-
-  if (typeof cluster.waitForLoadReadinessStability === 'function') {
-    try {
-      await cluster.waitForLoadReadinessStability({
-        stableWindowMs: LOAD_READINESS_STABLE_WINDOW_MS,
-        timeoutMs: LOAD_READINESS_TIMEOUT_MS,
-      });
-    } catch (_error) {
-      // Keep warmup best-effort so throughput assertions can measure
-      // sustained behavior even when one node starts in transient degradation.
-      process.stderr.write(
-        'sustained-write-throughput: load readiness warmup skipped ' +
-        '(best-effort): ' + String(_error?.message || _error) + '\n',
-      );
-    }
-  }
+  const loadDuration = resolveSustainedLoadDuration(cluster);
+  await warmupLoadReadinessStability(cluster);
 
   const provisionedTable = await provisionUserLoadTable(cluster, options);
 

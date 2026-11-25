@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 122,
+    "admin-diagnostics": 123,
     "architecture-governance": 21,
     "bootstrap-membership": 358,
     "cdc-metadata": 81,
@@ -13,22 +13,22 @@
     "examples-e2e": 8,
     "pgwire-compat": 25,
     "placement-rebalance": 312,
-    "query-sql": 225,
+    "query-sql": 226,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 259,
     "storage-raft": 164,
-    "test-infrastructure": 170,
+    "test-infrastructure": 173,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2820,
-  "digest": "fnv1a32-caae678b",
+  "censusSize": 2825,
+  "digest": "fnv1a32-4cd38bb6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-87d02846",
+  "observationDigest": "fnv1a32-68361ae4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -876,6 +876,7 @@
     "test/diagnostics/lease-liveness-decision-neutrality.test.js": "admin-diagnostics",
     "test/diagnostics/raft-churn-sync-section-attribution.test.js": "admin-diagnostics",
     "test/diagnostics/resource-diagnostics-sampler.test.js": "admin-diagnostics",
+    "test/diagnostics/runtime-content-fingerprint.test.js": "admin-diagnostics",
     "test/diagnostics/source-fingerprint.test.js": "admin-diagnostics",
     "test/diagnostics/stop-condition-decision.test.js": "admin-diagnostics",
     "test/diagnostics/sync-section-clock-seam.test.js": "admin-diagnostics",
@@ -1653,6 +1654,7 @@
     "test/query/create-table-policy-option.test.js": "query-sql",
     "test/query/cross-partition-join-pushdown.test.js": "query-sql",
     "test/query/cross-partition-join.property.test.js": "query-sql",
+    "test/query/decision-authority-and-ratchet-models.property.test.js": "query-sql",
     "test/query/dedupe-registry.test.js": "query-sql",
     "test/query/deferred-hash.test.js": "query-sql",
     "test/query/dialect-wiring.test.js": "query-sql",
@@ -2510,6 +2512,7 @@
     "test/scripts/metric-cycle-custody.test.js": "test-infrastructure",
     "test/scripts/metric-cycle-resolution.test.js": "test-infrastructure",
     "test/scripts/metric-duplication-inputs.test.js": "test-infrastructure",
+    "test/scripts/metric-ratchet-identity-and-completeness.test.js": "test-infrastructure",
     "test/scripts/metric-report-inputs.test.js": "test-infrastructure",
     "test/scripts/metric-report-provenance.test.js": "test-infrastructure",
     "test/scripts/model-contract-tools.test.js": "test-infrastructure",
@@ -2519,6 +2522,8 @@
     "test/scripts/no-external-llm-guards.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "test-infrastructure",
+    "test/scripts/npm-runtime-process.test.js": "test-infrastructure",
+    "test/scripts/npm-runtime-smoke.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
@@ -3758,6 +3763,7 @@
     },
     "test/bootstrap/management-v1-l4-l3.test.js": {
       "files": [
+        "package.json",
         "src/bootstrap/owners/management-v1-constants.js"
       ]
     },
@@ -7671,6 +7677,17 @@
     "test/diagnostics/resource-diagnostics-sampler.test.js": {
       "files": [
         "src/diagnostics/resource-diagnostics-sampler.js"
+      ]
+    },
+    "test/diagnostics/runtime-content-fingerprint.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "src/diagnostics/runtime-content-fingerprint.js",
+        "src/index.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/diagnostics/stop-condition-decision.test.js": {
@@ -11771,6 +11788,8 @@
         "README.md",
         "package-lock.json",
         "package.json",
+        "scripts/npm-runtime-process.js",
+        "scripts/npm-runtime-smoke-consumer.js",
         "src/admin/static/playback-viewer.html",
         "src/admin/static/test-run-dashboard.html",
         "src/cli/bin/lagrange-admin.js",
@@ -14159,10 +14178,14 @@
     },
     "test/packaging/sea-bundle-smoke.test.js": {
       "files": [
+        "package.json",
         "scripts/build-sea.js",
         "src/index.js",
         "src/query/distributed/coordinator-merge-process.js",
         "src/query/sql-value-codec.js"
+      ],
+      "directories": [
+        "src"
       ],
       "env": [
         "SEA_BUILD"
@@ -17419,6 +17442,11 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js"
+      ]
+    },
+    "test/query/decision-authority-and-ratchet-models.property.test.js": {
+      "directories": [
+        "src"
       ]
     },
     "test/query/deferred-hash.test.js": {
@@ -26017,6 +26045,8 @@
         "package.json",
         "scripts/action-authority.js",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/npm-runtime-process.js",
+        "scripts/npm-runtime-smoke-consumer.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/publish-head.js",
@@ -27138,7 +27168,6 @@
         "package.json",
         "scripts/check-cognitive-complexity.js",
         "scripts/check-complexity.js",
-        "scripts/checks/run-static-audits.js",
         "test/manifests/proof-obligations.json"
       ]
     },
@@ -28063,6 +28092,11 @@
         "TZ"
       ]
     },
+    "test/scripts/metric-ratchet-identity-and-completeness.test.js": {
+      "directories": [
+        "src"
+      ]
+    },
     "test/scripts/metric-report-inputs.test.js": {
       "files": [
         "README.md",
@@ -28233,6 +28267,23 @@
         "src",
         "test",
         "test/distributed"
+      ]
+    },
+    "test/scripts/npm-runtime-smoke.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/npm-runtime-process.js",
+        "scripts/npm-runtime-smoke-consumer.js",
+        "src/public-api.js"
+      ],
+      "directories": [
+        "data",
+        "src",
+        "wit"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
       ]
     },
     "test/scripts/observation-census.test.js": {
@@ -28562,6 +28613,8 @@
         "Dockerfile",
         "package-lock.json",
         "package.json",
+        "scripts/npm-runtime-process.js",
+        "scripts/npm-runtime-smoke-consumer.js",
         "src/public-api.js"
       ],
       "directories": [
@@ -29009,10 +29062,35 @@
         ".github/workflows/ci.yml",
         "CLAUDE.md",
         "RELEASE.md",
+        "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
+        "scripts/check-file-size-thresholds.js",
+        "scripts/checks/file-size-change-ratchet.js",
+        "scripts/inventory-ordinal-segments.js",
+        "solve/changes/global-owner-debt-inventory/inventory.json",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/priority-recovery-snapshot.js",
         "src/raft/raft-rs-operation-port.js",
         "test/manifests/proof-obligations.json"
+      ],
+      "directories": [
+        "scripts",
+        "solve/quests",
+        "src",
+        "src/bootstrap",
+        "src/control-plane",
+        "src/query",
+        "src/raft",
+        "src/rebalancer",
+        "test"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
       ]
     },
     "test/scripts/steering-diet.test.js": {

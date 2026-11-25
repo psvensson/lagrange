@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T19:11:15.831Z",
+  "generatedAt": "2026-11-25T10:44:29.740Z",
   "rawViolationCount": 59,
   "violations": [
     {
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 650,
+      "line": 651,
       "column": 4,
       "functionName": "createPartitionServiceLearnerPromotionMethods",
       "kind": "prototype_copy_bags",
@@ -527,7 +527,7 @@
     },
     {
       "filePath": "src/workflow/durable-workflow-coordinator.js",
-      "line": 743,
+      "line": 735,
       "column": 25,
       "functionName": "<anonymous>",
       "kind": "prototype_copy_bags",

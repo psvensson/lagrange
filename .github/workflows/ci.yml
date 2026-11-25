@@ -111,14 +111,19 @@ jobs:
             base="$PUSH_BEFORE_SHA"
           fi
 
-          # A new branch reports the zero SHA, and a force-push or an expired
-          # object can leave `before` unreachable. Fall back to the single
-          # preceding commit and SAY SO, rather than resolving to an empty base
-          # that would quietly prove the working tree alone.
-          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] ||
-            ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "proof range: base '$base' unavailable, falling back to HEAD^"
-            base="$(git rev-parse HEAD^)"
+          # A declared base SHA is mandatory for pull_request and push proof ranges.
+          # Fetch from origin if not yet present locally, and fail closed when the
+          # base is unset, all-zero, or unreachable rather than substituting HEAD^.
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+            echo "::error::proof range base '$base' is missing or all-zero; refusing to substitute another range"
+            exit 1
+          fi
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$base" 2>/dev/null || true
+          fi
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::error::proof range base '$base' is unreachable; refusing to silently narrow proof range"
+            exit 1
           fi
 
           echo "proof range: $base..$(git rev-parse HEAD)"
@@ -203,6 +208,12 @@ jobs:
       # and a reason code rather than proving a convenient subset.
       - name: Ordinary proof
         run: npm run check
+
+      - name: Structural regression ratchets (new or worsened debt fails)
+        run: |
+          npm run test:complexity
+          npm run test:unused:ratchet
+          npm run audit:file-size
 
       # The proof writes test-output/proof-scope.json itself, saying which sha
       # it proved and whether it ran the whole corpus; the canary reads it

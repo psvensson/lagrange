@@ -67,10 +67,23 @@ import {
 
 const {COMMIT, ROLLBACK} = PARTICIPANT_TRANSACTION_DECISION;
 const NO_PARTICIPANT_FAILURES = Object.freeze([]);
+const SETTLED_STATUS_FULFILLED = 'fulfilled';
+const SETTLED_STATUS_REJECTED = 'rejected';
 const PREPARE_SENT_TRANSACTION_STATUS = Object.freeze(new Set([
   TRANSACTION_STATUS.PREPARING,
   TRANSACTION_STATUS.PREPARED,
 ]));
+
+async function settleAllOrThrow(promises) {
+  const settled = await Promise.allSettled(promises);
+  const rejected = settled.find(
+    (entry) => entry.status === SETTLED_STATUS_REJECTED,
+  );
+  if (rejected) {
+    throw rejected.reason;
+  }
+  return settled.map((entry) => entry.value);
+}
 
 function progressStatusForDecision(decision) {
   return decision === COMMIT ?
@@ -285,41 +298,56 @@ const distributedTransactionDecisionProtocolMethods = {
   },
 
   async releaseReadOnlyParticipants(tx) {
-    const entries = tx?.readOnlyParticipants instanceof Map ?
+    if (!tx) return;
+    if (tx.inFlightReadOnlyReleasePromise) {
+      await tx.inFlightReadOnlyReleasePromise;
+      return;
+    }
+    const entries = tx.readOnlyParticipants instanceof Map ?
       Array.from(tx.readOnlyParticipants.values()).filter(
         (participant) => participant.status !== PARTICIPANT_STATUS.ROLLED_BACK,
       ) :
       [];
     if (entries.length === 0) return;
-    const settled = await Promise.allSettled(
-      entries.map((participant) =>
-        this.executeParticipantOperationWithRetry(
-          tx,
-          PARTICIPANT_STATUS.ROLLING_BACK,
-          participant.partitionId,
-          () => this.rollbackParticipant(
-            tx.sessionId,
+    const releasePromise = (async () => {
+      const settled = await Promise.allSettled(
+        entries.map((participant) =>
+          this.executeParticipantOperationWithRetry(
+            tx,
+            PARTICIPANT_STATUS.ROLLING_BACK,
             participant.partitionId,
-            participantIdentityOf(tx, participant.partitionId),
+            () => this.rollbackParticipant(
+              tx.sessionId,
+              participant.partitionId,
+              participantIdentityOf(tx, participant.partitionId),
+            ),
+            {skipBudgetEnforcement: true},
           ),
-          {skipBudgetEnforcement: true},
         ),
-      ),
-    );
-    for (let index = 0; index < settled.length; index += 1) {
-      if (settled[index].status === 'fulfilled') {
-        entries[index].status = PARTICIPANT_STATUS.ROLLED_BACK;
-        entries[index].updatedAt = this.now();
-      } else {
-        this.logger?.warn?.(
-          TRANSACTION_DECISION_LOG_MSG.VOLATILE_READ_CLEANUP_FAILED,
-          {
-            transactionId: tx.transactionId,
-            partitionId: entries[index].partitionId,
-            error: settled[index].reason?.message ??
-              String(settled[index].reason),
-          },
-        );
+      );
+      for (let index = 0; index < settled.length; index += 1) {
+        if (settled[index].status === SETTLED_STATUS_FULFILLED) {
+          entries[index].status = PARTICIPANT_STATUS.ROLLED_BACK;
+          entries[index].updatedAt = this.now();
+        } else {
+          this.logger?.warn?.(
+            TRANSACTION_DECISION_LOG_MSG.VOLATILE_READ_CLEANUP_FAILED,
+            {
+              transactionId: tx.transactionId,
+              partitionId: entries[index].partitionId,
+              error: settled[index].reason?.message ??
+                String(settled[index].reason),
+            },
+          );
+        }
+      }
+    })();
+    tx.inFlightReadOnlyReleasePromise = releasePromise;
+    try {
+      await releasePromise;
+    } finally {
+      if (tx.inFlightReadOnlyReleasePromise === releasePromise) {
+        tx.inFlightReadOnlyReleasePromise = null;
       }
     }
   },
@@ -474,7 +502,7 @@ const distributedTransactionDecisionProtocolMethods = {
         this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED),
       );
     }
-    await Promise.all(pendingCommit);
+    await settleAllOrThrow(pendingCommit);
     endTransaction(this, tx);
     return commitSuccessResult(this, tx);
   },
@@ -568,7 +596,7 @@ const distributedTransactionDecisionProtocolMethods = {
           this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK),
         );
       }
-      await Promise.all(pendingRollback);
+      await settleAllOrThrow(pendingRollback);
       endTransaction(this, tx);
     }
     if (tx?.telemetry) {

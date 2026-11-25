@@ -781,15 +781,40 @@ function expiredUserTableRoutability(lastObservation) {
   return unmet(PREDICATE.USER_TABLE_ROUTABLE, ['routability_bound_spent'], {lastObservation});
 }
 
+function isValidProbeSpec(probe) {
+  return (
+    typeof probe?.probeId === TYPEOF_STRING &&
+    probe.probeId.length > ZERO &&
+    Number.isFinite(probe.probeValue)
+  );
+}
+
 function matchesProbeRows(read, probe, publicPg = false) {
-  if (typeof probe?.probeId !== TYPEOF_STRING || probe.probeId.length === ZERO ||
-      !Number.isFinite(probe.probeValue) || !Array.isArray(read?.rows) ||
+  if (!isValidProbeSpec(probe) || !Array.isArray(read?.rows) ||
       read.rows.length !== ONE) return false;
   // The public pg-wire owner describes every output column as PostgreSQL TEXT.
   // Admin queries expose the integer from the engine in their JSON result.
   const expectedValue = publicPg ? String(probe.probeValue) : probe.probeValue;
-  return read.rows[ZERO]?.probe_id === probe.probeId &&
-    read.rows[ZERO]?.probe_value === expectedValue;
+  const firstRow = read.rows[ZERO] ?? {};
+  return firstRow.probe_id === probe.probeId &&
+    firstRow.probe_value === expectedValue;
+}
+
+function checkSinglePublicProbeReadback(entry, input, reasons) {
+  const record = entry ?? {};
+  if (
+    record.nodeId !== null &&
+    !arrayIncludes(input.clusterNodeIds, record.nodeId)
+  ) {
+    reasons.push('readback_unknown_node');
+  }
+  if (record.error) reasons.push(`readback_failed:${record.via}`);
+  if (
+    record.rowCount !== ONE ||
+    !matchesProbeRows(entry, input.publicProbe, record.nodeId === null)
+  ) {
+    reasons.push(`readback_row_mismatch:${record.via}`);
+  }
 }
 
 function checkPublicProbeReadbacks(input, readbacks, reasons) {
@@ -798,28 +823,34 @@ function checkPublicProbeReadbacks(input, readbacks, reasons) {
     if (matches.length !== ONE) reasons.push(`readback_coverage:${nodeId}`);
   }
   for (const entry of readbacks) {
-    if (entry?.nodeId !== null && !arrayIncludes(input.clusterNodeIds, entry?.nodeId)) {
-      reasons.push('readback_unknown_node');
-    }
-    if (entry?.error) reasons.push(`readback_failed:${entry.via}`);
-    if (entry?.rowCount !== ONE ||
-        !matchesProbeRows(entry, input.publicProbe, entry.nodeId === null)) {
-      reasons.push(`readback_row_mismatch:${entry?.via}`);
-    }
+    checkSinglePublicProbeReadback(entry, input, reasons);
   }
 }
 
 function checkNodeWrite(entry, nodeIds, reasons) {
-  const writer = entry?.writerNodeId;
+  const record = entry ?? {};
+  const writer = record.writerNodeId;
   if (!arrayIncludes(nodeIds, writer)) reasons.push('write_unknown_node');
-  if (!arrayIncludes(nodeIds, entry?.readerNodeId) || entry.readerNodeId === writer) {
+  if (
+    !arrayIncludes(nodeIds, record.readerNodeId) ||
+    record.readerNodeId === writer
+  ) {
     reasons.push(`write_cross_node_read_absent:${writer}`);
   }
-  if (entry?.insert?.error || entry?.insert?.affectedRows !== ONE) {
+  const insert = record.insert ?? {};
+  if (insert.error || insert.affectedRows !== ONE) {
     reasons.push(`node_insert_failed:${writer}`);
   }
-  if (entry?.readback?.error || !matchesProbeRows(entry?.readback, entry)) {
+  if (record.readback?.error || !matchesProbeRows(record.readback, entry)) {
     reasons.push(`node_readback_mismatch:${writer}`);
+  }
+}
+
+function checkPublicInsertResult(insert, reasons) {
+  if (insert === null) reasons.push('insert_not_issued');
+  else if (insert.error) reasons.push(`insert_failed:${insert.error}`);
+  else if (insert.rowCount !== ONE) {
+    reasons.push(`insert_row_count:${insert.rowCount}`);
   }
 }
 
@@ -833,9 +864,7 @@ function checkNodeWrite(entry, nodeIds, reasons) {
 function evaluateWriteReadback(input) {
   const reasons = [];
   const insert = input.insert || null;
-  if (insert === null) reasons.push('insert_not_issued');
-  else if (insert.error) reasons.push(`insert_failed:${insert.error}`);
-  else if (insert.rowCount !== ONE) reasons.push(`insert_row_count:${insert.rowCount}`);
+  checkPublicInsertResult(insert, reasons);
   const readbacks = Array.isArray(input.readbacks) ? input.readbacks : [];
   checkPublicProbeReadbacks(input, readbacks, reasons);
   const nodeWrites = Array.isArray(input.nodeWrites) ? input.nodeWrites : [];

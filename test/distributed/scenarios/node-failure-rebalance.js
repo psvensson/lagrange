@@ -184,12 +184,29 @@ async function assertAcknowledgedWritesVisibleOnSurvivors(
   };
 }
 
-function buildClientErrorClassification(metrics) {
-  const waitReasons = metrics?.waitReasons &&
+function resolveClientWaitReasons(metrics) {
+  return metrics?.waitReasons &&
     typeof metrics.waitReasons === 'object' &&
     !Array.isArray(metrics.waitReasons) ?
     {...metrics.waitReasons} :
     {};
+}
+
+function resolveClientErrorState(
+  unexpectedClientErrorCount,
+  toleratedDisruptionCount,
+) {
+  if (unexpectedClientErrorCount > ZERO_FAILURES) {
+    return CLIENT_ERROR_CLASSIFICATION.UNEXPECTED_CLIENT_ERROR;
+  }
+  if (toleratedDisruptionCount > ZERO_FAILURES) {
+    return CLIENT_ERROR_CLASSIFICATION.TOLERATED_CLIENT_DISRUPTION;
+  }
+  return CLIENT_ERROR_CLASSIFICATION.CLEAN;
+}
+
+function buildClientErrorClassification(metrics) {
+  const waitReasons = resolveClientWaitReasons(metrics);
   const distinctErrors = Array.isArray(metrics?.distinctErrors) ?
     [...metrics.distinctErrors] :
     [];
@@ -214,11 +231,10 @@ function buildClientErrorClassification(metrics) {
     ...Object.values(waitReasons)
       .map((count) => normalizeNonNegativeInteger(count)),
   );
-  const state = unexpectedClientErrorCount > ZERO_FAILURES ?
-    CLIENT_ERROR_CLASSIFICATION.UNEXPECTED_CLIENT_ERROR :
-    toleratedDisruptionCount > ZERO_FAILURES ?
-      CLIENT_ERROR_CLASSIFICATION.TOLERATED_CLIENT_DISRUPTION :
-      CLIENT_ERROR_CLASSIFICATION.CLEAN;
+  const state = resolveClientErrorState(
+    unexpectedClientErrorCount,
+    toleratedDisruptionCount,
+  );
 
   return {
     state,

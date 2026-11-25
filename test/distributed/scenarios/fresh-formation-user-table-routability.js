@@ -316,23 +316,31 @@ async function observeFormationUntilSettled(context) {
 // recorded); any other error ends the attempt, named. A DDL answer is
 // bounded by the remaining routability bound, not the control-read timeout
 // (run 1, 2026-11-01: a 15 s control-read bound cut a slower CREATE answer).
+async function executeCreateProbeTableAttempt(seedNode, remainingMs) {
+  try {
+    const result = await seedNode.queryWithTimeout(SQL.CREATE_TABLE, [],
+      {timeoutMs: remainingMs});
+    return {
+      contractState: result.contractState ?? null,
+      nextAction: result.nextAction ?? null,
+      reasonCodes: result.reasonCodes ?? [],
+    };
+  } catch (error) {
+    return {
+      contractState: error.contractState ?? null,
+      error: errorText(error),
+      nextAction: error.nextAction ?? null,
+      reasonCodes: error.reasonCodes ?? [],
+    };
+  }
+}
+
 async function createProbeTable(seedNode, deps, deadline) {
   const attempts = [];
   for (;;) {
     const remainingMs = deadline - deps.now();
     if (remainingMs <= ZERO) break;
-    let outcome;
-    try {
-      const result = await seedNode.queryWithTimeout(SQL.CREATE_TABLE, [],
-        {timeoutMs: remainingMs});
-      outcome = {contractState: result.contractState ?? null,
-        nextAction: result.nextAction ?? null,
-        reasonCodes: result.reasonCodes ?? []};
-    } catch (error) {
-      outcome = {contractState: error.contractState ?? null,
-        error: errorText(error), nextAction: error.nextAction ?? null,
-        reasonCodes: error.reasonCodes ?? []};
-    }
+    const outcome = await executeCreateProbeTableAttempt(seedNode, remainingMs);
     attempts.push({...outcome, atMs: deps.now()});
     const pending = outcome.contractState === CONTRACT_STATE_PENDING &&
       outcome.nextAction === NEXT_ACTION_RETRY;

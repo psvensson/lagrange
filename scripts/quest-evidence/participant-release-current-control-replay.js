@@ -34,18 +34,45 @@ const REQUIRED = ['current-control-loss-before-replay-resume',
   'healthy-current-replay-and-retained-origin',
   'original-control-loss-and-release-lifetime-composition',
   'independent-contract-and-execution-review'];
+const SELECTION_FILE = 'selection.json';
+const TEST_RESULTS_FILE = 'test-results.ndjson';
 const DIGESTS = {
   [LOG]: '529e1a1ce6ffc5a7303e42b1031279fe2653aa7fd54fb4d72b1dae7263a2e19a',
-  'selection.json': 'dd39a7fb8f7fa34f511628250880c85879e128246bb44d433f5d83b7fb5c73ed',
-  'test-results.ndjson': '3c223cb4821755803ab50284d4784f8b8ce20a63a2616d8ce3d0a094056908fe',
+  [SELECTION_FILE]: 'dd39a7fb8f7fa34f511628250880c85879e128246bb44d433f5d83b7fb5c73ed',
+  [TEST_RESULTS_FILE]: '3c223cb4821755803ab50284d4784f8b8ce20a63a2616d8ce3d0a094056908fe',
 };
 const MAX_BYTES = 131072;
 const ENCODING = 'utf8';
+const HASH_ALGORITHM = 'sha256';
+const HASH_DIGEST_ENCODING = 'hex';
+const LINE_DELIMITER = '\n';
+const TAP_PLACEMENT_MODE_MARKER = 'mode:local retry:0 ';
+const TAP_SUMMARY_LINE = '# test-files total=3 pass=2 fail=1 assertions=25\n';
+const TAP_HEADER_LINE = 'TAP version 13\n';
+const TAP_TIME_PREFIX = '# time=';
+const TAP_SECTION_ASSERT_MESSAGE = 'complete failing TAP section';
+const TAP_EVENT_ASSERT = 'assert';
+const TAP_EVENT_COMPLETE = 'complete';
+const ASSERTION_ERROR_CODE = 'ERR_ASSERTION';
+const STRICT_EQUAL_OPERATOR = 'strictEqual';
+const OBSERVED_ANSWER_PREFIX = '# {"answer":';
+const OBSERVED_EFFECTS_MESSAGE = 'actual replay effects';
+const GIT_SHOW_COMMAND = 'show';
+const GIT_SHOW_STDIO = ['ignore', 'pipe', 'pipe'];
+const EXPECTED_ARGV_COUNT = 3;
+const ARGV_COUNT_MESSAGE = 'one original directory argument';
+const RECEIPT_STATUS_FAIL = 'fail';
+const RECEIPT_CEILING =
+  'Original native in-process replay divergence on an identified physical host. ' +
+  'Native build/process hashes were not captured. No green repair, automatic recovery, ' +
+  'physical formation or task-3823 causal attribution.';
+const RECEIPT_FAILURE_SUMMARY =
+  'Original red admitted; repair and complete current interaction await proof.';
 const OUTPUT = path.join(ROOT, 'solve/quests', QUEST, 'evidence/receipt.json');
 const UNAVAILABLE = {schema: 'test-receipt/1', quest: QUEST, status: 'unavailable', receipts: []};
 
 function digest(bytes) {
-  return createHash('sha256').update(bytes).digest('hex');
+  return createHash(HASH_ALGORITHM).update(bytes).digest(HASH_DIGEST_ENCODING);
 }
 
 function writeReceipt(receipt) {
@@ -69,11 +96,11 @@ function readOriginals(directory) {
 }
 
 function verifyLedger(originals) {
-  const selection = JSON.parse(originals['selection.json']);
+  const selection = JSON.parse(originals[SELECTION_FILE]);
   assert.equal(selection.sha, SOURCE);
   assert.equal(selection.host, HOST);
   assert.deepEqual([...selection.files].sort(), [...FILES].sort());
-  const ledger = originals['test-results.ndjson'].trim().split('\n').map(JSON.parse);
+  const ledger = originals[TEST_RESULTS_FILE].trim().split(LINE_DELIMITER).map(JSON.parse);
   assert.equal(ledger.length, FILES.length);
   for (const [index, file] of FILES.entries()) {
     const [row] = ledger.filter((entry) => entry.file === file);
@@ -88,16 +115,18 @@ function verifyLedger(originals) {
 }
 
 function parseTap(raw) {
-  assert.ok(raw.includes(`placement-head=${SOURCE}\n`) && raw.includes('mode:local retry:0 '));
-  assert.ok(raw.includes('# test-files total=3 pass=2 fail=1 assertions=25\n'));
-  const start = raw.indexOf('TAP version 13\n');
-  const end = raw.indexOf('# time=', start);
-  assert.ok(start >= 0 && end > start, 'complete failing TAP section');
+  assert.ok(
+    raw.includes(`placement-head=${SOURCE}\n`) && raw.includes(TAP_PLACEMENT_MODE_MARKER),
+  );
+  assert.ok(raw.includes(TAP_SUMMARY_LINE));
+  const start = raw.indexOf(TAP_HEADER_LINE);
+  const end = raw.indexOf(TAP_TIME_PREFIX, start);
+  assert.ok(start >= 0 && end > start, TAP_SECTION_ASSERT_MESSAGE);
   const parser = new Parser();
   const assertions = [];
   let final;
-  parser.on('assert', (result) => assertions.push(result));
-  parser.on('complete', (result) => {
+  parser.on(TAP_EVENT_ASSERT, (result) => assertions.push(result));
+  parser.on(TAP_EVENT_COMPLETE, (result) => {
     final = result;
   });
   parser.end(raw.slice(start, end));
@@ -118,8 +147,8 @@ function verifyTap(raw) {
     assert.ok(!result.skip && !result.todo && !result.tapError);
   }
   const failure = assertions[1].diag;
-  assert.equal(failure.code, 'ERR_ASSERTION');
-  assert.equal(failure.operator, 'strictEqual');
+  assert.equal(failure.code, ASSERTION_ERROR_CODE);
+  assert.equal(failure.operator, STRICT_EQUAL_OPERATOR);
   assert.equal(failure.actual, OUTCOME.CUT_OVER);
   assert.equal(failure.expected, OUTCOME.UNAVAILABLE);
   assert.ok(failure.stack.includes(`${TEST}:157:12`));
@@ -129,22 +158,23 @@ function verifyTap(raw) {
 function verifyObservedEffects(raw) {
   // Node TAP diagnostics escape backslashes in nested JSON. Check the emitted
   // primitive effect suffix exactly; do not reinterpret escaped census JSON.
-  const observations = raw.split('\n').filter((line) => line.startsWith('# {"answer":'));
+  const observations = raw.split(LINE_DELIMITER)
+    .filter((line) => line.startsWith(OBSERVED_ANSWER_PREFIX));
   assert.equal(observations.length, CASES.length);
   const effectSuffix = JSON.stringify({admission: ADMISSION.OPEN,
     dependentActions: [ACTION.RELEASE, ACTION.INSPECT, ACTION.PAUSE, ACTION.RESUME],
     controlOutcomes: [OUTCOME.CUT_OVER]}).slice(1);
   for (const observation of observations) {
     assert.ok(observation.startsWith(`# {"answer":{"outcome":"${OUTCOME.CUT_OVER}",`));
-    assert.ok(observation.endsWith(effectSuffix), 'actual replay effects');
+    assert.ok(observation.endsWith(effectSuffix), OBSERVED_EFFECTS_MESSAGE);
   }
   return {count: observations.length, effectSuffix};
 }
 
 function sourceDigests(files) {
   return Object.fromEntries(files.map((file) => {
-    const result = spawnGit(['show', `${SOURCE}:${file}`], {cwd: ROOT,
-      env: gitProcessEnvironment(), stdio: ['ignore', 'pipe', 'pipe']});
+    const result = spawnGit([GIT_SHOW_COMMAND, `${SOURCE}:${file}`], {cwd: ROOT,
+      env: gitProcessEnvironment(), stdio: GIT_SHOW_STDIO});
     assert.equal(result.status, 0, `source blob ${file}`);
     const expected = digest(result.stdout);
     assert.equal(digest(fs.readFileSync(path.join(ROOT, file))), expected, `current ${file}`);
@@ -155,22 +185,20 @@ function sourceDigests(files) {
 try {
   // Invalidate the fixed output before resolving any input, including missing paths.
   writeReceipt(UNAVAILABLE);
-  assert.equal(process.argv.length, 3, 'one original directory argument');
+  assert.equal(process.argv.length, EXPECTED_ARGV_COUNT, ARGV_COUNT_MESSAGE);
   const directory = fs.realpathSync(process.argv[2]);
   assert.ok(fs.statSync(directory).isDirectory());
   const originals = readOriginals(directory);
   const provenance = verifyLedger(originals);
   const measured = verifyTap(originals[LOG]);
   const observations = verifyObservedEffects(originals[LOG]);
-  const receipt = {...UNAVAILABLE, status: 'fail', sourceCommit: SOURCE,
+  const receipt = {...UNAVAILABLE, status: RECEIPT_STATUS_FAIL, sourceCommit: SOURCE,
     generatedAt: new Date().toISOString(), placementId: PLACEMENT, host: HOST,
     testFileDigests: sourceDigests(FILES), productionFileDigests: sourceDigests(PRODUCTION),
     originalDigests: DIGESTS, provenance, measured, observations,
-    ceiling: 'Original native in-process replay divergence on an identified physical host. ' +
-      'Native build/process hashes were not captured. No green repair, automatic recovery, ' +
-      'physical formation or task-3823 causal attribution.',
+    ceiling: RECEIPT_CEILING,
     receipts: REQUIRED.map((id) => ({id, passed: false,
-      failure: 'Original red admitted; repair and complete current interaction await proof.'})),
+      failure: RECEIPT_FAILURE_SUMMARY})),
   };
   writeReceipt(receipt);
   process.stdout.write(`${JSON.stringify({status: receipt.status, measured, output: OUTPUT})}\n`);

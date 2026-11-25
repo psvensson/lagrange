@@ -173,6 +173,7 @@ function createAdversarialSystemCache() {
     table_name: name,
     table_id: name,
     primaryKey: 'id',
+    active_partition_version: 1,
     schema_definition: JSON.stringify({
       columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
     }),
@@ -183,6 +184,8 @@ function createAdversarialSystemCache() {
     table_name: name,
     partition_key_start: null,
     partition_key_end: null,
+    partition_version: 1,
+    state: 'NORMAL',
     leader_node_id: 'test-node',
   }));
   const services = partitions.map((p) => ({
@@ -206,6 +209,9 @@ function createAdversarialSystemCache() {
       if (type === 'tables') return tables.filter(predicate);
       return [];
     },
+    find(type, predicate) {
+      return this.getAll(type).find(predicate) || null;
+    },
     getAll(type) {
       if (type === 'partitions') return partitions;
       if (type === 'tables') return tables;
@@ -218,7 +224,13 @@ function createAdversarialSystemCache() {
 function createAdversarialEngine() {
   const delivered = [];
   const systemCache = createAdversarialSystemCache();
-  const gateway = createTransactionPersistenceGateway();
+  const baseGateway = createTransactionPersistenceGateway();
+  const gateway = {
+    ...baseGateway,
+    readRows(tableName, sql, params = []) {
+      return baseGateway.readAuthoritativeRows(tableName, sql, params);
+    },
+  };
   const tableCreationService = new TableCreationService({
     systemTableCache: systemCache,
     controlPlaneSystemTableGateway: gateway,

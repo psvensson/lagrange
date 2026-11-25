@@ -1,42 +1,36 @@
-/**
- * SQL parsing helpers for CDC event generation.
- * Extracted from PartitionService — pure parsing logic that operates
- * on SQL strings, a logger, and an optional DB handle.
- */
-
+// SQL parsing helpers for CDC event generation.
 import {STRING} from '../constants/index.js';
 import {
-  PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_VALUE,
+  PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_OPERATION,
+  PARTITION_SERVICE_SQL_FRAGMENT, PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
+import {
+  PARTITION_STATEMENT_DETERMINISTIC_WRITE_FUNCTIONS, PARTITION_STATEMENT_TOKEN,
+} from './partition-statement-admission-constants.js';
+import {asciiLower, lexPartitionStatement} from './partition-statement-admission-lexer.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  getSystemCachePrimaryKeyField, hasSystemCacheKeyDescriptor,
+} from '../cache/system-cache-key-descriptor.js';
 import {admitCdcRowFetchLog} from './partition-cdc-log-throttle.js';
 
 const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
-  SYSTEM_TABLE_NAME.LOGS,
-  SYSTEM_TABLE_NAME.NODES,
-  SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
+  SYSTEM_TABLE_NAME.LOGS, SYSTEM_TABLE_NAME.NODES, SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
 ]);
 
 const SQL_LEXICAL_TOKEN = Object.freeze({
-  BACKTICK: '`',
-  BLOCK_COMMENT_END: '*/',
-  BLOCK_COMMENT_START: '/*',
-  BRACKET_CLOSE: ']',
-  BRACKET_OPEN: '[',
-  DOUBLE_QUOTE: '"',
-  EQUALS: '=',
-  FALSE_VALUE: 'FALSE',
-  LINE_COMMENT_START: '--',
-  MASK_IDENT: '_',
-  MASK_SPACE: ' ',
-  NEWLINE: '\n',
-  SINGLE_QUOTE: '\'',
-  TRUE_VALUE: 'TRUE',
+  BACKTICK: '`', BRACKET_CLOSE: ']', BRACKET_OPEN: '[', DOUBLE_QUOTE: '"', EQUALS: '=',
+  FALSE_VALUE: 'FALSE', MASK_IDENT: '_', MASK_SPACE: ' ', SINGLE_QUOTE: '\'', TRUE_VALUE: 'TRUE',
 });
+
+const MASKED_LITERAL_TOKEN_TYPES = new Set([
+  PARTITION_STATEMENT_TOKEN.STRING, PARTITION_STATEMENT_TOKEN.QUOTED,
+  PARTITION_STATEMENT_TOKEN.BLOB,
+]);
+const QUOTE_DELIMITERS = new Set([
+  SQL_LEXICAL_TOKEN.SINGLE_QUOTE, SQL_LEXICAL_TOKEN.DOUBLE_QUOTE,
+  SQL_LEXICAL_TOKEN.BACKTICK, SQL_LEXICAL_TOKEN.BRACKET_OPEN,
+]);
 
 const SQL_NUMERIC_LITERAL_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 const SQL_BOOLEAN_LITERAL_PATTERN = /^(?:TRUE|FALSE)$/i;
@@ -44,7 +38,7 @@ const SQL_QUOTED_IDENTIFIER_PATTERN = /^(?:"[\s\S]*"|`[\s\S]*`|\[[\s\S]*\])$/;
 const SQL_INSERT_COLUMNS_PREFIX_PATTERN =
   /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+(?:\w+|"[^"]*"|`[^`]*`|\[[^\]]*\])\s*\(/i;
 const SQL_VALUES_PREFIX_PATTERN = /^\s*VALUES\s*\(/i;
-const SQL_MULTI_TUPLE_CONTINUATION_PATTERN = /^,\s*\(/;
+const SQL_MULTI_TUPLE_CONTINUATION_PATTERN = /^\s*,\s*\(/;
 const SQL_SET_CLAUSE_PATTERN = /\bSET\s+/i;
 const SQL_WHERE_CLAUSE_PATTERN = /\bWHERE\s+/i;
 const SQL_AND_CONJUNCT_PATTERN = /\bAND\b/gi;
@@ -54,107 +48,55 @@ const SQL_ESCAPED_SINGLE_QUOTE_PATTERN = /''/g;
 const SQL_ESCAPED_DOUBLE_QUOTE_PATTERN = /""/g;
 const SQL_ESCAPED_BACKTICK_PATTERN = /``/g;
 
-function scanDelimitedQuoteEnd(sql, startIndex, quoteChar) {
-  for (let i = startIndex + 1; i < sql.length; i++) {
-    if (sql[i] === quoteChar) {
-      if (i + 1 < sql.length && sql[i + 1] === quoteChar) {
-        i += 1;
-        continue;
-      }
-      return i;
-    }
-  }
-  return sql.length - 1;
+function isMaskedQuoteToken(token) {
+  return MASKED_LITERAL_TOKEN_TYPES.has(token.type) ||
+    (token.type === PARTITION_STATEMENT_TOKEN.ILLEGAL &&
+      QUOTE_DELIMITERS.has(token.text[0]));
 }
 
-function scanSqlSpan(sql, startIndex) {
-  const ch = sql[startIndex];
-  if (ch === SQL_LEXICAL_TOKEN.SINGLE_QUOTE || ch === SQL_LEXICAL_TOKEN.DOUBLE_QUOTE ||
-      ch === SQL_LEXICAL_TOKEN.BACKTICK) {
-    return {endIndex: scanDelimitedQuoteEnd(sql, startIndex, ch), isComment: false};
-  }
-  if (ch === SQL_LEXICAL_TOKEN.BRACKET_OPEN) {
-    const closeIndex = sql.indexOf(SQL_LEXICAL_TOKEN.BRACKET_CLOSE, startIndex + 1);
-    return {endIndex: closeIndex === -1 ? sql.length - 1 : closeIndex, isComment: false};
-  }
-  if (sql.startsWith(SQL_LEXICAL_TOKEN.LINE_COMMENT_START, startIndex)) {
-    const newlineIndex = sql.indexOf(SQL_LEXICAL_TOKEN.NEWLINE, startIndex + 2);
-    return {endIndex: newlineIndex === -1 ? sql.length - 1 : newlineIndex - 1, isComment: true};
-  }
-  if (sql.startsWith(SQL_LEXICAL_TOKEN.BLOCK_COMMENT_START, startIndex)) {
-    const closeIndex = sql.indexOf(SQL_LEXICAL_TOKEN.BLOCK_COMMENT_END, startIndex + 2);
-    return {endIndex: closeIndex === -1 ? sql.length - 1 : closeIndex + 1, isComment: true};
-  }
-  return null;
+function maskTokenText(token) {
+  if (!isMaskedQuoteToken(token)) return token.text;
+  const raw = token.text;
+  if (raw.length <= 1) return raw;
+  const innerLen = Math.max(0, raw.length - 2);
+  return raw[0] + SQL_LEXICAL_TOKEN.MASK_IDENT.repeat(innerLen) + raw[raw.length - 1];
 }
 
-function transformSqlSpans(sql, handleSpan) {
+function projectLexedSql(sql, transformToken) {
   if (typeof sql !== 'string' || sql.length === 0) return STRING.EMPTY;
+  const {tokens} = lexPartitionStatement(sql);
   let result = STRING.EMPTY;
-  for (let i = 0; i < sql.length; i++) {
-    const span = scanSqlSpan(sql, i);
-    if (span) {
-      result += handleSpan(sql, i, span);
-      i = span.endIndex;
-    } else {
-      result += sql[i];
-    }
+  let cursor = 0;
+  for (const token of tokens) {
+    if (token.start > cursor) result += SQL_LEXICAL_TOKEN.MASK_SPACE.repeat(token.start - cursor);
+    result += transformToken(token);
+    cursor = token.start + token.text.length;
   }
+  if (cursor < sql.length) result += SQL_LEXICAL_TOKEN.MASK_SPACE.repeat(sql.length - cursor);
   return result;
 }
 
 function maskSqlLiteralsAndComments(sql) {
-  return transformSqlSpans(sql, (src, start, span) => {
-    if (span.isComment) {
-      return SQL_LEXICAL_TOKEN.MASK_SPACE.repeat(span.endIndex - start + 1);
-    }
-    const innerLen = Math.max(0, span.endIndex - start - 1);
-    const endChar = span.endIndex > start ? src[span.endIndex] : STRING.EMPTY;
-    return src[start] + SQL_LEXICAL_TOKEN.MASK_IDENT.repeat(innerLen) + endChar;
-  });
+  return projectLexedSql(sql, maskTokenText);
 }
 
 function stripSqlComments(sql) {
-  return transformSqlSpans(sql, (src, start, span) => (
-    span.isComment ?
-      SQL_LEXICAL_TOKEN.MASK_SPACE.repeat(span.endIndex - start + 1) :
-      src.slice(start, span.endIndex + 1)
-  ));
+  return projectLexedSql(sql, (token) => token.text);
 }
 
-function scanSqlPlaceholders(sql, stopAtFirst) {
-  if (typeof sql !== 'string' || sql.length === 0) return 0;
-  let count = 0;
-  for (let i = 0; i < sql.length; i++) {
-    const span = scanSqlSpan(sql, i);
-    if (span) {
-      i = span.endIndex;
-    } else if (sql[i] === PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK) {
-      count += 1;
-      if (stopAtFirst) return count;
-    }
-  }
-  return count;
+function isPositionalQuestionParamToken(token) {
+  return token.type === PARTITION_STATEMENT_TOKEN.PARAM &&
+    token.text.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK);
 }
 
-/**
- * Count SQL binding `?` placeholders outside string literals, quoted identifiers,
- * and SQL comments.
- * @param {string} sql - SQL statement or fragment.
- * @return {number} Count of unquoted `?` placeholders.
- */
 export function countSqlParameterPlaceholders(sql) {
-  return scanSqlPlaceholders(sql, false);
+  if (typeof sql !== 'string' || sql.length === 0) return 0;
+  return lexPartitionStatement(sql).tokens.filter(isPositionalQuestionParamToken).length;
 }
 
-/**
- * Determine whether SQL contains at least one binding `?` placeholder outside
- * string literals, quoted identifiers, and SQL comments.
- * @param {string} sql - SQL statement or fragment.
- * @return {boolean}
- */
 export function hasSqlParameterPlaceholders(sql) {
-  return scanSqlPlaceholders(sql, true) > 0;
+  if (typeof sql !== 'string' || sql.length === 0) return false;
+  return lexPartitionStatement(sql).tokens.some(isPositionalQuestionParamToken);
 }
 
 function extractBalancedParens(sql, maskedSql, openParenIndex) {
@@ -168,8 +110,7 @@ function extractBalancedParens(sql, maskedSql, openParenIndex) {
         return {
           content: sql.slice(openParenIndex + 1, i),
           maskedContent: maskedSql.slice(openParenIndex + 1, i),
-          start: openParenIndex,
-          end: i,
+          start: openParenIndex, end: i,
         };
       }
     }
@@ -230,19 +171,29 @@ function unquoteSqlIdentifier(rawToken) {
   return trimmed;
 }
 
+function countUnmatchedClosingParens(maskedText) {
+  let openCount = 0;
+  let closeCount = 0;
+  for (let i = 0; i < maskedText.length; i++) {
+    if (maskedText[i] === PARTITION_SERVICE_SQL_FRAGMENT.OPEN_PAREN) openCount += 1;
+    else if (maskedText[i] === PARTITION_SERVICE_SQL_FRAGMENT.CLOSE_PAREN) closeCount += 1;
+  }
+  return Math.max(0, closeCount - openCount);
+}
+
 function stripOuterParensOutsideLiterals(rawToken, maskedToken) {
   const leadingMatch = maskedToken.match(/^\s*\(+/);
   const startTrim = leadingMatch ? leadingMatch[0].length : 0;
-  const trailingMatch = maskedToken.match(/\)+(?=\s*$)/);
+  const innerRaw = rawToken.slice(startTrim).trimEnd();
+  const innerMasked = maskedToken.slice(startTrim).trimEnd();
+  const trailingMatch = innerMasked.match(/\)+$/);
   const trailingParensLen = trailingMatch ? trailingMatch[0].length : 0;
-  const trailingWsLen = rawToken.length - rawToken.trimEnd().length;
-  const endTrim = trailingParensLen > 0 ?
-    rawToken.length - trailingWsLen - trailingParensLen :
-    rawToken.length;
-  if (endTrim <= startTrim) return {raw: STRING.EMPTY, masked: STRING.EMPTY};
+  const stripTrailing = Math.min(trailingParensLen, countUnmatchedClosingParens(innerMasked));
+  const endTrim = innerRaw.length - stripTrailing;
+  if (endTrim <= 0) return {raw: STRING.EMPTY, masked: STRING.EMPTY};
   return {
-    raw: rawToken.slice(startTrim, endTrim).trim(),
-    masked: maskedToken.slice(startTrim, endTrim).trim(),
+    raw: innerRaw.slice(0, endTrim).trim(),
+    masked: innerMasked.slice(0, endTrim).trim(),
   };
 }
 
@@ -258,7 +209,9 @@ function isSqlLiteralToken(token) {
       first !== SQL_LEXICAL_TOKEN.DOUBLE_QUOTE)) {
     return false;
   }
-  return scanDelimitedQuoteEnd(token, 0, first) === token.length - 1;
+  const {tokens} = lexPartitionStatement(token);
+  return tokens.length === 1 && (tokens[0].type === PARTITION_STATEMENT_TOKEN.STRING ||
+    tokens[0].type === PARTITION_STATEMENT_TOKEN.QUOTED);
 }
 
 function parseAssignmentParts(rawPart, maskedPart) {
@@ -288,19 +241,23 @@ function extractInsertSyntaxParts(sql) {
 
   const afterColumnsMasked = maskedSql.slice(columnsParen.end + 1);
   const valuesPrefixMatch = SQL_VALUES_PREFIX_PATTERN.exec(afterColumnsMasked);
-  let valuesParen = null;
-  let hasMultiRowValues = false;
+  const valuesTuples = [];
   if (valuesPrefixMatch) {
-    const openValuesParen =
+    let openValuesParen =
       columnsParen.end + 1 + valuesPrefixMatch.index + valuesPrefixMatch[0].length - 1;
-    valuesParen = extractBalancedParens(sql, maskedSql, openValuesParen);
-    if (valuesParen) {
-      hasMultiRowValues = SQL_MULTI_TUPLE_CONTINUATION_PATTERN.test(
-        maskedSql.slice(valuesParen.end + 1).trim(),
-      );
+    while (openValuesParen >= 0 && openValuesParen < maskedSql.length) {
+      const tupleParen = extractBalancedParens(sql, maskedSql, openValuesParen);
+      if (!tupleParen) return null;
+      valuesTuples.push(tupleParen);
+      const restMasked = maskedSql.slice(tupleParen.end + 1);
+      const nextMatch = SQL_MULTI_TUPLE_CONTINUATION_PATTERN.exec(restMasked);
+      if (!nextMatch) break;
+      openValuesParen = tupleParen.end + 1 + nextMatch.index + nextMatch[0].length - 1;
     }
   }
-  return {columns, valuesParen, hasMultiRowValues};
+  const valuesParen = valuesTuples[0] ?? null;
+  const hasMultiRowValues = valuesTuples.length > 1;
+  return {columns, valuesParen, valuesTuples, hasMultiRowValues};
 }
 
 function extractUpdateClauses(sql) {
@@ -377,21 +334,16 @@ export function parseValue(val) {
   if (trimmed.length >= 2 &&
       trimmed.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE) &&
       trimmed.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE)) {
-    return trimmed.slice(1, -1).replace(
-      SQL_ESCAPED_SINGLE_QUOTE_PATTERN, PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE,
-    );
+    return trimmed.slice(1, -1)
+      .replace(SQL_ESCAPED_SINGLE_QUOTE_PATTERN, PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE);
   }
   if (trimmed.length >= 2 &&
       trimmed.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE) &&
       trimmed.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE)) {
-    return trimmed.slice(1, -1).replace(
-      SQL_ESCAPED_DOUBLE_QUOTE_PATTERN, PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE,
-    );
+    return trimmed.slice(1, -1)
+      .replace(SQL_ESCAPED_DOUBLE_QUOTE_PATTERN, PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE);
   }
-  if (trimmed.length > 0) {
-    const num = Number(trimmed);
-    if (!isNaN(num)) return num;
-  }
+  if (trimmed.length > 0 && !isNaN(Number(trimmed))) return Number(trimmed);
   return trimmed;
 }
 
@@ -410,15 +362,123 @@ export function parseValuesFromSQL(valuesStr) {
     .map((token) => parseValue(token));
 }
 
+function resolvePrimaryKeyLookupColumn(tableName, columns, row) {
+  if (hasSystemCacheKeyDescriptor(tableName)) {
+    const pkField = getSystemCachePrimaryKeyField(tableName);
+    if (Object.prototype.hasOwnProperty.call(row, pkField)) return pkField;
+  }
+  return columns[0];
+}
+
+function hydrateInsertedRowFromDb(tableName, pkColumn, pkValue, rowData, db, logger) {
+  if (!db || !pkColumn || pkValue === null || pkValue === undefined) return rowData;
+  try {
+    const row = db.prepare(`SELECT * FROM ${tableName} WHERE ${pkColumn} = ?`).get(pkValue);
+    if (row) {
+      const suppressed = admitCdcFetch(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, tableName);
+      if (suppressed !== null) {
+        logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
+          tableName, rowKeys: Object.keys(row), suppressedSinceLastEmit: suppressed,
+        });
+      }
+      return row;
+    }
+  } catch (err) {
+    logger?.warn?.(
+      PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {tableName, error: err.message},
+    );
+    throw err;
+  }
+  return rowData;
+}
+
+function logInsertSyntaxFailure(sql, hasPlaceholders, logger) {
+  const msg = hasPlaceholders ?
+    PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED :
+    PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED;
+  logger?.warn?.(msg, {sql: sql.substring(0, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT)});
+}
+
+function logTupleArityFailure(columnsCount, valuePartsCount, paramsCount, hasPlaceholders, logger) {
+  if (hasPlaceholders) {
+    logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
+      columns: columnsCount, params: paramsCount,
+    });
+    return;
+  }
+  logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_INSERT_MISMATCH, {
+    columns: columnsCount, values: valuePartsCount,
+  });
+}
+
+function bindTupleFromParts(columns, tupleParen, params, startIndex, hasPlaceholders, logger, db) {
+  const valueParts = splitTopLevelSqlList(tupleParen.content, tupleParen.maskedContent);
+  if (valueParts.length !== columns.length) {
+    logTupleArityFailure(
+      columns.length, valueParts.length, params.length, hasPlaceholders, logger,
+    );
+    return null;
+  }
+  const row = {};
+  let paramIndex = startIndex;
+  for (let i = 0; i < columns.length; i++) {
+    const slot = resolveBoundOrLiteralSlot(
+      valueParts[i].raw, valueParts[i].masked, params, paramIndex, db,
+    );
+    if (slot.hasValue) row[columns[i]] = slot.value;
+    paramIndex += slot.paramCount;
+  }
+  return {row, nextParamIndex: paramIndex};
+}
+
+function parseInsertTuples(parts, params, hasPlaceholders, logger, db) {
+  const {columns, valuesTuples} = parts;
+  const rows = [];
+  let paramIndex = 0;
+  for (const tupleParen of valuesTuples) {
+    const bound = bindTupleFromParts(
+      columns, tupleParen, params, paramIndex, hasPlaceholders, logger, db,
+    );
+    if (!bound) return [];
+    rows.push(bound.row);
+    paramIndex = bound.nextParamIndex;
+  }
+  if (hasPlaceholders && paramIndex !== params.length) {
+    logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
+      columns: paramIndex, params: params.length,
+    });
+    return [];
+  }
+  return rows;
+}
+
 /**
- * Extract column/value data from an INSERT SQL statement.
- * Falls back to querying the DB for the full row when possible.
- * @param {string} sql - INSERT SQL statement.
+ * Extract all inserted/upserted rows from a single- or multi-row INSERT/UPSERT SQL
+ * statement, hydrating each stored row from SQLite when `db` is available.
+ * @param {string} sql - INSERT / INSERT OR REPLACE SQL statement.
+ * @param {Array} params - Bound parameter values.
  * @param {string} tableName - Table name.
- * @param {Object} db - better-sqlite3 database handle.
- * @param {Object} logger - Logger instance.
- * @return {Object} Extracted data or empty object.
+ * @param {Object|null} db - better-sqlite3 database handle.
+ * @param {Object|null} logger - Logger instance.
+ * @return {Array<Object>} Extracted row objects.
  */
+export function extractInsertRowsFromSQL(sql, params, tableName, db, logger) {
+  if (typeof sql !== 'string') return [];
+  const normalizedParams = Array.isArray(params) ? params : [];
+  const hasPlaceholders = hasSqlParameterPlaceholders(sql);
+  if (hasPlaceholders && normalizedParams.length === 0) return [];
+  const parts = extractInsertSyntaxParts(sql);
+  if (!parts || parts.valuesTuples.length === 0) {
+    logInsertSyntaxFailure(sql, hasPlaceholders, logger);
+    return [];
+  }
+  const rows = parseInsertTuples(parts, normalizedParams, hasPlaceholders, logger, db);
+  return rows.map((row) => {
+    const pkColumn = resolvePrimaryKeyLookupColumn(tableName, parts.columns, row);
+    return hydrateInsertedRowFromDb(tableName, pkColumn, row[pkColumn], row, db, logger);
+  });
+}
+
 export function extractInsertDataFromSQL(sql, tableName, db, logger) {
   if (typeof sql !== 'string' || hasSqlParameterPlaceholders(sql)) return {};
   const parts = extractInsertSyntaxParts(sql);
@@ -428,44 +488,10 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
     });
     return {};
   }
-
-  const {columns, valuesParen} = parts;
-  const values = parseValuesFromSQL(valuesParen.content);
-  if (columns.length !== values.length) {
-    logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_INSERT_MISMATCH, {
-      columns: columns.length,
-      values: values.length,
-    });
-    return {};
-  }
-
-  const data = {};
-  for (let i = 0; i < columns.length; i++) data[columns[i]] = values[i];
-  const pkColumn = columns[0];
-  const pkValue = values[0];
-  if (db && pkValue !== null && pkValue !== undefined) {
-    try {
-      const row = db.prepare(`SELECT * FROM ${tableName} WHERE ${pkColumn} = ?`).get(pkValue);
-      if (row) {
-        const suppressed = admitCdcFetch(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, tableName);
-        if (suppressed !== null) {
-          logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
-            tableName, rowKeys: Object.keys(row), suppressedSinceLastEmit: suppressed,
-          });
-        }
-        return row;
-      }
-    } catch (err) {
-      logger?.warn?.(
-        PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {tableName, error: err.message},
-      );
-      throw err;
-    }
-  }
-  return data;
+  return extractInsertRowsFromSQL(sql, [], tableName, db, logger)[0] ?? {};
 }
 
-function extractFirstLiteralWhereEquality(sql) {
+function extractFirstLiteralWhereEquality(sql, db = null) {
   const whereClause = extractWhereClauseFromSql(sql);
   if (!whereClause) return null;
   const conjuncts = splitSqlByPattern(
@@ -475,25 +501,15 @@ function extractFirstLiteralWhereEquality(sql) {
     const clean = stripOuterParensOutsideLiterals(raw, masked);
     const assignment = parseAssignmentParts(clean.raw, clean.masked);
     if (!assignment) continue;
-    const rhsToken = stripSqlComments(assignment.rhsRaw).trim();
-    if (isSqlLiteralToken(rhsToken)) {
-      return {keyColumn: assignment.column, keyValue: parseValue(rhsToken)};
-    }
+    const slot = resolveBoundOrLiteralSlot(assignment.rhsRaw, assignment.rhsMasked, [], 0, db);
+    if (slot.hasValue) return {keyColumn: assignment.column, keyValue: slot.value};
   }
   return null;
 }
 
-/**
- * Extract data from an UPDATE SQL statement by querying the updated row.
- * @param {string} sql - UPDATE SQL statement.
- * @param {string} tableName - Table name.
- * @param {Object} db - better-sqlite3 database handle.
- * @param {Object} logger - Logger instance.
- * @return {Object} Extracted data or empty object.
- */
 export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
   if (typeof sql !== 'string' || hasSqlParameterPlaceholders(sql)) return {};
-  const equality = extractFirstLiteralWhereEquality(sql);
+  const equality = extractFirstLiteralWhereEquality(sql, db);
   if (!equality) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
       sql: sql.substring(0, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT),
@@ -531,15 +547,9 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
   return {};
 }
 
-/**
- * Extract data from a DELETE SQL statement.
- * @param {string} sql - DELETE SQL statement.
- * @param {Object} logger - Logger instance.
- * @return {Object} Extracted data or empty object.
- */
-export function extractDeleteDataFromSQL(sql, logger) {
+export function extractDeleteDataFromSQL(sql, logger, db = null) {
   if (typeof sql !== 'string' || hasSqlParameterPlaceholders(sql)) return {};
-  const equality = extractFirstLiteralWhereEquality(sql);
+  const equality = extractFirstLiteralWhereEquality(sql, db);
   if (equality) return {[equality.keyColumn]: equality.keyValue};
   logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
     sql: sql.substring(0, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT),
@@ -547,8 +557,61 @@ export function extractDeleteDataFromSQL(sql, logger) {
   return {};
 }
 
-function resolveBoundOrLiteralSlot(rhsRaw, rhsMasked, params, paramIndex) {
+const SCALAR_LITERAL_WORDS = new Set([
+  PARTITION_SERVICE_SQL_FRAGMENT.NULL_VALUE,
+  SQL_LEXICAL_TOKEN.TRUE_VALUE,
+  SQL_LEXICAL_TOKEN.FALSE_VALUE,
+]);
+
+function isEvaluatableScalarTokens(tokens) {
+  if (!Array.isArray(tokens) || tokens.length === 0) return false;
+  return tokens.every((token, idx) => {
+    if (token.type === PARTITION_STATEMENT_TOKEN.ILLEGAL ||
+        token.type === PARTITION_STATEMENT_TOKEN.QUOTED) {
+      return false;
+    }
+    if (token.type === PARTITION_STATEMENT_TOKEN.PARAM) {
+      return isPositionalQuestionParamToken(token);
+    }
+    if (token.type !== PARTITION_STATEMENT_TOKEN.WORD || SCALAR_LITERAL_WORDS.has(token.upper)) {
+      return true;
+    }
+    return tokens[idx + 1]?.text === PARTITION_SERVICE_SQL_FRAGMENT.OPEN_PAREN &&
+      PARTITION_STATEMENT_DETERMINISTIC_WRITE_FUNCTIONS.has(asciiLower(token.text));
+  });
+}
+
+const UNARY_CALL_TOKEN_LENGTH = 4;
+const UNARY_CALL_CLOSE_PAREN_INDEX = 3;
+const UNARY_STRING_EVALUATORS = Object.freeze({
+  lower: (s) => s.toLowerCase(), upper: (s) => s.toUpperCase(),
+  trim: (s) => s.trim(), ltrim: (s) => s.trimStart(), rtrim: (s) => s.trimEnd(),
+});
+
+function evaluateSimpleUnaryStringFunction(tokens, rhsParams) {
+  if (tokens.length !== UNARY_CALL_TOKEN_LENGTH ||
+      tokens[0].type !== PARTITION_STATEMENT_TOKEN.WORD ||
+      tokens[1].text !== PARTITION_SERVICE_SQL_FRAGMENT.OPEN_PAREN ||
+      tokens[UNARY_CALL_CLOSE_PAREN_INDEX].text !== PARTITION_SERVICE_SQL_FRAGMENT.CLOSE_PAREN) {
+    return {evaluated: false, value: undefined};
+  }
+  const argToken = tokens[2];
+  const rawArg = isPositionalQuestionParamToken(argToken) ?
+    rhsParams[0] :
+    (isSqlLiteralToken(argToken.text) ? parseValue(argToken.text) : undefined);
+  const evaluator = typeof rawArg === 'string' ?
+    UNARY_STRING_EVALUATORS[asciiLower(tokens[0].text)] : null;
+  return evaluator ? {evaluated: true, value: evaluator(rawArg)} :
+    {evaluated: false, value: undefined};
+}
+
+function unresolvedSlot(paramCount) {
+  return {hasValue: false, value: undefined, paramCount};
+}
+
+function resolveBoundOrLiteralSlot(rhsRaw, rhsMasked, params, paramIndex, db) {
   const paramCount = countSqlParameterPlaceholders(rhsRaw);
+  if (paramIndex + paramCount > params.length) return unresolvedSlot(paramCount);
   if (paramCount === 1 &&
       stripSqlComments(rhsMasked).trim() === PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK) {
     return {hasValue: true, value: params[paramIndex], paramCount};
@@ -559,60 +622,65 @@ function resolveBoundOrLiteralSlot(rhsRaw, rhsMasked, params, paramIndex) {
       return {hasValue: true, value: parseValue(literalToken), paramCount};
     }
   }
-  return {hasValue: false, value: undefined, paramCount};
+  const {tokens} = lexPartitionStatement(rhsRaw);
+  if (!isEvaluatableScalarTokens(tokens)) return unresolvedSlot(paramCount);
+  const rhsParams = params.slice(paramIndex, paramIndex + paramCount);
+  if (db) {
+    const row = db.prepare(`SELECT (${rhsRaw}) AS val`).get(...rhsParams);
+    return {hasValue: row !== undefined, value: row?.val, paramCount};
+  }
+  const unary = evaluateSimpleUnaryStringFunction(tokens, rhsParams);
+  return {hasValue: unary.evaluated, value: unary.value, paramCount};
 }
 
 function applyWhereConjunctsFromParams({
-  whereRaw, whereMasked, params, startParamIndex, data, preserveExisting = false,
+  whereRaw, whereMasked, params, startParamIndex, data, preserveExisting = false, db,
 }) {
   let paramIndex = startParamIndex;
   const conjuncts = splitSqlByPattern(whereRaw, whereMasked, SQL_AND_CONJUNCT_PATTERN);
   for (const {raw, masked} of conjuncts) {
     const clean = stripOuterParensOutsideLiterals(raw, masked);
     const assignment = parseAssignmentParts(clean.raw, clean.masked);
-    if (!assignment) continue;
-    const {column, rhsRaw} = assignment;
-    const paramCount = countSqlParameterPlaceholders(rhsRaw);
-    const shouldWrite = !preserveExisting || !Object.prototype.hasOwnProperty.call(data, column);
-    if (paramCount > 0) {
-      const value = params[paramIndex];
-      paramIndex += paramCount;
-      if (shouldWrite) data[column] = value;
-    } else if (shouldWrite) {
-      const literalToken = stripSqlComments(rhsRaw).trim();
-      if (isSqlLiteralToken(literalToken)) data[column] = parseValue(literalToken);
+    if (!assignment) {
+      paramIndex += countSqlParameterPlaceholders(clean.raw);
+      continue;
     }
+    const slot = resolveBoundOrLiteralSlot(
+      assignment.rhsRaw, assignment.rhsMasked, params, paramIndex, db,
+    );
+    paramIndex += slot.paramCount;
+    const shouldWrite = !preserveExisting ||
+      !Object.prototype.hasOwnProperty.call(data, assignment.column);
+    if (shouldWrite && slot.hasValue) data[assignment.column] = slot.value;
   }
   return paramIndex;
 }
 
-function bindInsertValuesFromParts(columns, valuesParen, params, logger) {
-  const valueParts = splitTopLevelSqlList(valuesParen.content, valuesParen.maskedContent);
-  if (columns.length !== valueParts.length) {
+function bindSingleInsertData(parts, params, logger, db) {
+  const {columns, valuesParen} = parts;
+  if (valuesParen) {
+    const bound = bindTupleFromParts(columns, valuesParen, params, 0, true, logger, db);
+    if (!bound) return null;
+    if (bound.nextParamIndex !== params.length) {
+      logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
+        columns: bound.nextParamIndex, params: params.length,
+      });
+      return null;
+    }
+    return bound.row;
+  }
+  if (columns.length !== params.length) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
       columns: columns.length, params: params.length,
     });
     return null;
   }
   const data = {};
-  let paramIndex = 0;
-  for (let i = 0; i < columns.length; i++) {
-    const slot = resolveBoundOrLiteralSlot(
-      valueParts[i].raw, valueParts[i].masked, params, paramIndex,
-    );
-    if (slot.hasValue) data[columns[i]] = slot.value;
-    paramIndex += slot.paramCount;
-  }
-  if (paramIndex !== params.length) {
-    logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
-      columns: paramIndex, params: params.length,
-    });
-    return null;
-  }
+  for (let i = 0; i < columns.length; i++) data[columns[i]] = params[i];
   return data;
 }
 
-function extractInsertFromParams(sql, params, tableName, logger) {
+function extractInsertFromParams(sql, params, tableName, logger, db) {
   const parts = extractInsertSyntaxParts(sql);
   if (!parts) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
@@ -620,35 +688,35 @@ function extractInsertFromParams(sql, params, tableName, logger) {
     });
     return {};
   }
-  const {columns, valuesParen, hasMultiRowValues} = parts;
-  if (hasMultiRowValues) {
+  if (parts.hasMultiRowValues) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
-      columns: columns.length, params: params.length,
+      columns: parts.columns.length, params: params.length,
     });
     return {};
   }
-
-  let data;
-  if (valuesParen) {
-    data = bindInsertValuesFromParts(columns, valuesParen, params, logger);
-    if (!data) return {};
-  } else if (columns.length !== params.length) {
-    logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
-      columns: columns.length, params: params.length,
-    });
-    return {};
-  } else {
-    data = {};
-    for (let i = 0; i < columns.length; i++) data[columns[i]] = params[i];
-  }
-
+  const data = bindSingleInsertData(parts, params, logger, db);
+  if (!data) return {};
   logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_INSERT, {
     tableName, dataKeys: Object.keys(data),
   });
   return data;
 }
 
-function extractUpdateFromParams(sql, params, tableName, logger) {
+function applySetAssignmentsFromParams(clauses, params, data, db) {
+  let paramIndex = 0;
+  for (const {raw, masked} of splitTopLevelSqlList(clauses.setRaw, clauses.setMasked)) {
+    const assignment = parseAssignmentParts(raw, masked);
+    if (!assignment) continue;
+    const slot = resolveBoundOrLiteralSlot(
+      assignment.rhsRaw, assignment.rhsMasked, params, paramIndex, db,
+    );
+    if (slot.hasValue) data[assignment.column] = slot.value;
+    paramIndex += slot.paramCount;
+  }
+  return paramIndex;
+}
+
+function extractUpdateFromParams(sql, params, tableName, logger, db) {
   const clauses = extractUpdateClauses(sql);
   if (!clauses) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
@@ -656,25 +724,12 @@ function extractUpdateFromParams(sql, params, tableName, logger) {
     });
     return {};
   }
-
-  // Build data object while preserving UPDATE semantics:
-  // SET-column values are authoritative; WHERE-only columns backfill keys.
   const data = {};
-  let paramIndex = 0;
-  for (const {raw, masked} of splitTopLevelSqlList(clauses.setRaw, clauses.setMasked)) {
-    const assignment = parseAssignmentParts(raw, masked);
-    if (!assignment) continue;
-    const slot = resolveBoundOrLiteralSlot(
-      assignment.rhsRaw, assignment.rhsMasked, params, paramIndex,
-    );
-    if (slot.hasValue) data[assignment.column] = slot.value;
-    paramIndex += slot.paramCount;
-  }
-
+  let paramIndex = applySetAssignmentsFromParams(clauses, params, data, db);
   if (clauses.whereRaw !== null) {
     paramIndex = applyWhereConjunctsFromParams({
       whereRaw: clauses.whereRaw, whereMasked: clauses.whereMasked, params,
-      startParamIndex: paramIndex, data, preserveExisting: true,
+      startParamIndex: paramIndex, data, preserveExisting: true, db,
     });
   }
   if (paramIndex !== params.length) {
@@ -689,7 +744,7 @@ function extractUpdateFromParams(sql, params, tableName, logger) {
   return data;
 }
 
-function extractDeleteFromParams(sql, params, tableName, logger) {
+function extractDeleteFromParams(sql, params, tableName, logger, db) {
   const whereClause = extractWhereClauseFromSql(sql);
   if (!whereClause) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
@@ -700,7 +755,7 @@ function extractDeleteFromParams(sql, params, tableName, logger) {
   const data = {};
   const paramIndex = applyWhereConjunctsFromParams({
     whereRaw: whereClause.whereRaw, whereMasked: whereClause.whereMasked, params,
-    startParamIndex: 0, data, preserveExisting: false,
+    startParamIndex: 0, data, preserveExisting: false, db,
   });
   if (paramIndex !== params.length) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {
@@ -708,34 +763,28 @@ function extractDeleteFromParams(sql, params, tableName, logger) {
     });
     return {};
   }
-  logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE, {
-    tableName, dataKeys: Object.keys(data),
-  });
+  logger?.debug?.(
+    PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE,
+    {tableName, dataKeys: Object.keys(data)},
+  );
   return data;
 }
 
-/**
- * Extract data from parameterized SQL (SQL with ? placeholders and params).
- * @param {string} sql - SQL statement with ? placeholders.
- * @param {Array} params - Parameter values.
- * @param {string} tableName - Table name.
- * @param {string} operationType - INSERT, UPDATE, or DELETE.
- * @param {Object} logger - Logger instance.
- * @return {Object} Extracted data or empty object.
- */
 export function extractDataFromParameterizedSQL(
-  sql, params, tableName, operationType, logger,
+  sql, params, tableName, operationType, logger, db = null,
 ) {
   if (typeof sql !== 'string' || !params || params.length === 0) return {};
-  if (operationType === PARTITION_SERVICE_OPERATION.INSERT ||
-    operationType === PARTITION_SERVICE_OPERATION.UPSERT) {
-    return extractInsertFromParams(sql, params, tableName, logger);
+  if (
+    operationType === PARTITION_SERVICE_OPERATION.INSERT ||
+    operationType === PARTITION_SERVICE_OPERATION.UPSERT
+  ) {
+    return extractInsertFromParams(sql, params, tableName, logger, db);
   }
   if (operationType === PARTITION_SERVICE_OPERATION.UPDATE) {
-    return extractUpdateFromParams(sql, params, tableName, logger);
+    return extractUpdateFromParams(sql, params, tableName, logger, db);
   }
   if (operationType === PARTITION_SERVICE_OPERATION.DELETE) {
-    return extractDeleteFromParams(sql, params, tableName, logger);
+    return extractDeleteFromParams(sql, params, tableName, logger, db);
   }
   return {};
 }

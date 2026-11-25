@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T19:11:15.861Z",
-  "rawViolationCount": 356,
+  "generatedAt": "2026-11-25T10:44:29.750Z",
+  "rawViolationCount": 353,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -1346,7 +1346,7 @@
     },
     {
       "filePath": "src/node/replica-cleanup-tombstone-owner.js",
-      "line": 120,
+      "line": 126,
       "column": 4,
       "functionName": "observeScopedLearnerCleanup",
       "kind": "catch_returns_default",
@@ -1373,7 +1373,7 @@
     },
     {
       "filePath": "src/node/replica-handler-learner-retirement-authority.js",
-      "line": 127,
+      "line": 133,
       "column": 4,
       "functionName": "handOffAbsentLearnerCleanup",
       "kind": "catch_returns_default",
@@ -1652,7 +1652,7 @@
     },
     {
       "filePath": "src/partition/partition-transaction-determinism.js",
-      "line": 185,
+      "line": 184,
       "column": 4,
       "functionName": "compiled",
       "kind": "catch_returns_default",
@@ -1769,7 +1769,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 263,
+      "line": 325,
       "column": 14,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -1778,7 +1778,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 336,
+      "line": 398,
       "column": 6,
       "functionName": "refreshRoutingMetadataOverlay",
       "kind": "catch_returns_default",
@@ -1889,24 +1889,6 @@
       "line": 40,
       "column": 4,
       "functionName": "observeConditionWait",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 129,
-      "column": 6,
-      "functionName": "getTableRecord",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 172,
-      "column": 6,
-      "functionName": "getPartitionRecord",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -2227,15 +2209,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/operation-workflow-executor-outcome-redrive.js",
-      "line": 59,
-      "column": 8,
-      "functionName": "redriveExecutorOutcomeReconcile",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
       "line": 18,
       "column": 4,
@@ -2246,7 +2219,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-placement-learner-retirement.js",
-      "line": 77,
+      "line": 79,
       "column": 4,
       "functionName": "readSupersededDispatchReplay",
       "kind": "catch_returns_default",
@@ -2327,7 +2300,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-observation.js",
-      "line": 88,
+      "line": 90,
       "column": 4,
       "functionName": "selectAuthoritativePartitionOperations",
       "kind": "catch_returns_default",

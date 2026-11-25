@@ -1,5 +1,5 @@
 // Incremental operation-signature maintenance in ReplicaPlacementOwner (Finding 6D):
-// recordTouchedOperationSignature uses indexed lookups (getShared/get or primary-key
+// recordTouchedOperationSignature uses indexed lookups (getShared or primary-key
 // SQL) without scanning replica_operations via getAll; submitPlacementAttempt records
 // touched operationIds incrementally; readPassCensus does not rescan replica_operations.
 //
@@ -185,7 +185,7 @@ function createRealSqlLedgerHarness(cache, nodeId = 'n1') {
   };
 }
 
-test('Finding 6D: recordTouchedOperationSignature uses indexed lookup (getShared/get or primary-key SQL) and never scans replica_operations via getAll', () => {
+test('Finding 6D: recordTouchedOperationSignature uses indexed lookup (getShared or primary-key SQL) and never scans replica_operations via getAll', () => {
   const baseCache = createSimpleSystemCache();
   const ledger = createRealSqlLedgerHarness(baseCache, 'n1');
   try {
@@ -209,7 +209,7 @@ test('Finding 6D: recordTouchedOperationSignature uses indexed lookup (getShared
         return tableName === TABLES.REPLICA_OPERATIONS ? sharedRows.get(id) : undefined;
       },
       get() {
-        throw new Error('get() should not be called when getShared() is available');
+        throw new Error('get() should not be called by recordTouchedOperationSignature');
       },
     };
     const nodeAuthority = {
@@ -229,40 +229,6 @@ test('Finding 6D: recordTouchedOperationSignature uses indexed lookup (getShared
     assert.equal(
       ownerShared.seenRowSignatures.get('op-shared'),
       `${WORKFLOW_STEP.PENDING}:pending:[{"step":"PENDING"}]`,
-    );
-    assert.deepEqual(getAllCalls, []);
-
-    const getRows = new Map([[
-      'op-get',
-      {
-        operation_id: 'op-get',
-        workflow_step: WORKFLOW_STEP.ACTIVE,
-        status: 'active',
-        steps_history: '[{"step":"ACTIVE"}]',
-      },
-    ]]);
-    const cacheWithGet = {
-      ...baseCache,
-      getAll(tableName) {
-        getAllCalls.push(tableName);
-        return baseCache.getAll(tableName);
-      },
-      get(tableName, id) {
-        return tableName === TABLES.REPLICA_OPERATIONS ? getRows.get(id) : undefined;
-      },
-    };
-    const ownerGet = createReplicaPlacementOwner({
-      nodeId: 'n1',
-      ledgerPartitionService: ledger.service,
-      nodeAuthority,
-      systemTableCache: cacheWithGet,
-      now: () => NOW_MS,
-      logger: ledger.service.logger,
-    });
-    ownerGet.recordTouchedOperationSignature('op-get');
-    assert.equal(
-      ownerGet.seenRowSignatures.get('op-get'),
-      `${WORKFLOW_STEP.ACTIVE}:active:[{"step":"ACTIVE"}]`,
     );
     assert.deepEqual(getAllCalls, []);
 

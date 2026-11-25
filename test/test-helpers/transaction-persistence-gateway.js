@@ -110,6 +110,9 @@ function createTransactionPersistenceGateway(options = {}) {
         return {success: false, error: error.message, errorCode: error.code};
       }
     },
+    async readRows(_tableName, sql, params = []) {
+      return {success: true, rows: db.prepare(sql).all(...params)};
+    },
     async readAuthoritativeRows(_tableName, sql, params = []) {
       return {success: true, rows: db.prepare(sql).all(...params)};
     },

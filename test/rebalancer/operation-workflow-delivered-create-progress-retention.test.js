@@ -287,6 +287,21 @@ test(
         0,
         'excluded shapes leave no owner work',
       );
+      const admittedPartitionOp = buildRuntimeOperation({
+        operationId: 'admitted-partition-operation',
+        entityType: 'partition',
+        partitionId: 'services-p1',
+        createAdmissionState: 'ADMITTED',
+      });
+      t.ok(
+        owner.retainDeliveredCreateProgress(admittedPartitionOp, {
+          status: ReplicaOperationResponseStatus.IN_PROGRESS,
+        }),
+        'partition CREATE carrying durable create admission is retained',
+      );
+      owner.clearObservedProgressRetry(admittedPartitionOp.operationId, {
+        includeDeliveredCreateProgress: true,
+      });
     } finally {
       await coordinator.shutdown();
     }

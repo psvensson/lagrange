@@ -13,7 +13,6 @@ import {
 } from './sql-value-presentation.js';
 import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
 
-
 /**
  * Validate that a table has a PRIMARY KEY.
  * Requirement 20.2: Require PRIMARY KEY for user tables.
@@ -23,7 +22,6 @@ import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completio
 function validatePrimaryKey(ast) {
   const {tableName, columns, primaryKey} = ast;
 
-  // Check for table-level PRIMARY KEY constraint
   if (primaryKey && primaryKey.length > 0) {
     return {
       valid: true,
@@ -32,7 +30,6 @@ function validatePrimaryKey(ast) {
     };
   }
 
-  // Check for column-level PRIMARY KEY
   const pkColumns = columns.filter((col) => col.primaryKey);
   if (pkColumns.length > 0) {
     return {
@@ -55,6 +52,20 @@ const INTERNAL_PARTITION_ROW_FIELD = Object.freeze({
   PARTITION_ID_CAMEL: '_partitionId',
   SOURCE_PARTITION: '_sourcePartition',
 });
+
+const PARTITION_FIELD_NAMES = Object.freeze(new Set([
+  'partition_id',
+  'partitionId',
+  '_partition_id',
+  '_partitionId',
+  'partition_key_start',
+  'partition_key_end',
+  'partition_key_type',
+  'partitionKeyStart',
+  'partitionKeyEnd',
+  'partitionKeyType',
+  'sourcePartition',
+]));
 
 function hasInternalPartitionRowField(row) {
   return Boolean(
@@ -97,8 +108,6 @@ function stripPartitionDetails(result) {
   const hasLazyRows = hasLazyRowsProperty(result);
   const stripped = copyResultPreservingLazyRows(result);
 
-  // Remove internal partition-related fields from top-level result
-  // Keep 'partitions' array as it's useful metadata about which partitions were queried
   delete stripped.sourcePartition;
   delete stripped.partition_key_start;
   delete stripped.partition_key_end;
@@ -122,38 +131,11 @@ function stripPartitionDetails(result) {
  * @return {boolean} True if partition-related.
  */
 function isPartitionField(fieldName) {
-  const partitionFields = new Set([
-    'partition_id',
-    'partitionId',
-    '_partition_id',
-    '_partitionId',
-    'partition_key_start',
-    'partition_key_end',
-    'partition_key_type',
-    'partitionKeyStart',
-    'partitionKeyEnd',
-    'partitionKeyType',
-    'sourcePartition',
-  ]);
-  return partitionFields.has(fieldName);
+  return PARTITION_FIELD_NAMES.has(fieldName);
 }
 
-const RESULT_PROJECTION_METHODS = Object.freeze({
-  validatePrimaryKey,
-  stripPartitionDetails,
+export {
   isPartitionField,
-});
-
-function defineTableCreationResultProjection(serviceClass) {
-  for (const [methodName, methodImpl] of Object.entries(
-    RESULT_PROJECTION_METHODS,
-  )) {
-    Object.defineProperty(serviceClass.prototype, methodName, {
-      configurable: true,
-      value: methodImpl,
-      writable: true,
-    });
-  }
-}
-
-export {defineTableCreationResultProjection};
+  stripPartitionDetails,
+  validatePrimaryKey,
+};

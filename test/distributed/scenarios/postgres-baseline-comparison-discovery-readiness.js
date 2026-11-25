@@ -164,37 +164,46 @@ function uniqueSorted(values) {
   ].sort();
 }
 
-function summarizeDiscoveryReadinessReasons(readiness, options = {}) {
-  const reasons = Array.isArray(readiness?.[DISCOVERY_READINESS_FIELD_REASONS]) ?
-    readiness[DISCOVERY_READINESS_FIELD_REASONS] :
-    [];
+function formatDiscoveryReasonEntry(reason) {
+  const code =
+    typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_CODE] === 'string' &&
+    reason[DISCOVERY_READINESS_REASON_FIELD_CODE].length > ZERO ?
+      reason[DISCOVERY_READINESS_REASON_FIELD_CODE] :
+      'unknown_reason';
+  const detail =
+    typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_DETAIL] === 'string' &&
+    reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL].length > ZERO ?
+      reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL] :
+      null;
+  return detail ? code + '=' + detail : code;
+}
+
+function summarizeCodedDiscoveryReasons(
+  rawReasons,
+  defaultFallbackReason,
+  options = {},
+) {
+  const reasons = Array.isArray(rawReasons) ? rawReasons : [];
   const fallbackReason = Object.prototype.hasOwnProperty.call(
     options,
     'fallbackReason',
   ) ?
     options.fallbackReason :
-    DISCOVERY_READINESS_REASON_WORKLOAD_NOT_READY;
+    defaultFallbackReason;
   if (reasons.length === ZERO) {
-    if (typeof fallbackReason === 'string' && fallbackReason.length > ZERO) {
-      return [fallbackReason];
-    }
-    return [];
+    return typeof fallbackReason === 'string' && fallbackReason.length > ZERO ?
+      [fallbackReason] :
+      [];
   }
-  const summarized = [];
-  for (const reason of reasons) {
-    const code =
-      typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_CODE] === 'string' &&
-      reason[DISCOVERY_READINESS_REASON_FIELD_CODE].length > ZERO ?
-        reason[DISCOVERY_READINESS_REASON_FIELD_CODE] :
-        'unknown_reason';
-    const detail =
-      typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_DETAIL] === 'string' &&
-      reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL].length > ZERO ?
-        reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL] :
-        null;
-    summarized.push(detail ? code + '=' + detail : code);
-  }
-  return summarized;
+  return reasons.map((reason) => formatDiscoveryReasonEntry(reason));
+}
+
+function summarizeDiscoveryReadinessReasons(readiness, options = {}) {
+  return summarizeCodedDiscoveryReasons(
+    readiness?.[DISCOVERY_READINESS_FIELD_REASONS],
+    DISCOVERY_READINESS_REASON_WORKLOAD_NOT_READY,
+    options,
+  );
 }
 
 function summarizeDiscoverySelectionExclusionReasons(readiness) {
@@ -217,38 +226,11 @@ function summarizeDiscoverySelectionExclusionReasons(readiness) {
 }
 
 function summarizeBenchmarkAdmissionReasons(admission, options = {}) {
-  const reasons = Array.isArray(
+  return summarizeCodedDiscoveryReasons(
     admission?.[DISCOVERY_BENCHMARK_ADMISSION_FIELD_REASONS],
-  ) ?
-    admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_REASONS] :
-    [];
-  const fallbackReason = Object.prototype.hasOwnProperty.call(
+    DISCOVERY_READINESS_REASON_BENCHMARK_NOT_READY,
     options,
-    'fallbackReason',
-  ) ?
-    options.fallbackReason :
-    DISCOVERY_READINESS_REASON_BENCHMARK_NOT_READY;
-  if (reasons.length === ZERO) {
-    if (typeof fallbackReason === 'string' && fallbackReason.length > ZERO) {
-      return [fallbackReason];
-    }
-    return [];
-  }
-  const summarized = [];
-  for (const reason of reasons) {
-    const code =
-      typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_CODE] === 'string' &&
-      reason[DISCOVERY_READINESS_REASON_FIELD_CODE].length > ZERO ?
-        reason[DISCOVERY_READINESS_REASON_FIELD_CODE] :
-        'unknown_reason';
-    const detail =
-      typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_DETAIL] === 'string' &&
-      reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL].length > ZERO ?
-        reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL] :
-        null;
-    summarized.push(detail ? code + '=' + detail : code);
-  }
-  return summarized;
+  );
 }
 
 function buildCanonicalBenchmarkAdmissionState(admission) {
@@ -394,6 +376,33 @@ function buildCanonicalDiscoveryReadinessState(readiness) {
   };
 }
 
+function hasDiscoveryReasonWithPrefixes(discoveryReasons, prefixes) {
+  return discoveryReasons.some(
+    (reason) =>
+      typeof reason === 'string' &&
+      prefixes.some((prefix) => reason.startsWith(prefix)),
+  );
+}
+
+function isBenchmarkReadyContradicted(readinessState, blockers) {
+  return (
+    readinessState.benchmarkReady === true &&
+    (readinessState.routingReady !== true ||
+      readinessState.schemaReady !== true ||
+      readinessState.topologyReady !== true ||
+      blockers.hasTopologyBlocker ||
+      blockers.hasRoutingBlocker ||
+      blockers.hasSchemaBlocker)
+  );
+}
+
+function isTopologyReadyContradicted(readinessState, hasTopologyBlocker) {
+  return (
+    readinessState.topologyReady === true &&
+    (readinessState.leadershipStable !== true || hasTopologyBlocker)
+  );
+}
+
 function detectDiscoveryReadinessContradictions(readinessState) {
   if (!readinessState || typeof readinessState !== 'object') {
     return [];
@@ -403,44 +412,38 @@ function detectDiscoveryReadinessContradictions(readinessState) {
   const discoveryReasons = Array.isArray(readinessState.discoveryReasons) ?
     readinessState.discoveryReasons :
     [];
-  const hasTopologyBlocker = discoveryReasons.some(
-    (reason) =>
-      typeof reason === 'string' &&
-      (reason.startsWith('local_replica_not_voter_ready') ||
-        reason.startsWith('leadership_unstable') ||
-        reason.startsWith('replica_operations_in_flight')),
-  );
-  const hasRoutingBlocker = discoveryReasons.some(
-    (reason) =>
-      typeof reason === 'string' && reason.startsWith('routing_not_ready'),
-  );
-  const hasSchemaBlocker = discoveryReasons.some(
-    (reason) =>
-      typeof reason === 'string' &&
-      (reason.startsWith('schema_table_missing') ||
-        reason.startsWith('schema_partition_unavailable')),
-  );
+  const blockers = {
+    hasTopologyBlocker: hasDiscoveryReasonWithPrefixes(discoveryReasons, [
+      'local_replica_not_voter_ready',
+      'leadership_unstable',
+      'replica_operations_in_flight',
+    ]),
+    hasRoutingBlocker: hasDiscoveryReasonWithPrefixes(discoveryReasons, [
+      'routing_not_ready',
+    ]),
+    hasSchemaBlocker: hasDiscoveryReasonWithPrefixes(discoveryReasons, [
+      'schema_table_missing',
+      'schema_partition_unavailable',
+    ]),
+  };
 
-  if (
-    readinessState.benchmarkReady === true &&
-    (readinessState.routingReady !== true ||
-      readinessState.schemaReady !== true ||
-      readinessState.topologyReady !== true ||
-      hasTopologyBlocker ||
-      hasRoutingBlocker ||
-      hasSchemaBlocker)
-  ) {
+  if (isBenchmarkReadyContradicted(readinessState, blockers)) {
     contradictions.push(DISCOVERY_READINESS_REASON_STATE_CONTRADICTION);
   }
 
-  if (
-    readinessState.topologyReady === true &&
-    (readinessState.leadershipStable !== true || hasTopologyBlocker)
-  ) {
+  if (isTopologyReadyContradicted(readinessState, blockers.hasTopologyBlocker)) {
     contradictions.push(DISCOVERY_READINESS_REASON_STATE_CONTRADICTION);
   }
 
   return contradictions;
+}
+
+function isReplicaSelectionReady(readinessState) {
+  return (
+    readinessState?.routingReady === true &&
+    readinessState?.schemaReady === true &&
+    readinessState?.topologyReady === true
+  );
 }
 
 function evaluateDiscoveryReplicaReadiness(readiness, options = {}) {
@@ -469,13 +472,9 @@ function evaluateDiscoveryReplicaReadiness(readiness, options = {}) {
       readinessState,
     };
   }
-  const selectionReady =
-    readinessState?.routingReady === true &&
-    readinessState?.schemaReady === true &&
-    readinessState?.topologyReady === true;
   const ready = requireCanonicalBenchmarkReadiness ?
     readinessState?.benchmarkReady === true :
-    selectionReady;
+    isReplicaSelectionReady(readinessState);
   const reasons = ready ?
     [] :
     summarizeDiscoverySelectionExclusionReasons(readiness);
@@ -530,29 +529,35 @@ function summarizeReadinessProbeReasons(options = {}) {
   return reasons;
 }
 
+function resolveContextObjectOrTransient(context) {
+  return context && typeof context === 'object' ?
+    context :
+    NODE_CLIENT_TRANSIENT_CONTEXT;
+}
+
+function resolveLocalDiscoveryContextSequence(options = {}) {
+  if (
+    Array.isArray(options.contextSequence) &&
+    options.contextSequence.length > ZERO
+  ) {
+    return options.contextSequence;
+  }
+  return [
+    {
+      context: resolveContextObjectOrTransient(options.context),
+    },
+  ];
+}
+
 async function fetchLocalServiceDiscoverySnapshot(
   nodeClient,
   node,
   options = {},
 ) {
-  const contextSequence =
-    Array.isArray(options.contextSequence) &&
-    options.contextSequence.length > ZERO ?
-      options.contextSequence :
-      [
-        {
-          context:
-              options.context && typeof options.context === 'object' ?
-                options.context :
-                NODE_CLIENT_TRANSIENT_CONTEXT,
-        },
-      ];
+  const contextSequence = resolveLocalDiscoveryContextSequence(options);
   const nodeId = String(node?.id || '');
   for (const contextEntry of contextSequence) {
-    const context =
-      contextEntry?.context && typeof contextEntry.context === 'object' ?
-        contextEntry.context :
-        NODE_CLIENT_TRANSIENT_CONTEXT;
+    const context = resolveContextObjectOrTransient(contextEntry?.context);
     try {
       const snapshot = await nodeClient.fetchServiceDiscovery(node, context);
       if (
@@ -695,46 +700,60 @@ function buildSutLoadDiscoveryContextSequence(
   return sequence;
 }
 
-function extractLocalReplicaReadiness(snapshot, nodeId, options = {}) {
+function resolveReplicaAdmissionRuntimeSource(admissionEvaluation, hasReadiness) {
+  if (admissionEvaluation?.hasAdmission === true) {
+    return DISCOVERY_ADMISSION_SOURCE.RUNTIME;
+  }
+  return hasReadiness ?
+    DISCOVERY_ADMISSION_SOURCE.LEGACY :
+    DISCOVERY_ADMISSION_SOURCE.MISSING;
+}
+
+function findReplicaForNodeIdInSnapshot(snapshot, normalizedNodeId) {
   const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
   for (const service of services) {
     const replicas = Array.isArray(service?.replicas) ? service.replicas : [];
     for (const replica of replicas) {
-      if (String(replica?.nodeId || '') !== String(nodeId || '')) {
-        continue;
+      if (String(replica?.nodeId || '') === normalizedNodeId) {
+        return replica;
       }
-      const hasReadiness =
-        replica?.readiness && typeof replica.readiness === 'object';
-      const admissionEvaluation = evaluateDiscoveryReplicaBenchmarkAdmission(
-        replica?.[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION],
-      );
-      recordAdmissionRuntimeOwnership(
-        options.admissionRuntimeOwnership,
-        'localReplicaConfirmation',
-        String(nodeId || ''),
-        admissionEvaluation?.hasAdmission === true ?
-          DISCOVERY_ADMISSION_SOURCE.RUNTIME :
-          hasReadiness ?
-            DISCOVERY_ADMISSION_SOURCE.LEGACY :
-            DISCOVERY_ADMISSION_SOURCE.MISSING,
-      );
-      return {
-        hasLocalReplica: true,
-        requiresConfirmation:
-          admissionEvaluation?.hasAdmission === true || hasReadiness,
-        evaluation:
-          admissionEvaluation ||
-          evaluateDiscoveryReplicaReadiness(replica?.readiness, {
-            requireCanonicalBenchmarkReadiness: true,
-            allowMissingReadiness: true,
-          }),
-      };
     }
+  }
+  return null;
+}
+
+function extractLocalReplicaReadiness(snapshot, nodeId, options = {}) {
+  const normalizedNodeId = String(nodeId || '');
+  const replica = findReplicaForNodeIdInSnapshot(snapshot, normalizedNodeId);
+  if (replica) {
+    const hasReadiness = Boolean(
+      replica.readiness && typeof replica.readiness === 'object',
+    );
+    const admissionEvaluation = evaluateDiscoveryReplicaBenchmarkAdmission(
+      replica[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION],
+    );
+    recordAdmissionRuntimeOwnership(
+      options.admissionRuntimeOwnership,
+      'localReplicaConfirmation',
+      normalizedNodeId,
+      resolveReplicaAdmissionRuntimeSource(admissionEvaluation, hasReadiness),
+    );
+    return {
+      hasLocalReplica: true,
+      requiresConfirmation:
+        admissionEvaluation?.hasAdmission === true || hasReadiness,
+      evaluation:
+        admissionEvaluation ||
+        evaluateDiscoveryReplicaReadiness(replica.readiness, {
+          requireCanonicalBenchmarkReadiness: true,
+          allowMissingReadiness: true,
+        }),
+    };
   }
   recordAdmissionRuntimeOwnership(
     options.admissionRuntimeOwnership,
     'localReplicaConfirmation',
-    String(nodeId || ''),
+    normalizedNodeId,
     DISCOVERY_ADMISSION_SOURCE.MISSING,
   );
   return {
@@ -749,6 +768,41 @@ function extractLocalReplicaReadiness(snapshot, nodeId, options = {}) {
   };
 }
 
+async function issueDirectNodeProbeQuery(
+  node,
+  sql,
+  params = [],
+  lane = NODE_CLIENT_CHANNEL.LOAD,
+) {
+  const normalizedParams = Array.isArray(params) ? params : [];
+  if (typeof node?.queryWithTimeout === 'function') {
+    return node.queryWithTimeout(sql, normalizedParams, {
+      timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
+      lane,
+    });
+  }
+  if (typeof node?.query === 'function') {
+    return node.query(sql, normalizedParams);
+  }
+  throw new Error(
+    'Node handle missing direct query method(node=' +
+      String(node?.id || DISCOVERY_UNKNOWN_NODE_ID) +
+      ')',
+  );
+}
+
+async function tryRunLoadProbe(runLoadProbe, queryFn) {
+  if (typeof queryFn !== 'function') {
+    return false;
+  }
+  try {
+    await runLoadProbe(queryFn);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
 async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
   const issueLoadProbeQuery =
     typeof nodeClient?.queryLoadProbe === 'function' ?
@@ -761,27 +815,6 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
       (sql, params, context) =>
         nodeClient.queryLoad(node, sql, params, context) :
       null;
-  const issueDirectProbeQuery = async (
-    sql,
-    params = [],
-    lane = NODE_CLIENT_CHANNEL.LOAD,
-  ) => {
-    const normalizedParams = Array.isArray(params) ? params : [];
-    if (typeof node?.queryWithTimeout === 'function') {
-      return node.queryWithTimeout(sql, normalizedParams, {
-        timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
-        lane,
-      });
-    }
-    if (typeof node?.query === 'function') {
-      return node.query(sql, normalizedParams);
-    }
-    throw new Error(
-      'Node handle missing direct query method(node=' +
-        String(node?.id || DISCOVERY_UNKNOWN_NODE_ID) +
-        ')',
-    );
-  };
   const runLoadProbe = async (queryFn) => {
     await queryFn('SELECT 1', [], NODE_CLIENT_TRANSIENT_CONTEXT);
     const tableProbeSql =
@@ -797,29 +830,22 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
       reasons: [],
     };
   } catch (error) {
-    if (issueLoadChannelProbeQuery !== null) {
-      try {
-        await runLoadProbe(issueLoadChannelProbeQuery);
-        return {
-          ready: true,
-          reasons: [],
-        };
-      } catch (_loadChannelFallbackError) {
-        // Continue with additional fallback strategies.
-      }
+    if (await tryRunLoadProbe(runLoadProbe, issueLoadChannelProbeQuery)) {
+      return {
+        ready: true,
+        reasons: [],
+      };
     }
-    if (isNodeClientCircuitOpenError(error)) {
-      try {
-        await runLoadProbe((sql, params) =>
-          issueDirectProbeQuery(sql, params, NODE_CLIENT_CHANNEL.LOAD),
-        );
-        return {
-          ready: true,
-          reasons: [],
-        };
-      } catch (_fallbackError) {
-        // Fall through to the standard load probe failure reason.
-      }
+    if (
+      isNodeClientCircuitOpenError(error) &&
+      (await tryRunLoadProbe(runLoadProbe, (sql, params) =>
+        issueDirectNodeProbeQuery(node, sql, params, NODE_CLIENT_CHANNEL.LOAD),
+      ))
+    ) {
+      return {
+        ready: true,
+        reasons: [],
+      };
     }
     return {
       ready: false,
@@ -832,37 +858,117 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
   }
 }
 
+async function runFallbackReadinessDirectCheck(node) {
+  if (typeof node?.getReachabilityDiagnostics === 'function') {
+    const diagnostics = await node.getReachabilityDiagnostics({
+      timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
+      scope: 'preflight',
+    });
+    if (diagnostics && typeof diagnostics === 'object') {
+      return diagnostics;
+    }
+  }
+  if (typeof node?.queryWithTimeout === 'function') {
+    await node.queryWithTimeout('SELECT 1', [], {
+      timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
+    });
+  } else if (typeof node?.query === 'function') {
+    await node.query('SELECT 1', []);
+  } else {
+    throw new Error('node_missing_query_methods');
+  }
+  return {
+    nodeId: String(node?.id || DISCOVERY_UNKNOWN_NODE_ID),
+    reachable: true,
+    adminReady: true,
+  };
+}
+
 async function probeReadinessWithCircuitOpenFallback(nodeClient, node) {
   try {
     return await nodeClient.probeReadiness(node);
   } catch (error) {
     try {
-      if (typeof node?.getReachabilityDiagnostics === 'function') {
-        const diagnostics = await node.getReachabilityDiagnostics({
-          timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
-          scope: 'preflight',
-        });
-        if (diagnostics && typeof diagnostics === 'object') {
-          return diagnostics;
-        }
-      }
-      if (typeof node?.queryWithTimeout === 'function') {
-        await node.queryWithTimeout('SELECT 1', [], {
-          timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
-        });
-      } else if (typeof node?.query === 'function') {
-        await node.query('SELECT 1', []);
-      } else {
-        throw new Error('node_missing_query_methods');
-      }
-      return {
-        nodeId: String(node?.id || DISCOVERY_UNKNOWN_NODE_ID),
-        reachable: true,
-        adminReady: true,
-      };
+      return await runFallbackReadinessDirectCheck(node);
     } catch (_fallbackError) {
       throw error;
     }
+  }
+}
+
+function matchesDiscoveryService(service, serviceId, protocol) {
+  if (!service || typeof service !== 'object') {
+    return false;
+  }
+  if (service[DISCOVERY_SERVICE_FIELD_PROTOCOL] !== protocol) {
+    return false;
+  }
+  const serviceIds = Array.isArray(service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS]) ?
+    service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS] :
+    [];
+  return serviceIds.includes(serviceId);
+}
+
+function evaluateServiceReplicaForDiscoverySelection(
+  replica,
+  nodeId,
+  options = {},
+) {
+  const admissionEvaluation = evaluateDiscoveryReplicaBenchmarkAdmission(
+    replica?.[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION],
+  );
+  const hasReadiness = Boolean(
+    replica?.[DISCOVERY_REPLICA_FIELD_READINESS] &&
+      typeof replica[DISCOVERY_REPLICA_FIELD_READINESS] === 'object',
+  );
+  recordAdmissionRuntimeOwnership(
+    options.admissionRuntimeOwnership,
+    'selection',
+    nodeId,
+    resolveReplicaAdmissionRuntimeSource(admissionEvaluation, hasReadiness),
+  );
+  const readinessEvaluation =
+    admissionEvaluation ||
+    evaluateDiscoveryReplicaReadiness(
+      replica?.[DISCOVERY_REPLICA_FIELD_READINESS],
+      {
+        allowMissingReadiness: true,
+      },
+    );
+  const include =
+    readinessEvaluation.ready ||
+    shouldDeferTopologyOnlyAdmissionBlocker(admissionEvaluation, options);
+  return {
+    include,
+    reasons: readinessEvaluation.reasons,
+  };
+}
+
+function processDiscoveryServiceReplica({
+  replica,
+  seenNodeIds,
+  discoveredNodeIds,
+  excludedReadinessByNodeId,
+  options,
+}) {
+  const nodeId = replica?.[DISCOVERY_REPLICA_FIELD_NODE_ID];
+  if (
+    typeof nodeId !== 'string' ||
+    nodeId.length === ZERO ||
+    seenNodeIds.has(nodeId)
+  ) {
+    return;
+  }
+  seenNodeIds.add(nodeId);
+  const evaluation = evaluateServiceReplicaForDiscoverySelection(
+    replica,
+    nodeId,
+    options,
+  );
+  if (evaluation.include) {
+    discoveredNodeIds.push(nodeId);
+  } else {
+    excludedReadinessByNodeId[nodeId] = evaluation.reasons;
   }
 }
 
@@ -879,18 +985,7 @@ function resolveServiceNodeIdsFromDiscovery(
   const excludedReadinessByNodeId = {};
   const seenNodeIds = new Set();
   for (const service of services) {
-    if (!service || typeof service !== 'object') {
-      continue;
-    }
-    if (service[DISCOVERY_SERVICE_FIELD_PROTOCOL] !== protocol) {
-      continue;
-    }
-    const serviceIds = Array.isArray(
-      service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS],
-    ) ?
-      service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS] :
-      [];
-    if (!serviceIds.includes(serviceId)) {
+    if (!matchesDiscoveryService(service, serviceId, protocol)) {
       continue;
     }
     const serviceReplicas = Array.isArray(
@@ -899,47 +994,13 @@ function resolveServiceNodeIdsFromDiscovery(
       service[DISCOVERY_SERVICE_FIELD_REPLICAS] :
       [];
     for (const replica of serviceReplicas) {
-      const nodeId = replica?.[DISCOVERY_REPLICA_FIELD_NODE_ID];
-      if (typeof nodeId !== 'string' || nodeId.length === ZERO) {
-        continue;
-      }
-      if (seenNodeIds.has(nodeId)) {
-        continue;
-      }
-      seenNodeIds.add(nodeId);
-      const admissionEvaluation = evaluateDiscoveryReplicaBenchmarkAdmission(
-        replica?.[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION],
-      );
-      recordAdmissionRuntimeOwnership(
-        options.admissionRuntimeOwnership,
-        'selection',
-        nodeId,
-        admissionEvaluation?.hasAdmission === true ?
-          DISCOVERY_ADMISSION_SOURCE.RUNTIME :
-          replica?.[DISCOVERY_REPLICA_FIELD_READINESS] &&
-              typeof replica[DISCOVERY_REPLICA_FIELD_READINESS] === 'object' ?
-            DISCOVERY_ADMISSION_SOURCE.LEGACY :
-            DISCOVERY_ADMISSION_SOURCE.MISSING,
-      );
-      const readinessEvaluation =
-        admissionEvaluation ||
-        evaluateDiscoveryReplicaReadiness(
-          replica?.[DISCOVERY_REPLICA_FIELD_READINESS],
-          {
-            allowMissingReadiness: true,
-          },
-        );
-      if (readinessEvaluation.ready) {
-        discoveredNodeIds.push(nodeId);
-        continue;
-      }
-      if (
-        shouldDeferTopologyOnlyAdmissionBlocker(admissionEvaluation, options)
-      ) {
-        discoveredNodeIds.push(nodeId);
-        continue;
-      }
-      excludedReadinessByNodeId[nodeId] = readinessEvaluation.reasons;
+      processDiscoveryServiceReplica({
+        replica,
+        seenNodeIds,
+        discoveredNodeIds,
+        excludedReadinessByNodeId,
+        options,
+      });
     }
   }
   return {
@@ -975,7 +1036,7 @@ function resolveSutLoadNodeSelectionFromDiscovery(snapshot, options = {}) {
   };
 }
 
-function findServiceReplicaReadinessFromDiscovery(
+function findMatchingServiceReplicaFromDiscovery(
   snapshot,
   serviceId,
   protocol,
@@ -985,18 +1046,7 @@ function findServiceReplicaReadinessFromDiscovery(
     snapshot[DISCOVERY_FIELD_SERVICES] :
     [];
   for (const service of services) {
-    if (!service || typeof service !== 'object') {
-      continue;
-    }
-    if (service[DISCOVERY_SERVICE_FIELD_PROTOCOL] !== protocol) {
-      continue;
-    }
-    const serviceIds = Array.isArray(
-      service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS],
-    ) ?
-      service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS] :
-      [];
-    if (!serviceIds.includes(serviceId)) {
+    if (!matchesDiscoveryService(service, serviceId, protocol)) {
       continue;
     }
     const serviceReplicas = Array.isArray(
@@ -1006,11 +1056,26 @@ function findServiceReplicaReadinessFromDiscovery(
       [];
     for (const replica of serviceReplicas) {
       if (replica?.[DISCOVERY_REPLICA_FIELD_NODE_ID] === nodeId) {
-        return replica?.[DISCOVERY_REPLICA_FIELD_READINESS] || null;
+        return replica;
       }
     }
   }
   return null;
+}
+
+function findServiceReplicaReadinessFromDiscovery(
+  snapshot,
+  serviceId,
+  protocol,
+  nodeId,
+) {
+  const replica = findMatchingServiceReplicaFromDiscovery(
+    snapshot,
+    serviceId,
+    protocol,
+    nodeId,
+  );
+  return replica?.[DISCOVERY_REPLICA_FIELD_READINESS] || null;
 }
 
 function findServiceReplicaBenchmarkAdmissionFromDiscovery(
@@ -1019,36 +1084,13 @@ function findServiceReplicaBenchmarkAdmissionFromDiscovery(
   protocol,
   nodeId,
 ) {
-  const services = Array.isArray(snapshot?.[DISCOVERY_FIELD_SERVICES]) ?
-    snapshot[DISCOVERY_FIELD_SERVICES] :
-    [];
-  for (const service of services) {
-    if (!service || typeof service !== 'object') {
-      continue;
-    }
-    if (service[DISCOVERY_SERVICE_FIELD_PROTOCOL] !== protocol) {
-      continue;
-    }
-    const serviceIds = Array.isArray(
-      service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS],
-    ) ?
-      service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS] :
-      [];
-    if (!serviceIds.includes(serviceId)) {
-      continue;
-    }
-    const serviceReplicas = Array.isArray(
-      service[DISCOVERY_SERVICE_FIELD_REPLICAS],
-    ) ?
-      service[DISCOVERY_SERVICE_FIELD_REPLICAS] :
-      [];
-    for (const replica of serviceReplicas) {
-      if (replica?.[DISCOVERY_REPLICA_FIELD_NODE_ID] === nodeId) {
-        return replica?.[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION] || null;
-      }
-    }
-  }
-  return null;
+  const replica = findMatchingServiceReplicaFromDiscovery(
+    snapshot,
+    serviceId,
+    protocol,
+    nodeId,
+  );
+  return replica?.[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION] || null;
 }
 
 export const POSTGRES_BASELINE_COMPARISON_DISCOVERY_READINESS_BUNDLE = {

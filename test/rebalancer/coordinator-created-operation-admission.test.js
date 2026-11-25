@@ -348,6 +348,7 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
     createAdmissionOwnerIncarnation: 7,
   };
   const retained = [];
+  const stepUpdates = [];
   let failCalls = 0;
   owner.repository.isOperationLocallyOwned = () => true;
   owner.repository.isReplaceRemoveDispatchPhase = () => false;
@@ -356,6 +357,15 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
   owner.isPriorityRecoverySupersededTargetFailureApplicable = () => false;
   owner.evaluateRemoveSafety = async () => null;
   owner.clearDeferredSafetyBlockState = () => {};
+  owner.updateStep = async (candidate, nextStep) => {
+    stepUpdates.push({
+      operationId: candidate.operationId,
+      fromStep: candidate.workflowStep,
+      nextStep,
+    });
+    candidate.workflowStep = nextStep;
+    return OPERATION_RECONCILE_OUTCOME.ADVANCED;
+  };
   owner.deliverReplicaOperationRequest = async () => (buildDeliveryEnvelope(
     {acknowledged: true},
     {
@@ -391,8 +401,14 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
     t.equal(retained[0].candidate.createAdmissionAttemptToken,
       admitted.createAdmissionAttemptToken,
       'retention binds the exact durable attempt token');
+    t.same(stepUpdates, [{
+      operationId: operation.operationId,
+      fromStep: WORKFLOW_STEP.SENDING,
+      nextStep: WORKFLOW_STEP.CREATING,
+    }], 'retained CREATE delivery advances SENDING to CREATING');
 
     retained.length = 0;
+    stepUpdates.length = 0;
     owner.repository.getOperationByIdVisibilityObservation = async () => ({
       operation,
       deferredOutcome: null,

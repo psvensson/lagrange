@@ -34,6 +34,7 @@ export function extractParamInsertData({
   sql,
   params,
   tableName,
+  db = null,
   logger,
   fetchInsertRow,
 }) {
@@ -43,6 +44,7 @@ export function extractParamInsertData({
     tableName,
     PARTITION_SERVICE_OPERATION.INSERT,
     logger,
+    db,
   );
   const columns = Object.keys(data);
   if (columns.length === 0) {
@@ -59,6 +61,7 @@ export function extractParamInsertData({
  * @param {string} options.sql - SQL statement.
  * @param {Array} options.params - Parameter values.
  * @param {string} options.tableName - Table name.
+ * @param {Object|null} [options.db] - Optional SQLite database handle.
  * @param {Object} options.logger - Logger instance.
  * @param {Function} options.fetchUpdatedRow - Row fetch callback.
  * @return {Object} Extracted data.
@@ -67,6 +70,7 @@ export function extractParamUpdateData({
   sql,
   params,
   tableName,
+  db = null,
   logger,
   fetchUpdatedRow,
 }) {
@@ -76,6 +80,7 @@ export function extractParamUpdateData({
     tableName,
     PARTITION_SERVICE_OPERATION.UPDATE,
     logger,
+    db,
   );
   if (Object.keys(data).length === 0) {
     return {};
@@ -103,6 +108,7 @@ export function extractParamUpdateData({
  * @param {string} options.sql - SQL statement.
  * @param {Array} options.params - Parameter values.
  * @param {string} options.tableName - Table name.
+ * @param {Object|null} [options.db] - Optional SQLite database handle.
  * @param {Object} options.logger - Logger instance.
  * @return {Object} Extracted data.
  */
@@ -110,6 +116,7 @@ export function extractParamDeleteData({
   sql,
   params,
   tableName,
+  db = null,
   logger,
 }) {
   return extractDataFromParameterizedSQL(
@@ -118,6 +125,7 @@ export function extractParamDeleteData({
     tableName,
     PARTITION_SERVICE_OPERATION.DELETE,
     logger,
+    db,
   );
 }
 

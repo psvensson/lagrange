@@ -3,6 +3,10 @@ import {
   run,
 } from '../../scenarios/seven-node-read-write-load-transaction-recovery.js';
 
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+
 const SQL_INSERT_TRANSACTION = 'INSERT INTO sql_transactions';
 const SQL_CONTROL_SNAPSHOT = 'SELECT * FROM control_snapshot_local()';
 const SQL_SELECT_TRANSACTION_STATUSES =
@@ -27,140 +31,193 @@ const RECOVERY_READY_PARTITIONS = Object.freeze([
   'sql_write_operations-p1',
 ]);
 
+const BENCHMARK_TABLE_ID = 'tbl-benchmark-events-1';
+const BENCHMARK_PARTITION_SERVICE_ASSIGNMENTS = Object.freeze([
+  ['bench-p1', 'seed-1'],
+  ['bench-p1', 'node-2'],
+  ['bench-p1', 'node-3'],
+  ['bench-p2', 'node-4'],
+  ['bench-p2', 'node-5'],
+  ['bench-p2', 'node-6'],
+]);
+const JOINER_NODE_IDS = Object.freeze([
+  'node-2',
+  'node-3',
+  'node-4',
+  'node-5',
+  'node-6',
+  'node-7',
+]);
+
+function buildRecoveryControlSnapshot({
+  restarted,
+  recoveryStage = 'traffic_ready',
+  partitions = RECOVERY_READY_PARTITIONS,
+  recoveredCount = 2,
+}) {
+  const transactionRecovery = restarted ?
+    {
+      totalRecovered: recoveredCount,
+      resumed: recoveredCount,
+      failed: 0,
+    } :
+    null;
+  return {
+    rows: [{
+      cluster: {
+        nodeCount: 7,
+        activeNodeCount: 7,
+      },
+      controlPlaneDiagnostics: {
+        startupRecovery: {
+          controlPlaneRecoveryReady: true,
+          recoveryStage,
+        },
+      },
+      partitions,
+      queryEngine: {
+        transactionRecovery,
+      },
+    }],
+  };
+}
+
+function selectSeededTransactionStatusRows(transactionStatusById, params) {
+  const rows = arrayFilter(
+    arrayMap(params, (transactionId) => {
+      const status = transactionStatusById.get(transactionId);
+      return status ? {transaction_id: transactionId, status} : null;
+    }),
+    Boolean,
+  );
+  return {rows};
+}
+
+function recordSeededTransactionInsert(state, params) {
+  const [transactionId, _sessionId, status] = params;
+  state.transactionStatusById.set(transactionId, status);
+  if (status === 'ACTIVE') {
+    state.activeTransactionId = transactionId;
+  } else if (status === 'PREPARED') {
+    state.preparedTransactionId = transactionId;
+  }
+  return {rows: []};
+}
+
+function matchBenchmarkCatalogQuery(sql) {
+  if (stringIncludes(sql, SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
+    return {rows: []};
+  }
+  if (stringIncludes(sql, SQL_FROM_TABLES)) {
+    return {
+      rows: [{
+        table_id: BENCHMARK_TABLE_ID,
+        table_policies: TABLE_POLICIES_JSON,
+      }],
+    };
+  }
+  if (stringIncludes(sql, SQL_FROM_PARTITIONS)) {
+    return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
+  }
+  if (stringIncludes(sql, SQL_FROM_SERVICES)) {
+    return {
+      rows: arrayMap(
+        BENCHMARK_PARTITION_SERVICE_ASSIGNMENTS,
+        ([partitionId, nodeId]) => ({
+          partition_id: partitionId,
+          node_id: nodeId,
+          status: 'active',
+        }),
+      ),
+    };
+  }
+  return null;
+}
+
+function createRecoveryTailFixture({
+  buildSnapshot,
+  onSelectStatuses,
+  joinerOverrides = {},
+  waitCompleteResult = {total: 120, success: 96, failed: 24},
+  createLoadHandle,
+} = {}) {
+  const state = {
+    restarted: false,
+    loadCancelled: false,
+    transactionStatusById: new Map(),
+    activeTransactionId: null,
+    preparedTransactionId: null,
+  };
+  const resolveControlSnapshot = () =>
+    buildSnapshot ?
+      buildSnapshot(state) :
+      buildRecoveryControlSnapshot({restarted: state.restarted});
+  const seedNode = {
+    id: 'seed-1',
+    role: 'seed',
+    getControlSnapshot: async () => resolveControlSnapshot(),
+    updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
+    query: async (sql, params = []) => {
+      const catalogResult = matchBenchmarkCatalogQuery(sql);
+      if (catalogResult) {
+        return catalogResult;
+      }
+      if (sql.includes(SQL_INSERT_TRANSACTION)) {
+        return recordSeededTransactionInsert(state, params);
+      }
+      if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
+        if (onSelectStatuses) {
+          return onSelectStatuses(state, params);
+        }
+        return selectSeededTransactionStatusRows(
+          state.transactionStatusById,
+          params,
+        );
+      }
+      if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
+        return seedNode.getControlSnapshot();
+      }
+      return {rows: []};
+    },
+  };
+  const joiners = arrayMap(JOINER_NODE_IDS, (id) =>
+    joinerOverrides[id] || {id, role: 'joiner'},
+  );
+  const allNodes = [seedNode, ...joiners];
+  const readyLoadNodes = allNodes.slice(0, 6);
+  const cluster = {
+    getNodes: () => allNodes,
+    waitForConvergence: async () => ({settledAfterMs: 1}),
+    waitForControlPlaneQuiescence: async () => null,
+    resolveBenchmarkReadyLoadNodes: async () => readyLoadNodes,
+    startLoad: () =>
+      createLoadHandle ?
+        createLoadHandle(state) :
+        {
+          cancel: () => {
+            state.loadCancelled = true;
+          },
+          waitComplete: async () => waitCompleteResult,
+        },
+    restartNode: async () => {
+      state.restarted = true;
+    },
+    assertConsistency: async () => {},
+    waitForConsistencyConvergence: async () => {},
+  };
+  return {state, seedNode, cluster};
+}
+
 export function registerSevenNodeTransactionRecoveryTailTests({
   it,
 }) {
   it('queries replay transaction statuses across nodes in parallel',
     async () => {
-      let restarted = false;
-      const transactionStatusById = new Map();
-      let activeTransactionId = null;
-      let preparedTransactionId = null;
       const slowDelayMs = 60;
-
       const delay = (ms) => new Promise((resolve) => {
         setTimeout(resolve, ms);
       });
-
-      const seedNode = {
-        id: 'seed-1',
-        role: 'seed',
-        getControlSnapshot: async () => {
-          return {
-            rows: [{
-              cluster: {
-                nodeCount: 7,
-                activeNodeCount: 7,
-              },
-              controlPlaneDiagnostics: {
-                startupRecovery: {
-                  controlPlaneRecoveryReady: true,
-                  recoveryStage: 'traffic_ready',
-                },
-              },
-              partitions: RECOVERY_READY_PARTITIONS,
-              queryEngine: restarted ?
-                {
-                  transactionRecovery: {
-                    totalRecovered: 2,
-                    resumed: 2,
-                    failed: 0,
-                  },
-                } :
-                {
-                  transactionRecovery: null,
-                },
-            }],
-          };
-        },
-        updateTablePolicy: async () => {
-          return {success: true, outcome: 'applied'};
-        },
-        query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
-          }
-          if (sql.includes(SQL_INSERT_TRANSACTION)) {
-            const [transactionId, _sessionId, status] = params;
-            transactionStatusById.set(transactionId, status);
-            if (status === 'ACTIVE') {
-              activeTransactionId = transactionId;
-            }
-            if (status === 'PREPARED') {
-              preparedTransactionId = transactionId;
-            }
-            return {rows: []};
-          }
-          if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
-            await delay(slowDelayMs);
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
-          }
-          if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
-            return {
-              rows: [{
-                cluster: {
-                  nodeCount: 7,
-                  activeNodeCount: 7,
-                },
-                controlPlaneDiagnostics: {
-                  startupRecovery: {
-                    controlPlaneRecoveryReady: true,
-                    recoveryStage: 'traffic_ready',
-                  },
-                },
-                partitions: RECOVERY_READY_PARTITIONS,
-                queryEngine: restarted ?
-                  {
-                    transactionRecovery: {
-                      totalRecovered: 2,
-                      resumed: 2,
-                      failed: 0,
-                    },
-                  } :
-                  {
-                    transactionRecovery: null,
-                  },
-              }],
-            };
-          }
-          return {rows: []};
-        },
-      };
+      let fixtureState = null;
 
       const slowJoiner = {
         id: 'node-2',
@@ -170,19 +227,10 @@ export function registerSevenNodeTransactionRecoveryTailTests({
             return {rows: []};
           }
           await delay(slowDelayMs);
-          const rows = params
-            .map((transactionId) => {
-              const status = transactionStatusById.get(transactionId);
-              if (!status) {
-                return null;
-              }
-              return {
-                transaction_id: transactionId,
-                status,
-              };
-            })
-            .filter(Boolean);
-          return {rows};
+          return selectSeededTransactionStatusRows(
+            fixtureState.transactionStatusById,
+            params,
+          );
         },
       };
 
@@ -193,51 +241,46 @@ export function registerSevenNodeTransactionRecoveryTailTests({
           if (!sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
             return {rows: []};
           }
-          if (restarted && activeTransactionId && preparedTransactionId) {
-            transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
-            transactionStatusById.set(preparedTransactionId, 'COMMITTED');
+          if (
+            fixtureState.restarted &&
+            fixtureState.activeTransactionId &&
+            fixtureState.preparedTransactionId
+          ) {
+            fixtureState.transactionStatusById.set(
+              fixtureState.activeTransactionId,
+              'ROLLED_BACK',
+            );
+            fixtureState.transactionStatusById.set(
+              fixtureState.preparedTransactionId,
+              'COMMITTED',
+            );
           }
-          const rows = params
-            .map((transactionId) => {
-              const status = transactionStatusById.get(transactionId);
-              if (!status) {
-                return null;
-              }
-              return {
-                transaction_id: transactionId,
-                status,
-              };
-            })
-            .filter(Boolean);
-          return {rows};
+          return selectSeededTransactionStatusRows(
+            fixtureState.transactionStatusById,
+            params,
+          );
         },
       };
 
-      const cluster = {
-        getNodes: () => [
-          seedNode,
-          slowJoiner,
-          fastJoiner,
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-          {id: 'node-7', role: 'joiner'},
-        ],
-        waitForConvergence: async () => ({settledAfterMs: 1}),
-        waitForControlPlaneQuiescence: async () => {},
-        startLoad: () => ({
-          cancel: () => {},
-          waitComplete: async () => ({
-            total: 120,
-            success: 120,
-            failed: 0,
-          }),
-        }),
-        restartNode: async () => {
-          restarted = true;
+      const {state, cluster} = createRecoveryTailFixture({
+        onSelectStatuses: async (currentState, params) => {
+          await delay(slowDelayMs);
+          return selectSeededTransactionStatusRows(
+            currentState.transactionStatusById,
+            params,
+          );
         },
-        waitForConsistencyConvergence: async () => {},
-      };
+        joinerOverrides: {
+          'node-2': slowJoiner,
+          'node-3': fastJoiner,
+        },
+        waitCompleteResult: {
+          total: 120,
+          success: 120,
+          failed: 0,
+        },
+      });
+      fixtureState = state;
 
       const result = await run(cluster, {
         preRestartDelayMs: 0,
@@ -265,167 +308,7 @@ export function registerSevenNodeTransactionRecoveryTailTests({
 
   it('fails replay validation early when terminal transaction states make no progress',
     async () => {
-      let restarted = false;
-      let loadCancelled = false;
-      const transactionStatusById = new Map();
-      let activeTransactionId = null;
-      let preparedTransactionId = null;
-
-      const seedNode = {
-        id: 'seed-1',
-        role: 'seed',
-        getControlSnapshot: async () => {
-          return {
-            rows: [{
-              cluster: {
-                nodeCount: 7,
-                activeNodeCount: 7,
-              },
-              controlPlaneDiagnostics: {
-                startupRecovery: {
-                  controlPlaneRecoveryReady: true,
-                  recoveryStage: 'traffic_ready',
-                },
-              },
-              partitions: RECOVERY_READY_PARTITIONS,
-              queryEngine: restarted ?
-                {
-                  transactionRecovery: {
-                    totalRecovered: 2,
-                    resumed: 2,
-                    failed: 0,
-                  },
-                } :
-                {
-                  transactionRecovery: null,
-                },
-            }],
-          };
-        },
-        updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
-        query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
-          }
-          if (sql.includes(SQL_INSERT_TRANSACTION)) {
-            const [transactionId, _sessionId, status] = params;
-            transactionStatusById.set(transactionId, status);
-            if (status === 'ACTIVE') {
-              activeTransactionId = transactionId;
-            }
-            if (status === 'PREPARED') {
-              preparedTransactionId = transactionId;
-            }
-            return {rows: []};
-          }
-          if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
-          }
-          if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
-            return {
-              rows: [{
-                cluster: {
-                  nodeCount: 7,
-                  activeNodeCount: 7,
-                },
-                controlPlaneDiagnostics: {
-                  startupRecovery: {
-                    controlPlaneRecoveryReady: true,
-                    recoveryStage: 'traffic_ready',
-                  },
-                },
-                partitions: RECOVERY_READY_PARTITIONS,
-                queryEngine: restarted ?
-                  {
-                    transactionRecovery: {
-                      totalRecovered: 2,
-                      resumed: 2,
-                      failed: 0,
-                    },
-                  } :
-                  {
-                    transactionRecovery: null,
-                  },
-              }],
-            };
-          }
-          return {rows: []};
-        },
-      };
-
-      const cluster = {
-        getNodes: () => [
-          seedNode,
-          {id: 'node-2', role: 'joiner'},
-          {id: 'node-3', role: 'joiner'},
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-          {id: 'node-7', role: 'joiner'},
-        ],
-        waitForConvergence: async () => ({settledAfterMs: 1}),
-        waitForControlPlaneQuiescence: async () => null,
-        resolveBenchmarkReadyLoadNodes: async () => [
-          seedNode,
-          {id: 'node-2', role: 'joiner'},
-          {id: 'node-3', role: 'joiner'},
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-        ],
-        startLoad: () => {
-          return {
-            cancel: () => {
-              loadCancelled = true;
-            },
-            waitComplete: async () => ({
-              total: 120,
-              success: 96,
-              failed: 24,
-            }),
-          };
-        },
-        restartNode: async () => {
-          restarted = true;
-        },
-        assertConsistency: async () => {},
-        waitForConsistencyConvergence: async () => {},
-      };
+      const {state, cluster} = createRecoveryTailFixture();
 
       await assert.rejects(
         run(cluster, {
@@ -444,72 +327,16 @@ export function registerSevenNodeTransactionRecoveryTailTests({
         }),
         /stalled after recovery became ready/i,
       );
-      assert.equal(loadCancelled, true);
-      assert.ok(activeTransactionId);
-      assert.ok(preparedTransactionId);
+      assert.equal(state.loadCancelled, true);
+      assert.ok(state.activeTransactionId);
+      assert.ok(state.preparedTransactionId);
     });
 
   it('fails the partition-growth load phase early when load pressure stalls',
     async () => {
-      let loadCancelled = false;
       let loadMetricSampleCount = 0;
-
-      const seedNode = {
-        id: 'seed-1',
-        role: 'seed',
-        updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
-        query: async (sql) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
-          }
-          return {rows: []};
-        },
-      };
-
-      const cluster = {
-        getNodes: () => [
-          seedNode,
-          {id: 'node-2', role: 'joiner'},
-          {id: 'node-3', role: 'joiner'},
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-          {id: 'node-7', role: 'joiner'},
-        ],
-        waitForConvergence: async () => ({settledAfterMs: 1}),
-        waitForControlPlaneQuiescence: async () => null,
-        resolveBenchmarkReadyLoadNodes: async () => [
-          seedNode,
-          {id: 'node-2', role: 'joiner'},
-          {id: 'node-3', role: 'joiner'},
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-        ],
-        startLoad: () => ({
+      const {state, cluster} = createRecoveryTailFixture({
+        createLoadHandle: (currentState) => ({
           getMetrics: () => {
             loadMetricSampleCount += 1;
             return {
@@ -545,7 +372,7 @@ export function registerSevenNodeTransactionRecoveryTailTests({
             };
           },
           cancel: () => {
-            loadCancelled = true;
+            currentState.loadCancelled = true;
           },
           waitComplete: async () => ({
             total: 0,
@@ -553,7 +380,7 @@ export function registerSevenNodeTransactionRecoveryTailTests({
             failed: 0,
           }),
         }),
-      };
+      });
 
       await assert.rejects(
         run(cluster, {
@@ -581,173 +408,23 @@ export function registerSevenNodeTransactionRecoveryTailTests({
           return true;
         },
       );
-      assert.equal(loadCancelled, true);
+      assert.equal(state.loadCancelled, true);
       assert.ok(loadMetricSampleCount >= 2);
     });
 
   it('fails early when seeded transaction rows stay invisible after restart',
     async () => {
-      let restarted = false;
-      let loadCancelled = false;
-      const transactionStatusById = new Map();
-      let activeTransactionId = null;
-      let preparedTransactionId = null;
-
-      const seedNode = {
-        id: 'seed-1',
-        role: 'seed',
-        getControlSnapshot: async () => {
-          return {
-            rows: [{
-              cluster: {
-                nodeCount: 7,
-                activeNodeCount: 7,
-              },
-              controlPlaneDiagnostics: {
-                startupRecovery: {
-                  controlPlaneRecoveryReady: true,
-                  recoveryStage: 'traffic_ready',
-                },
-              },
-              partitions: RECOVERY_READY_PARTITIONS,
-              queryEngine: restarted ?
-                {
-                  transactionRecovery: {
-                    totalRecovered: 2,
-                    resumed: 2,
-                    failed: 0,
-                  },
-                } :
-                {
-                  transactionRecovery: null,
-                },
-            }],
-          };
-        },
-        updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
-        query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
+      const {state, cluster} = createRecoveryTailFixture({
+        onSelectStatuses: (currentState, params) => {
+          if (currentState.restarted) {
             return {rows: []};
           }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
-          }
-          if (sql.includes(SQL_INSERT_TRANSACTION)) {
-            const [transactionId, _sessionId, status] = params;
-            transactionStatusById.set(transactionId, status);
-            if (status === 'ACTIVE') {
-              activeTransactionId = transactionId;
-            }
-            if (status === 'PREPARED') {
-              preparedTransactionId = transactionId;
-            }
-            return {rows: []};
-          }
-          if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
-            if (restarted) {
-              return {rows: []};
-            }
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
-          }
-          if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
-            return {
-              rows: [{
-                cluster: {
-                  nodeCount: 7,
-                  activeNodeCount: 7,
-                },
-                controlPlaneDiagnostics: {
-                  startupRecovery: {
-                    controlPlaneRecoveryReady: true,
-                    recoveryStage: 'traffic_ready',
-                  },
-                },
-                partitions: RECOVERY_READY_PARTITIONS,
-                queryEngine: restarted ?
-                  {
-                    transactionRecovery: {
-                      totalRecovered: 2,
-                      resumed: 2,
-                      failed: 0,
-                    },
-                  } :
-                  {
-                    transactionRecovery: null,
-                  },
-              }],
-            };
-          }
-          return {rows: []};
+          return selectSeededTransactionStatusRows(
+            currentState.transactionStatusById,
+            params,
+          );
         },
-      };
-
-      const cluster = {
-        getNodes: () => [
-          seedNode,
-          {id: 'node-2', role: 'joiner'},
-          {id: 'node-3', role: 'joiner'},
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-          {id: 'node-7', role: 'joiner'},
-        ],
-        waitForConvergence: async () => ({settledAfterMs: 1}),
-        waitForControlPlaneQuiescence: async () => null,
-        resolveBenchmarkReadyLoadNodes: async () => [
-          seedNode,
-          {id: 'node-2', role: 'joiner'},
-          {id: 'node-3', role: 'joiner'},
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-        ],
-        startLoad: () => ({
-          cancel: () => {
-            loadCancelled = true;
-          },
-          waitComplete: async () => ({
-            total: 120,
-            success: 96,
-            failed: 24,
-          }),
-        }),
-        restartNode: async () => {
-          restarted = true;
-        },
-        waitForConsistencyConvergence: async () => {},
-      };
+      });
 
       await assert.rejects(
         run(cluster, {
@@ -764,160 +441,43 @@ export function registerSevenNodeTransactionRecoveryTailTests({
         }),
         /Seeded transaction visibility stalled with no progress after restart/i,
       );
-      assert.equal(loadCancelled, true);
-      assert.ok(activeTransactionId);
-      assert.ok(preparedTransactionId);
+      assert.equal(state.loadCancelled, true);
+      assert.ok(state.activeTransactionId);
+      assert.ok(state.preparedTransactionId);
     });
 
   it('fails replay validation early when recovery remains not ready after fallback',
     async () => {
-      let restarted = false;
-      let loadCancelled = false;
       let postRestartVisibilityObserved = false;
-      const transactionStatusById = new Map();
-      let activeTransactionId = null;
-      let preparedTransactionId = null;
-
-      const seedNode = {
-        id: 'seed-1',
-        role: 'seed',
-        getControlSnapshot: async () => {
-          if (restarted && !postRestartVisibilityObserved) {
+      const {state, cluster} = createRecoveryTailFixture({
+        buildSnapshot: (currentState) => {
+          if (currentState.restarted && !postRestartVisibilityObserved) {
             throw new Error(
               'Admin API query timed out for node seed-1 on lane snapshot after 30000ms',
             );
           }
-          return {
-            rows: [{
-              cluster: {
-                nodeCount: 7,
-                activeNodeCount: 7,
-              },
-              controlPlaneDiagnostics: {
-                startupRecovery: {
-                  controlPlaneRecoveryReady: true,
-                  recoveryStage: 'control_plane_recovery_ready',
-                },
-              },
-              partitions: restarted ?
-                RECOVERY_READY_PARTITIONS.filter((partitionId) =>
-                  partitionId !== 'sql_transactions-p1',
-                ) :
-                RECOVERY_READY_PARTITIONS,
-              queryEngine: restarted ?
-                {
-                  transactionRecovery: {
-                    totalRecovered: 0,
-                    resumed: 0,
-                    failed: 0,
-                  },
-                } :
-                {
-                  transactionRecovery: null,
-                },
-            }],
-          };
+          const partitions = currentState.restarted ?
+            arrayFilter(RECOVERY_READY_PARTITIONS, (partitionId) =>
+              partitionId !== 'sql_transactions-p1',
+            ) :
+            RECOVERY_READY_PARTITIONS;
+          return buildRecoveryControlSnapshot({
+            restarted: currentState.restarted,
+            recoveryStage: 'control_plane_recovery_ready',
+            partitions,
+            recoveredCount: 0,
+          });
         },
-        updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
-        query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
+        onSelectStatuses: (currentState, params) => {
+          if (currentState.restarted) {
+            postRestartVisibilityObserved = true;
           }
-          if (sql.includes(SQL_FROM_TABLES)) {
-            return {
-              rows: [{
-                table_id: 'tbl-benchmark-events-1',
-                table_policies: TABLE_POLICIES_JSON,
-              }],
-            };
-          }
-          if (sql.includes(SQL_FROM_PARTITIONS)) {
-            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
-          }
-          if (sql.includes(SQL_FROM_SERVICES)) {
-            return {
-              rows: [
-                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
-                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
-                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
-              ],
-            };
-          }
-          if (sql.includes(SQL_INSERT_TRANSACTION)) {
-            const [transactionId, _sessionId, status] = params;
-            transactionStatusById.set(transactionId, status);
-            if (status === 'ACTIVE') {
-              activeTransactionId = transactionId;
-            }
-            if (status === 'PREPARED') {
-              preparedTransactionId = transactionId;
-            }
-            return {rows: []};
-          }
-          if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
-            if (restarted) {
-              postRestartVisibilityObserved = true;
-            }
-            const rows = params
-              .map((transactionId) => {
-                const status = transactionStatusById.get(transactionId);
-                if (!status) {
-                  return null;
-                }
-                return {
-                  transaction_id: transactionId,
-                  status,
-                };
-              })
-              .filter(Boolean);
-            return {rows};
-          }
-          if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
-            return seedNode.getControlSnapshot();
-          }
-          return {rows: []};
+          return selectSeededTransactionStatusRows(
+            currentState.transactionStatusById,
+            params,
+          );
         },
-      };
-
-      const cluster = {
-        getNodes: () => [
-          seedNode,
-          {id: 'node-2', role: 'joiner'},
-          {id: 'node-3', role: 'joiner'},
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-          {id: 'node-7', role: 'joiner'},
-        ],
-        waitForConvergence: async () => ({settledAfterMs: 1}),
-        waitForControlPlaneQuiescence: async () => null,
-        resolveBenchmarkReadyLoadNodes: async () => [
-          seedNode,
-          {id: 'node-2', role: 'joiner'},
-          {id: 'node-3', role: 'joiner'},
-          {id: 'node-4', role: 'joiner'},
-          {id: 'node-5', role: 'joiner'},
-          {id: 'node-6', role: 'joiner'},
-        ],
-        startLoad: () => ({
-          cancel: () => {
-            loadCancelled = true;
-          },
-          waitComplete: async () => ({
-            total: 120,
-            success: 96,
-            failed: 24,
-          }),
-        }),
-        restartNode: async () => {
-          restarted = true;
-        },
-        assertConsistency: async () => {},
-        waitForConsistencyConvergence: async () => {},
-      };
+      });
 
       await assert.rejects(
         run(cluster, {
@@ -936,9 +496,9 @@ export function registerSevenNodeTransactionRecoveryTailTests({
         }),
         /stalled before recovery became ready/i,
       );
-      assert.equal(loadCancelled, true);
+      assert.equal(state.loadCancelled, true);
       assert.ok(postRestartVisibilityObserved);
-      assert.ok(activeTransactionId);
-      assert.ok(preparedTransactionId);
+      assert.ok(state.activeTransactionId);
+      assert.ok(state.preparedTransactionId);
     });
 }

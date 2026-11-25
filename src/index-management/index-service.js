@@ -12,6 +12,7 @@ import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
+  GLOBAL_INDEX_ERROR_CODE,
   GLOBAL_INDEX_SQL_STATE,
   INDEX_CONFIG_KEY,
   INDEX_DEFAULTS,
@@ -22,6 +23,7 @@ import {
   INDEX_TYPE,
 } from './index-constants.js';
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
+import {createUnavailableError} from './global-index-partition-discovery.js';
 import {indexServiceCdcHandler} from './index-service-cdc-handler.js';
 import {indexServicePartitionMethods} from './index-service-partition-methods.js';
 import {indexServiceGlobalMethods} from './index-service-global-methods.js';
@@ -31,6 +33,10 @@ import {
 } from './global-index-production-wiring.js';
 
 const LOCAL_STR_CRITICAL = 'critical';
+const PERSIST_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG =
+  'System-table write authority is unavailable for persisting index metadata';
+const DELETE_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG =
+  'System-table write authority is unavailable for deleting index metadata';
 
 function resolvePartitionServiceInstance(service, partitionId) {
   if (!service) return null;
@@ -280,20 +286,13 @@ class IndexService {
     if (cacheId) return cacheId;
 
     if (this.canReadMetadata()) {
-      try {
-        const result = await this.getControlPlaneSystemTableGateway().readRows(
-          TABLES.TABLES,
-          'SELECT * FROM tables WHERE table_name = ?',
-          [tableName],
-        );
-        if (result.rows?.[0]?.table_id) {
-          return result.rows[0].table_id;
-        }
-      } catch (err) {
-        this.logger.debug(INDEX_LOG_MSG.RESOLVE_TABLE_ID_FAILED, {
-          tableName,
-          error: err?.message,
-        });
+      const result = await this.getControlPlaneSystemTableGateway().readRows(
+        TABLES.TABLES,
+        'SELECT * FROM tables WHERE table_name = ?',
+        [tableName],
+      );
+      if (result?.rows?.[0]?.table_id) {
+        return result.rows[0].table_id;
       }
     }
     return tableName;
@@ -364,32 +363,33 @@ class IndexService {
   }
 
   async persistIndexMetadata(metadata) {
-    if (!this.canWriteSystemTable()) {
-      return;
-    }
-    const {indexId, tableId, indexName, columnNames, indexType, unique, createdAt} = metadata;
     const gateway = this.getControlPlaneSystemTableGateway();
-    if (gateway) {
-      await gateway.insertSystemTableRow(
-        TABLES.INDICES,
-        {
-          index_id: indexId,
-          table_id: tableId,
-          table_name: metadata.tableName || null,
-          index_name: indexName,
-          column_names: JSON.stringify(columnNames),
-          index_type: indexType,
-          is_unique: unique ? 1 : 0,
-          unique: unique ? 1 : 0,
-          state: metadata.state || INDEX_READABLE_STATE.READY,
-          created_at: createdAt,
-        },
-        {
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: LOCAL_STR_CRITICAL,
-        },
+    if (!this.canWriteSystemTable() || !gateway?.insertSystemTableRow) {
+      throw createUnavailableError(
+        GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+        PERSIST_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG,
       );
     }
+    const {indexId, tableId, indexName, columnNames, indexType, unique, createdAt} = metadata;
+    await gateway.insertSystemTableRow(
+      TABLES.INDICES,
+      {
+        index_id: indexId,
+        table_id: tableId,
+        table_name: metadata.tableName || null,
+        index_name: indexName,
+        column_names: JSON.stringify(columnNames),
+        index_type: indexType,
+        is_unique: unique ? 1 : 0,
+        unique: unique ? 1 : 0,
+        state: metadata.state || INDEX_READABLE_STATE.READY,
+        created_at: createdAt,
+      },
+      {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: LOCAL_STR_CRITICAL,
+      },
+    );
   }
 
   /**
@@ -553,24 +553,25 @@ class IndexService {
   }
 
   async deleteIndexMetadata(indexMetadata, resolvedTableId, indexName) {
-    if (!this.canWriteSystemTable()) {
-      return;
-    }
     const gateway = this.getControlPlaneSystemTableGateway();
-    if (gateway) {
-      const whereClause = {table_id: resolvedTableId, index_name: indexName};
-      if (indexMetadata?.indexId) {
-        whereClause.index_id = indexMetadata.indexId;
-      }
-      await gateway.deleteSystemTableRow(
-        TABLES.INDICES,
-        whereClause,
-        {
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: LOCAL_STR_CRITICAL,
-        },
+    if (!this.canWriteSystemTable() || !gateway?.deleteSystemTableRow) {
+      throw createUnavailableError(
+        GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+        DELETE_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG,
       );
     }
+    const whereClause = {table_id: resolvedTableId, index_name: indexName};
+    if (indexMetadata?.indexId) {
+      whereClause.index_id = indexMetadata.indexId;
+    }
+    await gateway.deleteSystemTableRow(
+      TABLES.INDICES,
+      whereClause,
+      {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: LOCAL_STR_CRITICAL,
+      },
+    );
   }
 
   /**
@@ -745,26 +746,18 @@ class IndexService {
     this.syncGlobalIndexesFromCache();
   }
 
-  /**
-   * Set the CDC integration service.
-   * @param {Object} service - CDC integration service.
-   */
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
   }
 
   canReadMetadata() {
     return Boolean(
-      this.controlPlaneSystemTableGateway ||
-      this.sqlQueryEngine ||
-      this.cdcIntegrationService,
+      this.controlPlaneSystemTableGateway || this.sqlQueryEngine || this.cdcIntegrationService,
     );
   }
 
   getControlPlaneSystemTableGateway() {
-    if (this.controlPlaneSystemTableGateway) {
-      return this.controlPlaneSystemTableGateway;
-    }
+    if (this.controlPlaneSystemTableGateway) return this.controlPlaneSystemTableGateway;
     this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
       getCdcIntegrationService: () => this.cdcIntegrationService,
       getSqlQueryEngine: () => this.sqlQueryEngine,
@@ -773,10 +766,6 @@ class IndexService {
     return this.controlPlaneSystemTableGateway;
   }
 
-  /**
-   * Shutdown the index service.
-   * @return {Promise<void>}
-   */
   async shutdown() {
     this.logger.info(INDEX_LOG_MSG.SHUTTING_DOWN);
     this.shuttingDown = true;
@@ -791,9 +780,7 @@ class IndexService {
 
 Object.assign(
   IndexService.prototype,
-  indexServiceCdcHandler,
-  indexServicePartitionMethods,
-  indexServiceGlobalMethods,
+  indexServiceCdcHandler, indexServicePartitionMethods, indexServiceGlobalMethods,
 );
 
 export {IndexService, IndexType};
