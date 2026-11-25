@@ -4,19 +4,6 @@
 
 The history holds 76 records over 53 combinations. History records are forensic: none is admitted as a current result.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
-
-![Lagrange and TiDB comparison history](tidb-comparison-progress.svg)
-
-## Cell status vocabulary
-
-- `valid-observed`: admitted from retained v2 observations
-- `product-failure`: the product ran and failed; failure counts are shown
-- `invalid-measurement`: evidence exists but cannot support the claim (reason codes name why)
-- `blocked`: cannot be measured until a named prerequisite exists
-- `unsupported`: the configuration cannot express this claim
-- `not-measured`: no observation exists
-
 ## Scenario A history
 
 Definition: tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline. Latest record per combination.
@@ -90,6 +77,19 @@ Latest record per combination.
 | --- | --- |
 | 2026-10-30T11:45:00.000Z scenario-a-semantic-closure/scenario-a-semantic-v1 [github-actions-live] 66d08c67e9e3 | invalid-measurement (closed-loop-throughput, forensic-record-not-admissible, invalidated:inv-0013, non-canonical-workload) |
 | 2026-10-30T12:11:36.102Z scenario-a-semantic-closure/scenario-a-semantic-v1 [github-actions-semantic-closure] 0157b6d79ab0 | invalid-measurement (closed-loop-throughput, forensic-record-not-admissible, invalidated:inv-0013, non-canonical-workload) |
+
+![Lagrange and TiDB comparison history](tidb-comparison-progress.svg)
+
+## Cell status vocabulary
+
+- `valid-observed`: admitted from retained v2 observations
+- `product-failure`: the product ran and failed; failure counts are shown
+- `invalid-measurement`: evidence exists but cannot support the claim (reason codes name why)
+- `blocked`: cannot be measured until a named prerequisite exists
+- `unsupported`: the configuration cannot express this claim
+- `not-measured`: no observation exists
+
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ## Sources
 

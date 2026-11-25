@@ -21,8 +21,8 @@ const STATUS_COLOR = Object.freeze({
   [CLAIM_CELL_STATUS.NOT_MEASURED]: '#94a3b8',
 });
 
-const LABEL_WIDTH = 330;
-const CELL_WIDTH = 150;
+const LABEL_WIDTH = 470;
+const CELL_WIDTH = 185;
 const ROW_HEIGHT = 26;
 const HEADER_HEIGHT = 70;
 const SECTION_GAP = 34;
@@ -51,13 +51,21 @@ function cellTitle(cell) {
   return `${cell.claimKey} ${cell.status}${reasons}`;
 }
 
+function cellBadgeText(cell) {
+  const a = cell.metrics?.accounting;
+  if (cell.status === CLAIM_CELL_STATUS.VALID_OBSERVED && a) {
+    return `${cell.status} (${a.committed}/${a.offered})`;
+  }
+  return cell.status;
+}
+
 function renderSvgCell(cell, x, y) {
   const color = STATUS_COLOR[cell.status];
   return `<g><title>${escapeXml(cellTitle(cell))}</title>` +
     `<rect x="${x + 2}" y="${y + 3}" width="${CELL_WIDTH - 4}" height="${ROW_HEIGHT - 6}" ` +
     `rx="4" fill="${color}" fill-opacity="0.15" stroke="${color}"/>` +
     `<text x="${x + CELL_WIDTH / 2}" y="${y + ROW_HEIGHT / 2 + 4}" text-anchor="middle" ` +
-    `font-size="11" fill="${color}">${escapeXml(cell.status)}</text></g>`;
+    `font-size="11" fill="${color}">${escapeXml(cellBadgeText(cell))}</text></g>`;
 }
 
 function renderSvgSection(section, top) {

@@ -106,6 +106,70 @@ function buildTargetSection(matrix, {heading, description, targetIds, columns}) 
   };
 }
 
+const BREAKDOWN_HEADERS = Object.freeze([
+  'Configuration', 'Status', 'Semantic Gate Proofs', 'Offered', 'Issued', 'Committed',
+  'Conflict-Exhausted', 'Product Error', 'Correctness Failure', 'Transport Failure',
+  'Harness Fault', 'Unresolved', 'Unissued', 'Run ID',
+]);
+
+function buildBreakdownRow(target, claimKey) {
+  const cell = target.claims[claimKey];
+  if (!cell) throw new Error(`${target.label}/${claimKey}: no admission cell`);
+  const reasons = cell.reasons.length > 0 ? ` (${arrayJoin(cell.reasons, ', ')})` : '';
+  const statusText = `${cell.status}${reasons}`;
+  const a = cell.metrics?.accounting;
+  if (!a) {
+    return {
+      status: cell.status,
+      values: [target.label, statusText, '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+    };
+  }
+  const tf = a.terminalFailures || {};
+  const proofs = Array.isArray(cell.evidence?.semanticProofIds) ?
+    String(cell.evidence.semanticProofIds.length) : '-';
+  const runIds = Array.isArray(cell.evidence?.runIds) && cell.evidence.runIds.length > 0 ?
+    arrayJoin(cell.evidence.runIds, ', ') : '-';
+  return {
+    status: cell.status,
+    values: [
+      target.label, statusText, proofs,
+      String(a.offered), String(a.issued), String(a.committed),
+      String(a.conflictExhausted), String(tf.product_error ?? 0),
+      String(tf.correctness_failure ?? 0), String(tf.transport_failure ?? 0),
+      String(tf.harness_fault ?? 0), String(a.unresolved), String(a.unissued), runIds,
+    ],
+  };
+}
+
+function buildMeasurementBreakdownTable(matrix, {heading, description, targetIds, claimKey}) {
+  const targets = arrayMap(targetIds, (id) => arrayFind(matrix.targets, (t) => t.targetId === id));
+  return {
+    heading,
+    description,
+    headers: BREAKDOWN_HEADERS,
+    rows: arrayMap(targets, (t) => buildBreakdownRow(t, claimKey)),
+  };
+}
+
+function renderBreakdownMarkdown(breakdown) {
+  if (!breakdown) return [];
+  const header = `| ${arrayJoin(breakdown.headers, ' | ')} |`;
+  const rule = `| ${arrayJoin(arrayMap(breakdown.headers, () => '---'), ' | ')} |`;
+  const rows = arrayMap(breakdown.rows, (r) =>
+    `| ${arrayJoin(arrayMap(r.values, mdEscape), ' | ')} |`);
+  return [`## ${breakdown.heading}`, '', breakdown.description, '', header, rule, ...rows, ''];
+}
+
+function renderBreakdownHtml(breakdown) {
+  if (!breakdown) return '';
+  const head = arrayJoin(arrayMap(breakdown.headers, (h) => `<th>${escapeXml(h)}</th>`), '');
+  const rows = arrayMap(breakdown.rows, (r) =>
+    `<tr class="${escapeXml(r.status)}">` +
+    arrayJoin(arrayMap(r.values, (v) => `<td>${escapeXml(v)}</td>`), '') + '</tr>');
+  return `<h2>${escapeXml(breakdown.heading)}</h2><p>${escapeXml(breakdown.description)}</p>` +
+    `<table><thead><tr>${head}</tr></thead><tbody>${arrayJoin(rows, '')}</tbody></table>`;
+}
+
 function buildExperimentSection(matrix, experimentId, description) {
   const exp = arrayFind(matrix.experiments, (e) => e.experimentId === experimentId);
   return {
@@ -170,12 +234,17 @@ function renderClaimPageMarkdown(page) {
     ['## Related pages', '', ...arrayMap(page.links, (l) => `- [${l.label}](${l.href})`), ''] :
     [];
   const svg = page.svgHref ? [`![${page.title}](${page.svgHref})`, ''] : [];
+  const breakdown = renderBreakdownMarkdown(page.measurementBreakdown);
   return arrayJoin([`<!-- ${GENERATED_MARKER} -->`, '', `# ${page.title}`, '',
     ...arrayMap(page.intro, (p) => `${p}\n`),
+    ...breakdown,
+    ...arrayMap(page.sections, renderSectionMarkdown),
+    ...svg,
+    renderStatusLegendMarkdown(),
     renderWithdrawalNotice(page.withdrawal, {
       ledger: `[invalidation ledger](${LEDGER_HREF})`, code: (c) => `\`${c}\``,
-    }), '', ...svg,
-    renderStatusLegendMarkdown(), ...arrayMap(page.sections, renderSectionMarkdown), ...links,
+    }), '',
+    ...links,
     renderSourcesMarkdown(page.sources)], '\n');
 }
 
@@ -209,12 +278,13 @@ function renderClaimPageHtml(page) {
     '.unsupported{color:#475569}.not-measured{color:#64748b}</style></head><body>' +
     `<h1>${escapeXml(page.title)}</h1>` +
     arrayJoin(arrayMap(page.intro, (p) => `<p>${escapeXml(p)}</p>`), '') +
+    renderBreakdownHtml(page.measurementBreakdown) +
+    arrayJoin(arrayMap(page.sections, renderSectionHtml), '') +
+    `<h2>Cell status vocabulary</h2><ul>${arrayJoin(legend, '')}</ul>` +
     `<p>${renderWithdrawalNotice(page.withdrawal, {
       ledger: `<a href="${LEDGER_HREF}">invalidation ledger</a>`,
       code: (c) => `<code>${escapeXml(c)}</code>`,
     })}</p>` +
-    `<h2>Cell status vocabulary</h2><ul>${arrayJoin(legend, '')}</ul>` +
-    arrayJoin(arrayMap(page.sections, renderSectionHtml), '') +
     (links.length > 0 ? `<h2>Related pages</h2><ul>${arrayJoin(links, '')}</ul>` : '') +
     `<h2>Sources</h2><ul>${arrayJoin(sources, '')}</ul></body></html>\n`;
 }
@@ -253,6 +323,7 @@ async function writeClaimPageArtifacts(page, paths) {
 
 export {
   buildExperimentSection,
+  buildMeasurementBreakdownTable,
   buildTargetSection,
   column,
   formatCell,

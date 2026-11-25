@@ -6,18 +6,27 @@ This page lists every comparative claim the benchmark pages have advertised, one
 
 Scenario definitions and the Scenario A semantic gate are contracts, not results: see the related pages below.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+## Latest comparative systems measurements (Scenario A)
 
-![Comparative benchmarks](comparative-overview.svg)
+Admitted v2 measurements for scenario-a-smoke-v1 across the four comparative systems (per-request accounting and Scenario A semantic gate proof count).
 
-## Cell status vocabulary
+| Configuration | Status | Semantic Gate Proofs | Offered | Issued | Committed | Conflict-Exhausted | Product Error | Correctness Failure | Transport Failure | Harness Fault | Unresolved | Unissued | Run ID |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim) | 33 | 100 | 100 | 97 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001 |
+| TiDB + TiKV v8.5.8 | valid-observed (smoke-profile-no-capacity-claim) | 33 | 100 | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | bench-gcp-3sys-smoke-44eeb290a-20261124-r002 |
+| PostgreSQL 17 (single primary) | valid-observed (smoke-profile-no-capacity-claim) | 33 | 100 | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | bench-gcp-3sys-smoke-44eeb290a-20261124-r003 |
+| PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | valid-observed (smoke-profile-no-capacity-claim) | 33 | 100 | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | bench-gcp-pg-ha-smoke-44eeb290a-20261124-r001 |
 
-- `valid-observed`: admitted from retained v2 observations
-- `product-failure`: the product ran and failed; failure counts are shown
-- `invalid-measurement`: evidence exists but cannot support the claim (reason codes name why)
-- `blocked`: cannot be measured until a named prerequisite exists
-- `unsupported`: the configuration cannot express this claim
-- `not-measured`: no observation exists
+## Scenario A smoke runs
+
+The named smoke profile scenario-a-smoke-v1: the canonical workload executed end to end with per-request correctness and complete accounting. A smoke cell never carries throughput, latency quantiles or a ratio.
+
+| Configuration | Scenario A smoke |
+| --- | --- |
+| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 97, conflict-exhausted 3, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| TiDB + TiKV v8.5.8 | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| PostgreSQL 17 (single primary) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 
 ## Advertised configurations
 
@@ -40,17 +49,6 @@ Configuration labels describe what the deployer starts.
 | PostgreSQL 17 + Valkey 8 (Sync Write-Through + App Service) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
 | PostgreSQL 17 + Valkey 8 (Async CDC Stream + App Service) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | unsupported (async-stream-cannot-serve-0ms-freshness, closed-loop-throughput, constant-phase-or-byte, emulated-product, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
 
-## Scenario A smoke runs
-
-The named smoke profile scenario-a-smoke-v1: the canonical workload executed end to end with per-request correctness and complete accounting. A smoke cell never carries throughput, latency quantiles or a ratio.
-
-| Configuration | Scenario A smoke |
-| --- | --- |
-| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 97, conflict-exhausted 3, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
-| TiDB + TiKV v8.5.8 | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
-| PostgreSQL 17 (single primary) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
-| PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
-
 ## Per-phase time breakdown
 
 Phase timings are admitted only from observed spans.
@@ -69,6 +67,19 @@ Phase timings are admitted only from observed spans.
 | scenarioC: lagrange | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, dataset-unverified, emulated-product, forensic-record-not-admissible, freshness-not-observed, invalidated:inv-0003, invalidated:inv-0004, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
 | scenarioC: pg-plpgsql-sync-ha-rf3 | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, dataset-unverified, emulated-product, forensic-record-not-admissible, freshness-not-observed, invalidated:inv-0003, invalidated:inv-0004, invalidated:inv-0005, invalidated:inv-0006, label-hash-identity, label-not-observed, non-canonical-workload) |
 | scenarioC: tidb-tikv | not-measured (no-observation) |
+
+![Comparative benchmarks](comparative-overview.svg)
+
+## Cell status vocabulary
+
+- `valid-observed`: admitted from retained v2 observations
+- `product-failure`: the product ran and failed; failure counts are shown
+- `invalid-measurement`: evidence exists but cannot support the claim (reason codes name why)
+- `blocked`: cannot be measured until a named prerequisite exists
+- `unsupported`: the configuration cannot express this claim
+- `not-measured`: no observation exists
+
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ## Related pages
 

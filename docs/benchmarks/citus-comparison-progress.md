@@ -4,19 +4,6 @@
 
 Advertised Citus configurations. No Citus deployment has been executed by the comparative benchmark runner.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
-
-![Citus comparison](citus-comparison-progress.svg)
-
-## Cell status vocabulary
-
-- `valid-observed`: admitted from retained v2 observations
-- `product-failure`: the product ran and failed; failure counts are shown
-- `invalid-measurement`: evidence exists but cannot support the claim (reason codes name why)
-- `blocked`: cannot be measured until a named prerequisite exists
-- `unsupported`: the configuration cannot express this claim
-- `not-measured`: no observation exists
-
 ## Scenario A
 
 Citus with client-side SQL and with colocated tables plus a distributed function.
@@ -43,6 +30,19 @@ Citus with client-side SQL and with colocated tables plus a distributed function
 | --- | --- | --- | --- | --- | --- |
 | Citus 13 (Sharded SQL RF=3 + App Service) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
 | Citus 13 (Colocated Tables + Distributed Function RF=3) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, emulated-product, forensic-record-not-admissible, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
+
+![Citus comparison](citus-comparison-progress.svg)
+
+## Cell status vocabulary
+
+- `valid-observed`: admitted from retained v2 observations
+- `product-failure`: the product ran and failed; failure counts are shown
+- `invalid-measurement`: evidence exists but cannot support the claim (reason codes name why)
+- `blocked`: cannot be measured until a named prerequisite exists
+- `unsupported`: the configuration cannot express this claim
+- `not-measured`: no observation exists
+
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ## Related pages
 

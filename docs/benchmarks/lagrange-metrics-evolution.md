@@ -4,18 +4,21 @@
 
 Each milestone lists the claims it advertised. Lagrange Scenario B is blocked until the compiled risk service journey exists.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+## Latest Lagrange measurement (Scenario A)
 
-![Lagrange milestones](lagrange-metrics-evolution.svg)
+Admitted v2 measurement for Lagrange 3-node cluster on Scenario A.
 
-## Cell status vocabulary
+| Configuration | Status | Semantic Gate Proofs | Offered | Issued | Committed | Conflict-Exhausted | Product Error | Correctness Failure | Transport Failure | Harness Fault | Unresolved | Unissued | Run ID |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim) | 33 | 100 | 100 | 97 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001 |
 
-- `valid-observed`: admitted from retained v2 observations
-- `product-failure`: the product ran and failed; failure counts are shown
-- `invalid-measurement`: evidence exists but cannot support the claim (reason codes name why)
-- `blocked`: cannot be measured until a named prerequisite exists
-- `unsupported`: the configuration cannot express this claim
-- `not-measured`: no observation exists
+## Scenario A smoke runs
+
+
+
+| Configuration | Scenario A smoke |
+| --- | --- |
+| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 97, conflict-exhausted 3, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 
 ## Lagrange milestones
 
@@ -35,6 +38,19 @@ Every comparative result published before 2026-11-01 was withdrawn; the records 
 | --- | --- | --- | --- |
 | Lagrange 0.4.0 (3 nodes) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, dataset-unverified, emulated-product, forensic-record-not-admissible, health-substitute, invalidated:inv-0001, invalidated:inv-0003, invalidated:inv-0006, label-hash-identity, non-canonical-workload, timeout-counted-as-success, unverified-response-envelope) | blocked (closed-loop-throughput, compiled-risk-service-missing, constant-phase-or-byte, dataset-unverified, emulated-product, invalidated:inv-0003, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, dataset-unverified, emulated-product, forensic-record-not-admissible, freshness-not-observed, invalidated:inv-0003, invalidated:inv-0004, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
 | Lagrange 0.4.0 (5 nodes, RF=3 configured) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, dataset-unverified, emulated-product, forensic-record-not-admissible, health-substitute, invalidated:inv-0001, invalidated:inv-0003, invalidated:inv-0006, label-hash-identity, non-canonical-workload, timeout-counted-as-success, unverified-response-envelope) | blocked (closed-loop-throughput, compiled-risk-service-missing, constant-phase-or-byte, dataset-unverified, emulated-product, invalidated:inv-0003, invalidated:inv-0006, label-hash-identity, non-canonical-workload) | invalid-measurement (closed-loop-throughput, constant-phase-or-byte, dataset-unverified, emulated-product, forensic-record-not-admissible, freshness-not-observed, invalidated:inv-0003, invalidated:inv-0004, invalidated:inv-0006, label-hash-identity, non-canonical-workload) |
+
+![Lagrange milestones](lagrange-metrics-evolution.svg)
+
+## Cell status vocabulary
+
+- `valid-observed`: admitted from retained v2 observations
+- `product-failure`: the product ran and failed; failure counts are shown
+- `invalid-measurement`: evidence exists but cannot support the claim (reason codes name why)
+- `blocked`: cannot be measured until a named prerequisite exists
+- `unsupported`: the configuration cannot express this claim
+- `not-measured`: no observation exists
+
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ## Related pages
 

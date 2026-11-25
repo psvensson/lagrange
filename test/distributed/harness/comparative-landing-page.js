@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import {
   buildExperimentSection,
+  buildMeasurementBreakdownTable,
   buildTargetSection,
   writeClaimPageArtifacts,
 } from './comparative-landing-tables.js';
@@ -50,15 +51,22 @@ function buildComparativeLandingPage(matrix) {
       'Scenario definitions and the Scenario A semantic gate are contracts, not results: see ' +
         'the related pages below.',
     ],
+    measurementBreakdown: buildMeasurementBreakdownTable(matrix, {
+      heading: 'Latest comparative systems measurements (Scenario A)',
+      description: `Admitted v2 measurements for ${SMOKE_PROFILE_ID} across the four comparative ` +
+        'systems (per-request accounting and Scenario A semantic gate proof count).',
+      targetIds: SMOKE_TARGETS,
+      claimKey: 'scenarioA/smoke',
+    }),
     sections: [
-      buildTargetSection(matrix, {heading: 'Advertised configurations', columns: OVERVIEW_COLUMNS,
-        targetIds: ALL_TARGET_IDS,
-        description: 'Configuration labels describe what the deployer starts.'}),
       buildTargetSection(matrix, {heading: 'Scenario A smoke runs', columns: SMOKE_COLUMNS,
         targetIds: SMOKE_TARGETS,
         description: `The named smoke profile ${SMOKE_PROFILE_ID}: the canonical workload ` +
           'executed end to end with per-request correctness and complete accounting. A smoke ' +
           'cell never carries throughput, latency quantiles or a ratio.'}),
+      buildTargetSection(matrix, {heading: 'Advertised configurations', columns: OVERVIEW_COLUMNS,
+        targetIds: ALL_TARGET_IDS,
+        description: 'Configuration labels describe what the deployer starts.'}),
       buildExperimentSection(matrix, 'scenario-setup-breakdown',
         'Phase timings are admitted only from observed spans.'),
     ],

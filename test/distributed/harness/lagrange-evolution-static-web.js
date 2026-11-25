@@ -2,17 +2,26 @@
 import {TARGET_ID} from './comparative-coverage-manifest.js';
 import {
   buildExperimentSection,
+  buildMeasurementBreakdownTable,
   buildTargetSection,
   writeClaimPageArtifacts,
 } from './comparative-landing-tables.js';
-import {OVERVIEW_COLUMNS, SCENARIO_LINKS} from './comparative-page-columns.js';
+import {OVERVIEW_COLUMNS, SCENARIO_LINKS, SMOKE_COLUMNS} from './comparative-page-columns.js';
 
 function buildLagrangeEvolutionPage(matrix) {
   return {
     title: 'Lagrange milestones',
     intro: ['Each milestone lists the claims it advertised. Lagrange Scenario B is blocked ' +
       'until the compiled risk service journey exists.'],
+    measurementBreakdown: buildMeasurementBreakdownTable(matrix, {
+      heading: 'Latest Lagrange measurement (Scenario A)',
+      description: 'Admitted v2 measurement for Lagrange 3-node cluster on Scenario A.',
+      targetIds: [TARGET_ID.LAGRANGE],
+      claimKey: 'scenarioA/smoke',
+    }),
     sections: [
+      buildTargetSection(matrix, {heading: 'Scenario A smoke runs', description: '',
+        columns: SMOKE_COLUMNS, targetIds: [TARGET_ID.LAGRANGE]}),
       buildExperimentSection(matrix, 'lagrange-evolution', ''),
       buildTargetSection(matrix, {heading: 'Lagrange configurations', description: '',
         columns: OVERVIEW_COLUMNS, targetIds: [TARGET_ID.LAGRANGE, TARGET_ID.LAGRANGE_5]}),
