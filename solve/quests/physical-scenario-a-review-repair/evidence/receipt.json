@@ -1,0 +1,20 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "scenario-a-three-physical-hosts",
+      "passed": false,
+      "observed": "dataset-preparation-failed; no-committed-operations",
+      "campaign": "bench-20261126T130159Z-501b4c",
+      "endpoint": {
+        "campaignId": "bench-20261126T130159Z-501b4c",
+        "containerId": "a9806970319b1fa5b89c178d14d6149adef11ba24311c0f42763c984a628f726",
+        "imageId": "sha256:647ada01006b2a7198582cd82cbf7a328dc4926466b2e606838637a5d3b0866d",
+        "endpoint": "192.168.86.34:5432"
+      },
+      "summarySha256": "d1540cfa08c2974572daf4dc5bc0240f86a928ecb70a92f5661efe5276cfe43a",
+      "caseSha256": "aa32a8bcda52a361d058aedd88f2bb4a8c5a6446c74f900546a7c4266bf715ce"
+    }
+  ]
+}

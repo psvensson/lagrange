@@ -37,7 +37,6 @@ import {
   completeOwnedLearnerRetirement, evaluatePlacementLearnerRetirement,
   reconcileUnscopedPlacementRemoval, settleSupersededRemoval,
 } from './operation-workflow-placement-learner-retirement.js';
-import {recordAcknowledgedCreateInFlight} from './operation-workflow-create-ack-state.js';
 import {
   deliverAdmittedOperationEffect, holdReplaceSourceRemovalEffect, prepareReplaceRemovalEffectTurn,
 } from './operation-workflow-remove-effect-admission.js';
@@ -229,7 +228,6 @@ function isReplaceStoppingOwnerEntry(operation, options) {
 async function reconcileRetainedCreateDeliveryStep(
   owner, operation, response, replaceRemoveDispatchPhase,
 ) {
-  recordAcknowledgedCreateInFlight(owner, operation, replaceRemoveDispatchPhase);
   if (replaceRemoveDispatchPhase === true || operation?.workflowStep !== WORKFLOW_STEP.SENDING) {
     return;
   }
@@ -706,9 +704,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     try {
       const {delivery, wait} = await deliverAdmittedOperationEffect(
         this, operation, target, request, dispatchNodeId, removalEffectTurn,
-        readinessEntryLevel, () => logSendOperationAttempt(this, operation, {
+        readinessEntryLevel, options?.routineCreateRearmWake === true,
+        (createReceipt) => logSendOperationAttempt(this, operation, {
           operationId: operation.operationId, target, type: messageType, entityType,
           entityId, replaceRemovePhase: replaceRemoveDispatchPhase,
+          ...(createReceipt ? {createReceipt} : {}),
         }));
       if (wait) return wait;
       transport = deliveryTransportOf(delivery);
@@ -844,7 +844,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (response.status === ReplicaOperationResponseStatus.INITIATED ||
         response.status === ReplicaOperationResponseStatus.IN_PROGRESS) {
-      recordAcknowledgedCreateInFlight(this, operation, replaceRemovePhase);
       if (response.status === ReplicaOperationResponseStatus.IN_PROGRESS &&
           await this.reconcileCreateInProgressDispatchResponse(
             operation, response, replaceRemovePhase)) {

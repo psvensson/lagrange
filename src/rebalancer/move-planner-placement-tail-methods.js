@@ -180,19 +180,6 @@ class MovePlannerPlacementTailMethods {
   }
 
   /**
-   * Calculate node load score.
-   * @param {Object} node - Node object.
-   * @return {number} Load score (0-300, lower is better).
-   */
-  calculateNodeLoad(node) {
-    const cpuLoad = node.cpu_usage_percent || 0;
-    const memoryLoad = node.memory_usage_percent || 0;
-    const diskLoad = node.disk_usage_percent || 0;
-    return cpuLoad + memoryLoad + diskLoad;
-  }
-
-
-  /**
    * Apply pressure-state gating to a list of computed moves.
    *
    * For each storage-increasing move (ADD, REPLACE) targeting a node:

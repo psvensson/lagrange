@@ -92,7 +92,7 @@ test('NodeJoiningService retries ready heartbeat before failing join readiness',
     const originalGetInstance = NodeService.getInstance;
     NodeService.getInstance = () => ({
       getNodeStats: async () => ({
-        cpu: {count: 4, usagePercent: 10},
+        cpu: {count: 4},
         memory: {totalBytes: 1024, usagePercent: 20},
         diskGb: 100,
         diskUsagePercent: 30,
@@ -175,7 +175,7 @@ test('NodeJoiningService waits for local query transport readiness before sendin
     const originalGetInstance = NodeService.getInstance;
     NodeService.getInstance = () => ({
       getNodeStats: async () => ({
-        cpu: {count: 4, usagePercent: 10},
+        cpu: {count: 4},
         memory: {totalBytes: 1024, usagePercent: 20},
         diskGb: 100,
         diskUsagePercent: 30,
@@ -246,7 +246,7 @@ test('NodeJoiningService opens the ready heartbeat for control-ready metadata pu
     const originalGetInstance = NodeService.getInstance;
     NodeService.getInstance = () => ({
       getNodeStats: async () => ({
-        cpu: {count: 4, usagePercent: 10},
+        cpu: {count: 4},
         memory: {totalBytes: 1024, usagePercent: 20},
         diskGb: 100,
         diskUsagePercent: 30,
@@ -317,7 +317,7 @@ test('NodeJoiningService opens the ready heartbeat during the lifecycle stable w
     const originalGetInstance = NodeService.getInstance;
     NodeService.getInstance = () => ({
       getNodeStats: async () => ({
-        cpu: {count: 4, usagePercent: 10},
+        cpu: {count: 4},
         memory: {totalBytes: 1024, usagePercent: 20},
         diskGb: 100,
         diskUsagePercent: 30,
@@ -392,7 +392,7 @@ test('NodeJoiningService opens the ready heartbeat for seed-authorized INIT diag
     const originalGetInstance = NodeService.getInstance;
     NodeService.getInstance = () => ({
       getNodeStats: async () => ({
-        cpu: {count: 4, usagePercent: 10},
+        cpu: {count: 4},
         memory: {totalBytes: 1024, usagePercent: 20},
         diskGb: 100,
         diskUsagePercent: 30,

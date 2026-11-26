@@ -159,7 +159,7 @@ test('cache apply closes stored admission until its exact revision is classified
       CDC_OPERATION.UPDATE,
       {
         ...initialRow,
-        [COLUMN.CPU_USAGE_PERCENT]: 91,
+        [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 100,
         [COLUMN.LAST_HEARTBEAT]: NOW_MS + 3,
       },
     );

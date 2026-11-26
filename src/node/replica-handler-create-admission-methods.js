@@ -39,6 +39,7 @@ import {
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
+import {traceCreateWorker} from './replica-handler-create-work.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
 const ROTATING_ADMISSION_RECOVERY_REFUSED = false;
@@ -472,9 +473,18 @@ function isPendingCreateStatus(status) {
 
 async function claimCreatePhysicalWorker(handler, createRequest) {
   const evidence = createRequest.createAdmissionEvidence;
-  if (!evidence) return true;
-  const claim = await handler.getReplicaCreateAdmissionOwner()
-    .claimPhysicalWorker(evidence);
+  if (!evidence) {
+    traceCreateWorker(handler, createRequest, 'claim', 'not_required');
+    return true;
+  }
+  let claim;
+  try {
+    claim = await handler.getReplicaCreateAdmissionOwner().claimPhysicalWorker(evidence);
+  } catch (error) {
+    traceCreateWorker(handler, createRequest, 'claim', 'error', error);
+    throw error;
+  }
+  traceCreateWorker(handler, createRequest, 'claim', claim ? 'acquired' : 'refused');
   if (!claim) return false;
   createRequest.createPhysicalWorkerClaim = claim;
   return true;

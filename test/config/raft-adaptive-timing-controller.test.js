@@ -54,7 +54,7 @@ function createMockDynamicConfigService(values = {}) {
 /**
  * Build diagnostics sampler report payload.
  * @param {Object} options
- * @param {number} options.cpuPercent
+ * @param {number} options.processCpuPercentOfHostCores
  * @param {number} options.writeBytesPerSec
  * @param {number} options.rssGrowthPerMinBytes
  * @return {Object}
@@ -62,7 +62,7 @@ function createMockDynamicConfigService(values = {}) {
 function buildReport(options = {}) {
   return {
     latest: {
-      process: {cpuPercent: options.cpuPercent},
+      process: {processCpuPercentOfHostCores: options.processCpuPercentOfHostCores},
       io: {writeBytesPerSec: options.writeBytesPerSec},
     },
     trend: {
@@ -82,7 +82,7 @@ function createSequentialSampler(reports) {
     getReport() {
       if (!reports.length) {
         return buildReport({
-          cpuPercent: 0,
+          processCpuPercentOfHostCores: 0,
           writeBytesPerSec: 0,
           rssGrowthPerMinBytes: 0,
         });
@@ -151,12 +151,12 @@ test('RaftAdaptiveTimingController switches from idle to active after high-load 
 
     const reports = [
       buildReport({
-        cpuPercent: 2,
+        processCpuPercentOfHostCores: 2,
         writeBytesPerSec: 0,
         rssGrowthPerMinBytes: 0,
       }),
       buildReport({
-        cpuPercent: 2,
+        processCpuPercentOfHostCores: 2,
         writeBytesPerSec: 0,
         rssGrowthPerMinBytes: 0,
       }),
@@ -211,12 +211,12 @@ test('RaftAdaptiveTimingController switches from active to idle after low-load h
 
     const reports = [
       buildReport({
-        cpuPercent: 0.2,
+        processCpuPercentOfHostCores: 0.2,
         writeBytesPerSec: 0,
         rssGrowthPerMinBytes: 0,
       }),
       buildReport({
-        cpuPercent: 0.2,
+        processCpuPercentOfHostCores: 0.2,
         writeBytesPerSec: 0,
         rssGrowthPerMinBytes: 0,
       }),

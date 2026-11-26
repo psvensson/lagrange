@@ -12,7 +12,6 @@ import * as DISPATCH_WAKE_PREEMPTION
   from './operation-workflow-dispatch-wake-preemption.js';
 import * as DISPATCH_RESPONSE_RECONCILE
   from './operation-workflow-dispatch-response-reconcile.js';
-import {isAcknowledgedCreateStillInFlight} from './operation-workflow-create-ack-state.js';
 import {ensureDispatchMembershipEpochOrSkip} from './operation-workflow-dispatch-epoch-gate.js';
 import {ensureDispatchReservationOrSkip} from './operation-workflow-dispatch-reservation-gate.js';
 import {OPERATION_OWNER_TURN_POLICY} from './operation-owner-turn-policy.js';
@@ -426,13 +425,6 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       await this.reconcileDispatchWakeOperationProgress(operation)) {
       return this.buildSuccessfulOperationResult(operation.operationId);
     }
-    if (createRearmDispatchPhase &&
-        isAcknowledgedCreateStillInFlight(this, operation, options)) {
-      return this.buildSuccessfulOperationResult(operation.operationId, {
-        status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
-      });
-    }
-
     // Fail-closed reservation gate (audit findings 3+11): after the
     // progress-preemption lanes (an operation already observed terminal or
     // claimed elsewhere no longer needs its reservation) and before any
@@ -457,7 +449,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     if (epochGateSkip) {
       return epochGateSkip;
     }
-    return this.advanceReservationClearedDispatch(operationInput, operation);
+    return this.advanceReservationClearedDispatch(operationInput, operation, options);
   }
 
   /**
@@ -468,7 +460,10 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
    * @return {Promise<Object>}
    * @private
    */
-  async advanceReservationClearedDispatch(operationInput, operation) {
+  async advanceReservationClearedDispatch(operationInput, operation, options = {}) {
+    const deliveryOptions = {routineCreateRearmWake: options.routineCreateRearmWake === true &&
+      options.boundary !== 'dispatch_retry' &&
+      options.boundary !== OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE_RECONCILE};
     const replaceRemoveDispatchPhase =
       this.repository.isReplaceRemoveDispatchPhase(operation);
     const dispatchableWorkflowStep = operation.workflowStep;
@@ -482,7 +477,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
           operation.operationId,
         );
       }
-      return this.executeOperationInternal(operation);
+      return this.executeOperationInternal(operation, deliveryOptions);
     }
     if (dispatchableWorkflowStep === WORKFLOW_STEP.PENDING) {
       const claimOutcome = await this.claimPendingDispatchCandidate(
@@ -492,7 +487,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       if (claimOutcome?.skipped === true) {
         return claimOutcome;
       }
-      return this.executeOperationInternal(claimOutcome);
+      return this.executeOperationInternal(claimOutcome, deliveryOptions);
     }
     if (!DISPATCH_PENDING_WORKFLOW_STEPS.has(dispatchableWorkflowStep) &&
       !createRearmDispatchPhase) {
@@ -504,7 +499,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
         operation.operationId,
       );
     }
-    return this.executeOperationInternal(operation);
+    return this.executeOperationInternal(operation, deliveryOptions);
   }
 
   /**

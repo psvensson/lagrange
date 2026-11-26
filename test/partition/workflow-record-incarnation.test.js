@@ -1,3 +1,4 @@
+import {replicateSourceMirrorRetentionCustody, readDurableMirrorRetentionCustodyIn} from '../../src/partition/partition-mirror-effect-retention.js';
 /**
  * Round-7 witnesses: the workflow record is an INCARNATION, never bytes that
  * can repeat (design-workflow-record-change-store-2026-10-05.md, "Round 7").
@@ -37,6 +38,8 @@
  * the failure through the same production entries (persistExecutionFailure,
  * handleRetryablePostAdmissionExecutionFailure) after the cutover landed.
  */
+import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {reconcileFailedMirrorCustody} from '../../src/partition/partition-mirror-custody-lifecycle.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PARTICIPANT_ACK_FIELD} from
   '../../src/workflow/workflow-constants.js';
@@ -241,6 +244,106 @@ function writesOf(store, writer, from) {
 for (const family of Object.keys(FAMILY)) {
   const spec = FAMILY[family];
 
+  async function authorizeSources(workflow, store, t, acquire) {
+    const metadata = store.metadata();
+    const sources = [];
+    for (const partitionId of spec.sources) {
+      const isSplit = family === 'split';
+      const ack = {status: 'snapshot_started', acknowledgedAt: 1000,
+        attempt: metadata.workflowAttempt, fenceToken: metadata.workflowFenceToken,
+        participantKey: isSplit ? SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION :
+          buildMergeSourceParticipantKey(partitionId)};
+      const context = {tableId: store.tableId, tableName: 'users',
+        metadata: {...metadata, targetPartitionId: metadata.targetPartitionIds[0]}};
+      const reserved = await workflow.reserveSourceMirrorCustody(family, partitionId, context.metadata,
+        context.tableId, context.tableName);
+      if (!reserved) throw new Error('source custody reservation refused');
+      const confirmed = isSplit ?
+        await workflow.confirmSplitReplicationStart(context.metadata, context.tableId, context.tableName) :
+        await workflow.confirmMergeReplicationStart(partitionId, context.metadata, context.tableId, context.tableName);
+      if (confirmed) throw new Error('reservation remotely confirmed START before acquisition');
+      if (!acquire) continue;
+      const group = await formAdmittedGroup({partitionId, members: [[partitionId + '-r1', 'n1']],
+        tempPrefix: 'retiring-source-', budgetMs: 5000, serviceOptions: {tableId: store.tableId,
+          tableName: 'users', schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]}}});
+      t.teardown(() => group.dispose());
+      const [source] = group.services;
+      source.sqlQueryEngine = isSplit ? {managedSplitWorkflow: workflow} : {managedMergeWorkflow: workflow};
+      await replicateSourceMirrorRetentionCustody(source, metadata, {family, barrierIndex: 0});
+      sources.push(source);
+      const result = isSplit ?
+        await workflow.acknowledgeSourceParticipant(metadata.workflowId, ack, context) :
+        await workflow.acknowledgeMergeSourceParticipant(metadata.workflowId, ack, context);
+      if (!['accepted', 'duplicate'].includes(result.result)) throw new Error(JSON.stringify(result));
+    }
+    return sources;
+  }
+
+  test(`${family}: FAILED retains each source grant until committed release ACK`, async (t) => {
+    const store = spec.store();
+    const diagnostics = recordingLogger();
+    const workflow = owner(spec, store, {name: 'A', clock: {now: 1000}, logger: diagnostics.logger});
+    const started = await spec.start(workflow);
+    await authorizeSources(workflow, store, t, false);
+    t.same(store.metadata().mirrorCustodyGrants.map((grant) => grant.partitionId), spec.sources);
+    t.equal(workflow.resolveWorkflowState(started.workflowId).metadata.workflowAttempt,
+      store.metadata().workflowAttempt);
+    const firstFence = store.metadata().workflowFenceToken;
+    const claim = await workflow.workflowCoordinator.claimWorkflow(started.workflowId);
+    t.equal(claim.accepted, true, 'same attempt acquires a fresh workflow fence');
+    const secondFence = store.metadata().workflowFenceToken;
+    t.ok(secondFence > firstFence);
+    await authorizeSources(workflow, store, t, false);
+    await workflow.persistExecutionFailure(started.workflowId, new Error('aborted'));
+    const failed = store.tablesRow();
+    if (failed.partition_transition_state !== STATE.FAILED || store.metadata().mirrorExecutionEnded !== true) {
+      throw new Error(JSON.stringify({expected: STATE.FAILED, state: failed.partition_transition_state,
+        metadata: store.metadata(), ownerLog: diagnostics.lines}));
+    }
+    for (const partitionId of spec.sources) {
+      // Reconstruct the workflow owner before each ACK. A successor (including
+      // a merge after only one source replied) must still see retained work.
+      const restarted = owner(spec, store, {name: 'A', clock: {now: 1010}});
+      const refusal = await restarted.workflowCoordinator.registerWorkflowFromRead(
+        spec.record('successor'), store.tablesRow());
+      t.equal(refusal.reason, 'source-mirror-release-pending');
+      const group = await formAdmittedGroup({partitionId, members: [[partitionId + '-r1', 'n1']],
+        tempPrefix: 'terminal-source-', budgetMs: 5000,
+        serviceOptions: {tableId: store.tableId, tableName: 'users',
+          schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]}}});
+      try {
+        const [source] = group.services;
+        source.sqlQueryEngine = family === 'split' ? {managedSplitWorkflow: restarted} :
+          {managedMergeWorkflow: restarted};
+        // The first ACK reaches SQLite, but its reply is lost. The exact
+        // metadata/generation reread still proves that fence's receipt.
+        store.loseAckOnce(({sql}) => sql.startsWith('UPDATE tables SET partition_transition_metadata'));
+        source.systemTableCache.applySystemTableChange('tables', 'INSERT', store.tablesRow());
+        for (const fence of [firstFence, secondFence]) {
+          const start = store.writes.length;
+          const acknowledged = await reconcileFailedMirrorCustody(source).catch((error) => {
+            error.releaseWitness = {partitionId, fence, pendingLostReplies: store.lostAcks.length,
+              writes: store.writes.slice(start), durableGrants: store.metadata().mirrorCustodyGrants};
+            throw error;
+          });
+          t.equal(acknowledged, true, 'committed release acknowledged by the record owner', {
+            partitionId, fence, actualState: store.tablesRow().partition_transition_state,
+            grants: store.metadata().mirrorCustodyGrants, lastWrite: store.writes.at(-1),
+          });
+          const outstanding = store.metadata().mirrorCustodyGrants.filter((grant) =>
+            grant.partitionId === partitionId).map((grant) => grant.fence);
+          t.same(outstanding, fence === firstFence ? [secondFence] : [],
+            'one committed release receipt discharges exactly its source and fence');
+        }
+        t.equal(store.lostAcks.length, 0, 'the release ACK traversed the lost-reply injection');
+      } finally {
+        await group.dispose();
+      }
+    }
+    const successor = await registerFromRecordAsRead(workflow, spec.record('successor'));
+    t.equal(successor.workflowId, 'successor');
+  });
+
   test(`V6-A1 ${family}: a registration derived from a read taken before a ` +
     'whole competing workflow ran to its clear is refused and does nothing',
   async (t) => {
@@ -253,7 +356,15 @@ for (const family of Object.keys(FAMILY)) {
     await turns(20);
     const bStarted = await spec.start(b);
     t.equal(bStarted.success, true, 'setup: B registered and started');
-    await deliver(spec, b, store, [...spec.toCutover, ...spec.toClear]);
+    const sources = await authorizeSources(b, store, t, true);
+    t.equal(store.metadata().mirrorCustodyGrants.length, spec.sources.length);
+    await deliver(spec, b, store, [...spec.toCutover.filter(({status}) =>
+      status !== 'snapshot_started'), ...spec.toClear]);
+    for (const source of sources) {
+      t.ok(readDurableMirrorRetentionCustodyIn(source.db));
+      await reconcileFailedMirrorCustody(source);
+      t.equal(readDurableMirrorRetentionCustodyIn(source.db), null);
+    }
     const afterB = store.tablesRow();
     t.equal(afterB.partition_transition_state, null, 'setup: B cleared');
     t.equal(afterB.active_partition_version, 2, 'setup: B promoted v2');

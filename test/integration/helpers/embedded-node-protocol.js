@@ -190,8 +190,13 @@ function exposedProperty(snapshot, key) {
  * @return {string}
  */
 function describeExposedError(snapshot) {
-  return `${exposedProperty(snapshot, 'code')}: ` +
-    `${exposedProperty(snapshot, 'message')}`;
+  const causes = [];
+  for (let current = snapshot; current && current.__kind !== EXPOSURE_KIND.UNDEFINED;
+    current = current.properties?.cause?.value) {
+    const name = exposedProperty(current, 'code') ?? current.prototype ?? 'Error';
+    causes.push(`${name}: ${exposedProperty(current, 'message') ?? String(current)}`);
+  }
+  return causes.join(' <- ');
 }
 
 export {

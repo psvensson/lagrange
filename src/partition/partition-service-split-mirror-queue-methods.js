@@ -1,3 +1,4 @@
+import {reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   GROUP_RETIREMENT_KIND,
@@ -8,9 +9,6 @@ import {
   findDurableMirrorTransitionForService,
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
-import {
-  pruneSettledMirrorOutcomeEffects,
-} from './partition-committed-statement-outcome.js';
 import {
   beginSourceReplicationActivityForService,
   finishSourceReplicationActivityForService,
@@ -33,7 +31,6 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-const SPLIT_CUSTODY_FAMILY = 'split';
 
 /**
  * Split mirror queue/flush methods for PartitionService.
@@ -85,15 +82,6 @@ class PartitionServiceSplitMirrorQueueMethods {
       resolveSnapshotBarrierIndex(this);
     splitReplication.replayWatermarkIndex =
       splitReplication.snapshotBarrierIndex;
-    pruneSettledMirrorOutcomeEffects(
-      this,
-      splitReplication.snapshotBarrierIndex ?? 0,
-      {
-        establishObligation: true,
-        metadata: splitReplication.metadata,
-        family: SPLIT_CUSTODY_FAMILY,
-      },
-    );
   }
 
   /**
@@ -128,6 +116,7 @@ class PartitionServiceSplitMirrorQueueMethods {
    */
   resumeDurableMirrorReplicationWorkers() {
     const resumers = [
+      function reconcileCustody() { return reconcileFailedMirrorCustody(this); },
       this.startOrResumeSplitReplicationFromDurable,
       this.startOrResumeMergeReplicationFromDurable,
     ];

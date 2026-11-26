@@ -77,7 +77,22 @@ See [Current Capabilities and Limitations](docs/current-capabilities-and-limitat
 
 ## Try it
 
-Run the end-to-end account-summary demonstration (requires Node.js 22.12 or newer):
+### Install from npm
+
+With Node.js 22.12 or newer, run these commands in an empty directory to install the published package and check the node configuration.
+
+```bash
+npm init -y
+npm install lagrange-server
+npx lagrange --version
+NODE_HOST_ID=demo-host npx lagrange --dry-run --data-dir ./lagrange-data
+```
+
+The dry run prints `Dry run completed`. The installed package supplies both the `lagrange` and `lagrange-admin` commands.
+
+### Run the account-summary demonstration from source
+
+In a separate directory, clone the repository and run the demonstration.
 
 ```bash
 git clone https://github.com/psvensson/lagrange

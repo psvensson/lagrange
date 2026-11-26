@@ -1,3 +1,4 @@
+import {CONTROL_PLANE_OPERATION_HANDOFF_MODE} from './control-plane-constants.js';
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {DISPATCH_PENDING_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {
@@ -23,6 +24,7 @@ const {
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 const ROUTINE_CREATE_REARM_WAKE_REASONS = Object.freeze(new Set([
+  RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY,
   RECONCILE_REASON.COORDINATOR_OPERATION_CREATED,
   RECONCILE_REASON.CDC_OPERATION_PENDING,
   RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_PENDING,
@@ -32,8 +34,10 @@ const ROUTINE_CREATE_REARM_WAKE_REASONS = Object.freeze(new Set([
 
 function isRoutineCreateRearmWake(context, reasons) {
   if (!Array.isArray(reasons) || reasons.length === 0) return false;
-  if (context?.[REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PROVENANCE] === true ||
-      context?.[ControlPlaneField.HANDOFF_MODE]) {
+  const handoff = context?.[ControlPlaneField.HANDOFF_MODE];
+  if ((handoff != null && handoff !== CONTROL_PLANE_OPERATION_HANDOFF_MODE.INITIAL_DISPATCH) ||
+      (context?.[REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PROVENANCE] === true &&
+       !reasons.includes(RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY))) {
     return false;
   }
   return reasons.every((reason) => ROUTINE_CREATE_REARM_WAKE_REASONS.has(reason));
@@ -320,6 +324,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       }
 
       await this.dispatchOperationRow(row, {
+        routineCreateRearmWake: isRoutineCreateRearmWake(context, reasons),
         readyNodeId:
           typeof context?.readyNodeId === 'string' &&
           context.readyNodeId.length > 0 ?

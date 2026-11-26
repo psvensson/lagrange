@@ -177,7 +177,7 @@ function createSystemTableQueryStub(nowMs) {
   };
 }
 
-function createStageObservationContext() {
+function createStageObservationContext({inFlightCount = () => 0} = {}) {
   let clockMs = 1000000;
   const now = () => clockMs;
   const advance = (ms) => {
@@ -197,8 +197,8 @@ function createStageObservationContext() {
     if (stringIncludes(command, '/management/v1/facts')) {
       return JSON.stringify({
         facts: {
-          topology: {readyNodeCount: 3},
-          cluster: {formation: {state: 'FORMED'}},
+          topology: {state: 'observed', readyNodeCount: 3, underReplicatedPartitionCount: 0},
+          cluster: {formation: {state: 'FORMED', declaredHostCount: 3}},
           release: {version: '0.4.0'},
         },
       }) + '\nhttp_status=200';
@@ -206,7 +206,7 @@ function createStageObservationContext() {
     if (stringIncludes(command, '/api/admin/control-snapshot')) {
       return JSON.stringify({
         controlPlaneDiagnostics: {readinessByNodeId},
-        replicaOperations: {inFlightCount: 0},
+        replicaOperations: {inFlightCount: inFlightCount()},
       }) + '\nhttp_status=200';
     }
     if (stringIncludes(command, 'docker inspect')) {
@@ -313,6 +313,80 @@ describe('readiness summary and canonical history outcome accounting', () => {
     assert.equal(stringIncludes(cellText, 'last completed observation: ready (46/46 RF3'), true);
     assert.equal(stringIncludes(cellText, 'last negative observation: cluster-readiness'), true);
     assert.equal(stringIncludes(cellText, 'last readiness answer'), false);
+  });
+
+  it('requires fresh SQL and consecutive healthy serve lanes after facts suppress a refresh',
+    async () => {
+      let attempt = 1;
+      const {ctx, now, sshRun} = createStageObservationContext({
+        inFlightCount: () => attempt === 5 ? 1 : 0,
+      });
+      const roles = arrayMap([1, 2, 3], (n) => ({
+        host: `10.166.0.1${n}`,
+        nodeId: `00000000-0000-4000-8000-00000000000${n}`,
+      }));
+      const sqlAttempts = [];
+      const factsAttempts = [];
+      const laneAttempts = [];
+      ctx.budget.attempts = 7;
+      ctx.sleep = async () => { attempt++; };
+      ctx.sshRun = async (host, opts, command, timeoutMs) => {
+        if (stringIncludes(command, '/management/v1/facts')) {
+          factsAttempts.push(attempt);
+          if (attempt === 2) return '{"facts":{"topology":{}}}\nhttp_status=200';
+          if (attempt === 3) return '{}\nhttp_status=503';
+          const count = attempt === 4 ? 1 : 0;
+          return JSON.stringify({facts: {topology: {
+            state: 'observed', underReplicatedPartitionCount: count,
+          }}}) + '\nhttp_status=200';
+        }
+        if (stringIncludes(command, '/api/admin/control-snapshot')) {
+          laneAttempts.push(attempt);
+        }
+        return sshRun(host, opts, command, timeoutMs);
+      };
+      const healthyQuery = createSystemTableQueryStub(now);
+      const ready = await clusterReady(ctx, 'lagrange-system-tables', async (sql) => {
+        sqlAttempts.push(attempt);
+        if (attempt === 1 && stringIncludes(sql, 'FROM services')) return [];
+        return healthyQuery(sql);
+      }, roles);
+      assert.equal(ready.attempts, 7);
+      assert.deepEqual(factsAttempts, [2, 3, 4, 5]);
+      assert.deepEqual(sqlAttempts, [1, 5, 6, 7].flatMap((n) => Array(4).fill(n)));
+      assert.deepEqual(laneAttempts, [1, 5, 6, 7].flatMap((n) => Array(3).fill(n)));
+      assert.equal(ready.evidence.sampling.sqlBatches, 4);
+      assert.equal(ready.evidence.sampling.factsChecks, 4);
+    });
+
+  it('retains the observed under-replication and probe costs on facts exhaustion', async () => {
+    const {ctx, now, sshRun} = createStageObservationContext();
+    let attempt = 1;
+    ctx.budget.attempts = 3;
+    ctx.sleep = async () => { attempt++; };
+    ctx.sshRun = async (host, opts, command, timeoutMs) => {
+      if (!stringIncludes(command, '/management/v1/facts')) {
+        return sshRun(host, opts, command, timeoutMs);
+      }
+      const topology = attempt === 2 ?
+        {state: 'observed', underReplicatedPartitionCount: 4} : {state: 'unknown'};
+      return JSON.stringify({facts: {topology}}) + '\nhttp_status=200';
+    };
+    const roles = arrayMap([1, 2, 3], (n) => ({
+      host: `10.166.0.1${n}`,
+      nodeId: `00000000-0000-4000-8000-00000000000${n}`,
+    }));
+    const healthyQuery = createSystemTableQueryStub(now);
+    await assert.rejects(clusterReady(ctx, 'lagrange-system-tables', (sql) =>
+      stringIncludes(sql, 'FROM services') ? [] : healthyQuery(sql), roles), (error) => {
+      const {lastDeniedObservation, lastProbeError} = error.diagnostic;
+      assert.deepEqual(lastDeniedObservation.denials, ['under_replicated_partitions']);
+      assert.equal(lastDeniedObservation.underReplicatedPartitionCount, 4);
+      assert.equal(lastProbeError.reason, 'replication_topology_unavailable');
+      assert.equal(lastProbeError.sampling.factsChecks, 2);
+      assert.equal(lastProbeError.sampling.sqlBatches, 1);
+      return true;
+    });
   });
 
   it('retains completed nodes, membership, and systemTables timeToReadyMs evidence when ' +

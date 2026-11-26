@@ -1,6 +1,7 @@
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {
   createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
-  serveRefreshPublication,
+  createServeRefreshClock, serveRefreshPublication,
 } from './schema-provisioning-job-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
@@ -560,9 +561,19 @@ for (const recreateOwner of [false, true]) {
     }
     refusal = {epoch: {publicationEpoch: 8},
       reasons: ['committed_lease_unavailable'], retryAfterMs: 275};
-    const second = await query();
-    assertQuorumRefusal(t, second, refusal);
-    t.equal(second.outcome.jobId, jobId, 'repeated CREATE attaches to one job');
+    if (recreateOwner) {
+      timers.at(-1).callback();
+      for (let turn = 0; turn < 100; turn += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+        if (provisionCalls.length === 2 &&
+            service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size === 1) break;
+      }
+      t.equal(provisionCalls.length, 2, 'lease expiry resumes work without a new CREATE');
+    } else {
+      const second = await query();
+      assertQuorumRefusal(t, second, refusal);
+      t.equal(second.outcome.jobId, jobId, 'repeated CREATE attaches to one job');
+    }
     t.equal(gateway.rows.get(jobKey).status, 'PENDING');
     t.equal(gateway.rows.get(jobKey).workflow_owner_id,
       recreateOwner ? 'schema-worker-b' : 'schema-worker-a');
@@ -844,7 +855,10 @@ test('client deadline returns a stable job and retry survives stale worker ' +
     },
     clearTimeoutFn() {},
     schemaProvisioningOwnerId: 'schema-worker-stale',
-    partitionProvisioner: () => {
+    partitionProvisioner: (context) => {
+      t.equal(context.timeoutBudget, null, 'detached job supplies no client budget');
+      t.equal(context.cancellationToken, first.schemaProvisioningCancellationToken,
+        'service shutdown owns job cancellation');
       markStaleWorkerStarted();
       return staleWorkerResult;
     },
@@ -1248,3 +1262,232 @@ test('Logs case survives schema job identity, metadata creation and restart',
     t.equal(await resumed.findExistingTableRecord('logs'), null,
       'authoritative catalog does not resolve a case alias');
   });
+
+test('READY recovery retains both unavailable scans and shutdown cancels discovery', async (t) => {
+  const gateway = createGateway();
+  const calls = [];
+  const timers = [];
+  const service = createService(gateway, calls, {
+    schemaProvisioningRetrySetTimeoutFn(callback) {
+      const timer = {callback, cleared: false};
+      timers.push(timer);
+      return timer;
+    },
+    schemaProvisioningRetryClearTimeoutFn(timer) { timer.cleared = true; },
+  });
+  t.teardown(() => service.shutdown());
+  const owner = service.schemaProvisioningJobOwner;
+  const intent = canonicalizeSchemaProvisioningIntent(createAst(), {});
+  await owner.insertOrAttach(intent);
+  const index = await owner.execute({...createAst(), tableName: 'index_dataset'},
+    {globalIndex: {indexName: 'users_idx'}}, async () => ({contractState: 'ready'}));
+  const continued = [];
+  owner.setSucceededGlobalIndexRecoveryHandler((intents) => {
+    continued.push(...intents.map((item) => item.jobId));
+  });
+  const read = gateway.readRows.bind(gateway);
+  let available = false;
+  let scans = 0;
+  gateway.readRows = async (table, sql, params, options) => {
+    if (table === TABLES.SCHEMA_OPERATIONS && params.length === 0) {
+      scans++;
+      if (!available) return sql.includes('NOT IN') ? {rows: null} : {success: false, rows: []};
+    }
+    return read(table, sql, params, options);
+  };
+  const engine = Object.assign(Object.create(SQLQueryEngine.prototype), {
+    tableCreationService: service, logger: {warn() {}},
+    transactionCoordinator: {startRecoverySweep() {}},
+    recoverDistributedTransactionStateFromCache() {},
+    async resumeRecoveredDistributedTransactions() {},
+  });
+  await engine.activateDistributedTransactionRecovery();
+  await new Promise((resolve) => setImmediate(resolve));
+  t.equal(timers.length, 2);
+  t.equal(calls.length, 0, 'a cached intent cannot satisfy discovery');
+  available = true;
+  for (const timer of [...timers]) timer.callback();
+  await new Promise((resolve) => setImmediate(resolve));
+  t.equal(scans, 4);
+  t.equal(gateway.rows.get('schema_operations:' + intent.jobId).status, 'SUCCEEDED');
+  t.equal(calls.length, 1, 'recovered without a new CREATE or activation');
+  t.same(continued, [index.jobId], 'succeeded index continuation was rediscovered');
+
+  available = false;
+  await engine.activateDistributedTransactionRecovery();
+  await new Promise((resolve) => setImmediate(resolve));
+  const outstanding = timers.slice(2);
+  t.equal(outstanding.length, 2);
+  await service.shutdown();
+  for (const timer of outstanding) {
+    t.ok(timer.cleared);
+    timer.callback();
+  }
+  t.equal(scans, 6);
+});
+
+test('a stale executing CREATE takes over only after the durable winner lease expires', async (t) => {
+  const gateway = createGateway();
+  const timers = [];
+  let now = 100;
+  const started = Promise.withResolvers();
+  const blocked = Promise.withResolvers();
+  const winnerStarted = Promise.withResolvers();
+  const winnerBlocked = Promise.withResolvers();
+  const ready = {resolvedReplicaCount: 3, routableReplicaCount: 3, committedReplicaCount: 3,
+    fullReplicaCountConverged: true, contractState: 'ready', nextAction: 'proceed'};
+  let attempts = 0;
+  const first = createService(gateway, [], {
+    now: () => now, schemaProvisioningLeaseMs: 4000,
+    schemaProvisioningRetrySetTimeoutFn(callback, delay) {
+      const timer = {callback, delay};
+      timers.push(timer);
+      return timer;
+    },
+    schemaProvisioningRetryClearTimeoutFn() {},
+    async partitionProvisioner() {
+      if (++attempts === 1) {
+        started.resolve();
+        await blocked.promise;
+      }
+      return ready;
+    },
+  });
+  const winner = createService(gateway, [], {
+    now: () => now, schemaProvisioningOwnerId: 'departed-winner',
+    schemaProvisioningLeaseMs: 4000,
+    async partitionProvisioner() {
+      winnerStarted.resolve();
+      await winnerBlocked.promise;
+      return ready;
+    },
+  });
+  t.teardown(() => first.shutdown());
+  t.teardown(() => winner.shutdown());
+  const firstResult = first.createTable(createAst());
+  await started.promise;
+  now += 4001;
+  const winnerResult = winner.createTable(createAst());
+  await winnerStarted.promise;
+  await winner.shutdown();
+  blocked.resolve();
+  const stale = await firstResult;
+  const key = 'schema_operations:' + stale.jobId;
+  const winning = gateway.rows.get(key);
+  t.equal(winning.workflow_owner_id, 'departed-winner');
+  t.equal(stale.contractState, OWNER_CONTRACT_STATE.PENDING);
+  t.equal(timers.length, 1);
+  t.equal(timers[0].delay, winning.workflow_lease_expires_at - now);
+  now = winning.workflow_lease_expires_at;
+  timers[0].callback();
+  await new Promise((resolve) => setImmediate(resolve));
+  const completed = gateway.rows.get(key);
+  t.equal(completed.status, 'SUCCEEDED');
+  t.equal(completed.workflow_fence_token, winning.workflow_fence_token + 1);
+  t.equal(attempts, 2);
+  winnerBlocked.resolve();
+  await winnerResult;
+  t.equal(gateway.rows.get(key).row_version, completed.row_version);
+});
+
+test('both recovery scans refuse a detached gateway despite a retained intent', async (t) => {
+  const service = createService(createGateway(), []);
+  t.teardown(() => service.shutdown());
+  const owner = service.schemaProvisioningJobOwner;
+  await owner.insertOrAttach(canonicalizeSchemaProvisioningIntent(createAst()));
+  service.setControlPlaneSystemTableGateway(null);
+  const unavailable = {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE};
+  await t.rejects(service.resumeDurableProvisioningJobs(), unavailable);
+  await t.rejects(owner.listSucceededGlobalIndexIntents(), unavailable);
+});
+
+for (const interruption of ['lost reply', 'expired lease', 'transient refusal']) {
+  test(`discovered DDL reconciles the first claim after ${interruption}`, async (t) => {
+    const gateway = createGateway();
+    const clock = createServeRefreshClock();
+    const provisioned = [];
+    const service = createService(gateway, provisioned, {
+      now: () => clock.now,
+      schemaProvisioningLeaseMs: 4000,
+      schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+      schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
+    });
+    t.teardown(() => service.shutdown());
+    const intent = canonicalizeSchemaProvisioningIntent(createAst());
+    await service.schemaProvisioningJobOwner.insertOrAttach(intent);
+
+    const submit = gateway.submitMutation.bind(gateway);
+    const read = gateway.readRows.bind(gateway);
+    let interrupted = false;
+    const reconciledFences = [];
+    gateway.readRows = async (table, sql, params, options) => {
+      const result = await read(table, sql, params, options);
+      if (interrupted && table === TABLES.SCHEMA_OPERATIONS &&
+          params[0] === intent.tableIdentityKey) {
+        reconciledFences.push(result.rows[0].workflow_fence_token);
+      }
+      return result;
+    };
+    gateway.submitMutation = async (mutation, options) => {
+      if (interrupted || mutation.tableName !== TABLES.SCHEMA_OPERATIONS) {
+        return submit(mutation, options);
+      }
+      interrupted = true;
+      if (interruption === 'transient refusal') {
+        throw Object.assign(new Error('claim timed out'), {code: QUERY_ERROR_CODE.TIMEOUT});
+      }
+      const answer = await submit(mutation, options);
+      if (interruption === 'lost reply') {
+        throw Object.assign(new Error('claim reply unavailable'), {
+          failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+        });
+      }
+      clock.now = mutation.data.workflow_lease_expires_at + 1;
+      return answer;
+    };
+
+    const [pending] = await service.resumeDurableProvisioningJobs();
+    const key = 'schema_operations:' + intent.jobId;
+    const observed = gateway.rows.get(key);
+    const expectedFence = interruption === 'transient refusal' ? 0 : 1;
+    t.equal(pending.contractState, OWNER_CONTRACT_STATE.PENDING);
+    t.same(reconciledFences, [expectedFence], 'rereads the committed claim after discovery');
+    t.equal(observed.status, 'PENDING');
+    t.equal(provisioned.length, 0);
+    t.equal(clock.timers.length, 1);
+
+    await clock.advance(clock.timers[0].at - clock.now);
+    const completed = gateway.rows.get(key);
+    t.equal(completed.status, 'SUCCEEDED');
+    t.equal(completed.workflow_fence_token, expectedFence + 1);
+    t.equal(provisioned.length, 1, 'retry completes without another CREATE or activation');
+    t.equal(service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size, 0);
+  });
+}
+
+test('a committed claim rejection is propagated without scheduling takeover', async (t) => {
+  const gateway = createGateway();
+  const provisioned = [];
+  const service = createService(gateway, provisioned);
+  t.teardown(() => service.shutdown());
+  const owner = service.schemaProvisioningJobOwner;
+  const intent = canonicalizeSchemaProvisioningIntent(createAst());
+  await owner.insertOrAttach(intent);
+  const rejection = Object.assign(new Error('Message timeout in rejected statement'), {
+    committed: true, outcome: 'statement_failed', failureCode: 'constraint_violation',
+  });
+  gateway.submitMutation = async () => { throw rejection; };
+  await t.rejects(service.resumeDurableProvisioningJobs(), rejection);
+
+  gateway.submitMutation = async () => ({
+    success: false, error: rejection.message, committed: true, outcome: rejection.outcome,
+    failureCode: rejection.failureCode,
+  });
+  await t.rejects(service.resumeDurableProvisioningJobs(), {
+    message: rejection.message, committed: true, failureCode: rejection.failureCode,
+  });
+  t.equal(owner.retryTimersByWorkflowId.size, 0);
+  t.equal(owner.discoveryRetries.size, 0);
+  t.equal(provisioned.length, 0);
+  t.equal(gateway.rows.get('schema_operations:' + intent.jobId).workflow_fence_token, 0);
+});

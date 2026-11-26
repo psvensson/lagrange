@@ -26,7 +26,9 @@ import {
   armCreateAdmissionRecoveryRearm,
   canRetainCreateActivation,
   hasDecidedCreateWorkReadiness,
+  queuedCreateMayStart,
   lostBootPhysicalWorkerError,
+  traceCreateWorker,
   matchesRetainedCreateActivation,
   observeCreateActivation,
   ownsReplicaCreateWork,
@@ -211,16 +213,25 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           setImmediate(() => {
             let createStarted = false;
             const start = async () => {
-              if (this.shuttingDown || !ownsReplicaCreateWork(this, work)) return;
-              const evidence = request?.createAdmissionEvidence;
+              if (!queuedCreateMayStart(this, work, request, 'queued_callback')) return;
               requireVoterReadinessInputs(this, request);
-              if (evidence && !await this.getReplicaCreateAdmissionOwner()
-                .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
-                throw lostBootPhysicalWorkerError(
+              if (request.createAdmissionEvidence) {
+                let valid;
+                try {
+                  valid = await this.getReplicaCreateAdmissionOwner()
+                    .revalidatePhysicalWorker(request.createPhysicalWorkerClaim);
+                } catch (error) {
+                  traceCreateWorker(this, request, 'revalidate', 'error', error);
+                  throw error;
+                }
+                traceCreateWorker(this, request, 'revalidate', valid ? 'current' : 'refused');
+                if (!valid) throw lostBootPhysicalWorkerError(
                   `Current boot lost before queued CREATE ${operationId}`,
                 );
+              } else {
+                traceCreateWorker(this, request, 'revalidate', 'not_required');
               }
-              if (this.shuttingDown || !ownsReplicaCreateWork(this, work)) return;
+              if (!queuedCreateMayStart(this, work, request, 'post_revalidation')) return;
               createStarted = true;
               await this.createReplicaAsync(request, work);
             };
@@ -300,6 +311,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
      * @private
      */
     async createReplicaAsync(request, work = replicaCreateWork(this, request)) {
+      traceCreateWorker(this, request, 'createReplicaAsync', 'entered');
       const {
         operationId,
         explicitOperationType,

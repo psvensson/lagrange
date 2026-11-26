@@ -7,11 +7,9 @@ import {
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {
-  clearAcknowledgedCreateInFlight,
-  isAcknowledgedCreateStillInFlight,
-  recordAcknowledgedCreateInFlight,
-} from '../../src/rebalancer/operation-workflow-create-ack-state.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {deliverAdmittedOperationEffect} from
+  '../../src/rebalancer/operation-workflow-remove-effect-admission.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const SOURCE_NODE_ID = 'source-node';
@@ -416,88 +414,83 @@ test(
   },
 );
 
-test(
-  'generation-fenced acknowledged CREATE state suppresses routine CREATING ' +
-  're-dispatch under matching boot incarnation, fails closed without boot ' +
-  'incarnation, and clears on non-routine dispatch or incarnation change',
-  async (t) => {
-    let currentBoot = 1;
-    const {coordinator, owner} = createOwnerHarness();
-    const originalGet = owner.repository.systemTableCache.get.bind(
-      owner.repository.systemTableCache,
-    );
-    owner.repository.systemTableCache.get = (tableName, key) => {
-      if (tableName === 'nodes' && key === TARGET_NODE_ID) {
-        return currentBoot === null ?
-          null :
-          {node_id: TARGET_NODE_ID, boot_incarnation: currentBoot};
-      }
-      return originalGet(tableName, key);
+test('CREATE delivery receipts bind the live target boot and exact granted attempt', async (t) => {
+  const {coordinator, owner} = createOwnerHarness();
+  let boot = 1;
+  let deliveries = 0;
+  const operation = buildRuntimeOperation({
+    entityType: 'partition', createAdmissionOwnerIncarnation: 1,
+    createAdmissionState: 'ADMITTED', createAdmissionToken: 'admission',
+    createAdmissionAttemptToken: 'attempt-1',
+  });
+  const request = {
+    type: 'CREATE_REPLICA', operationType: operation.type,
+    entityType: operation.entityType, entityId: operation.entityId,
+    partitionId: operation.partitionId, sourceNodeId: operation.sourceNodeId,
+    operationId: operation.operationId, replicaId: operation.replicaId,
+    createAdmissionToken: operation.createAdmissionToken, createAdmissionAttemptSeq: 1,
+    createAdmissionAttemptToken: operation.createAdmissionAttemptToken,
+    createAdmissionWorkflowUpdatedAt: operation.updatedAt,
+  };
+  const reply = {status: ReplicaOperationResponseStatus.INITIATED, nodeId: TARGET_NODE_ID,
+    operationId: operation.operationId, replicaId: operation.replicaId};
+  let deliver = () => buildDeliveryEnvelope({acknowledged: true}, reply);
+  const originalGet = owner.repository.systemTableCache.get.bind(owner.repository.systemTableCache);
+  owner.repository.systemTableCache.get = (table, key) => table === 'nodes' && key === TARGET_NODE_ID ?
+    {node_id: key, boot_incarnation: boot} : originalGet(table, key);
+  owner.deliverReplicaOperationRequest = () => {
+    deliveries += 1;
+    return deliver();
+  };
+  const sends = [];
+  const run = (routine = true) => deliverAdmittedOperationEffect(owner, operation,
+    TARGET_NODE_ID + '/service/replica-handler', request, TARGET_NODE_ID, null, null, routine,
+    (evidence) => sends.push(evidence));
+  try {
+    const first = await run();
+    t.equal((await run()).delivery, first.delivery);
+    t.equal(deliveries, 1, 'confirmed receipt reuses the actual target reply');
+    await run(false);
+    t.equal(deliveries, 2, 'explicit recovery redrives');
+    t.equal(sends.length, 2, 'only actual sends invoke the existing log boundary');
+    t.equal(sends[1].receiptMatches, true);
+    t.equal(sends[1].priorReceiptStatus, ReplicaOperationResponseStatus.INITIATED);
+    t.equal(sends[1].routineWake, false);
+    t.equal(sends[1].attemptToken, request.createAdmissionAttemptToken);
+    operation.createAdmissionAttemptToken = request.createAdmissionAttemptToken = 'attempt-2';
+    request.createAdmissionAttemptSeq = 2;
+    await run();
+    t.equal(deliveries, 3, 'a different attempt requires its own reply');
+    boot = operation.createAdmissionOwnerIncarnation = 2;
+    await run();
+    t.equal(deliveries, 4, 'a restarted target must acknowledge again');
+    deliver = () => buildDeliveryEnvelope({acknowledged: false});
+    await run(false);
+    await run();
+    t.equal(deliveries, 6, 'lost acknowledgement leaves the next send eligible');
+    deliver = () => buildDeliveryEnvelope({acknowledged: true}, {...reply, replicaId: 'other'});
+    await run();
+    await run();
+    t.equal(deliveries, 8, 'a reply for another replica cannot establish custody');
+    deliver = () => {
+      boot += 1;
+      return buildDeliveryEnvelope({acknowledged: true}, reply);
     };
-    const op = buildRuntimeOperation({
-      workflowStep: WORKFLOW_STEP.CREATING,
-    });
-
-    try {
-      recordAcknowledgedCreateInFlight(owner, op);
-      t.equal(
-        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
-        true,
-        'suppresses routine CDC/heartbeat re-dispatch for matching boot incarnation',
-      );
-
-      t.equal(
-        isAcknowledgedCreateStillInFlight(owner, op, {boundary: 'dispatch'}),
-        false,
-        'direct non-routine dispatch clears acknowledged in-flight CREATE',
-      );
-      t.equal(
-        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
-        false,
-        'entry remains cleared after non-routine dispatch',
-      );
-
-      recordAcknowledgedCreateInFlight(owner, op);
-      t.equal(
-        isAcknowledgedCreateStillInFlight(
-          owner, op, {routineCreateRearmWake: true, boundary: 'dispatch_retry'}),
-        false,
-        'explicit dispatch_retry boundary always clears acknowledged CREATE',
-      );
-
-      recordAcknowledgedCreateInFlight(owner, op);
-      currentBoot = 2;
-      t.equal(
-        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
-        false,
-        'target boot incarnation change clears acknowledged in-flight CREATE',
-      );
-
-      recordAcknowledgedCreateInFlight(owner, op);
-      currentBoot = null;
-      t.equal(
-        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
-        false,
-        'unreadable target boot incarnation fails closed and clears entry',
-      );
-
-      recordAcknowledgedCreateInFlight(owner, op);
-      t.equal(
-        owner.acknowledgedCreateByOperationId.has(op.operationId),
-        false,
-        'recording fails closed when target boot incarnation is absent',
-      );
-
-      currentBoot = 3;
-      recordAcknowledgedCreateInFlight(owner, op);
-      clearAcknowledgedCreateInFlight(owner, op.operationId);
-      t.equal(
-        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
-        false,
-        'explicit clear removes acknowledged entry',
-      );
-    } finally {
-      await coordinator.shutdown();
-    }
-  },
-);
+    await run();
+    operation.createAdmissionOwnerIncarnation = boot;
+    await run();
+    t.equal(deliveries, 10, 'an answer spanning a target boot change cannot be reused');
+    operation.createAdmissionOwnerIncarnation = boot;
+    deliver = () => buildDeliveryEnvelope({acknowledged: true}, reply);
+    await run();
+    operation.createAdmissionState = 'ROTATING';
+    await run();
+    t.equal(deliveries, 12, 'rotation invalidates permission to reuse an otherwise identical receipt');
+    boot = null;
+    await run();
+    await run();
+    t.equal(deliveries, 14, 'missing target incarnation leaves each recovery send eligible');
+  } finally {
+    await coordinator.shutdown();
+  }
+});

@@ -103,6 +103,7 @@ class TableCreationService {
    *   provisioning callback.
    */
   constructor(options = {}) {
+    this.logger = this.initLogger();
     this.systemCache = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway = null;
@@ -119,11 +120,11 @@ class TableCreationService {
       options.schemaProvisioningJobRepository ||
       new SchemaProvisioningJobRepository({
         gateway: this.controlPlaneSystemTableGateway,
-        systemCache: null,
       });
     this.schemaProvisioningJobOwner =
       options.schemaProvisioningJobOwner || new SchemaProvisioningJobOwner({
         repository: this.schemaProvisioningJobRepository,
+        logger: this.logger,
         workflowCoordinator: options.schemaWorkflowCoordinator,
         ownerId: options.schemaProvisioningOwnerId,
         now: options.now,
@@ -150,7 +151,6 @@ class TableCreationService {
     const config = ConfigurationManager.getInstance();
     this.defaultReplicaCount =
       config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || NUM.THREE;
-    this.logger = this.initLogger();
     this.setSystemCache(options.systemCache || null);
     this.setPartitionSplitMergeManager(
       options.partitionSplitMergeManager || null,

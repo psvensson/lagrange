@@ -59,7 +59,7 @@ async function buildAcceptedSplitAckOutcome(owner, workflow, workflowId,
   ackResult, ackStatus) {
   let splitCutoverApplied =
     workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
-  let splitSourceRetired = false;
+  let terminalCustody = null;
   let cutoverReadiness = null;
   if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
     owner.abortSplitOnSourceFailure(workflowId, ackStatus).catch((error) => {
@@ -75,10 +75,11 @@ async function buildAcceptedSplitAckOutcome(owner, workflow, workflowId,
     cutoverReadiness = outcome.readiness;
   }
   if (ackStatus === SPLIT_ACK_STATUS.CLEANUP_COMPLETED) {
-    splitSourceRetired = await owner.finalizeSplitDissolutionIfReady(
+    terminalCustody = await owner.finalizeSplitDissolutionEvidence(
       workflowId);
   }
-  return {...ackResult, splitCutoverApplied, splitSourceRetired,
+  return {...ackResult, splitCutoverApplied, splitSourceRetired: Boolean(terminalCustody),
+    ...(terminalCustody ? {terminalCustody} : {}),
     ...(cutoverReadiness ? {cutoverReadiness} : {})};
 }
 

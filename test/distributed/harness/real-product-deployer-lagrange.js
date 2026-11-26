@@ -145,7 +145,7 @@ function nodeIdOf(index) {
 // every timeout, budget and policy stays at the product's shipped default
 // (owner decision 2026-11-17), so the arm measures the product as shipped; a
 // formation that needs more is a product finding.
-function nodeEnv({nodeId, host, hostName, seedHost, connection}) {
+function nodeEnv({nodeId, host, hostName, seedHost, connection, declaredHostCount}) {
   const env = {
     NODE_ID: nodeId, NODE_HOST_ID: hostName, DATA_DIR, NODE_ADDRESS: `${host}:${PORT.REST}`,
     REST_API_PORT: PORT.REST, ADMIN_WS_PORT: PORT.ADMIN, TRANSPORT_WS_PORT: PORT.TRANSPORT,
@@ -156,6 +156,8 @@ function nodeEnv({nodeId, host, hostName, seedHost, connection}) {
   };
   if (seedHost !== host) {
     env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
+  } else {
+    env.FORMATION_DECLARED_HOST_COUNT = declaredHostCount;
   }
   return arrayFlatMap(Object.entries(env), ([key, value]) => ['-e', `${key}=${value}`]);
 }
@@ -535,13 +537,13 @@ async function observeHostName({sshRun, opts, host}) {
 }
 
 async function startLagrangeNode({sshRun, opts, host, seedHost, image, connection, campaignId,
-  index}) {
+  index, declaredHostCount}) {
   const nodeId = nodeIdOf(index);
   const hostName = await observeHostName({sshRun, opts, host});
   const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
     ordinal: index + 1, image: imageForHost(opts, host, image),
     dockerArgs: [...storageArgs(opts, campaignId, index),
-      ...nodeEnv({nodeId, host, hostName, seedHost, connection})]});
+      ...nodeEnv({nodeId, host, hostName, seedHost, connection, declaredHostCount})]});
   return {role: NODE_ROLE, host, containerId: started.containerId, nodeId};
 }
 
@@ -633,7 +635,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
   const seedHost = hosts[0];
   await prepareNodeStorage({sshRun, opts, host: seedHost, campaignId, index: 0});
   roles.push(await startLagrangeNode({sshRun, opts, host: seedHost, seedHost, image, connection,
-    campaignId, index: 0}));
+    campaignId, index: 0, declaredHostCount: hosts.length}));
   await startJoinerNodes({sshRun, opts, hosts, seedHost, image, connection, campaignId, roles});
   ctx.watchedRoles = [...roles];
   if (hosts.length > 0) {

@@ -168,7 +168,7 @@ function createNodeEntry(nodeId, overrides = {}, nowMs = Date.now()) {
     cpu_cores: 4,
     memory_mb: 1024,
     disk_gb: 10,
-    cpu_usage_percent: 10,
+    host_cpu_utilization_percent: 10,
     memory_usage_percent: 20,
     disk_usage_percent: 30,
     status: NODE_STATUS.ACTIVE,

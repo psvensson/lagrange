@@ -1,97 +1,75 @@
-// Generation-fenced in-flight CREATE acknowledgement state for the operation
-// workflow owner. Once a target node answers INITIATED or IN_PROGRESS under
-// its current boot incarnation, routine CDC echoes of the owner's own
-// SENDING -> CREATING write (and routine node heartbeats under the same boot
-// incarnation) do not re-send duplicate CREATE_REPLICA RPCs. Any process
-// restart, target boot-incarnation change, or explicit progress-reconcile /
-// dispatch-retry rearm clears the acknowledgement immediately.
+// The receipt belongs to the dispatched attempt. Cache visibility and a
+// reconstructed admission outcome cannot establish transport acknowledgement.
+import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
+import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../constants/index.js';
 import {resolveTargetNodeIncarnationSnapshot} from './replica-status.js';
-import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-
-const {
-  OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
-  WORKFLOW_STEP,
-} = OPERATION_WORKFLOW_OWNER_SHARED;
-
-const EXPLICIT_REARM_BOUNDARIES = Object.freeze(new Set([
-  'dispatch_retry',
-  OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE_RECONCILE,
-]));
-
-function currentTargetBootIncarnation(owner, targetNodeId) {
-  const systemTableCache = owner?.repository?.systemTableCache;
-  if (!targetNodeId || !systemTableCache) return null;
-  return resolveTargetNodeIncarnationSnapshot(
-    systemTableCache, targetNodeId,
-  ).bootIncarnation;
-}
-
-function recordAcknowledgedCreateInFlight(owner, operation, replaceRemovePhase = false) {
-  if (!owner || !operation?.operationId || replaceRemovePhase === true) return;
-  if (operation.type !== OperationType.ADD && operation.type !== OperationType.REPLACE) {
-    return;
-  }
-  const targetBootIncarnation = currentTargetBootIncarnation(
-    owner, operation.targetNodeId,
-  );
-  // Fail closed: without an authoritative target boot incarnation we cannot
-  // generation-fence an in-flight CREATE against target restarts.
-  if (targetBootIncarnation === null) {
-    clearAcknowledgedCreateInFlight(owner, operation.operationId);
-    return;
-  }
-  if (!owner.acknowledgedCreateByOperationId) {
-    owner.acknowledgedCreateByOperationId = new Map();
-  }
-  owner.acknowledgedCreateByOperationId.set(operation.operationId, {
-    targetNodeId: operation.targetNodeId ?? null,
-    replicaId: operation.replicaId ?? null,
-    targetBootIncarnation,
-  });
-}
+import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
+  './replica-operation-constants.js';
+import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
 function clearAcknowledgedCreateInFlight(owner, operationId) {
-  if (!operationId || !owner?.acknowledgedCreateByOperationId) return;
-  owner.acknowledgedCreateByOperationId.delete(operationId);
+  owner.acknowledgedCreateByOperationId?.delete(operationId);
 }
 
-function ackMatchesOperation(owner, ack, operation) {
-  if (ack.targetNodeId !== (operation.targetNodeId ?? null) ||
-      ack.replicaId !== (operation.replicaId ?? null)) {
-    return false;
-  }
-  const currentBoot = currentTargetBootIncarnation(owner, operation.targetNodeId);
-  return ack.targetBootIncarnation !== null &&
-    currentBoot !== null &&
-    ack.targetBootIncarnation === currentBoot;
+function currentBoot(owner, targetNodeId) {
+  const cache = owner.repository?.systemTableCache;
+  return cache ? resolveTargetNodeIncarnationSnapshot(cache, targetNodeId).bootIncarnation : null;
 }
 
-function isRoutineCreateWakeOptions(options) {
-  return options?.routineCreateRearmWake === true &&
-    !EXPLICIT_REARM_BOUNDARIES.has(options?.boundary);
+// Every published CREATE attempt has an immutable admission token and attempt
+// token. Compare the actual wire fields, including the initial pre-grant send.
+function createFence(request, boot, targetNodeId) {
+  if (!Number.isSafeInteger(boot) || boot <= 0 || !request.operationId ||
+      !request.replicaId || !request.createAdmissionToken || !request.createAdmissionAttemptToken ||
+      !Number.isSafeInteger(request.createAdmissionAttemptSeq) || request.createAdmissionAttemptSeq < 1 ||
+      !Number.isSafeInteger(request.createAdmissionWorkflowUpdatedAt)) return null;
+  return JSON.stringify([boot, targetNodeId, request.operationId, request.replicaId,
+    request.partitionId, request.entityType, request.entityId, request.operationType,
+    request.sourceNodeId, request.createAdmissionToken, request.createAdmissionAttemptToken,
+    request.createAdmissionAttemptSeq, request.createAdmissionWorkflowUpdatedAt,
+    request.membershipPublicationEpoch]);
 }
 
-function isAcknowledgedCreateStillInFlight(owner, operation, options = {}) {
-  const operationId = operation?.operationId;
-  if (!operationId || operation.workflowStep !== WORKFLOW_STEP.CREATING) {
-    return false;
+async function deliverCreateWithReceipt(owner, operation, targetNodeId, request, routineWake, send) {
+  if (request.type !== ReplicaOperationMessageType.CREATE_REPLICA) return send();
+  const boot = currentBoot(owner, targetNodeId);
+  const fence = createFence(request, boot, targetNodeId);
+  const prior = owner.acknowledgedCreateByOperationId?.get(request.operationId);
+  // Partition admission is claimed by the target. A stale wake may still carry
+  // the pre-claim row or the previous owner's tuple after target restart.
+  const grantMatches = request.entityType !== UNIFIED_SERVICE_TYPE.PARTITION ||
+    (operation.createAdmissionOwnerIncarnation === boot &&
+     operation.createAdmissionToken === request.createAdmissionToken &&
+     operation.createAdmissionAttemptToken === request.createAdmissionAttemptToken &&
+     (operation.createAdmissionState === CREATE_ADMISSION_STATE.ADMITTED ||
+      operation.createAdmissionState === CREATE_ADMISSION_STATE.MATERIALIZED));
+  const createPending = operation.workflowStep === WORKFLOW_STEP.SENDING ||
+    operation.workflowStep === WORKFLOW_STEP.CREATING;
+  const receiptMatches = fence !== null && prior?.fence === fence;
+  if (routineWake && createPending && grantMatches && receiptMatches) {
+    return prior.delivery;
   }
-  if (!isRoutineCreateWakeOptions(options)) {
-    clearAcknowledgedCreateInFlight(owner, operationId);
-    return false;
+
+  clearAcknowledgedCreateInFlight(owner, request.operationId);
+  const delivery = await send({
+    routineWake, createPending, grantMatches, receiptMatches, targetBootIncarnation: boot,
+    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq,
+    grantState: operation.createAdmissionState ?? null,
+    grantOwnerIncarnation: operation.createAdmissionOwnerIncarnation ?? null,
+    priorReceiptStatus: prior ? deliveryAnswerOf(prior.delivery).status : null,
+  });
+  const reply = deliveryAnswerOf(delivery);
+  if (fence !== null && reply?.success !== false &&
+      isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
+      (reply?.status === ReplicaOperationResponseStatus.INITIATED ||
+       reply?.status === ReplicaOperationResponseStatus.IN_PROGRESS) &&
+      reply.operationId === request.operationId && reply.replicaId === request.replicaId &&
+      reply.nodeId === targetNodeId && currentBoot(owner, targetNodeId) === boot) {
+    owner.acknowledgedCreateByOperationId ??= new Map();
+    owner.acknowledgedCreateByOperationId.set(request.operationId, {fence, delivery});
   }
-  const ack = owner?.acknowledgedCreateByOperationId?.get(operationId);
-  if (!ack) return false;
-  if (!ackMatchesOperation(owner, ack, operation)) {
-    clearAcknowledgedCreateInFlight(owner, operationId);
-    return false;
-  }
-  return true;
+  return delivery;
 }
 
-export {
-  clearAcknowledgedCreateInFlight,
-  isAcknowledgedCreateStillInFlight,
-  recordAcknowledgedCreateInFlight,
-};
+export {clearAcknowledgedCreateInFlight, deliverCreateWithReceipt};
