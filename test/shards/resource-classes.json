@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2800,
+    "ordinary": 2802,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2826,
-  "digest": "fnv1a32-cb5f3b78",
+  "censusSize": 2828,
+  "digest": "fnv1a32-3def9157",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1183,6 +1183,7 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "ordinary",
     "test/integration/pgwire-command-tag-real-engine.integration.test.js": "ordinary",
     "test/integration/pgwire-rebalance.integration.test.js": "ordinary",
+    "test/integration/pgwire-schema-provisioning-deadline.integration.test.js": "ordinary",
     "test/integration/preflight-critical-path-hops.integration.test.js": "ordinary",
     "test/integration/priority-spread-one-authority-rebalance.integration.test.js": "ordinary",
     "test/integration/public-application-database-multinode.integration.test.js": "ordinary",
@@ -1420,6 +1421,7 @@
     "test/partition/learner-promotion-proof-committed-admission.test.js": "ordinary",
     "test/partition/learner-promotion-proof-delivery-outcome.test.js": "ordinary",
     "test/partition/learner-promotion-proof-epoch-guard.test.js": "ordinary",
+    "test/partition/malformed-mirror-replay-snapshot.test.js": "ordinary",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "ordinary",
     "test/partition/managed-merge-workflow.test.js": "ordinary",
     "test/partition/managed-split-epoch-persistence-effects.test.js": "ordinary",
