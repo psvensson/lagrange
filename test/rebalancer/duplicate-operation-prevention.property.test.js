@@ -143,7 +143,7 @@ test('MovePlanner - Duplicate Operation Prevention', async (t) => {
         fc.array(fc.record({
           node_id: fc.constantFrom('node-1', 'node-2', 'node-3'),
           status: fc.constant('active'),
-          cpu_usage_percent: fc.integer({min: 0, max: 100}),
+          host_cpu_utilization_percent: fc.integer({min: 0, max: 100}),
         }), {minLength: 2, maxLength: 5}),
         fc.constantFrom('node-1', 'node-2', 'node-3'),
         (nodes, targetNodeWithInFlight) => {

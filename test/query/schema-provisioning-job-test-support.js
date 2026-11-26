@@ -90,6 +90,9 @@ function createGateway() {
         .map(([, row]) => row);
       if (tableName === 'schema_operations') {
         if (params.length === 0) {
+          if (_sql.includes("WHERE status = 'SUCCEEDED'")) {
+            return {rows: candidates.filter((row) => row.status === 'SUCCEEDED')};
+          }
           return {rows: candidates.filter(
             (row) => row.status !== 'SUCCEEDED' && row.status !== 'FAILED',
           )};
@@ -252,5 +255,5 @@ function createServeRefreshFixture(t, gateway) {
 
 export {
   createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
-  serveRefreshPublication,
+  createServeRefreshClock, serveRefreshPublication,
 };

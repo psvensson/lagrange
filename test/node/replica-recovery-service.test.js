@@ -455,12 +455,12 @@ test('ReplicaRecoveryService - selectTargetNodes prefers distinct healthy nodes 
 
     const selected = service.selectTargetNodes(
       [
-        {node_id: 'node-2', cpu_usage_percent: 5},
+        {node_id: 'node-2', host_cpu_utilization_percent: 5},
       ],
       [
-        {node_id: 'node-2', cpu_usage_percent: 5},
-        {node_id: 'node-3', cpu_usage_percent: 15},
-        {node_id: 'node-1', cpu_usage_percent: 25},
+        {node_id: 'node-2', host_cpu_utilization_percent: 5},
+        {node_id: 'node-3', host_cpu_utilization_percent: 15},
+        {node_id: 'node-1', host_cpu_utilization_percent: 25},
       ],
       2,
     );
@@ -481,12 +481,12 @@ test('ReplicaRecoveryService - selectTargetNodes duplicates only after unique he
 
     const selected = service.selectTargetNodes(
       [
-        {node_id: 'node-2', cpu_usage_percent: 5},
+        {node_id: 'node-2', host_cpu_utilization_percent: 5},
       ],
       [
-        {node_id: 'node-2', cpu_usage_percent: 5},
-        {node_id: 'node-3', cpu_usage_percent: 15},
-        {node_id: 'node-1', cpu_usage_percent: 25},
+        {node_id: 'node-2', host_cpu_utilization_percent: 5},
+        {node_id: 'node-3', host_cpu_utilization_percent: 15},
+        {node_id: 'node-1', host_cpu_utilization_percent: 25},
       ],
       4,
     );

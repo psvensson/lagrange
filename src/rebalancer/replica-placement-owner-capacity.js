@@ -1,4 +1,4 @@
-// Public entry: summarizeCopyOccupancy, saturatedTargetsOf, isCopyWithinCapacity, recordAdmittedCopyOccupancy, classifyNodeStorageExclusion, COPY_MOVE_TYPES, buildTargetCapacityRanker, computeCopyWaitingDemand, buildPassOrderedCandidates, evaluatePassBudgetsForController, createControlPlanePlacementNodeObservationReader.
+// Public entry: summarizeCopyOccupancy, saturatedTargetsOf, decideCopyCapacity, recordAdmittedCopyOccupancy, classifyNodeStorageExclusion, COPY_MOVE_TYPES, buildTargetCapacityRanker, computeCopyWaitingDemand, buildPassOrderedCandidates, evaluatePassBudgetsForController, createControlPlanePlacementNodeObservationReader.
 // Required collaborators: none (pure functions of the census and the candidate).
 // Durable authority / commit point: none - the ledger's apply arbitrates copy capacity.
 // Permitted post-commit work: none.
@@ -9,6 +9,7 @@
 // decision D2: K_src copies per source, K_tgt per target): the copy-phase
 // occupancy of the census, the saturated targets, whether a copy candidate
 // fits, the occupancy after an admission, and a node's storage exclusion.
+import {decodeResourceSample, resourceSampleFields} from '../diagnostics/placement-resource-sample.js';
 import {COLUMN, TABLES} from '../constants/index.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-record-decision.js';
 import {isOccupyingCopy} from '../partition/partition-placement-admission-decision.js';
@@ -163,7 +164,7 @@ function saturatedTargetsOf(byTarget, budgetSnapshot = null, eligibleNodeIds = [
   return saturated;
 }
 
-function isCopyWithinCapacity(
+function decideCopyCapacity(
   candidate,
   repairWaitingSourceNodeIds,
   occupancy,
@@ -171,8 +172,7 @@ function isCopyWithinCapacity(
 ) {
   const kSrc = sourceLimitOf(candidate.move.copySourceNodeId, budgetSnapshot);
   const kTgt = targetLimitOf(candidate.move.targetNodeId, budgetSnapshot);
-  if (kSrc <= 0 || kTgt <= 0) return false;
-  const kSrcForClass = resolveSourceCapacityForClass({
+  const kSrcForClass = kSrc <= 0 || kTgt <= 0 ? null : resolveSourceCapacityForClass({
     placementClass: candidate.placementClass,
     repair: candidate.repair,
     copySourceNodeId: candidate.move.copySourceNodeId,
@@ -182,7 +182,12 @@ function isCopyWithinCapacity(
   const sourceOcc = occupancy.unrecordedSourceCopies +
     (occupancy.bySource.get(candidate.move.copySourceNodeId) ?? 0);
   const targetOcc = occupancy.byTarget.get(candidate.move.targetNodeId) ?? 0;
-  return sourceOcc < kSrcForClass && targetOcc < kTgt;
+  return Object.freeze({
+    partitionId: candidate.partitionId, placementClass: candidate.placementClass,
+    repair: candidate.repair, sourceNodeId: candidate.move.copySourceNodeId,
+    targetNodeId: candidate.move.targetNodeId, sourceOcc, targetOcc, kSrc, kSrcForClass, kTgt,
+    allowed: kSrcForClass !== null && sourceOcc < kSrcForClass && targetOcc < kTgt,
+  });
 }
 
 function recordAdmittedCopyOccupancy(
@@ -263,22 +268,20 @@ function buildEffectiveTargetObservation(obs, storageConstrained, nowMs) {
 
 function evaluateSourceNodeDecision({
   nodeId, sourceStates, getObservationFor, occupancy, waitingBySource,
-  nodeBoots, declaredHosts, nodesPerHost, nowMs, sourceConfig, decideWindow,
+  nodeBoots, declaredHosts, nodesPerHost, nowMs, sourceConfig, decideWindow, recordWindow,
 }) {
   const sourceOcc = (occupancy?.unrecordedSourceCopies ?? 0) +
     (occupancy?.bySource?.get(nodeId) ?? 0);
-  const decision = decideWindow(
-    sourceStates.get(nodeId) || null,
-    getObservationFor(nodeId, ROLE_SOURCE, nowMs),
-    {
-      occupancy: sourceOcc,
-      waitingDemandCount: waitingBySource.get(nodeId) ?? 0,
-      nowMs,
-      expectedBootIncarnation: nodeBoots.get(nodeId) ?? null,
-      hostLogicalNodeCount: resolveHostLogicalNodeCount(nodeId, declaredHosts, nodesPerHost),
-    },
-    sourceConfig,
-  );
+  const sample = getObservationFor(nodeId, ROLE_SOURCE, nowMs);
+  const demand = {
+    occupancy: sourceOcc,
+    waitingDemandCount: waitingBySource.get(nodeId) ?? 0,
+    nowMs,
+    expectedBootIncarnation: nodeBoots.get(nodeId) ?? null,
+    hostLogicalNodeCount: resolveHostLogicalNodeCount(nodeId, declaredHosts, nodesPerHost),
+  };
+  const decision = decideWindow(sourceStates.get(nodeId) || null, sample, demand, sourceConfig);
+  recordWindow?.(nodeId, ROLE_SOURCE, sample, demand, decision);
   sourceStates.set(nodeId, decision.nextState);
   return decision;
 }
@@ -286,25 +289,22 @@ function evaluateSourceNodeDecision({
 function evaluateTargetNodeDecision({
   nodeId, targetStates, getObservationFor, occupancy, waitingByTarget,
   storageExcludedTargets, hardExcludedTargets, nodeBoots, declaredHosts,
-  nodesPerHost, nowMs, targetConfig, decideWindow,
+  nodesPerHost, nowMs, targetConfig, decideWindow, recordWindow,
 }) {
-  const effectiveObs = buildEffectiveTargetObservation(
+  const sample = buildEffectiveTargetObservation(
     getObservationFor(nodeId, ROLE_TARGET, nowMs),
     storageExcludedTargets.has(nodeId),
     nowMs,
   );
-  const decision = decideWindow(
-    targetStates.get(nodeId) || null,
-    effectiveObs,
-    {
-      occupancy: occupancy?.byTarget?.get(nodeId) ?? 0,
-      waitingDemandCount: waitingByTarget.get(nodeId) ?? 0,
-      nowMs,
-      expectedBootIncarnation: nodeBoots.get(nodeId) ?? null,
-      hostLogicalNodeCount: resolveHostLogicalNodeCount(nodeId, declaredHosts, nodesPerHost),
-    },
-    targetConfig,
-  );
+  const demand = {
+    occupancy: occupancy?.byTarget?.get(nodeId) ?? 0,
+    waitingDemandCount: waitingByTarget.get(nodeId) ?? 0,
+    nowMs,
+    expectedBootIncarnation: nodeBoots.get(nodeId) ?? null,
+    hostLogicalNodeCount: resolveHostLogicalNodeCount(nodeId, declaredHosts, nodesPerHost),
+  };
+  const decision = decideWindow(targetStates.get(nodeId) || null, sample, demand, targetConfig);
+  recordWindow?.(nodeId, ROLE_TARGET, sample, demand, decision);
   targetStates.set(nodeId, decision.nextState);
   if (!decision.hardAdmissionAllowed && !hardExcludedTargets.has(nodeId)) {
     const exclusionReason = decision.reason === HARD_MEMORY_REASON ?
@@ -373,7 +373,7 @@ function normalizePassEligibility(nodeInput) {
 
 function evaluatePassBudgetsForController(state, {
   nodeInput, occupancy, waitingBySource = new Map(), waitingByTarget = new Map(),
-  storageExcludedTargets = new Map(), nowMs = 0,
+  storageExcludedTargets = new Map(), nowMs = 0, recordWindow,
 }) {
   const {nodeBoots, declaredHosts, nodesPerHost, eligibleIds} =
     normalizePassEligibility(nodeInput);
@@ -389,10 +389,14 @@ function evaluatePassBudgetsForController(state, {
     hardExcludedTargets, nodeBoots, declaredHosts, nodesPerHost, nowMs,
   };
   for (const nodeId of allSourceNodes) {
-    sourceDecisions.set(nodeId, evaluateSourceNodeDecision({...ctx, nodeId}));
+    sourceDecisions.set(nodeId, evaluateSourceNodeDecision({
+      ...ctx, nodeId, recordWindow,
+    }));
   }
   for (const nodeId of allTargetNodes) {
-    targetDecisions.set(nodeId, evaluateTargetNodeDecision({...ctx, nodeId}));
+    targetDecisions.set(nodeId, evaluateTargetNodeDecision({
+      ...ctx, nodeId, recordWindow,
+    }));
   }
   return buildPassBudgetSnapshot({
     sourceDecisions, targetDecisions, hardExcludedTargets, occupancy,
@@ -421,63 +425,27 @@ function readNodeRowAvailableMemoryBytes(nodeRow) {
   return Math.max(0, Math.floor(totalBytes * (1 - (usagePct / PERCENT_DIVISOR))));
 }
 
-function resolveLocalDiagnosticsSampleStamp(latest, nowMs) {
-  const reportTimestamp = Number(latest?.timestamp);
-  const sampledAtMs = Number.isFinite(reportTimestamp) && reportTimestamp > 0 ?
-    reportTimestamp :
-    nowMs;
-  const rawSampleId = latest?.sampleId;
-  const sampleId = Number.isSafeInteger(rawSampleId) ? rawSampleId : null;
-  return {sampledAtMs, sampleId};
-}
-
-function readLocalDiagnosticsObservation(resourceDiagnosticsSampler, nodeRow, nowMs) {
-  const report = resourceDiagnosticsSampler.getSharedReport();
-  const proc = report?.latest ? report.latest.process : null;
-  if (!proc) return null;
-  const {sampledAtMs, sampleId} = resolveLocalDiagnosticsSampleStamp(report.latest, nowMs);
+function buildPlacementObservation(nodeRow, sampledAtMs, sampleId, fields) {
   const availableMemoryBytes = readNodeRowAvailableMemoryBytes(nodeRow);
-  return {
-    sampledAtMs,
-    ...(sampleId !== null ? {sampleId, congestionEpochId: sampleId} : {}),
-    bootIncarnation: nodeRow ? nodeRow[COLUMN.BOOT_INCARNATION] : null,
-    cpuUsagePercent: proc.cpuPercent,
-    ...(hasExplicitFiniteMetric(proc.singleCoreCpuPercent) ?
-      {singleCoreCpuPercent: proc.singleCoreCpuPercent} : {}),
-    eventLoopDelayMs: proc.eventLoopDelayMs,
-    eventLoopUtilizationPercent: proc.eventLoopUtilizationPercent,
-    ...(availableMemoryBytes !== undefined ? {availableMemoryBytes} : {}),
-  };
-}
-
-function resolveRemoteHeartbeatSampleStamp(nodeRow) {
-  const heartbeatAtMs = Number(nodeRow[COLUMN.LAST_HEARTBEAT]);
-  const explicitSampledAt = nodeRow[TELEMETRY_SAMPLED_AT_COLUMN];
-  const sampledAtMs = hasExplicitFiniteMetric(explicitSampledAt) ?
-    Number(explicitSampledAt) :
-    heartbeatAtMs;
-  const rawSampleId = nodeRow[TELEMETRY_SAMPLE_ID_COLUMN];
-  const sampleId = rawSampleId !== undefined && rawSampleId !== null ? rawSampleId : sampledAtMs;
-  return {sampledAtMs, sampleId};
-}
-
-function readRemoteHeartbeatObservation(nodeRow) {
-  if (!nodeRow || !hasExplicitFiniteMetric(nodeRow[COLUMN.LAST_HEARTBEAT])) return null;
-  const {sampledAtMs, sampleId} = resolveRemoteHeartbeatSampleStamp(nodeRow);
-  const availableMemoryBytes = readNodeRowAvailableMemoryBytes(nodeRow);
-  const cpuUsagePercent = Number(nodeRow.cpu_usage_percent);
-  const hasCpuUsage =
-    hasExplicitFiniteMetric(nodeRow.cpu_usage_percent) && cpuUsagePercent >= 0;
-  const pressureSensorsComplete = hasCpuUsage && availableMemoryBytes !== undefined;
+  const validSample = Number.isSafeInteger(sampleId) && Number.isFinite(sampledAtMs) &&
+    fields.sampleIntervalMs > 0;
   return {
     sampledAtMs,
     sampleId,
     congestionEpochId: sampleId,
-    bootIncarnation: nodeRow[COLUMN.BOOT_INCARNATION],
-    pressureSensorsComplete,
+    bootIncarnation: nodeRow?.[COLUMN.BOOT_INCARNATION],
+    ...(validSample ? fields : resourceSampleFields(null)),
+    pressureSensorsComplete: validSample && availableMemoryBytes !== undefined &&
+      [fields.mainThreadCpuPercent, fields.eventLoopUtilizationPercent, fields.eventLoopDelayMs]
+        .some(Number.isFinite),
     ...(availableMemoryBytes !== undefined ? {availableMemoryBytes} : {}),
-    ...(hasCpuUsage ? {cpuUsagePercent} : {}),
   };
+}
+
+function readRemoteHeartbeatObservation(nodeRow) {
+  if (!nodeRow) return null;
+  return buildPlacementObservation(nodeRow, nodeRow[TELEMETRY_SAMPLED_AT_COLUMN],
+    nodeRow[TELEMETRY_SAMPLE_ID_COLUMN], decodeResourceSample(nodeRow));
 }
 
 function createControlPlanePlacementNodeObservationReader({
@@ -485,12 +453,14 @@ function createControlPlanePlacementNodeObservationReader({
   resourceDiagnosticsSampler,
   systemTableCache,
 }) {
-  return (targetNodeId, _role, nowMs, nodeRowOverride = null) => {
+  return (targetNodeId, _role, _nowMs, nodeRowOverride = null) => {
     const nodeRow = nodeRowOverride ?? (systemTableCache ?
       systemTableCache.get(TABLES.NODES, targetNodeId) :
       null);
     if (targetNodeId === localNodeId && resourceDiagnosticsSampler) {
-      return readLocalDiagnosticsObservation(resourceDiagnosticsSampler, nodeRow, nowMs);
+      const {latest} = resourceDiagnosticsSampler.getSharedReport();
+      return buildPlacementObservation(nodeRow, latest.timestamp, latest.sampleId,
+        resourceSampleFields(latest.process));
     }
     return readRemoteHeartbeatObservation(nodeRow);
   };
@@ -621,7 +591,7 @@ export {
   computeCopyWaitingDemand,
   createControlPlanePlacementNodeObservationReader,
   evaluatePassBudgetsForController,
-  isCopyWithinCapacity,
+  decideCopyCapacity,
   readRemoteHeartbeatObservation,
   recordAdmittedCopyOccupancy,
   resolveMoveCopyLimitsForController,

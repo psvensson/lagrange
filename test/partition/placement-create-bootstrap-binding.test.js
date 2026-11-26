@@ -31,12 +31,13 @@ import {
   OPERATION_METADATA_KEY, OperationType, WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {
-  REBALANCER_SKIP_REASON,
+  REBALANCER_SKIP_REASON, REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCE_COORDINATOR_DEFER_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
   ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
 import {
@@ -203,10 +204,27 @@ test('native ADD dispatch bootstrap is durable and reused by a fresh workflow', 
           [step, WORKFLOW_STEP_TO_STATUS[step], at,
             JSON.stringify({step, timestamp: at}), row.operation_id]), null);
         const [sending] = ledgerRows(leader);
-        await reconstructed.workflowOwner.executeOperationInternal(
-          reconstructed.repository.rowToOperation(sending), {},
-        );
-        assert.equal(emittedRequests.length, 1, 'the real workflow delivered one CREATE');
+        const owner = reconstructed.workflowOwner;
+        const sendLogs = [];
+        owner.logger = Object.create(owner.logger);
+        for (const level of ['info', 'debug']) {
+          owner.logger[level] = (message, fields) => {
+            if (message === REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION) sendLogs.push({level, fields});
+          };
+        }
+        const dispatchWake = {reasons: [RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY], handoffMode: null};
+        for (let send = 0; send < 3; send++) {
+          const operation = reconstructed.repository.rowToOperation(sending);
+          await owner.advanceReservationClearedDispatch(operation.operationId, operation,
+            {routineCreateRearmWake: true, dispatchWake});
+        }
+        assert.equal(emittedRequests.length, 3, 'a deferred CREATE response leaves the next send eligible');
+        assert.deepEqual(sendLogs.map(({level}) => level), ['info', 'info', 'debug']);
+        assert.deepEqual(sendLogs.map(({fields}) => fields.firstRepeatCreate), [false, true, false]);
+        assert.deepEqual(sendLogs.map(({fields}) => fields.firstAttemptForStep), [true, false, false]);
+        assert.deepEqual(sendLogs[1].fields.dispatchWake, dispatchWake);
+        assert.equal(sendLogs[1].fields.workflowStep, WORKFLOW_STEP.SENDING);
+        assert.equal(sendLogs[1].fields.createReceipt.priorReceiptStatus, null);
         const [{address, request}] = emittedRequests;
         assert.equal(address, `${NODE.B}/service/replica-handler`);
         assert.equal(request.operationId, row.operation_id);

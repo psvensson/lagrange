@@ -26,7 +26,10 @@ import {
   armCreateAdmissionRecoveryRearm,
   canRetainCreateActivation,
   hasDecidedCreateWorkReadiness,
+  queuedCreateMayStart,
   lostBootPhysicalWorkerError,
+  traceCreateWorker,
+  measureCreateStage,
   matchesRetainedCreateActivation,
   observeCreateActivation,
   ownsReplicaCreateWork,
@@ -211,16 +214,25 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           setImmediate(() => {
             let createStarted = false;
             const start = async () => {
-              if (this.shuttingDown || !ownsReplicaCreateWork(this, work)) return;
-              const evidence = request?.createAdmissionEvidence;
+              if (!queuedCreateMayStart(this, work, request, 'queued_callback')) return;
               requireVoterReadinessInputs(this, request);
-              if (evidence && !await this.getReplicaCreateAdmissionOwner()
-                .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
-                throw lostBootPhysicalWorkerError(
+              if (request.createAdmissionEvidence) {
+                let valid;
+                try {
+                  valid = await this.getReplicaCreateAdmissionOwner()
+                    .revalidatePhysicalWorker(request.createPhysicalWorkerClaim);
+                } catch (error) {
+                  traceCreateWorker(this, request, 'revalidate', 'error', error);
+                  throw error;
+                }
+                traceCreateWorker(this, request, 'revalidate', valid ? 'current' : 'refused');
+                if (!valid) throw lostBootPhysicalWorkerError(
                   `Current boot lost before queued CREATE ${operationId}`,
                 );
+              } else {
+                traceCreateWorker(this, request, 'revalidate', 'not_required');
               }
-              if (this.shuttingDown || !ownsReplicaCreateWork(this, work)) return;
+              if (!queuedCreateMayStart(this, work, request, 'post_revalidation')) return;
               createStarted = true;
               await this.createReplicaAsync(request, work);
             };
@@ -300,6 +312,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
      * @private
      */
     async createReplicaAsync(request, work = replicaCreateWork(this, request)) {
+      traceCreateWorker(this, request, 'createReplicaAsync', 'entered');
       const {
         operationId,
         explicitOperationType,
@@ -618,25 +631,26 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             // SYNCING owns the attached runtime. The caller's budget bounds
             // observation, while the service owns and drives the same request.
             if (!work.admissionReady) {
-              await waitForMaterializedCreateReadiness(
-                this, work, request, deadlineAtMs, isJoiningExistingGroup);
+              await measureCreateStage(this, work, 'voter_readiness', () =>
+                waitForMaterializedCreateReadiness(
+                  this, work, request, deadlineAtMs, isJoiningExistingGroup));
             }
             // The named release operation owns a committed origin even when
             // this caller cannot observe its reply. Only a current, timely
             // answer advances the local activation checkpoint.
             if (!participantReleased) {
               requireFreshCreateReleaseRoute(this);
-              await observeCreateActivation(this, work, deadlineAtMs, () =>
-                this.participantReleaseRecovery.releaseFreshCreate(partitionId, {
-                  createAdmissionEvidence, identityExisted: existed, deadlineAtMs,
-                }));
+              await measureCreateStage(this, work, 'participant_release', () =>
+                observeCreateActivation(this, work, deadlineAtMs, () =>
+                  this.participantReleaseRecovery.releaseFreshCreate(partitionId, {
+                    createAdmissionEvidence, identityExisted: existed, deadlineAtMs,
+                  })));
               requireReplicaCreateWork(this, work);
               participantReleased = true;
             }
-            if (work.claim && !await observeCreateActivation(
-              this, work, deadlineAtMs, () =>
-                work.owner.revalidatePhysicalWorker(work.claim),
-            )) {
+            if (work.claim && !await measureCreateStage(this, work, 'activation_worker_revalidation', () =>
+              observeCreateActivation(this, work, deadlineAtMs, () =>
+                work.owner.revalidatePhysicalWorker(work.claim)))) {
               return retireReplicaCreateWork(this, work);
             }
             requireReplicaCreateWork(this, work);

@@ -261,7 +261,6 @@ const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
     }
     this.detachCachePolicyListener();
     this.systemCache = validatedCache;
-    this.schemaProvisioningJobRepository?.setSystemCache(this.systemCache);
     attachCachePolicyListener(this);
   },
 

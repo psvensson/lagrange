@@ -39,6 +39,7 @@ import {
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
+import {traceCreateWorker} from './replica-handler-create-work.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
 const ROTATING_ADMISSION_RECOVERY_REFUSED = false;
@@ -472,31 +473,40 @@ function isPendingCreateStatus(status) {
 
 async function claimCreatePhysicalWorker(handler, createRequest) {
   const evidence = createRequest.createAdmissionEvidence;
-  if (!evidence) return true;
-  const claim = await handler.getReplicaCreateAdmissionOwner()
-    .claimPhysicalWorker(evidence);
+  if (!evidence) {
+    traceCreateWorker(handler, createRequest, 'claim', 'not_required');
+    return true;
+  }
+  let claim;
+  try {
+    claim = await handler.getReplicaCreateAdmissionOwner().claimPhysicalWorker(evidence);
+  } catch (error) {
+    traceCreateWorker(handler, createRequest, 'claim', 'error', error);
+    throw error;
+  }
+  traceCreateWorker(handler, createRequest, 'claim', claim ? 'acquired' : 'refused');
   if (!claim) return false;
   createRequest.createPhysicalWorkerClaim = claim;
   return true;
 }
 
-function inProgressCreateResponse(handler, operationId, replicaId,
-  replicaStatus) {
+async function workerCreateResponse(handler, request, status, replicaStatus) {
+  const {operationId, replicaId, createAdmissionEvidence, createPhysicalWorkerClaim} = request;
   const details = {operationId, replicaId, nodeId: handler.nodeId};
-  if (replicaStatus) {
-    details[ReplicaOperationField.REPLICA_STATUS] = replicaStatus;
+  if (replicaStatus) details[ReplicaOperationField.REPLICA_STATUS] = replicaStatus;
+  if (createAdmissionEvidence && !handler.shuttingDown) {
+    const receipt = await handler.getReplicaCreateAdmissionOwner()
+      .createWorkerReceipt(createAdmissionEvidence, createPhysicalWorkerClaim);
+    if (receipt) details.createWorkerReceipt = receipt;
   }
-  return handler.buildReplicaOperationResponse(
-    ReplicaOperationResponseStatus.IN_PROGRESS,
-    details,
-  );
+  return handler.buildReplicaOperationResponse(status, details);
 }
 
 async function restartPendingCreate(handler, existingReplica, createRequest,
   tableName) {
   if (!await claimCreatePhysicalWorker(handler, createRequest)) {
-    return inProgressCreateResponse(
-      handler, createRequest.operationId, createRequest.replicaId,
+    return workerCreateResponse(
+      handler, createRequest, ReplicaOperationResponseStatus.IN_PROGRESS,
     );
   }
   handler.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_RESTARTING_PENDING, {
@@ -516,11 +526,7 @@ async function restartPendingCreate(handler, existingReplica, createRequest,
   // before any step of the attempt (verifier finding B1).
   createRequest.resumedLifecycleStatus = existingReplica.status;
   handler.startCreateReplicaAsync(createRequest);
-  return handler.buildReplicaOperationResponse(
-    ReplicaOperationResponseStatus.INITIATED,
-    {operationId: createRequest.operationId,
-      replicaId: createRequest.replicaId, nodeId: handler.nodeId},
-  );
+  return workerCreateResponse(handler, createRequest, ReplicaOperationResponseStatus.INITIATED);
 }
 
 async function pendingCreateResponse(handler, existingReplica, createRequest,
@@ -544,10 +550,8 @@ async function pendingCreateResponse(handler, existingReplica, createRequest,
     existingReplica,
     createRequest.operationId,
   );
-  return inProgressCreateResponse(
-    handler,
-    createRequest.operationId,
-    existingReplica.replicaId,
+  return workerCreateResponse(
+    handler, createRequest, ReplicaOperationResponseStatus.IN_PROGRESS,
     existingReplica.status,
   );
 }
@@ -601,8 +605,8 @@ async function persistCreateLifecycle(handler, createRequest,
 async function startPreparedCreate(handler, createRequest, tableName,
   needsReplicaRuntimeRepair) {
   if (!await claimCreatePhysicalWorker(handler, createRequest)) {
-    return inProgressCreateResponse(
-      handler, createRequest.operationId, createRequest.replicaId,
+    return workerCreateResponse(
+      handler, createRequest, ReplicaOperationResponseStatus.IN_PROGRESS,
     );
   }
   handler.trackReplicaCreateOperation(
@@ -613,11 +617,7 @@ async function startPreparedCreate(handler, createRequest, tableName,
   );
   createRequest.skipLifecycleStatusPersistence = needsReplicaRuntimeRepair;
   handler.startCreateReplicaAsync(createRequest);
-  return handler.buildReplicaOperationResponse(
-    ReplicaOperationResponseStatus.INITIATED,
-    {operationId: createRequest.operationId,
-      replicaId: createRequest.replicaId, nodeId: handler.nodeId},
-  );
+  return workerCreateResponse(handler, createRequest, ReplicaOperationResponseStatus.INITIATED);
 }
 
 async function executePreparedCreate(handler, prepared, tableName) {
@@ -637,7 +637,7 @@ async function executePreparedCreate(handler, prepared, tableName) {
       operationId: createRequest.operationId,
       nodeId: handler.nodeId,
     });
-    return inProgressCreateResponse(handler, createRequest.operationId);
+    return workerCreateResponse(handler, createRequest, ReplicaOperationResponseStatus.IN_PROGRESS);
   }
   const needsReplicaRuntimeRepair =
     existingReplica?.status === ReplicaStatus.ACTIVE &&

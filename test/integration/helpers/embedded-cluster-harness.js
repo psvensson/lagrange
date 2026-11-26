@@ -17,6 +17,7 @@ import {fork} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {
   closeSync,
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   openSync,
@@ -222,15 +223,20 @@ function buildNodeEnvironment(node, role, seedRestPort, credentials, env) {
   return environment;
 }
 
-async function stopNode(t, node) {
-  if (node.channel.exitState()) return;
+async function stopNode(t, node, requireClean = false) {
+  if (node.channel.exitState()) {
+    if (requireClean) throw new Error(`node ${node.nodeId} exited before stop`);
+    return;
+  }
   try {
-    await node.channel.request(
+    const reply = await node.channel.request(
       EMBEDDED_WORKER_OP.STOP,
       {},
       EMBEDDED_CLUSTER_BUDGET_MS.STOP,
     );
-  } catch {
+    if (requireClean) requireOk(reply, `stop ${node.nodeId}`);
+  } catch (error) {
+    if (requireClean) throw error;
     // A node that cannot stop cleanly is still terminated below.
   }
   if (node.channel.exitState()) return;
@@ -388,7 +394,7 @@ function createEmbeddedCluster(t, options = {}) {
   async function startEmbeddedNode(nodeOptions = {}) {
     const role = nodeOptions.role ?? EMBEDDED_NODE_ROLE.SEED;
     const nodeId = nodeOptions.nodeId ?? randomUUID();
-    const listenerPorts = getUniqueListenerPorts();
+    const listenerPorts = nodeOptions.listenerPorts ?? getUniqueListenerPorts();
     const node = {
       adminPort: listenerPorts.adminWebSocketPort,
       dataDir: nodeOptions.dataDir ?? join(rootDir, `node-${nodes.length}`),
@@ -404,7 +410,7 @@ function createEmbeddedCluster(t, options = {}) {
     mkdirSync(node.dataDir, {recursive: true});
     const logFd = openSync(node.logPath, 'a');
     const startedAt = Date.now();
-    node.child = fork(WORKER_PATH, [], {
+    node.child = fork(nodeOptions.workerPath ?? WORKER_PATH, [], {
       cwd: REPOSITORY_ROOT,
       env: buildNodeEnvironment(
         node,
@@ -424,12 +430,25 @@ function createEmbeddedCluster(t, options = {}) {
       EMBEDDED_WORKER_OP.OPEN_SESSION,
       {options: {applicationId: EMBEDDED_CLUSTER_VALUE.HARNESS_APPLICATION_ID}},
     );
-    requireOk(await node.channel.request(
-      EMBEDDED_WORKER_OP.START,
-      {configuration: nodeOptions.configuration ?? {}},
-      nodeOptions.startBudgetMs ?? EMBEDDED_CLUSTER_BUDGET_MS.NODE_START,
-    ), `start ${role} ${nodeId} (log ${node.logPath})`);
+    try {
+      requireOk(await node.channel.request(
+        EMBEDDED_WORKER_OP.START,
+        {configuration: nodeOptions.configuration ?? {}},
+        nodeOptions.startBudgetMs ?? EMBEDDED_CLUSTER_BUDGET_MS.NODE_START,
+      ), `start ${role} ${nodeId}`);
+    } catch (error) {
+      const retained = `${rootDir}-node-${nodes.indexOf(node)}-startup.log`;
+      let evidence;
+      try {
+        copyFileSync(node.logPath, retained);
+        evidence = `startup log: ${retained}`;
+      } catch (copyError) {
+        evidence = `startup log copy failed: ${copyError.message}`;
+      }
+      throw new Error(`${error.message}\n${evidence}\n${nodeLogDigest(node)}`, {cause: error});
+    }
     node.startMs = Date.now() - startedAt;
+    node.stop = () => stopNode(t, node, true);
 
     node.openSession = async (openOptions) => node.channel.request(
       EMBEDDED_WORKER_OP.OPEN_SESSION,

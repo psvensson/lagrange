@@ -52,6 +52,45 @@ function lostBootPhysicalWorkerError(message) {
   );
 }
 
+// Correlate target worker decisions with the durable admission generation.
+function traceCreateWorker(handler, request, boundary, outcome, error = null, elapsedMs = null) {
+  const evidence = request.createAdmissionEvidence;
+  handler.logger.info('Replica CREATE physical worker', {
+    operationId: request.operationId,
+    partitionId: request.partitionId,
+    replicaId: request.replicaId,
+    nodeId: handler.nodeId,
+    attemptToken: evidence?.attemptToken ?? null,
+    attemptSeq: evidence?.attemptSeq ?? null,
+    ownerIncarnation: evidence?.ownerIncarnation ?? null,
+    boundary,
+    outcome,
+    elapsedMs,
+    errorCode: error?.code ?? null,
+  });
+}
+
+async function measureCreateStage(handler, request, stage, observe) {
+  const start = performance.now();
+  traceCreateWorker(handler, request, stage, 'started');
+  try {
+    const result = await observe();
+    traceCreateWorker(handler, request, stage, result === false ? 'refused' : 'settled',
+      null, performance.now() - start);
+    return result;
+  } catch (error) {
+    traceCreateWorker(handler, request, stage, 'error', error, performance.now() - start);
+    throw error;
+  }
+}
+
+function queuedCreateMayStart(handler, work, request, boundary) {
+  const outcome = handler.shuttingDown ? 'shutdown' :
+    ownsReplicaCreateWork(handler, work) ? 'current' : 'superseded';
+  traceCreateWorker(handler, request, boundary, outcome);
+  return outcome === 'current';
+}
+
 function replicaCreateWork(handler, request) {
   const {operationId, replicaId, partitionId, createPhysicalWorkerClaim: claim} = request;
   return {
@@ -255,7 +294,10 @@ export {
   matchesRetainedCreateActivation,
   observeCreateActivation,
   ownsReplicaCreateWork,
+  queuedCreateMayStart,
   releaseReplicaCreateWork,
+  traceCreateWorker,
+  measureCreateStage,
   replicaCreateWork,
   requireVoterReadinessInputs,
   requireFreshCreateReleaseRoute,

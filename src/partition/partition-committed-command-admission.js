@@ -123,6 +123,12 @@ function refused(code, reason) {
 }
 
 function sqlCommandRefusal(command) {
+  if (Object.hasOwn(command, 'mirrorRetentionBarrierIndex') ||
+      Object.hasOwn(command, 'mirrorRetentionRelease') ||
+      Object.hasOwn(command, 'mirrorRetentionCustody')) {
+    return refused(MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES,
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES);
+  }
   if (!isNonEmptyString(command.sql)) {
     return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
       PARTITION_SERVICE_ERROR_MSG.WRITE_STATEMENT_MISSING);

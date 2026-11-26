@@ -16,7 +16,7 @@ const JOIN_CHECKPOINT_COUNT = 5;
 
 function buildNodeStats() {
   return {
-    cpu: {count: 4, usagePercent: 10},
+    cpu: {count: 4},
     memory: {totalBytes: 1024, usagePercent: 20},
     diskGb: 100,
     diskUsagePercent: 30,

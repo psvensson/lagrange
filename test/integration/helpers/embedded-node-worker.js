@@ -97,6 +97,14 @@ const handlers = {
   },
 };
 
+// A dedicated integration worker may add synchronization operations before START.
+export function registerEmbeddedWorkerOperations(operations) {
+  for (const [op, handler] of Object.entries(operations)) {
+    if (Object.hasOwn(handlers, op)) throw new Error(`Duplicate embedded worker operation: ${op}`);
+    handlers[op] = handler;
+  }
+}
+
 process.on('message', async (message) => {
   const handler = handlers[message?.op];
   let reply;

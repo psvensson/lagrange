@@ -1,4 +1,5 @@
 import {types as nodeUtilTypes} from 'node:util';
+import {encodeResourceSample} from '../../diagnostics/placement-resource-sample.js';
 import {COLUMN, TABLES} from '../../constants/index.js';
 import {
   buildStaleNodeIncarnationError,
@@ -443,6 +444,12 @@ function buildBirthWrite(options, row) {
   );
 }
 
+// UPDATE merges columns on an incumbent row. A boot advance must therefore
+// clear the complete previous interval and its identity in the registration CAS.
+const EMPTY_BOOT_RESOURCE_SAMPLE = Object.freeze({
+  ...encodeResourceSample(null), telemetry_sampled_at: null, telemetry_sample_id: null,
+});
+
 function planRegistration(options, row, observedRow, bootIncarnation) {
   const relation = classifyNodeIncarnationRelation(observedRow,
     bootIncarnation, options.issueRecord);
@@ -450,13 +457,12 @@ function planRegistration(options, row, observedRow, bootIncarnation) {
     return buildBirthWrite(options, row);
   }
   if (relation !== NODE_INCARNATION_RELATION.OLDER) return null;
-  const observedValue = observedRow[COLUMN.BOOT_INCARNATION];
+  const observedValue = observedRow[COLUMN.BOOT_INCARNATION] ?? null;
+  const nextRow = {...row, ...EMPTY_BOOT_RESOURCE_SAMPLE};
   return () => options.advance({
     [COLUMN.NODE_ID]: row[COLUMN.NODE_ID],
-    [COLUMN.BOOT_INCARNATION]: observedValue === undefined ?
-      null : observedValue,
-  }, row, registrationWriteIdentity(row, REGISTRATION_WRITE_VERB.ADVANCE_FROM,
-    observedValue === undefined ? null : observedValue));
+    [COLUMN.BOOT_INCARNATION]: observedValue,
+  }, nextRow, registrationWriteIdentity(row, REGISTRATION_WRITE_VERB.ADVANCE_FROM, observedValue));
 }
 
 function classifyObservation(read, bootIncarnation, afterAttempt,
@@ -675,6 +681,7 @@ function buildSupersededRegistrationError(options) {
 }
 
 export {
+  EMPTY_BOOT_RESOURCE_SAMPLE,
   ISSUE_INDETERMINATE_MODE,
   NODE_IDENTITY_TWIN_SUSPECTED,
   NODE_INCARNATION_RELATION,

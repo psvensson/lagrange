@@ -867,7 +867,10 @@ async function snapshotProfileBounds(t, profileName) {
     bootIncarnation: 1,
     systemTableCache: createReadinessSystemTableCacheStub(),
   });
-  const coordinator = new ParallelQueryCoordinator({nodeId: `bounds-${profileName}`});
+  const coordinator = new ParallelQueryCoordinator({
+    nodeId: `bounds-${profileName}`,
+    partitionQueryExecutor: () => { throw new Error('timing inspection only'); },
+  });
 
   const recoveryExecutor = {
     nodeId: `bounds-${profileName}`,

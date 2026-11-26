@@ -27,10 +27,6 @@ import {
   settleHedgedPartition,
 } from './parallel-query-hedging.js';
 
-const REPLICA_STATUS = Object.freeze({
-  ACTIVE: 'active',
-});
-
 const parallelQueryCoordinatorHedgingMethods = {
   /**
    * Execute one partition chunk with straggler hedging: each partition's
@@ -97,12 +93,7 @@ const parallelQueryCoordinatorHedgingMethods = {
       return partitionIds.map((id) => hedging.results.get(id));
     } finally {
       clearInterval(stragglerCheckInterval);
-      // Cancel any pending speculative executions
-      for (const [, controller] of speculativePromises) {
-        if (controller && controller.abort) {
-          controller.abort();
-        }
-      }
+      for (const controller of hedging.controllers.values()) controller.abort();
     }
   },
 
@@ -125,7 +116,7 @@ const parallelQueryCoordinatorHedgingMethods = {
         partitionId,
         params,
         metrics,
-        hedging.primaryExecutionOptions,
+        {...hedging.primaryExecutionOptions, signal: hedging.signals.get(partitionId)},
       ).then((outcome) => {
         this.settleHedgedAttemptOutcome(hedging, partitionId, outcome);
       }).catch((error) => {
@@ -219,8 +210,6 @@ const parallelQueryCoordinatorHedgingMethods = {
           params,
           metrics,
           speculativePromises,
-          hedging.results,
-          hedging.pendingPartitions,
           hedging,
         );
       }
@@ -229,19 +218,14 @@ const parallelQueryCoordinatorHedgingMethods = {
 
   /**
    * Start speculative execution ("hedge") on an alternative replica.
-   * In the wired path the hedge re-enters the partitionQueryExecutor with
-   * the primary's delivery addresses excluded; in the registry path it
-   * targets an alternative active replica service. When no alternative
-   * exists, nothing is hedged.
+   * Exclude the primary's observed delivery addresses.
    * Requirements: 26.11
    * @param {string} partitionId - Partition ID.
    * @param {string} sql - SQL query.
    * @param {Array} params - Query parameters.
    * @param {QueryExecutionMetrics} metrics - Metrics tracker.
    * @param {Map} speculativePromises - Map of speculative promises.
-   * @param {Map} results - Results map.
-   * @param {Set} pendingPartitions - Set of pending partitions.
-   * @param {Object} [hedging] - Hedged fan-out state (wired path only).
+   * @param {Object} hedging - Hedged fan-out state.
    * @private
    */
   startSpeculativeExecution(
@@ -250,11 +234,9 @@ const parallelQueryCoordinatorHedgingMethods = {
     params,
     metrics,
     speculativePromises,
-    results,
-    pendingPartitions,
-    hedging = undefined,
+    hedging,
   ) {
-    const hedgeDelivery = this.resolveHedgeDelivery(partitionId, hedging);
+    const hedgeDelivery = resolveWiredHedgeDelivery(hedging, partitionId);
     if (!hedgeDelivery.available) {
       this.logger.debug(QUERY_LOG_MSG.NO_ALTERNATIVE_REPLICAS, {partitionId});
       return;
@@ -262,7 +244,6 @@ const parallelQueryCoordinatorHedgingMethods = {
 
     this.logger.debug(QUERY_LOG_MSG.SPECULATIVE_EXEC_START, {
       partitionId,
-      replicaId: hedgeDelivery.replicaId,
     });
 
     metrics.speculativeExecutions++;
@@ -274,19 +255,16 @@ const parallelQueryCoordinatorHedgingMethods = {
     speculativeMetrics.isSpeculative = true;
     speculativeMetrics.start();
 
-    const speculativePromise = this.executeQueryOnService(
-      hedgeDelivery.service,
-      sql,
-      params,
-      partitionId,
-      hedgeDelivery.executionOptions,
-    ).then((result) => this.acceptSpeculativeResult({
+    const signal = hedging.signals.get(partitionId);
+    const speculativePromise = Promise.resolve().then(() => {
+      signal.throwIfAborted();
+      return this.partitionQueryExecutor(sql, partitionId, params,
+        {...hedgeDelivery.executionOptions, signal});
+    }).then((result) => this.acceptSpeculativeResult({
       partitionId,
       result,
       speculativeMetrics,
       metrics,
-      results,
-      pendingPartitions,
       hedging,
     })).catch((error) => {
       speculativeMetrics.fail(error);
@@ -297,49 +275,7 @@ const parallelQueryCoordinatorHedgingMethods = {
       return {success: false, error: error.message, rows: []};
     });
 
-    speculativePromises.set(partitionId, {promise: speculativePromise});
-  },
-
-  /**
-   * Resolve where a hedge attempt can execute. Wired deployments hedge
-   * through the partitionQueryExecutor callback with the primary's
-   * delivery targets excluded; registry deployments select an alternative
-   * active replica service directly.
-   * @param {string} partitionId - Partition ID.
-   * @param {Object|undefined} hedging - Hedged fan-out state.
-   * @return {Object} Hedge delivery descriptor.
-   * @private
-   */
-  resolveHedgeDelivery(partitionId, hedging) {
-    const unavailable = {available: false};
-    if (this.partitionQueryExecutor) {
-      if (!hedging) {
-        return unavailable;
-      }
-      const wiredDelivery = resolveWiredHedgeDelivery(hedging, partitionId);
-      if (!wiredDelivery.available) {
-        return unavailable;
-      }
-      return {
-        available: true,
-        service: undefined,
-        replicaId: undefined,
-        executionOptions: wiredDelivery.executionOptions,
-      };
-    }
-    const replicas = this.getAlternativeReplicas(partitionId);
-    const alternativeReplica = replicas.find((r) =>
-      r.status === REPLICA_STATUS.ACTIVE || r.status === undefined,
-    );
-    if (!alternativeReplica) {
-      return unavailable;
-    }
-    return {
-      available: true,
-      service: alternativeReplica,
-      replicaId: alternativeReplica.replicaId,
-      executionOptions: {},
-    };
+    speculativePromises.set(partitionId, speculativePromise);
   },
 };
 

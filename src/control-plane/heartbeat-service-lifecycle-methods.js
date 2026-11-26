@@ -512,9 +512,6 @@ class HeartbeatServiceLifecycleMethods {
       cpu_cores: Number.isFinite(existing?.cpu_cores) ? existing.cpu_cores : 0,
       memory_mb: Number.isFinite(existing?.memory_mb) ? existing.memory_mb : 0,
       disk_gb: Number.isFinite(existing?.disk_gb) ? existing.disk_gb : 0,
-      cpu_usage_percent: Number.isFinite(existing?.cpu_usage_percent) ?
-        existing.cpu_usage_percent :
-        0,
       memory_usage_percent: Number.isFinite(existing?.memory_usage_percent) ?
         existing.memory_usage_percent :
         0,

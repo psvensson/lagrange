@@ -6,15 +6,12 @@ import {REPLICA_RECOVERY_NUM} from './replica-recovery-constants.js';
  * @return {Array<Object>} Sorted nodes.
  */
 function sortReplicaRecoveryNodesByLoad(nodes) {
-  return [...nodes].sort((a, b) => {
-    const loadA = (a.cpu_usage_percent || 0) +
-      (a.memory_usage_percent || 0) +
-      (a.disk_usage_percent || 0);
-    const loadB = (b.cpu_usage_percent || 0) +
-      (b.memory_usage_percent || 0) +
-      (b.disk_usage_percent || 0);
-    return loadA - loadB;
-  });
+  const compareHostCpu = nodes.every((node) => Number.isFinite(node.host_cpu_utilization_percent));
+  const load = (node) => {
+    const otherLoad = (node.memory_usage_percent || 0) + (node.disk_usage_percent || 0);
+    return compareHostCpu ? otherLoad + node.host_cpu_utilization_percent : otherLoad;
+  };
+  return [...nodes].sort((a, b) => load(a) - load(b));
 }
 
 /**

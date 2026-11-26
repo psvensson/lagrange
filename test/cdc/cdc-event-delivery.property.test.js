@@ -65,7 +65,7 @@ const nodeRecordArb = fc.record({
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.ADDRESS]: address,
     [COLUMN.STATUS]: status,
-    [COLUMN.CPU_USAGE_PERCENT]: cpuUsagePercent,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: cpuUsagePercent,
     [COLUMN.MEMORY_USAGE_PERCENT]: memoryUsagePercent,
     [COLUMN.CREATED_AT]: now,
     [COLUMN.UPDATED_AT]: now,
@@ -431,7 +431,7 @@ test('Property 4: CDC Event Delivery', async (t) => {
 
           const updateData = {
             [COLUMN.NODE_ID]: nodeRecord[COLUMN.NODE_ID],
-            [COLUMN.CPU_USAGE_PERCENT]: newCpuUsage,
+            [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: newCpuUsage,
             [COLUMN.UPDATED_AT]: Date.now(),
           };
           cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, updateData);
@@ -455,7 +455,7 @@ test('Property 4: CDC Event Delivery', async (t) => {
           const retrieved = cache.get(TABLES.NODES, nodeId);
 
           return retrieved &&
-                 retrieved[COLUMN.CPU_USAGE_PERCENT] === newCpuUsage;
+                 retrieved[COLUMN.HOST_CPU_UTILIZATION_PERCENT] === newCpuUsage;
         },
       ),
       {numRuns: 10},

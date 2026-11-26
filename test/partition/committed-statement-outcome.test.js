@@ -1,3 +1,8 @@
+import {sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
+import {replicateSourceMirrorRetentionCustody} from '../../src/partition/partition-mirror-effect-retention.js';
+import {
+  decodeMirrorCustodyRow, MIRROR_CUSTODY_FORMAT,
+} from '../../src/partition/partition-mirror-custody-codec.js';
 // Committed statement outcome and mirror-effect retention lifecycle tests
 // (quest raft-rs-single-path-partition-cutover, B2 / F-i / mirror retention).
 
@@ -43,11 +48,8 @@ import {
 } from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {
   STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
-  partitionOwesDurableMirrorEffects,
-  pruneSettledMirrorOutcomeEffects,
   readCommittedStatementOutcome,
   readDurableMirrorRetentionCustodyIn,
-  reconcileCommittedStatementMirrorEffects,
 } from '../../src/partition/partition-committed-statement-outcome.js';
 import {
   createPartitionSnapshotCadence,
@@ -61,7 +63,7 @@ import {
   requestSnapshotInstall, resolveReplicaCheckpointsRoot,
 } from '../../src/raft/snapshot-install.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../../src/raft/snapshot-install-constants.js';
-import {sqliteConnectionState} from '../../src/storage/sqlite-connection-state.js';
+import {reconcileFailedMirrorCustody} from '../../src/partition/partition-mirror-custody-lifecycle.js';
 import {loadDurableDeltasBehindWatermark} from '../../src/partition/partition-mirror-replay-cursor.js';
 import {
   preparePartitionReadStatement,
@@ -236,13 +238,13 @@ function failInsertEnvironmentally(db) {
   };
 }
 
-async function withPartition(partitionId, body) {
+async function withPartition(partitionId, body, options = {}) {
   quietEnvironment();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
   const dbPath = path.join(directory, DB_FILE);
   const services = [];
   const open = async () => {
-    const service = new PartitionService(withFoundingStamp(partitionOptions(partitionId, dbPath)));
+    const service = new PartitionService(withFoundingStamp({...partitionOptions(partitionId, dbPath), ...options}));
     services.push(service);
     await service.initialize();
     await resumeFixtureParticipantAdmission(service);
@@ -1012,38 +1014,22 @@ test('AD: on a three-replica group, the leader\'s own environmental apply ' +
 test('durable split effects: committed writes retain canonical affectedRows and ' +
   'changes across restart for trim(?), zero-row no-ops, and multi-child mutations',
 {timeout: TEST_TIMEOUT_MS}, async () => {
+  const tableName = 'durable_split_rows';
   await withPartition('split-durable-effects', async ({open}) => {
     const partition = await open();
-    assert.equal(
-      partitionOwesDurableMirrorEffects(partition),
-      false,
-      'system table partition without active mirror obligations does not owe mirror effects',
-    );
-    const seedA = await insert(partition, '\tA\t', 'node-left', 'entry-seed-left');
-    const seedZ = await insert(partition, 'Z', 'node-right', 'entry-seed-right');
-    assert.equal(seedA.success, true);
+    const seed = async (key, value, entryId) => partition.applyWrite({
+      type: PARTITION_SERVICE_OPERATION.INSERT,
+      sql: `INSERT INTO ${tableName} (group_id, representative_node_id) VALUES (?, ?)`,
+      params: [key, value], entryId,
+    });
+    assert.equal((await seed('\tA\t', 'node-left', 'entry-seed-left')).success, true);
+    const seedZ = await seed('Z', 'node-right', 'entry-seed-right');
     assert.equal(seedZ.success, true);
-    assert.equal(
-      partition.db
-        .prepare(
-          'SELECT 1 AS present FROM sqlite_master ' +
-          'WHERE type = \'table\' AND name = \'_partition_statement_outcome_effects\'',
-        )
-        .get(),
-      undefined,
-      'ordinary system table writes do not create _partition_statement_outcome_effects',
-    );
     const watermarkIndex = seedZ.logIndex;
-    partition.captureDurableMirrorEffects = true;
-    assert.equal(
-      partitionOwesDurableMirrorEffects(partition),
-      true,
-      'mirror-capturing partition owes durable mirror effects',
-    );
 
     const deleteTrim = await partition.applyWrite({
       type: PARTITION_SERVICE_OPERATION.DELETE,
-      sql: `DELETE FROM ${TABLE_NAME} WHERE group_id = trim(?)`,
+      sql: `DELETE FROM ${tableName} WHERE group_id = trim(?)`,
       params: ['\tA\t'],
       entryId: 'entry-delete-trim',
     });
@@ -1052,7 +1038,7 @@ test('durable split effects: committed writes retain canonical affectedRows and 
 
     const noOpDeleteTrim = await partition.applyWrite({
       type: PARTITION_SERVICE_OPERATION.DELETE,
-      sql: `DELETE FROM ${TABLE_NAME} WHERE group_id = trim(?)`,
+      sql: `DELETE FROM ${tableName} WHERE group_id = trim(?)`,
       params: ['\tA\t'],
       entryId: 'entry-noop-trim',
     });
@@ -1062,7 +1048,7 @@ test('durable split effects: committed writes retain canonical affectedRows and 
     const multiChildInsert = await partition.applyWrite({
       type: PARTITION_SERVICE_OPERATION.INSERT,
       sql:
-        `INSERT INTO ${TABLE_NAME} (group_id, representative_node_id) ` +
+        `INSERT INTO ${tableName} (group_id, representative_node_id) ` +
         'VALUES (?, ?), (?, ?)',
       params: ['B', 'node-b', 'Y', 'node-y'],
       entryId: 'entry-multi-child-insert',
@@ -1117,7 +1103,7 @@ test('durable split effects: committed writes retain canonical affectedRows and 
     };
     for (const delta of deltas) {
       await replaySplitEntry(delta, metadata, {
-        tableName: TABLE_NAME,
+        tableName,
         queryExecutor,
       });
     }
@@ -1135,28 +1121,19 @@ test('durable split effects: committed writes retain canonical affectedRows and 
       'projects the multi-child mutation to both children',
     );
 
-    const prunedFirstTwo = pruneSettledMirrorOutcomeEffects(
-      recovered,
-      noOpDeleteTrim.logIndex,
-    );
-    assert.equal(prunedFirstTwo, 2, 'prunes settled mirror effects through watermark');
-    assert.equal(
-      readCommittedStatementOutcome(
-        recovered,
-        recovered.getCommittedEntryKey({entryId: 'entry-delete-trim'}),
-      ).affectedRows,
-      undefined,
-      'pruned entry outcome retains settled status but drops mirror effect payload',
-    );
-    assert.equal(
-      readCommittedStatementOutcome(
-        recovered,
-        recovered.getCommittedEntryKey({entryId: 'entry-multi-child-insert'}),
-      ).affectedRows?.length,
-      2,
-      'unsettled mirror effects above watermark remain intact',
-    );
-  });
+  }, {tableName, tableId: tableName});
+});
+
+test('durable custody refuses scalar, unversioned and incomplete identities', () => {
+  const custody = {format: MIRROR_CUSTODY_FORMAT, barrierIndex: 8, family: 'split',
+    workflowId: 'split-1', workflowAttempt: 1, workflowFenceToken: 3, targetPartitionVersion: 2};
+  const decode = (value) => decodeMirrorCustodyRow({entry_key: '__mirror_retention_barrier__',
+    log_index: 0, mutation_kind: 'PINNED', typed_effects_json: JSON.stringify(value)});
+  assert.deepEqual(decode(custody), custody);
+  for (const invalid of [8, {...custody, format: undefined}, {...custody, barrierIndex: '8'},
+    {...custody, workflowFenceToken: null}, {...custody, workflowAttempt: -1}]) {
+    assert.throws(() => decode(invalid), {code: 'mirror_retention_custody_bytes_invalid'});
+  }
 });
 
 test(
@@ -1202,7 +1179,8 @@ test(
     };
 
     try {
-      const [initialLeader, follower, thirdReplica] = group.services;
+      const [initialLeader, follower] = group.services;
+      let thirdReplica = group.services[2];
       const membershipGenerationEpoch = Number(
         RaftRsDurableStore.readDurableRecordIn(initialLeader.db, partitionId)
           .membershipGenerationIndex,
@@ -1228,9 +1206,9 @@ test(
       });
       initialLeader.sqlQueryEngine = {
         managedSplitWorkflow: {
-          async acknowledgeSourceParticipant() {
+          async reserveSourceMirrorCustody() {
             await refusedAuthGate;
-            return {result: 'rejected', splitCutoverApplied: false};
+            return false;
           },
         },
       };
@@ -1254,7 +1232,7 @@ test(
       assert.equal(readDurableMirrorRetentionCustodyIn(initialLeader.db), null);
 
       const abortedMeta = {
-        ...refusedMeta, workflowId: 'wf-split-aborted-pre-cutover', workflowFenceToken: 2,
+        ...refusedMeta, workflowId: 'wf-split-aborted-pre-cutover', workflowAttempt: 2, workflowFenceToken: 2,
       };
       initialLeader.sqlQueryEngine = {
         queryExecutor: {
@@ -1263,12 +1241,30 @@ test(
           },
         },
         managedSplitWorkflow: {
+          reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
           async acknowledgeSourceParticipant(_wfId, ack) {
             if (ack.status === 'snapshot_started') return {result: 'accepted'};
             throw new Error('simulated backfill/catchup pre-cutover failure');
           },
         },
       };
+      const occupied = [];
+      const queue = initialLeader.proposalQueue;
+      while (queue.size < queue.capacityFor('ordinary')) {
+        const id = `retention-pressure-${occupied.length}`;
+        queue.enqueue(id, {resolve() {}, reject() {}});
+        occupied.push(id);
+      }
+      try {
+        await assert.rejects(initialLeader.handleStartSplitReplication({
+          partitionId, tableId: userTableName, tableName: userTableName,
+          transitionMetadata: abortedMeta,
+        }), /custody commitment unconfirmed/u);
+        assert.equal(initialLeader.splitReplication, null);
+        assert.ok(group.services.every((svc) => readDurableMirrorRetentionCustodyIn(svc.db) === null));
+      } finally {
+        for (const id of occupied) queue.resolve(id, {});
+      }
       assert.equal((await initialLeader.handleStartSplitReplication({
         partitionId, tableId: userTableName, tableName: userTableName,
         transitionMetadata: abortedMeta,
@@ -1287,11 +1283,59 @@ test(
         });
         assert.equal(w.success, true);
       }
-      assert.equal(readDurableMirrorRetentionCustodyIn(initialLeader.db), null);
+      assert.equal(readDurableMirrorRetentionCustodyIn(initialLeader.db)?.workflowId,
+        abortedMeta.workflowId, 'an uncertain acknowledgement retains protection');
       const countPositiveEffectsSql =
         'SELECT COUNT(*) AS count FROM _partition_statement_outcome_effects WHERE log_index > 0';
-      const retainedAfterAbort = initialLeader.db.prepare(countPositiveEffectsSql).get().count;
-      assert.ok(retainedAfterAbort <= STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW);
+      assert.ok(initialLeader.db.prepare(countPositiveEffectsSql).get().count >
+        STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW);
+      let terminalMetadata = {...abortedMeta, mirrorExecutionEnded: true, mirrorCustodyGrants: [
+        {partitionId, fence: abortedMeta.workflowFenceToken + 1},
+      ]};
+      const terminalRow = () => ({table_id: userTableName, partition_transition_state: 'failed',
+        pending_partition_version: null, partition_transition_generation: 7,
+        partition_transition_metadata: JSON.stringify(terminalMetadata)});
+      const releaseOwner = initialLeader.sqlQueryEngine.managedSplitWorkflow;
+      releaseOwner.readAuthoritativeWorkflowRecord = async () => terminalRow();
+      await reconcileFailedMirrorCustody(initialLeader);
+      assert.equal(readDurableMirrorRetentionCustodyIn(initialLeader.db)?.workflowFenceToken,
+        abortedMeta.workflowFenceToken);
+      terminalMetadata.mirrorCustodyGrants = [{partitionId, fence: abortedMeta.workflowFenceToken}];
+      let allowAck = false;
+      releaseOwner.getControlPlaneSystemTableGateway = () => ({
+        async updateSystemTableRow(_table, where, data) {
+          if (!allowAck || where.partition_transition_metadata !== terminalRow().partition_transition_metadata) {
+            return {affectedRows: 0};
+          }
+          terminalMetadata = JSON.parse(data.partition_transition_metadata);
+          return {affectedRows: 1};
+        },
+      });
+      await assert.rejects(reconcileFailedMirrorCustody(initialLeader),
+        {code: 'MIRROR_RELEASE_ACK_UNCONFIRMED'});
+      assert.equal(readDurableMirrorRetentionCustodyIn(initialLeader.db), null);
+      assert.equal(terminalMetadata.mirrorCustodyGrants.length, 1);
+      // The release committed before its control-plane acknowledgement. Reopen a
+      // follower on disk and move leadership there while the grant is retained.
+      const releaseIndex = initialLeader.raft.readStatus().appliedIndex;
+      assert.ok(await group.waitFor(() => thirdReplica.raft.readStatus().appliedIndex >= releaseIndex));
+      await thirdReplica.shutdown();
+      thirdReplica = await group.reopen(2);
+      await transferGroupLeadership(group, initialLeader, thirdReplica);
+      await settleGroupLeader(group, thirdReplica);
+      thirdReplica.sqlQueryEngine = {managedSplitWorkflow: releaseOwner};
+      assert.equal(readDurableMirrorRetentionCustodyIn(thirdReplica.db), null);
+      await assert.rejects(replicateSourceMirrorRetentionCustody(thirdReplica, abortedMeta,
+        {family: 'split', barrierIndex: 0}), /custody commitment unconfirmed/u);
+      thirdReplica.systemTableCache.applySystemTableChange('tables', 'UPDATE', terminalRow());
+      allowAck = true;
+      await reconcileFailedMirrorCustody(thirdReplica);
+      assert.deepEqual(terminalMetadata.mirrorCustodyGrants, []);
+      await transferGroupLeadership(group, thirdReplica, initialLeader);
+      await settleGroupLeader(group, initialLeader);
+      assert.ok(await group.waitFor(() => group.services.every((service) => !service.splitReplication)),
+        'committed release retires the failed handle on the former leader before participant admission');
+      await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
       assert.equal((await initialLeader.applyWrite({
         type: PARTITION_SERVICE_OPERATION.UPDATE,
         sql: `UPDATE ${userTableName} SET representative_node_id = ? WHERE group_id = ?`,
@@ -1302,7 +1346,7 @@ test(
       const rightChild = await openChildPartition('orders-right');
       const childById = new Map([['orders-left', leftChild], ['orders-right', rightChild]]);
       const activeMeta = {
-        ...refusedMeta, workflowId: 'wf-split-no-dml-held-catchup', workflowFenceToken: 3,
+        ...refusedMeta, workflowId: 'wf-split-no-dml-held-catchup', workflowAttempt: 3, workflowFenceToken: 3,
       };
       for (const targetId of ['orders-left', 'orders-right']) {
         initialLeader.systemTableCache.applySystemTableChange('partitions', 'INSERT', {
@@ -1324,11 +1368,12 @@ test(
           },
         },
         managedSplitWorkflow: {
+          reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
           async acknowledgeSourceParticipant(_wfId, ack) {
             if (ack.status === 'snapshot_started') return {result: 'accepted'};
             if (ack.status === 'catchup_ready') {
               heldCheckpoint = ack.checkpoint;
-              return {result: 'accepted', splitCutoverApplied: false};
+              throw new Error('cutover failed after checkpoint acceptance');
             }
             return {result: 'accepted', splitSourceRetired: true};
           },
@@ -1340,7 +1385,8 @@ test(
       })).success, true);
       await initialLeader.splitReplicationRun;
       assert.ok(heldCheckpoint, 'CATCHUP_READY checkpoint recorded with zero DML during backfill');
-      const heldBarrierIndex = heldCheckpoint.replayWatermarkIndex;
+      const heldBarrierIndex = readDurableMirrorRetentionCustodyIn(initialLeader.db).barrierIndex;
+      assert.ok(heldBarrierIndex <= heldCheckpoint.replayWatermarkIndex);
       const leaderAppliedBeforeTransfer = initialLeader.raft.readStatus().appliedIndex;
       assert.equal(
         await group.waitFor(() => group.services.every((svc) =>
@@ -1350,7 +1396,7 @@ test(
         true,
       );
 
-      initialLeader.splitReplication = null;
+      const childQueryExecutor = initialLeader.sqlQueryEngine.queryExecutor;
       initialLeader.systemTableCache.applySystemTableChange('tables', 'UPDATE', {
         table_id: userTableName, table_name: userTableName, active_partition_version: 1,
         pending_partition_version: null, partition_transition_state: 'active',
@@ -1358,6 +1404,10 @@ test(
       });
       await transferGroupLeadership(group, initialLeader, follower);
       await settleGroupLeader(group, follower);
+      await initialLeader.shutdown();
+      const reopenedSource = await group.reopen(0);
+      assert.equal(readDurableMirrorRetentionCustodyIn(reopenedSource.db)?.workflowId,
+        activeMeta.workflowId, 'loss of the volatile worker preserves the committed obligation');
       await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
       assert.equal(
         follower.systemTableCache.get('tables', userTableName)?.partition_transition_state,
@@ -1392,7 +1442,8 @@ test(
 
       const activeCadence = createPartitionSnapshotCadence({service: follower, entryThreshold: 1});
       const activeTick = await activeCadence.tick(Date.now());
-      assert.equal(activeTick.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.COMPACTED);
+      assert.equal(activeTick.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.COMPACTED,
+        [activeTick.detail, activeTick.cause, activeTick.stack].filter(Boolean).join('\n'));
       assert.ok(activeTick.checkpointedIndex > heldBarrierIndex);
       assert.equal(activeTick.compactedIndex, heldBarrierIndex);
       assert.equal(activeTick.compactedUpToIndex, heldBarrierIndex);
@@ -1417,60 +1468,55 @@ test(
         expectedReplicaIdentity: thirdReplica.replicaId,
       });
       assert.equal(installOutcome.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED);
-      const installedDb = new Database(thirdDbPath);
-      try {
-        assert.equal(installedDb.prepare(countPositiveEffectsSql).get().count, 0);
-        const installedCustody = readDurableMirrorRetentionCustodyIn(installedDb);
-        assert.equal(installedCustody?.workflowId, activeMeta.workflowId);
-        assert.equal(installedCustody?.barrierIndex, heldBarrierIndex);
-        const installedSimService = {
-          partitionId, tableId: userTableName, tableName: userTableName,
-          db: installedDb, systemTableCache: thirdReplica.systemTableCache,
-        };
-        const installedState = sqliteConnectionState(installedDb);
-        const postInstallCount = STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW + 30;
-        for (let i = 1; i <= postInstallCount; i += 1) {
-          reconcileCommittedStatementMirrorEffects(
-            installedSimService, installedState, `entry:post-install-${i}`,
-            activeTick.checkpointedIndex + i,
-            {mutationKind: 'UPDATE', typedEffects: {columns: ['group_id'], rows: [[`G-${i}`]]}},
-          );
-        }
-        assert.equal(
-          installedDb.prepare(countPositiveEffectsSql).get().count,
-          postInstallCount,
-          'installed replica with stale cache preserves all >256 post-C effects via custody pin',
-        );
-      } finally {
-        installedDb.close();
-      }
+      const installed = await group.reopen(2);
+      assert.equal(readDurableMirrorRetentionCustodyIn(installed.db)?.workflowId, activeMeta.workflowId);
+      assert.ok(installed.db.prepare(countPositiveEffectsSql).get().count > postBarrierBulkCount);
+      await transferGroupLeadership(group, follower, installed);
+      await settleGroupLeader(group, installed);
+      await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
+      assert.equal((await installed.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.INSERT,
+        sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
+        params: ['Z-post-install', 'node-installed'], entryId: 'entry-post-install',
+      })).success, true);
 
       for (const targetId of ['orders-left', 'orders-right']) {
-        follower.systemTableCache.applySystemTableChange('partitions', 'INSERT', {
+        installed.systemTableCache.applySystemTableChange('partitions', 'INSERT', {
           partition_id: targetId, table_name: userTableName, partition_version: 2,
         });
       }
       const splitMetadataWithCheckpoint = {...activeMeta, sourceCheckpoint: heldCheckpoint};
-      follower.systemTableCache.applySystemTableChange('tables', 'UPDATE', {
+      installed.systemTableCache.applySystemTableChange('tables', 'UPDATE', {
         table_id: userTableName, table_name: userTableName,
         active_partition_version: 1, pending_partition_version: 2,
         partition_transition_state: 'split_catchup',
         partition_transition_metadata: JSON.stringify(splitMetadataWithCheckpoint),
       });
-      follower.sqlQueryEngine = {
-        queryExecutor: initialLeader.sqlQueryEngine.queryExecutor,
+      installed.sqlQueryEngine = {
+        queryExecutor: childQueryExecutor,
         managedSplitWorkflow: {
+          reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
+          readAuthoritativeWorkflowRecord: async () => ({...terminalRow(),
+            partition_transition_state: 'split_cutover_active',
+            partition_transition_metadata: JSON.stringify(terminalMetadata)}),
+          getControlPlaneSystemTableGateway: releaseOwner.getControlPlaneSystemTableGateway,
           async acknowledgeSourceParticipant(_workflowId, ack) {
+            if (ack.status === 'cleanup_completed') {
+              terminalMetadata = {...activeMeta, mirrorCustodyGrants: [
+                {partitionId, fence: activeMeta.workflowFenceToken, acquired: true, release: true},
+              ]};
+            }
             return {
               result: 'accepted',
               splitCutoverApplied: ack.status === 'catchup_ready',
               splitSourceRetired: ack.status === 'cleanup_completed',
+              terminalCustody: {...activeMeta, family: 'split'},
             };
           },
         },
       };
-      assert.equal(await follower.startOrResumeSplitReplicationFromDurable(), true);
-      await follower.splitReplicationRun;
+      assert.equal(await installed.startOrResumeSplitReplicationFromDurable(), true);
+      await installed.splitReplicationRun;
 
       const selectChildRowsSql =
         `SELECT group_id, representative_node_id FROM ${userTableName} ORDER BY group_id`;
@@ -1481,9 +1527,10 @@ test(
         {group_id: 'B-early', representative_node_id: 'node-2'},
       ]);
       assert.equal(rightRows.some((r) => r.group_id === 'Z-early'), false);
-      assert.equal(rightRows.length, postBarrierBulkCount);
-      assert.equal(readDurableMirrorRetentionCustodyIn(follower.db), null);
-      assert.equal(follower.db.prepare(countPositiveEffectsSql).get().count, 0);
+      assert.equal(rightRows.length, postBarrierBulkCount + 1);
+      assert.ok(rightRows.some((r) => r.group_id === 'Z-post-install'));
+      assert.equal(readDurableMirrorRetentionCustodyIn(installed.db), null);
+      assert.equal(installed.db.prepare(countPositiveEffectsSql).get().count, 0);
     } finally {
       for (const child of childServices) await child.shutdown();
       fs.rmSync(childDir, {recursive: true, force: true});

@@ -196,7 +196,7 @@ test('Control plane dispatch integration', async (t) => {
           memory_mb: 1024,
           disk_gb: 10,
           storage_budget_bytes: 10 * 1024 * 1024 * 1024,
-          cpu_usage_percent: 10,
+          host_cpu_utilization_percent: 10,
           memory_usage_percent: 10,
           disk_usage_percent: 10,
           status: NodeStatus.ACTIVE,

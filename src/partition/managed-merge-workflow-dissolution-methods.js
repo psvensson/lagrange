@@ -1,3 +1,5 @@
+import {hasPendingSourceGrants} from './managed-workflow-record-store.js';
+import {terminalMirrorIdentity} from './partition-mirror-custody-codec.js';
 import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
 import {
@@ -83,11 +85,16 @@ class ManagedMergeWorkflowDissolutionMethods {
    * @return {Promise<boolean>} True when the merge reached its terminal.
    * @private
    */
-  finalizeMergeDissolutionIfReady(workflowId) {
+  async finalizeMergeDissolutionIfReady(workflowId) {
+    return Boolean(await this.finalizeMergeDissolutionEvidence(workflowId));
+  }
+
+  finalizeMergeDissolutionEvidence(workflowId) {
     // One run per workflow at a time; a trigger arriving during a run
     // (ack, node-ready, fallback) runs it once more after it.
     return this.groupRetirementRedrive.exclusive(workflowId,
-      () => this.finalizeMergeDissolutionStep(workflowId));
+      () => this.finalizeMergeDissolutionStep(workflowId),
+      {terminal: (result) => Boolean(result)});
   }
 
   /**
@@ -98,7 +105,8 @@ class ManagedMergeWorkflowDissolutionMethods {
    */
   async finalizeMergeDissolutionStep(workflowId) {
     const workflow = this.resolveWorkflowState(workflowId);
-    if (this.isMergeWorkflowStateUnavailable(workflow)) {
+    if (this.isMergeWorkflowStateUnavailable(workflow) ||
+        await hasPendingSourceGrants(this, workflow)) {
       return false;
     }
     if (!this.areAllMergeSourcesAtStatus(
@@ -137,9 +145,10 @@ class ManagedMergeWorkflowDissolutionMethods {
         )) {
       return false;
     }
+    const terminal = terminalMirrorIdentity(workflow, 'merge');
     await this.persistTerminalTransitionClear(workflow);
     this.workflowCoordinator.removeWorkflow(workflowId);
-    return true;
+    return terminal;
   }
 
   /**
