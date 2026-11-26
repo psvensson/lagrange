@@ -804,16 +804,16 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
       tables.partitions,
       (row) => row?.partition_id || row?.id || null,
     );
-    const tableNames = arrayMap(
-      tables.tables,
-      (row) => row?.table_name || row?.name || null,
-    );
+    const tableNames = [...new Set(arrayFilter(
+      arrayMap(tables.partitions, (row) => row?.table_name || null),
+      Boolean,
+    ))];
     return {
       ready: denials.length === 0,
       diagnostic: {
         denials,
         nodes: tables.nodes.length,
-        tables: tables.tables.length,
+        tables: tableNames.length,
         partitions: tables.partitions.length,
         partitionIds,
         tableNames,
