@@ -1,21 +1,19 @@
+import {
+  isControlPlaneWriterShutDown,
+  isTerminalTypedDistributedFailure,
+} from '../control-plane/control-plane-error-classification.js';
 import {TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
-import {SCHEMA_PROVISIONING_ERROR_CODE} from
+import {SCHEMA_PROVISIONING_ERROR_CODE, SCHEMA_PROVISIONING_JOB_STATUS} from
   './schema-provisioning-job-constants.js';
 
 const SELECT_BY_IDENTITY =
   `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
   'WHERE table_identity_key = ? LIMIT 1';
-const SELECT_NONTERMINAL =
-  `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
-  'WHERE status NOT IN (\'SUCCEEDED\', \'FAILED\')';
-const SELECT_SUCCEEDED =
-  `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
-  'WHERE status = \'SUCCEEDED\'';
-
+const RECOVERY_PAGE_SIZE = 32;
 const WRITE_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
   deliveryPriority: 'critical',
@@ -28,10 +26,11 @@ const SCHEMA_JOB_REPOSITORY_ERROR_MSG = Object.freeze({
   PERSISTENCE_UNAVAILABLE:
     'Schema provisioning job persistence is unavailable',
 });
-const SCHEMA_JOB_TERMINAL_STATUS = Object.freeze({
-  FAILED: 'FAILED',
-  SUCCEEDED: 'SUCCEEDED',
-});
+
+function isTerminalSchemaWriteRejection(error) {
+  return error?.committed === true || isTerminalTypedDistributedFailure(error) ||
+    isControlPlaneWriterShutDown(error);
+}
 
 function createPersistenceUnavailableError() {
   const error = new Error(
@@ -39,6 +38,31 @@ function createPersistenceUnavailableError() {
   );
   error.code = SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE;
   return error;
+}
+
+const JOB_STATUSES = new Set(Object.values(SCHEMA_PROVISIONING_JOB_STATUS));
+
+function isDurableInteger(value, minimum) {
+  if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+$/u.test(value))) {
+    return false;
+  }
+  return Number.isSafeInteger(Number(value)) && Number(value) >= minimum;
+}
+
+function hasWorkflowAuthority(row) {
+  if (!row?.job_id || row.workflow_id !== row.job_id || !row.owner_key ||
+      !row.intent_hash || !row.table_identity_key || !JOB_STATUSES.has(row.status)) return false;
+  if (!isDurableInteger(row.row_version, 1) || !isDurableInteger(row.workflow_fence_token, 0)) {
+    return false;
+  }
+  return row.workflow_owner_id == null ? row.workflow_lease_expires_at == null :
+    isDurableInteger(row.workflow_lease_expires_at, 0);
+}
+
+function authoritativeRows(result) {
+  if (result?.success === false || !Array.isArray(result?.rows) ||
+      !result.rows.every(hasWorkflowAuthority)) throw createPersistenceUnavailableError();
+  return result.rows;
 }
 
 function parseJson(value, fallback) {
@@ -148,8 +172,12 @@ function canPersistWorkflowCandidate(repository, candidate) {
     typeof repository.gateway?.submitMutation === 'function';
 }
 
-function isMatchingPersistedWorkflowRow(observed, nextWorkflow, nextRowVersion) {
+function isMatchingPersistedWorkflowRow(observed, current, nextWorkflow, nextRowVersion) {
   return Boolean(observed) &&
+    observed.job_id === current.job_id && observed.workflow_id === nextWorkflow.workflowId &&
+    observed.owner_key === nextWorkflow.ownerKey && observed.intent_hash === current.intent_hash &&
+    observed.status === nextWorkflow.status && observed.current_step === nextWorkflow.step &&
+    normalizeNumber(observed.workflow_lease_expires_at) === nextWorkflow.leaseExpiresAt &&
     normalizeNumber(observed.row_version) === nextRowVersion &&
     normalizeNumber(observed.workflow_fence_token) === (nextWorkflow.fenceToken ?? 0) &&
     (observed.workflow_owner_id ?? null) === (nextWorkflow.workflowOwnerId ?? null);
@@ -170,43 +198,22 @@ function buildWorkflowMutationWhere(candidate, previousWorkflow, context) {
 class SchemaProvisioningJobRepository {
   constructor(options = {}) {
     this.gateway = options.gateway || null;
-    this.systemCache = options.systemCache || null;
     this.rowsByJobId = new Map();
-  }
-
-  setSystemCache(systemCache) {
-    this.systemCache = systemCache || null;
   }
 
   setGateway(gateway) {
     this.gateway = gateway || null;
   }
 
-  findCachedRow(predicate) {
-    for (const row of this.rowsByJobId.values()) {
-      if (predicate(row)) return row;
-    }
-    const rows = this.systemCache?.getAll?.(TABLES.SCHEMA_OPERATIONS) || [];
-    return rows.find(predicate) || null;
-  }
-
   async findByTableIdentity(tableIdentityKey) {
-    if (typeof this.gateway?.readRows === 'function') {
-      const result = await this.gateway.readRows(
-        TABLES.SCHEMA_OPERATIONS,
-        SELECT_BY_IDENTITY,
-        [tableIdentityKey],
-        {readProfile: 'table_lifecycle'},
-      );
-      const row = Array.isArray(result?.rows) ? result.rows[0] : null;
-      if (row?.job_id) {
-        this.rowsByJobId.set(row.job_id, row);
-        return row;
-      }
-    }
-    return this.findCachedRow(
-      (row) => row.table_identity_key === tableIdentityKey,
+    if (typeof this.gateway?.readRows !== 'function') throw createPersistenceUnavailableError();
+    const result = await this.gateway.readRows(
+      TABLES.SCHEMA_OPERATIONS, SELECT_BY_IDENTITY, [tableIdentityKey], TABLE_LIFECYCLE_READ_OPTIONS,
     );
+    const [row = null] = authoritativeRows(result);
+    if (row && row.table_identity_key !== tableIdentityKey) throw createPersistenceUnavailableError();
+    if (row) this.rowsByJobId.set(row.job_id, row);
+    return row;
   }
 
   async insertIntent(row) {
@@ -255,12 +262,15 @@ class SchemaProvisioningJobRepository {
       ),
       data,
     }, WRITE_OPTIONS);
+    if (result?.success === false && isTerminalSchemaWriteRejection(result)) {
+      throw Object.assign(new Error(result.error, {cause: result}), result);
+    }
     const affectedRows = resolveAffectedRows(result);
     if (result?.success === false || affectedRows !== 1) {
       const observed = current?.table_identity_key ?
         await this.findByTableIdentity(current.table_identity_key).catch(() => null) :
         null;
-      if (isMatchingPersistedWorkflowRow(observed, nextWorkflow, nextRowVersion)) {
+      if (isMatchingPersistedWorkflowRow(observed, current, nextWorkflow, nextRowVersion)) {
         return {accepted: true, workflow: rowToWorkflow(observed)};
       }
       return {accepted: false};
@@ -270,62 +280,42 @@ class SchemaProvisioningJobRepository {
     return {accepted: true, workflow: nextWorkflow};
   }
 
-  recoverWorkflowRows() {
-    const rows = this.systemCache?.getAll?.(TABLES.SCHEMA_OPERATIONS) || [];
-    for (const row of rows) {
-      if (row?.job_id) this.rowsByJobId.set(row.job_id, row);
+  async findRecoveryRow(leader, tableIdentityKey) {
+    const tenure = leader.leadershipTenure;
+    const result = await leader.executeLocalQuery(SELECT_BY_IDENTITY, [tableIdentityKey]);
+    if (!tenure || tenure !== leader.leadershipTenure || result?.rowSetComplete !== true ||
+        result.partitionId !== leader.partitionId) throw createPersistenceUnavailableError();
+    const [row] = authoritativeRows(result);
+    if (row && row.table_identity_key !== tableIdentityKey) throw createPersistenceUnavailableError();
+    if (row) this.rowsByJobId.set(row.job_id, row);
+    return row || null;
+  }
+
+  async listRecoveryPage(leader, status, cursor) {
+    // The existing (status, updated_at) SQLite index ends in rowid. Seek
+    // backwards so later appends cannot perpetually extend a pass.
+    const sql = `SELECT *, rowid AS recovery_rowid FROM ${TABLES.SCHEMA_OPERATIONS} ` +
+      'WHERE status = ? ' + (cursor ? 'AND (updated_at, rowid) < (?, ?) ' : '') +
+      `ORDER BY updated_at DESC, rowid DESC LIMIT ${RECOVERY_PAGE_SIZE}`;
+    const params = cursor ? [status, cursor.updatedAt, cursor.rowId] : [status];
+    const result = await leader.executeLocalQuery(sql, params);
+    if (result?.rowSetComplete !== true || result.partitionId !== leader.partitionId) {
+      throw createPersistenceUnavailableError();
     }
-    return [...this.rowsByJobId.values()].map(rowToWorkflow);
-  }
-
-  listRows() {
-    this.recoverWorkflowRows();
-    return [...this.rowsByJobId.values()];
-  }
-
-  async readSchemaJobRows(sql, rowFilter) {
-    if (this.gateway?.readRows) {
-      const result = await this.gateway.readRows(
-        TABLES.SCHEMA_OPERATIONS,
-        sql,
-        [],
-        TABLE_LIFECYCLE_READ_OPTIONS,
-      );
-      const rows = Array.isArray(result?.rows) ? result.rows : [];
-      for (const row of rows) {
-        if (row?.job_id) this.rowsByJobId.set(row.job_id, row);
-      }
-      return rows;
+    const rows = authoritativeRows(result);
+    if (rows.length > RECOVERY_PAGE_SIZE || rows.some((row) => row.status !== status ||
+        !Number.isSafeInteger(row.recovery_rowid) || !Number.isSafeInteger(row.updated_at))) {
+      throw createPersistenceUnavailableError();
     }
-    return this.listRows().filter(rowFilter);
+    return rows;
   }
 
-  async listNonterminalRows() {
-    if (typeof this.gateway?.readRows === 'function') {
-      const result = await this.gateway.readRows(
-        TABLES.SCHEMA_OPERATIONS,
-        SELECT_NONTERMINAL,
-        [],
-        TABLE_LIFECYCLE_READ_OPTIONS,
-      );
-      const rows = Array.isArray(result?.rows) ? result.rows : [];
-      for (const row of rows) {
-        if (row?.job_id) this.rowsByJobId.set(row.job_id, row);
-      }
-      return rows;
-    }
-    return this.listRows().filter(
-      (row) => row.status !== SCHEMA_JOB_TERMINAL_STATUS.SUCCEEDED &&
-        row.status !== SCHEMA_JOB_TERMINAL_STATUS.FAILED,
-    );
-  }
-
-  async listSucceededRows() {
-    return this.readSchemaJobRows(
-      SELECT_SUCCEEDED,
-      (row) => row.status === SCHEMA_JOB_TERMINAL_STATUS.SUCCEEDED,
-    );
-  }
 }
 
-export {SchemaProvisioningJobRepository, rowToWorkflow, serializeWorkflow};
+export {
+  RECOVERY_PAGE_SIZE,
+  SchemaProvisioningJobRepository,
+  isTerminalSchemaWriteRejection,
+  rowToWorkflow,
+  serializeWorkflow,
+};

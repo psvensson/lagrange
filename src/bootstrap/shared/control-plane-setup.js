@@ -534,6 +534,7 @@ class ControlPlaneSetup {
 
     // Create decomposed control plane services
     const heartbeatService = assembleHeartbeatService({
+      resourceDiagnosticsSampler: placementDiagnosticsSampler,
       nodeId,
       nodeAddress,
       advertisedNodeWsAddress,
@@ -736,7 +737,6 @@ class ControlPlaneSetup {
           sampleId: stats.sampleId,
           cpu: {
             count: stats.cpu?.count,
-            usagePercent: stats.cpu?.usagePercent,
           },
           memory: {
             totalBytes: stats.memory?.totalBytes,

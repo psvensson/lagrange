@@ -1,3 +1,4 @@
+import {hostBusyPercent, hostTicks} from '../diagnostics/resource-cpu-capacity.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import {NUM, STRING} from '../constants/index.js';
@@ -36,7 +37,7 @@ function resolveAvailableHostMemoryBytes(source, totalMemory) {
 
 const CPU_MEASUREMENT_MODE = Object.freeze({
   INTERVAL_DELTA: 'interval_delta',
-  CUMULATIVE_BASELINE: 'cumulative_baseline',
+  UNAVAILABLE: 'unavailable',
 });
 
 function readCachedSample(source, clock, nowMs, maxAgeMs) {
@@ -66,29 +67,6 @@ function storeSample(source, clock, sample, rawTicks) {
   samplesByClock.set(clock, Object.freeze({sample, rawTicks: retainedTicks}));
 }
 
-function computeHostCpuUsage(totalIdle, totalTick, previousTicks, nowMs) {
-  if (
-    previousTicks !== null &&
-    nowMs > previousTicks.sampledAtMs
-  ) {
-    const deltaTick = totalTick - previousTicks.totalTick;
-    const deltaIdle = totalIdle - previousTicks.totalIdle;
-    if (deltaTick > 0 && deltaIdle >= 0 && deltaIdle <= deltaTick) {
-      return {
-        cpuUsagePercent: ((deltaTick - deltaIdle) / deltaTick) * NUM.HUNDRED,
-        cpuMeasurementMode: CPU_MEASUREMENT_MODE.INTERVAL_DELTA,
-      };
-    }
-  }
-  const cumulative = totalTick > 0 ?
-    ((totalTick - totalIdle) / totalTick) * NUM.HUNDRED :
-    0;
-  return {
-    cpuUsagePercent: cumulative,
-    cpuMeasurementMode: CPU_MEASUREMENT_MODE.CUMULATIVE_BASELINE,
-  };
-}
-
 /**
  * Sample process-host statistics once per source, clock, and collection
  * interval. Several NodeService owners can coexist in one process, but their
@@ -111,21 +89,10 @@ function sampleNodeHostStatistics(source, clock, nowMs, maxAgeMs) {
   const totalMemory = source.totalmem();
   const freeMemory = resolveAvailableHostMemoryBytes(source, totalMemory);
   const usedMemory = totalMemory - freeMemory;
-  let totalIdle = 0;
-  let totalTick = 0;
-  for (const cpu of cpus) {
-    for (const type of Object.keys(cpu.times)) {
-      totalTick += cpu.times[type];
-    }
-    totalIdle += cpu.times.idle;
-  }
+  const ticks = hostTicks(cpus);
   const previousTicks = readPreviousRawTicks(source, clock);
-  const {cpuUsagePercent, cpuMeasurementMode} = computeHostCpuUsage(
-    totalIdle,
-    totalTick,
-    previousTicks,
-    nowMs,
-  );
+  const hostCpuUtilizationPercent = previousTicks && nowMs > previousTicks.sampledAtMs ?
+    hostBusyPercent(previousTicks, ticks) : null;
   const memoryUsagePercent = (usedMemory / totalMemory) * NUM.HUNDRED;
   const sampleId = nextHostStatisticsSampleId++;
   const sample = Object.freeze({
@@ -133,9 +100,10 @@ function sampleNodeHostStatistics(source, clock, nowMs, maxAgeMs) {
     sampledAtMs: nowMs,
     cpuCount: cpus.length,
     cpuModel: cpus[0]?.model || STRING.UNKNOWN,
-    cpuUsagePercent:
-      Math.round(cpuUsagePercent * NUM.HUNDRED) / NUM.HUNDRED,
-    cpuMeasurementMode,
+    hostCpuUtilizationPercent,
+    cpuSampleIntervalMs: hostCpuUtilizationPercent === null ? null : nowMs - previousTicks.sampledAtMs,
+    cpuMeasurementMode: hostCpuUtilizationPercent === null ?
+      CPU_MEASUREMENT_MODE.UNAVAILABLE : CPU_MEASUREMENT_MODE.INTERVAL_DELTA,
     totalMemory,
     usedMemory,
     freeMemory,
@@ -152,7 +120,7 @@ function sampleNodeHostStatistics(source, clock, nowMs, maxAgeMs) {
     clock,
     sample,
     shouldAdvanceBaseline ?
-      Object.freeze({sampledAtMs: nowMs, totalIdle, totalTick}) :
+      Object.freeze({sampledAtMs: nowMs, ...ticks}) :
       null,
   );
   return sample;
@@ -186,7 +154,8 @@ function buildNodeStatsSnapshot(runtime, {nowMs, hostStats, poolStats}) {
     cpu: {
       count: hostStats.cpuCount,
       model: hostStats.cpuModel,
-      usagePercent: hostStats.cpuUsagePercent,
+      hostUtilizationPercent: hostStats.hostCpuUtilizationPercent,
+      sampleIntervalMs: hostStats.cpuSampleIntervalMs,
     },
     memory: {
       totalBytes: hostStats.totalMemory,

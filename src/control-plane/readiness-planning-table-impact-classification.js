@@ -36,6 +36,7 @@ import {
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
 import {copyMapValuesToArray} from '../utils/map-values-array.js';
+import {isNodeLoadReady} from './node-load-readiness.js';
 import {endpointIncarnationOf} from
   './owners/endpoint-incarnation-currentness.js';
 
@@ -251,11 +252,7 @@ function canReuseDirectGlobalProjection(
 function localSemanticRecord(tableName, record) {
   if (!record) return null;
   if (tableName === TABLES.NODES) {
-    return objectFreeze({
-      cpuUsagePercent: record[COLUMN.CPU_USAGE_PERCENT] ?? null,
-      diskUsagePercent: record[COLUMN.DISK_USAGE_PERCENT] ?? null,
-      memoryUsagePercent: record[COLUMN.MEMORY_USAGE_PERCENT] ?? null,
-    });
+    return isNodeLoadReady(record);
   }
   if (tableName === TABLES.NODE_ENDPOINTS) {
     return isCanonicalWebSocketEndpointRow(record) ?

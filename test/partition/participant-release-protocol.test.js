@@ -105,12 +105,12 @@ function registeredReleaseRequest(fields = {}) {
   };
 }
 
-async function sendRegisteredRelease(handler, transport, request) {
+async function sendRegisteredRelease(handler, transport, request, messageId) {
   const registered = transport.getRegisteredHandler(
     `${handler.nodeId}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`,
   );
   assert.equal(typeof registered, 'function', 'release route must be registered');
-  const response = await registered({payload: request});
+  const response = await registered({payload: request, messageId});
   return response[PARTICIPANT_RELEASE_RESULT_FIELD];
 }
 
@@ -592,6 +592,42 @@ test('registered participant release projects one real blocked drain and older j
     failure = await cleanupBlockedDrainWitness({handler, leader, directory,
       pendingWrite, failure});
     if (failure !== null) throw failure;
+  });
+
+test('slow registered RELEASE responses identify the shared transport request only for a real join',
+  async () => {
+    await withEmptyRegisteredHandler(scriptedTimeSource([100, 100, 101, 102]),
+      async ({handler, transport}) => {
+        const logs = [];
+        const logger = handler.logger;
+        handler.logger = Object.create(logger);
+        handler.logger.info = (message, fields) => {
+          if (message === 'Slow participant release response') logs.push(fields);
+        };
+        // Advance only the diagnostic clock while the registered requests
+        // are pending. Release policy still uses the scripted handler clock.
+        const descriptor = Object.getOwnPropertyDescriptor(performance, 'now');
+        let tick = 0;
+        Object.defineProperty(performance, 'now', {configurable: true, value: () => tick});
+        try {
+          const request = registeredReleaseRequest();
+          const starter = sendRegisteredRelease(handler, transport, request, 'starter-hop');
+          const mixed = sendRegisteredRelease(handler, transport,
+            {...request, targetBuildDigest: 'b'.repeat(64)}, 'mixed-hop');
+          const joined = sendRegisteredRelease(handler, transport, request, 'joined-hop');
+          tick = 6000;
+          const answers = await Promise.all([starter, mixed, joined]);
+          assert.equal(answers[1].outcome, OUTCOME.INVALID);
+          assert.equal(logs.find((row) => row.messageId === 'joined-hop').joinedMessageId,
+            'starter-hop');
+          assert.equal(Object.hasOwn(logs.find((row) => row.messageId === 'mixed-hop'),
+            'joinedMessageId'), false);
+        } finally {
+          if (descriptor) Object.defineProperty(performance, 'now', descriptor);
+          else delete performance.now;
+          handler.logger = logger;
+        }
+      });
   });
 
 test('registered failed joins bound triggers without getters or coercion', async () => {

@@ -52,7 +52,7 @@ function node(nodeId, cpu, latencyGroupId) {
   return {
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
-    cpu_usage_percent: cpu,
+    host_cpu_utilization_percent: cpu,
     memory_usage_percent: 0,
     disk_usage_percent: 0,
     latency_group_id: latencyGroupId,

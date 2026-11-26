@@ -154,8 +154,8 @@ test('UnifiedRebalancer planner single-path enforcement', async (t) => {
   await t.test('rebalance delegates planning without using legacy local methods', async (t) => {
     const {rebalancer} = createTestRebalancer({
       nodes: [
-        {node_id: 'node-1', status: 'active', cpu_usage_percent: 60},
-        {node_id: 'node-2', status: 'active', cpu_usage_percent: 10},
+        {node_id: 'node-1', status: 'active', host_cpu_utilization_percent: 60},
+        {node_id: 'node-2', status: 'active', host_cpu_utilization_percent: 10},
       ],
       services: [
         {
@@ -197,9 +197,9 @@ test('UnifiedRebalancer planner single-path enforcement', async (t) => {
     async (t) => {
       const {rebalancer} = createTestRebalancer({
         nodes: [
-          {node_id: 'node-1', status: 'active', cpu_usage_percent: 60},
-          {node_id: 'node-2', status: 'active', cpu_usage_percent: 10},
-          {node_id: 'node-3', status: 'active', cpu_usage_percent: 20},
+          {node_id: 'node-1', status: 'active', host_cpu_utilization_percent: 60},
+          {node_id: 'node-2', status: 'active', host_cpu_utilization_percent: 10},
+          {node_id: 'node-3', status: 'active', host_cpu_utilization_percent: 20},
         ],
         services: [
           {
@@ -246,9 +246,9 @@ test('UnifiedRebalancer planner single-path enforcement', async (t) => {
     async (t) => {
       const {rebalancer} = createTestRebalancer({
         nodes: [
-          {node_id: 'node-1', status: 'active', cpu_usage_percent: 60},
-          {node_id: 'node-2', status: 'active', cpu_usage_percent: 10},
-          {node_id: 'node-3', status: 'active', cpu_usage_percent: 20},
+          {node_id: 'node-1', status: 'active', host_cpu_utilization_percent: 60},
+          {node_id: 'node-2', status: 'active', host_cpu_utilization_percent: 10},
+          {node_id: 'node-3', status: 'active', host_cpu_utilization_percent: 20},
         ],
         services: [
           {
@@ -285,8 +285,8 @@ test('UnifiedRebalancer planner single-path enforcement', async (t) => {
   await t.test('runtime planning does not generate duplicate ADDs to a single node', async (t) => {
     const {rebalancer, dispatchedMoves} = createTestRebalancer({
       nodes: [
-        {node_id: 'node-1', status: 'active', cpu_usage_percent: 40},
-        {node_id: 'node-2', status: 'active', cpu_usage_percent: 10},
+        {node_id: 'node-1', status: 'active', host_cpu_utilization_percent: 40},
+        {node_id: 'node-2', status: 'active', host_cpu_utilization_percent: 10},
       ],
       services: [],
       policy: {targetReplicaCount: 3},

@@ -27,13 +27,18 @@ function createCountingService() {
     nodes: nodeIds.map((id) => createActiveNode(id)),
     services: [createMessageGroupService(nodeIds[0])],
   });
-  const counters = {getAllNodeReads: 0};
+  const counters = {getAllNodeReads: 0, nodeRowVisits: 0};
   const originalGetAll = cache.getAll.bind(cache);
   cache.getAll = (tableName) => {
-    if (tableName === TABLES.NODES) {
-      counters.getAllNodeReads += 1;
-    }
-    return originalGetAll(tableName);
+    const rows = originalGetAll(tableName);
+    if (tableName !== TABLES.NODES) return rows;
+    counters.getAllNodeReads += 1;
+    return new Proxy(rows, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/u.test(key)) counters.nodeRowVisits++;
+        return Reflect.get(target, key, receiver);
+      },
+    });
   };
   const service = createReadinessServiceForTest({
     nodeId: nodeIds[0],
@@ -69,10 +74,14 @@ test('one planning enqueue performs one node-table read and the consumed ' +
   t.ok(owner, 'the readiness planning snapshot owner is installed');
 
   counters.getAllNodeReads = 0;
+  counters.nodeRowVisits = 0;
   owner.enqueueOwnerKeys('read-amplification-regression');
   t.equal(counters.getAllNodeReads, 1,
     'one enqueue reads the node table exactly once for the owner list and ' +
       'both formation keys');
+
+  t.equal(counters.nodeRowVisits, NODE_COUNT,
+    'a global enqueue visits each node row once even when no node is joining');
 
   owner.initialBootstrapConsumed = true;
   counters.getAllNodeReads = 0;

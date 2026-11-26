@@ -1,3 +1,6 @@
+import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
+import {ADMIN_ROUTE} from '../../src/admin/admin-constants.js';
+import {createServiceDiagnosticsProvider} from '../../src/entrypoint-runtime-admin-composition.js';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
@@ -35,7 +38,7 @@ import {
   decideAdaptiveResourceWindow,
   normalizeWindowConfig,
 } from '../../src/rebalancer/replica-placement-adaptive-budget.js';
-import {PLACEMENT_FORMATION_STATE, PLACEMENT_REFUSAL} from
+import {PLACEMENT_FORMATION_STATE, PLACEMENT_REFUSAL, PLACEMENT_TRIGGER} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
 import {createControlPlanePlacementNodeObservationReader, readRemoteHeartbeatObservation} from
   '../../src/rebalancer/replica-placement-owner-capacity.js';
@@ -64,7 +67,7 @@ function nodeRow(nodeId, hostId, {bootIncarnation = 1, leaseExpiresAt = NOW_MS +
 function healthyObs(sampledAtMs = NOW_MS, overrides = {}) {
   return {
     sampledAtMs, bootIncarnation: 1, eventLoopDelayMs: 4,
-    eventLoopUtilizationPercent: 30, singleCoreCpuPercent: 35,
+    eventLoopUtilizationPercent: 30, mainThreadCpuPercent: 35,
     initQueueDelayMs: 5, writeLatencyMs: 3, transferQueueDelayMs: 5,
     backpressured: false, ...overrides,
   };
@@ -498,8 +501,130 @@ test('Scenario 1, 2, 7 & 9: ReplicaPlacementOwner isolates slow destination from
       'existing operations retain ownership and are not terminated or released early when window shrinks',
     );
 
-    owner.shutdown();
+    const diagnostics = createServiceDiagnosticsProvider({
+      nodeId: 'n1', rebalanceCoordinator: {replicaPlacementOwner: owner},
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'n1', systemTableCache: cache, serviceDiagnosticsProvider: diagnostics,
+    });
+    await api.initialize(0, {listen: false});
+    try {
+      const last = owner.lastPlacementDecision;
+      const response = await api.getFastify().inject({
+        method: 'GET', url: ADMIN_ROUTE.SERVICE_DIAGNOSTICS,
+      });
+      assert.equal(response.statusCode, 200);
+      const decision = response.json().diagnostics.lastPlacementDecision;
+      assert.equal(decision.passSequence, last.passSequence);
+      assert.equal(decision.nodes.n1.source.sample.eventLoopDelayMs, 160);
+      assert.equal(decision.nodes.n1.source.demand.occupancy, 4);
+      assert.equal(decision.nodes.n2.target.sample.writeLatencyMs, 3);
+      assert.equal(decision.nodes.n1.source.admissionLimit, controller.getSourceBudget('n1'));
+      assert.ok(decision.nodes.n1.source.demand.waitingDemandCount > 0);
+      assert.equal(owner.lastPlacementDecision, last);
+      owner.shutdown();
+      assert.equal(diagnostics().lastPlacementDecision, null);
+    } finally {
+      await api.shutdown();
+    }
   } finally {
+    ledger.db.close();
+  }
+});
+
+test('one placement pass distinguishes admissions sharing a copy source and class', async () => {
+  const ids = ['tbl-a-p1', 'tbl-b-p1'];
+  const nodeRows = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
+  const settled = 'tbl-settled-p1';
+  const waiting = 'tbl-no-source-p1';
+  const catchingUp = 'tbl-catching-up-p1';
+  const spread = seededServiceRows(settled).map((row, i) => ({
+    ...row, [COLUMN.NODE_ID]: nodeRows[i][COLUMN.NODE_ID],
+  }));
+  const learners = seededServiceRows(catchingUp).map((row, i) => ({
+    ...row, [COLUMN.NODE_ID]: nodeRows[i][COLUMN.NODE_ID],
+    [COLUMN.RAFT_ROLE]: i === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.LEARNER,
+    caught_up: false,
+  }));
+  const cache = createSimpleSystemCache(
+    [...ids, settled, waiting, catchingUp].map((id) => seededPartitionRow(id)),
+    [...ids.flatMap((id) => seededServiceRows(id)), ...spread, ...learners]);
+  const ledger = createRealSqlLedgerHarness(cache, 'n1', () => NOW_MS);
+  const controller = createAdaptivePlacementBudgetController({
+    sourceWindow: {initialLimit: 1, minLimit: 1, maxLimit: 1},
+  });
+  for (const row of nodeRows) {
+    controller.recordObservation(row[COLUMN.NODE_ID], healthyObs(NOW_MS),
+      {nowMs: NOW_MS, notifyOnRecovery: false});
+  }
+  const owner = createReplicaPlacementOwner({
+    nodeId: 'n1', ledgerPartitionService: ledger.service, systemTableCache: cache,
+    nodeAuthority: {
+      subscribe: () => () => {}, scheduleRefresh: () => {},
+      answerCommittedNodes: () => ({state: 'ready', nodeRows, epoch: {publicationEpoch: 1},
+        formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 1}}),
+    },
+    now: () => NOW_MS, logger: ledger.service.logger,
+    admitPlacement: ledger.admitPlacement, releasePlacementHold: ledger.releasePlacementHold,
+    adaptiveBudgetController: controller,
+  });
+  const calls = [];
+  const comparisons = [];
+  const evaluate = owner.evaluatePassPartition.bind(owner);
+  owner.evaluatePassPartition = (id, ...rest) => {
+    calls.push(id);
+    return evaluate(id, ...rest);
+  };
+  const prepare = owner.preparePassOrderedCandidates.bind(owner);
+  owner.preparePassOrderedCandidates = (nodes, inputs, saturated, excluded, rank, diagnostics, preliminary) => {
+    const start = calls.length;
+    const actual = prepare(nodes, inputs, saturated, excluded, rank, diagnostics, preliminary);
+    const after = calls.length;
+    const reference = prepare(nodes, inputs, saturated, excluded, rank);
+    comparisons.push({actual, reference, evaluated: calls.slice(start, after),
+      referenceEvaluated: calls.slice(after)});
+    return actual;
+  };
+  try {
+    owner.setLeader(true);
+    await owner.awaitCurrentWorkIdle();
+    // Two cache notifications during one drain create one additional pass for that trigger.
+    const before = owner.lastPlacementDecision;
+    owner.notify(PLACEMENT_TRIGGER.RESYNC);
+    for (let i = 0; i < 2; i++) {
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, spread[0]);
+    }
+    await owner.awaitCurrentWorkIdle();
+    const decision = owner.lastPlacementDecision;
+    assert.equal(decision.triggerNotifications.SERVICES_CHANGED - before.triggerNotifications.SERVICES_CHANGED, 2);
+    assert.equal(decision.passesByTrigger.SERVICES_CHANGED - before.passesByTrigger.SERVICES_CHANGED, 1);
+    assert.ok(comparisons.length > 0);
+    for (const {actual, reference, evaluated, referenceEvaluated} of comparisons) {
+      assert.deepEqual(actual, reference);
+      assert.ok(referenceEvaluated.includes(settled));
+      assert.ok(referenceEvaluated.includes(catchingUp));
+      assert.ok(evaluated.includes(waiting));
+      assert.deepEqual(evaluated, referenceEvaluated.filter((id) => id !== settled && id !== catchingUp));
+    }
+    const rows = ledger.db.prepare('SELECT partition_id FROM replica_operations').all();
+    assert.equal(rows.length, 1);
+    const [admitted] = rows;
+    const blockedId = ids.find((id) => id !== admitted.partition_id);
+    const blocked = decision.partitions[blockedId];
+    const accepted = decision.partitions[admitted.partition_id];
+    assert.equal(decision.evaluatedAtMs, NOW_MS);
+    assert.equal(decision.omittedPartitionCount, 0);
+    assert.equal(blocked.placementClass, accepted.placementClass);
+    assert.equal(blocked.copyCheck.sourceNodeId, 'n1');
+    assert.equal(blocked.copyCheck.kSrc, 1);
+    assert.equal(blocked.copyCheck.sourceOcc, 1);
+    assert.equal(blocked.copyCheck.sourceAllowed, false);
+    assert.equal(blocked.disposition, 'capacity_denied');
+    assert.ok(accepted.disposition === 'ADMITTED' || accepted.busy);
+    assert.equal(accepted.sourceNodeId ?? decision.activeCopies.find(
+      (copy) => copy.partitionId === admitted.partition_id)?.sourceNodeId, 'n1');
+  } finally {
+    owner.shutdown();
     ledger.db.close();
   }
 });
@@ -620,13 +745,13 @@ test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without 
   assert.equal(incompleteDecision.reason, REASON.OBSERVATION_INCOMPLETE);
   assert.equal(incompleteDecision.limit, 6);
 
-  // Incomplete remote heartbeat observation (missing cpu_usage_percent) holds (INCOMPLETE),
-  // whereas complete remote heartbeat with low CPU and plenty of memory is complete,
-  // and remote heartbeat with high CPU (>= 95%) decreases the window:
+  // A fresh host-only sample cannot classify main-thread pressure.
   const remoteIncompleteHeartbeat = readRemoteHeartbeatObservation({
+    resource_sample_interval_ms: 1000, host_cpu_utilization_percent: 98,
     [COLUMN.NODE_ID]: 'n2',
     [COLUMN.LAST_HEARTBEAT]: nowMs,
     [COLUMN.BOOT_INCARNATION]: 1,
+    telemetry_sample_id: nowMs, telemetry_sampled_at: nowMs,
     memory_mb: 1024,
     memory_usage_percent: 25,
   });
@@ -646,12 +771,14 @@ test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without 
     [COLUMN.NODE_ID]: 'n2',
     [COLUMN.LAST_HEARTBEAT]: nowMs,
     [COLUMN.BOOT_INCARNATION]: 1,
+    telemetry_sample_id: nowMs, telemetry_sampled_at: nowMs,
     memory_mb: 1024,
     memory_usage_percent: 25,
-    cpu_usage_percent: 20,
+    main_thread_cpu_percent: 20, resource_sample_interval_ms: 1000,
+    host_cpu_utilization_percent: 98,
   });
   assert.equal(remoteHealthyHeartbeat.pressureSensorsComplete, true);
-  assert.equal(remoteHealthyHeartbeat.cpuUsagePercent, 20);
+  assert.equal(remoteHealthyHeartbeat.mainThreadCpuPercent, 20);
   assert.equal(remoteHealthyHeartbeat.sampleId, nowMs);
   assert.equal(remoteHealthyHeartbeat.congestionEpochId, nowMs);
 
@@ -659,9 +786,11 @@ test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without 
     [COLUMN.NODE_ID]: 'n2',
     [COLUMN.LAST_HEARTBEAT]: nowMs,
     [COLUMN.BOOT_INCARNATION]: 1,
+    telemetry_sample_id: nowMs, telemetry_sampled_at: nowMs,
     memory_mb: 1024,
     memory_usage_percent: 25,
-    cpu_usage_percent: 98,
+    main_thread_cpu_percent: 98, resource_sample_interval_ms: 1000,
+    host_cpu_utilization_percent: 20,
   });
   const remoteCpuDecreaseDecision = decideAdaptiveResourceWindow(
     null,
@@ -828,7 +957,7 @@ test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without 
     nowMs += 1_000;
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
       ...nodeRow('n2', 'h2'), [COLUMN.LAST_HEARTBEAT]: nowMs,
-      memory_mb: 2048, memory_usage_percent: 25, cpu_usage_percent: 15,
+      memory_mb: 2048, memory_usage_percent: 25, host_cpu_utilization_percent: 15,
     });
     await owner.awaitCurrentWorkIdle();
 
@@ -850,9 +979,9 @@ test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without 
 test('Finding 3: Distributed Leader vs Follower Active-Owner Admission + Leadership Transition', async () => {
   const nowMs = NOW_MS;
   const threeNodes = [
-    {...nodeRow('n1', 'h1'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 8192, memory_usage_percent: 20, cpu_usage_percent: 25},
-    {...nodeRow('n2', 'h2'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 8192, memory_usage_percent: 20, cpu_usage_percent: 25},
-    {...nodeRow('n3', 'h3'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 8192, memory_usage_percent: 20, cpu_usage_percent: 25},
+    {...nodeRow('n1', 'h1'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 8192, memory_usage_percent: 20, host_cpu_utilization_percent: 25},
+    {...nodeRow('n2', 'h2'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 8192, memory_usage_percent: 20, host_cpu_utilization_percent: 25},
+    {...nodeRow('n3', 'h3'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 8192, memory_usage_percent: 20, host_cpu_utilization_percent: 25},
   ];
   const partitions = [
     seededPartitionRow(LEDGER_PARTITION_ID, 'n1'),
@@ -1111,8 +1240,8 @@ test('Finding 3: Distributed Leader vs Follower Active-Owner Admission + Leaders
 test('Finding 4: Partial-Cohort Schema Provisioning Recovery Under Temporary Memory Pressure', async () => {
   let nowMs = NOW_MS;
   const twoNodes = [
-    {...nodeRow('n1', 'h1'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 8192, memory_usage_percent: 25, cpu_usage_percent: 20},
-    {...nodeRow('n2', 'h2'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 2048, memory_usage_percent: 99, cpu_usage_percent: 20},
+    {...nodeRow('n1', 'h1'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 8192, memory_usage_percent: 25, host_cpu_utilization_percent: 20},
+    {...nodeRow('n2', 'h2'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 2048, memory_usage_percent: 99, host_cpu_utilization_percent: 20},
   ];
   const partitionId = 'tbl-partial-recovery-p1';
   const existingServices = [{
@@ -1273,7 +1402,7 @@ test('Finding 4: Partial-Cohort Schema Provisioning Recovery Under Temporary Mem
     nowMs += 1_500;
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
       ...nodeRow('n2', 'h2'), [COLUMN.LAST_HEARTBEAT]: nowMs,
-      memory_mb: 8192, memory_usage_percent: 25, cpu_usage_percent: 20,
+      memory_mb: 8192, memory_usage_percent: 25, host_cpu_utilization_percent: 20,
     });
 
     const secondOutcome = await jobOwner.execute(ddlAst, {}, executeProvisioningAttempt);
@@ -1321,6 +1450,7 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
 
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
     node_id: 'n2', last_heartbeat: nowMs, boot_incarnation: 1,
+    telemetry_sampled_at: nowMs, telemetry_sample_id: nowMs,
     memory_mb: 8192, memory_usage_percent: 35,
   });
   let snap = evalTarget(2);
@@ -1331,7 +1461,8 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   nowMs += 100;
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
     node_id: 'n2', last_heartbeat: nowMs, boot_incarnation: 1,
-    cpu_usage_percent: 25, memory_usage_percent: 35,
+    telemetry_sampled_at: nowMs, telemetry_sample_id: nowMs,
+    host_cpu_utilization_percent: 25, memory_usage_percent: 35,
   });
   snap = evalTarget(2);
   assert.equal(snap.targetDecisions.get('n2').action, ACTION.HOLD);
@@ -1342,7 +1473,9 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   nowMs = congestedAtMs;
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
     node_id: 'n2', last_heartbeat: nowMs, boot_incarnation: 1,
-    memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 95,
+    telemetry_sampled_at: nowMs, telemetry_sample_id: nowMs,
+    memory_mb: 8192, memory_usage_percent: 35,
+    resource_sample_interval_ms: 1000, main_thread_cpu_percent: 95,
   });
   snap = evalTarget(2);
   assert.equal(snap.targetDecisions.get('n2').action, ACTION.DECREASE);
@@ -1352,7 +1485,9 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   nowMs = congestedAtMs + 1_500;
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
     node_id: 'n2', last_heartbeat: nowMs, boot_incarnation: 1,
-    memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 30,
+    telemetry_sampled_at: nowMs, telemetry_sample_id: nowMs,
+    memory_mb: 8192, memory_usage_percent: 35,
+    resource_sample_interval_ms: 1000, main_thread_cpu_percent: 30,
   });
   snap = evalTarget(1);
   assert.equal(snap.targetDecisions.get('n2').action, ACTION.INCREASE);
@@ -1362,7 +1497,9 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   nowMs = congestedAtMs + 3_000;
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
     node_id: 'n2', last_heartbeat: nowMs, boot_incarnation: 1,
-    memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 30,
+    telemetry_sampled_at: nowMs, telemetry_sample_id: nowMs,
+    memory_mb: 8192, memory_usage_percent: 35,
+    resource_sample_interval_ms: 1000, main_thread_cpu_percent: 30,
   });
   snap = evalTarget(2);
   assert.equal(snap.targetDecisions.get('n2').action, ACTION.INCREASE);
@@ -1384,7 +1521,8 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   nowMs += 2_000;
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
     node_id: 'n2', last_heartbeat: nowMs, telemetry_sampled_at: nowMs, telemetry_sample_id: 101,
-    boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 96,
+    boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35,
+    resource_sample_interval_ms: 1000, main_thread_cpu_percent: 96,
   });
   let multiSnap = evalMulti(3);
   assert.equal(multiSnap.targetDecisions.get('n2').action, ACTION.DECREASE);
@@ -1394,7 +1532,8 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
     nowMs = hbAtMs;
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
       node_id: 'n2', last_heartbeat: nowMs, telemetry_sampled_at: cachedSampleAtMs, telemetry_sample_id: 102,
-      boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 25,
+      boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35,
+      resource_sample_interval_ms: 1000, main_thread_cpu_percent: 25,
     });
     multiSnap = evalMulti(2);
     assert.equal(multiSnap.targetDecisions.get('n2').action, ACTION.HOLD);
@@ -1403,7 +1542,8 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   nowMs = cachedSampleAtMs + 7_000;
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
     node_id: 'n2', last_heartbeat: nowMs, telemetry_sampled_at: nowMs, telemetry_sample_id: 103,
-    boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 24,
+    boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35,
+    resource_sample_interval_ms: 1000, main_thread_cpu_percent: 24,
   });
   multiSnap = evalMulti(2);
   assert.equal(multiSnap.targetDecisions.get('n2').action, ACTION.INCREASE);
@@ -1416,16 +1556,21 @@ test('A10-1, A9-2, A9-3: multicore low normalized CPU never vetoes measured even
   });
   const baseObs = {
     sampledAtMs: NOW_MS, sampleId: 501, congestionEpochId: 501, bootIncarnation: 1,
-    cpuUsagePercent: 18, singleCoreCpuPercent: 108, eventLoopDelayMs: 120,
-    eventLoopUtilizationPercent: 95, availableMemoryBytes: 4096 * 1024 * 1024,
+    processCpuCores: 1.08, mainThreadCpuPercent: 25, eventLoopDelayMs: 120,
+    eventLoopUtilizationPercent: 45, availableMemoryBytes: 4096 * 1024 * 1024,
   };
   const ctx = {occupancy: 6, waitingDemandCount: 3, nowMs: NOW_MS, expectedBootIncarnation: 1};
   const severeDecision = decideAdaptiveResourceWindow(null, baseObs, ctx, config);
   assert.equal(severeDecision.action, ACTION.DECREASE);
   assert.equal(severeDecision.reason, REASON.EVENT_LOOP_CONGESTION);
   assert.equal(severeDecision.limit, 4);
+  const moderateDelay = decideAdaptiveResourceWindow(
+    null, {...baseObs, eventLoopDelayMs: 30}, ctx, config,
+  );
+  assert.equal(moderateDelay.action, ACTION.HOLD);
+  assert.equal(moderateDelay.reason, REASON.HYSTERESIS_BAND_HOLD);
   const highEluDecision = decideAdaptiveResourceWindow(
-    null, {...baseObs, sampleId: 502, congestionEpochId: 502, eventLoopDelayMs: 30}, ctx, config,
+    null, {...baseObs, sampleId: 502, congestionEpochId: 502, eventLoopUtilizationPercent: 95, eventLoopDelayMs: 30}, ctx, config,
   );
   assert.equal(highEluDecision.action, ACTION.DECREASE);
   assert.equal(highEluDecision.reason, REASON.EVENT_LOOP_CONGESTION);
@@ -1434,7 +1579,7 @@ test('A10-1, A9-2, A9-3: multicore low normalized CPU never vetoes measured even
     null,
     {
       ...baseObs, sampleId: 503, congestionEpochId: 503,
-      singleCoreCpuPercent: 54, eventLoopDelayMs: 10, eventLoopUtilizationPercent: 30,
+      mainThreadCpuPercent: 54, eventLoopDelayMs: 10, eventLoopUtilizationPercent: 30,
     },
     ctx,
     config,
@@ -1446,8 +1591,8 @@ test('A10-1, A9-2, A9-3: multicore low normalized CPU never vetoes measured even
     null,
     {
       ...baseObs, sampleId: 504, congestionEpochId: 504,
-      cpuUsagePercent: 25, singleCoreCpuPercent: 108,
-      eventLoopDelayMs: 30, eventLoopUtilizationPercent: 45,
+      processCpuCores: 1.5, mainThreadCpuPercent: 25,
+      eventLoopDelayMs: 10, eventLoopUtilizationPercent: 45,
     },
     ctx,
     config,
@@ -1475,7 +1620,7 @@ test('A10-1, A9-2, A9-3: multicore low normalized CPU never vetoes measured even
     {
       nodeId: 'n2', nodeAddress: '127.0.0.1:9102', state: 'ready', heartbeatAt: NOW_MS,
       telemetry: {
-        cpu_usage_percent: 22, memory_usage_percent: 40, disk_usage_percent: 15,
+        host_cpu_utilization_percent: 22, memory_usage_percent: 40, disk_usage_percent: 15,
         telemetry_sampled_at: NOW_MS - 500, telemetry_sample_id: 77,
       },
     },

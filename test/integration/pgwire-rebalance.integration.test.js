@@ -66,9 +66,9 @@ test('pgwire rebalance integration', async (t) => {
     'scale-out: plans ADD when under target',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
       const currentReplicas = [
         {
@@ -109,9 +109,9 @@ test('pgwire rebalance integration', async (t) => {
     'failover: REMOVE planned for failed replica',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
       const currentReplicas = [
         {
@@ -162,9 +162,9 @@ test('pgwire rebalance integration', async (t) => {
     'rebalance: in-flight ops suppress new moves',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
       const currentReplicas = [
         {
@@ -211,9 +211,9 @@ test('pgwire rebalance integration', async (t) => {
     'scale-down: REMOVE when over target',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
       const currentReplicas = [
         {

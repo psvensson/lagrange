@@ -1,11 +1,11 @@
-// Authoritative retention custody, leader barrier stamping, and retirement of
+// Committed retention custody and retirement of
 // committed statement mirror effects (_partition_statement_outcome_effects).
 
 import {TABLES} from '../constants/tables.js';
 import {materializeTypedRowSetObjects} from '../query/sql-value-codec.js';
-import {readSnapshotIndexIn} from '../raft/raft-rs-snapshot-witness.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
   MIRROR_RETENTION_BARRIER_ENTRY_KEY,
   MIRROR_RETENTION_BARRIER_KIND,
   MIRROR_RETENTION_CUSTODY_ACTION,
@@ -14,15 +14,15 @@ import {
 } from './partition-committed-statement-outcome-constants.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  workflowAttemptOf,
 } from './partition-constants.js';
 import {
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_OPERATION,
 } from './partition-service-constants.js';
-import {parseTablePartitionTransition} from './partition-transition-row.js';
+import {MIRROR_CUSTODY_FORMAT, decodeMirrorCustodyRow, decodeMirrorReplayRecord,
+  canAssumeMirrorCustody, hasObsoleteMirrorCustodyField, sameMirrorCustody, validMirrorCustody}
+  from './partition-mirror-custody-codec.js';
 
 const mirrorRetentionRaftHooks = {
   partitionWriteLeadershipRefusalOf: null,
@@ -34,27 +34,7 @@ function registerMirrorRetentionRaftHooks(hooks = {}) {
 }
 
 const SYSTEM_TABLE_NAMES_SET = Object.freeze(new Set(Object.values(TABLES)));
-const ACTIVE_MIRROR_TRANSITION_STATES = Object.freeze(new Set([
-  PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
-  PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
-  PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-  PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
-  PARTITION_TRANSITION_STATE.MERGE_CATCHUP,
-  PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
-]));
-const CANCELLED_TRANSITION_STATE = 'cancelled';
-const ABORTED_TRANSITION_STATE = 'aborted';
-const TERMINATED_TRANSITION_STATES = Object.freeze(new Set([
-  PARTITION_TRANSITION_STATE.FAILED,
-  CANCELLED_TRANSITION_STATE,
-  ABORTED_TRANSITION_STATE,
-]));
 const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
-const SPLIT_CUSTODY_FAMILY = 'split';
-const MERGE_CUSTODY_FAMILY = 'merge';
-const MERGE_STATE_PREFIX = 'merge_';
-const LOCAL_WORKFLOW_KEY = 'local';
-const JSON_OBJECT_PREFIX = '{';
 const CUSTODY_ENTRY_ID_PREFIX = 'mirror-retention';
 const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
   CREATE_TABLE:
@@ -69,7 +49,7 @@ const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
     'INSERT INTO _partition_statement_outcome_effects ' +
     '(entry_key, log_index, mutation_kind, typed_effects_json) VALUES (?, ?, ?, ?)',
   SELECT_BY_ENTRY_KEY:
-    'SELECT mutation_kind, typed_effects_json ' +
+    'SELECT entry_key, log_index, mutation_kind, typed_effects_json ' +
     'FROM _partition_statement_outcome_effects WHERE entry_key = ?',
   DELETE_THROUGH_LOG_INDEX:
     'DELETE FROM _partition_statement_outcome_effects WHERE log_index > 0 AND log_index <= ?',
@@ -83,220 +63,28 @@ const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
     'typed_effects_json = excluded.typed_effects_json',
 });
 
-function normalizeSafeNonNegativeInt(value, unparseableValue = null) {
-  const num = Number(value);
-  return Number.isSafeInteger(num) && num >= 0 ? num : unparseableValue;
-}
-
-function normalizeOptionalString(value) {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function resolveRawBarrierValue(source) {
-  return source.barrierIndex ?? source.replayWatermarkIndex ?? source.snapshotBarrierIndex;
-}
-
-function buildMirrorRetentionCustodyRecord(raw, initialBarrier = 0) {
-  const source = raw || {};
-  const barrierIndex = normalizeSafeNonNegativeInt(
-    resolveRawBarrierValue(source),
-    normalizeSafeNonNegativeInt(initialBarrier, 0),
-  );
-  return Object.freeze({
-    barrierIndex,
-    workflowId: normalizeOptionalString(source.workflowId),
-    workflowAttempt: normalizeSafeNonNegativeInt(source.workflowAttempt, null),
-    workflowFenceToken: normalizeSafeNonNegativeInt(source.workflowFenceToken, null),
-    targetPartitionVersion: normalizeSafeNonNegativeInt(source.targetPartitionVersion, null),
-    family: normalizeOptionalString(source.family),
-  });
-}
-
-function parseDurableCustodyJson(rawText) {
-  if (typeof rawText !== 'string' || rawText.length === 0) return null;
-  const plainNumber = Number(rawText);
-  if (Number.isSafeInteger(plainNumber) && plainNumber >= 0) {
-    return buildMirrorRetentionCustodyRecord({barrierIndex: plainNumber}, plainNumber);
-  }
-  if (!rawText.startsWith(JSON_OBJECT_PREFIX)) return null;
-  const parsed = JSON.parse(rawText);
-  if (!parsed || typeof parsed !== 'object') return null;
-  return buildMirrorRetentionCustodyRecord(parsed, 0);
-}
-
-function hasActiveAuthorizedVolatileMirrorHandle(service) {
-  const split = service?.splitReplication;
-  const merge = service?.mergeReplication;
-  const hasSplit = Boolean(split && split.authorized !== false && split.terminal !== true);
-  const hasMerge = Boolean(merge && merge.authorized !== false && merge.terminal !== true);
-  return hasSplit || hasMerge || service?.captureDurableMirrorEffects === true;
-}
-
 function isUserTableNameEligibleForMirror(tableName) {
   return typeof tableName === 'string' && tableName.length > 0 &&
     !SYSTEM_TABLE_NAMES_SET.has(tableName);
 }
 
-function resolveTableRowForMirrorEffects(service, tableName = service?.tableName) {
-  const cache = service?.systemTableCache;
-  if (!cache) return null;
-  const tableKey = service.tableId || tableName;
-  return (tableKey ? cache.get(TABLES.TABLES, tableKey) : null) ?? null;
-}
-
-function extractTransitionSourceIds(metadata) {
-  if (!metadata) return null;
-  const single = metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID];
-  if (typeof single === 'string' && single.length > 0) return [single];
-  const list = metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_IDS];
-  return Array.isArray(list) && list.length > 0 ? list : null;
-}
-
-function isPartitionNamedAsTransitionTargetOnly(partitionId, parsedTransition) {
-  if (typeof partitionId !== 'string' || partitionId.length === 0) return false;
-  const sourceIds = extractTransitionSourceIds(parsedTransition?.metadata);
-  return sourceIds !== null && !sourceIds.includes(partitionId);
-}
-
-function parseActiveSourceTransition(service, tableRow) {
-  if (!tableRow) return null;
-  const parsed = parseTablePartitionTransition(tableRow);
-  const state = String(tableRow.partition_transition_state ?? '').toLowerCase();
-  if (!ACTIVE_MIRROR_TRANSITION_STATES.has(state)) return null;
-  if (isPartitionNamedAsTransitionTargetOnly(service?.partitionId, parsed)) return null;
-  return {
-    state,
-    metadata: parsed?.metadata || null,
-  };
-}
-
-function extractTransitionCheckpointBarrier(parsedTransition) {
-  const checkpoint =
-    parsedTransition?.metadata?.[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT];
-  const replayWatermark = normalizeSafeNonNegativeInt(
-    checkpoint?.replayWatermarkIndex,
-    null,
-  );
-  if (replayWatermark !== null) return replayWatermark;
-  return normalizeSafeNonNegativeInt(checkpoint?.snapshotBarrierIndex, 0);
-}
-
 function buildCustodyFromMetadata(metadata, barrierIndex, family = null) {
   const meta = metadata || {};
-  return buildMirrorRetentionCustodyRecord({
+  return {
+    format: MIRROR_CUSTODY_FORMAT,
     barrierIndex,
     workflowId: meta[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] ?? null,
-    workflowAttempt: workflowAttemptOf(meta),
+    workflowAttempt: meta[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT],
     workflowFenceToken:
       meta[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] ?? null,
     targetPartitionVersion:
       meta[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION] ?? null,
     family,
-  }, barrierIndex);
-}
-
-function resolveHandleWatermarkBarrier(handle) {
-  const durable = normalizeSafeNonNegativeInt(handle?.durableWatermarkIndex, null);
-  const snapshot = normalizeSafeNonNegativeInt(handle?.snapshotBarrierIndex, null);
-  if (durable !== null && snapshot !== null) return Math.max(durable, snapshot);
-  return durable ?? snapshot ?? 0;
-}
-
-function resolveLocalActiveMirrorCustody(service) {
-  if (!service) return null;
-  if (service.captureDurableMirrorEffects === true) {
-    return buildMirrorRetentionCustodyRecord({barrierIndex: 0}, 0);
-  }
-  const splitHandle = service.splitReplication;
-  if (splitHandle && splitHandle.authorized !== false && splitHandle.terminal !== true) {
-    return buildCustodyFromMetadata(
-      splitHandle.metadata,
-      resolveHandleWatermarkBarrier(splitHandle),
-      SPLIT_CUSTODY_FAMILY,
-    );
-  }
-  const mergeHandle = service.mergeReplication;
-  if (mergeHandle && mergeHandle.authorized !== false && mergeHandle.terminal !== true) {
-    return buildCustodyFromMetadata(
-      mergeHandle.metadata,
-      resolveHandleWatermarkBarrier(mergeHandle),
-      MERGE_CUSTODY_FAMILY,
-    );
-  }
-  const tableRow = resolveTableRowForMirrorEffects(service);
-  const activeTransition = parseActiveSourceTransition(service, tableRow);
-  if (activeTransition !== null) {
-    const family = activeTransition.state.startsWith(MERGE_STATE_PREFIX) ?
-      MERGE_CUSTODY_FAMILY :
-      SPLIT_CUSTODY_FAMILY;
-    return buildCustodyFromMetadata(
-      activeTransition.metadata,
-      extractTransitionCheckpointBarrier(activeTransition),
-      family,
-    );
-  }
-  return null;
-}
-
-function extractTableRowTransitionIdentity(tableRow) {
-  const row = tableRow || {};
-  const meta = parseTablePartitionTransition(row)?.metadata || {};
-  return {
-    state: String(row.partition_transition_state ?? '').toLowerCase(),
-    workflowId: normalizeOptionalString(
-      meta[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID],
-    ),
-    workflowFenceToken: normalizeSafeNonNegativeInt(
-      meta[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN],
-      null,
-    ),
-    targetPartitionVersion: normalizeSafeNonNegativeInt(
-      meta[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION],
-      null,
-    ),
-    pendingPartitionVersion: normalizeSafeNonNegativeInt(
-      row.pending_partition_version,
-      null,
-    ),
-    activePartitionVersion: normalizeSafeNonNegativeInt(
-      row.active_partition_version,
-      null,
-    ),
   };
-}
-
-function isTerminatedRowSupersedingCustody(durableCustody, rowIdentity) {
-  if (!TERMINATED_TRANSITION_STATES.has(rowIdentity.state)) return false;
-  if (!durableCustody.workflowId) return true;
-  if (rowIdentity.workflowId === durableCustody.workflowId) return true;
-  if (durableCustody.workflowFenceToken !== null &&
-      rowIdentity.workflowFenceToken !== null &&
-      rowIdentity.workflowFenceToken >= durableCustody.workflowFenceToken) {
-    return true;
-  }
-  const rowTargetVersion =
-    rowIdentity.targetPartitionVersion ?? rowIdentity.pendingPartitionVersion;
-  return durableCustody.targetPartitionVersion !== null &&
-    rowTargetVersion !== null &&
-    rowTargetVersion >= durableCustody.targetPartitionVersion;
-}
-
-function isDurableCustodyTerminatedByTableState(durableCustody, tableRow) {
-  if (!durableCustody || !tableRow) return false;
-  const rowIdentity = extractTableRowTransitionIdentity(tableRow);
-  if (ACTIVE_MIRROR_TRANSITION_STATES.has(rowIdentity.state)) return false;
-  if (durableCustody.targetPartitionVersion !== null &&
-      durableCustody.targetPartitionVersion > 0 &&
-      rowIdentity.activePartitionVersion !== null &&
-      rowIdentity.activePartitionVersion >= durableCustody.targetPartitionVersion) {
-    return true;
-  }
-  return isTerminatedRowSupersedingCustody(durableCustody, rowIdentity);
 }
 
 function partitionOwesDurableMirrorEffects(service, tableName = service?.tableName) {
   if (!service) return false;
-  if (hasActiveAuthorizedVolatileMirrorHandle(service)) return true;
   return isUserTableNameEligibleForMirror(tableName);
 }
 
@@ -319,7 +107,7 @@ function ensureCapturedRowEffectsTableIn(db, state) {
 }
 
 function persistCapturedRowEffectsIn(
-  service, state, entryKey, logIndex, mutationKind, typedEffects,
+  service, state, entryKey, logIndex, mutationKind, typedEffects, command,
 ) {
   ensureCapturedRowEffectsTableIn(service.db, state);
   state.runNonApplication(
@@ -327,8 +115,44 @@ function persistCapturedRowEffectsIn(
     entryKey,
     logIndex,
     typeof mutationKind === 'string' ? mutationKind : null,
-    JSON.stringify(typedEffects),
+    JSON.stringify({typedEffects, command}),
   );
+}
+
+// Outcome rows survive effect pruning. Only the range still owed by this
+// checkpoint or replay cursor requires a matching retained effect.
+export function assertMirrorReplayCoverageIn(db, watermark) {
+  const effectsPresent = capturedRowEffectsTableExistsIn(db);
+  const missing = db.prepare(
+    `SELECT o.entry_key FROM ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} o ` +
+    'WHERE o.mirror_effect_required = 1 AND o.log_index > ? ' +
+    (effectsPresent ? `AND NOT EXISTS (SELECT 1 FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} e ` +
+      'WHERE e.entry_key = o.entry_key AND e.log_index = o.log_index) ' : '') +
+    'LIMIT 1',
+  ).get(watermark);
+  if (missing) {
+    throw Object.assign(new TypeError(`Missing retained mirror effect for ${missing.entry_key}`),
+      {code: MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES});
+  }
+}
+
+function readMirrorReplayCommandsIn(db, watermark) {
+  assertMirrorReplayCoverageIn(db, watermark);
+  if (!capturedRowEffectsTableExistsIn(db)) return [];
+  return sqliteConnectionState(db).statement(
+    'SELECT entry_key, log_index, typed_effects_json FROM _partition_statement_outcome_effects ' +
+    'WHERE log_index > ? ORDER BY log_index',
+  ).all(watermark).map((row) => ({
+    index: row.log_index, command: decodeMirrorReplayRecord(row).command,
+  }));
+}
+
+function pruneCompactedStatementOutcomeEffectsIn(db, compactedIndex) {
+  if (!capturedRowEffectsTableExistsIn(db)) return;
+  const custody = readDurableMirrorRetentionCustodyIn(db);
+  const floor = custody && BigInt(custody.barrierIndex) < compactedIndex ?
+    BigInt(custody.barrierIndex) : compactedIndex;
+  pruneEffectsThroughFloorIn(sqliteConnectionState(db), floor);
 }
 
 function readCapturedRowEffectsIn(db, entryKey) {
@@ -339,7 +163,7 @@ function readCapturedRowEffectsIn(db, entryKey) {
   if (typeof row?.typed_effects_json !== 'string') return null;
   return {
     mutationKind: typeof row.mutation_kind === 'string' ? row.mutation_kind : null,
-    affectedRows: materializeTypedRowSetObjects(JSON.parse(row.typed_effects_json)),
+    affectedRows: materializeTypedRowSetObjects(decodeMirrorReplayRecord(row).typedEffects),
   };
 }
 
@@ -348,33 +172,17 @@ function readDurableMirrorRetentionCustodyIn(db) {
   const row = sqliteConnectionState(db)
     .statement(STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
     .get(MIRROR_RETENTION_BARRIER_ENTRY_KEY);
-  if (row?.mutation_kind !== MIRROR_RETENTION_BARRIER_KIND) return null;
-  return parseDurableCustodyJson(row.typed_effects_json);
+  return row ? decodeMirrorCustodyRow(row) : null;
 }
 
-function readDurableMirrorRetentionBarrierIn(db) {
-  return readDurableMirrorRetentionCustodyIn(db)?.barrierIndex ?? null;
-}
-
-function writeDurableMirrorRetentionCustodyIn(service, state, custodyInput, initialBarrier = 0) {
+function writeDurableMirrorRetentionCustodyIn(service, state, custody) {
   ensureCapturedRowEffectsTableIn(service.db, state);
-  const existing = readDurableMirrorRetentionCustodyIn(service.db);
-  const normalized = typeof custodyInput === 'number' ?
-    buildMirrorRetentionCustodyRecord({
-      ...(existing || {}),
-      barrierIndex: custodyInput,
-    }, custodyInput) :
-    buildMirrorRetentionCustodyRecord({
-      ...(existing?.workflowId && !custodyInput?.workflowId ? existing : {}),
-      ...(custodyInput || {}),
-    }, initialBarrier);
   state.runNonApplication(
     STATEMENT_OUTCOME_EFFECTS_SQL.UPSERT_RETENTION_BARRIER,
     MIRROR_RETENTION_BARRIER_ENTRY_KEY,
     MIRROR_RETENTION_BARRIER_KIND,
-    JSON.stringify(normalized),
+    JSON.stringify(custody),
   );
-  return normalized;
 }
 
 function deleteDurableMirrorRetentionCustodyIn(service, state) {
@@ -385,142 +193,12 @@ function deleteDurableMirrorRetentionCustodyIn(service, state) {
   );
 }
 
-function resolveActiveMirrorRetentionCustody(service) {
-  const localCustody = resolveLocalActiveMirrorCustody(service);
-  if (localCustody !== null) return localCustody;
-  if (!service?.db?.open) return null;
-  const durableCustody = readDurableMirrorRetentionCustodyIn(service.db);
-  if (durableCustody === null) return null;
-  const tableRow = resolveTableRowForMirrorEffects(service);
-  if (isDurableCustodyTerminatedByTableState(durableCustody, tableRow)) {
-    return null;
-  }
-  return durableCustody;
-}
-
 function resolveActiveMirrorRetentionBarrierIndex(service) {
-  return resolveActiveMirrorRetentionCustody(service)?.barrierIndex ?? null;
-}
-
-function resolveLeaderMirrorRetentionStamp(service) {
-  if (!partitionOwesDurableMirrorEffects(service)) return {};
-  const activeCustody = resolveActiveMirrorRetentionCustody(service);
-  if (activeCustody !== null) {
-    return {
-      mirrorRetentionBarrierIndex: activeCustody.barrierIndex,
-      mirrorRetentionCustody: activeCustody,
-    };
-  }
-  if (service?.db?.open && readDurableMirrorRetentionCustodyIn(service.db) !== null) {
-    return {mirrorRetentionRelease: true};
-  }
-  return {};
-}
-
-function canMutateMirrorOutcomeEffectsIn(service) {
-  const db = service?.db;
-  return Boolean(db?.open && db.inTransaction !== true);
-}
-
-function advanceMirrorHandleDurableWatermark(service, settledThroughLogIndex) {
-  const handle = service.splitReplication || service.mergeReplication;
-  if (!handle) return;
-  const previousWatermark = normalizeSafeNonNegativeInt(handle.durableWatermarkIndex, 0);
-  handle.durableWatermarkIndex = Math.max(previousWatermark, settledThroughLogIndex);
-}
-
-function resolvePruneCustodyMetadata(service, settledThroughLogIndex, options) {
-  if (options?.custody) {
-    return buildMirrorRetentionCustodyRecord(options.custody, settledThroughLogIndex);
-  }
-  if (options?.metadata) {
-    return buildCustodyFromMetadata(
-      options.metadata,
-      settledThroughLogIndex,
-      options?.family ?? null,
-    );
-  }
-  const localCustody = resolveLocalActiveMirrorCustody(service);
-  if (localCustody !== null) {
-    return buildMirrorRetentionCustodyRecord({
-      ...localCustody,
-      barrierIndex: Math.max(localCustody.barrierIndex, settledThroughLogIndex),
-    }, settledThroughLogIndex);
-  }
-  return null;
-}
-
-function reconcileDurableBarrierAfterPrune(service, state, settledThroughLogIndex, options) {
-  if (options?.releaseObligation === true) {
-    deleteDurableMirrorRetentionCustodyIn(service, state);
-    return;
-  }
-  const custodyFromContext = resolvePruneCustodyMetadata(
-    service, settledThroughLogIndex, options,
-  );
-  if (custodyFromContext !== null) {
-    writeDurableMirrorRetentionCustodyIn(
-      service, state, custodyFromContext, settledThroughLogIndex,
-    );
-    return;
-  }
-  const existing = readDurableMirrorRetentionCustodyIn(service.db);
-  if (existing !== null && settledThroughLogIndex > existing.barrierIndex) {
-    writeDurableMirrorRetentionCustodyIn(
-      service,
-      state,
-      {...existing, barrierIndex: settledThroughLogIndex},
-      settledThroughLogIndex,
-    );
-  }
-}
-
-function deleteCapturedEffectsUpToFloorIn(service, state, normalizedFloor) {
-  if (normalizedFloor <= 0 || !capturedRowEffectsTableExistsIn(service.db)) {
-    return 0;
-  }
-  const info = state.runNonApplication(
-    STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_THROUGH_LOG_INDEX,
-    normalizedFloor,
-  );
-  return normalizeSafeNonNegativeInt(info?.changes, 0);
-}
-
-function pruneSettledMirrorOutcomeEffects(service, settledThroughLogIndex, options = {}) {
-  if (!canMutateMirrorOutcomeEffectsIn(service)) return 0;
-  const state = sqliteConnectionState(service.db);
-  const normalizedFloor = normalizeSafeNonNegativeInt(settledThroughLogIndex, 0);
-  if (options?.releaseObligation === true) {
-    const changes = deleteCapturedEffectsUpToFloorIn(service, state, normalizedFloor);
-    deleteDurableMirrorRetentionCustodyIn(service, state);
-    return changes;
-  }
-  const establishPin = options?.establishObligation === true;
-  if (normalizedFloor <= 0 && !establishPin) return 0;
-  const changes = deleteCapturedEffectsUpToFloorIn(service, state, normalizedFloor);
-  if (normalizedFloor > 0) {
-    advanceMirrorHandleDurableWatermark(service, normalizedFloor);
-  }
-  if (capturedRowEffectsTableExistsIn(service.db) || establishPin) {
-    reconcileDurableBarrierAfterPrune(service, state, normalizedFloor, options);
-  }
-  return changes;
-}
-
-function resolveCommittedMirrorRetentionCustody(service, command) {
-  if (command?.mirrorRetentionRelease === true) return null;
-  if (command?.mirrorRetentionCustody && typeof command.mirrorRetentionCustody === 'object') {
-    return buildMirrorRetentionCustodyRecord(command.mirrorRetentionCustody, 0);
-  }
-  const commandBarrier = normalizeSafeNonNegativeInt(command?.mirrorRetentionBarrierIndex, null);
-  if (commandBarrier !== null) {
-    return buildMirrorRetentionCustodyRecord({barrierIndex: commandBarrier}, commandBarrier);
-  }
-  return resolveActiveMirrorRetentionCustody(service);
+  return readDurableMirrorRetentionCustodyIn(service.db)?.barrierIndex ?? null;
 }
 
 function pruneEffectsThroughFloorIn(state, floorIndex) {
-  if (Number.isSafeInteger(floorIndex) && floorIndex > 0) {
+  if (floorIndex > 0) {
     state.runNonApplication(
       STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_THROUGH_LOG_INDEX,
       floorIndex,
@@ -529,28 +207,14 @@ function pruneEffectsThroughFloorIn(state, floorIndex) {
 }
 
 function reconcileCommittedStatementMirrorEffects(
-  service, state, entryKey, index, result, command = null,
+  service, state, entryKey, index, result, command,
 ) {
-  if (!result?.typedEffects || !partitionOwesDurableMirrorEffects(service)) return;
   persistCapturedRowEffectsIn(
-    service, state, entryKey, index, result.mutationKind, result.typedEffects,
+    service, state, entryKey, index, result.mutationKind, result.typedEffects, command,
   );
-  const compactedIndex = service?.partitionId ?
-    Number(readSnapshotIndexIn(service.db, service.partitionId)) : 0;
-  const activeCustody = resolveCommittedMirrorRetentionCustody(service, command);
-  if (activeCustody !== null) {
-    writeDurableMirrorRetentionCustodyIn(
-      service, state, activeCustody, activeCustody.barrierIndex,
-    );
-    pruneEffectsThroughFloorIn(state, Math.max(compactedIndex, activeCustody.barrierIndex));
-    return;
-  }
-  deleteDurableMirrorRetentionCustodyIn(service, state);
-  const steadyStateFloor = Math.max(
-    compactedIndex,
-    Number(index) - STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
-  );
-  pruneEffectsThroughFloorIn(state, steadyStateFloor);
+  const custody = readDurableMirrorRetentionCustodyIn(service.db);
+  pruneEffectsThroughFloorIn(state,
+    custody?.barrierIndex ?? Number(index) - STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW);
 }
 
 function isPinnedMirrorRetentionCustodyCommand(command) {
@@ -563,29 +227,23 @@ function isPinnedMirrorRetentionCustodyCommand(command) {
       command.action !== MIRROR_RETENTION_CUSTODY_ACTION.RELEASE) {
     return false;
   }
-  return Boolean(command.custody && typeof command.custody === 'object' &&
-    normalizeSafeNonNegativeInt(command.custody.barrierIndex, null) !== null);
+  return !hasObsoleteMirrorCustodyField(command) && validMirrorCustody(command.custody);
 }
 
-function isOrdinalSuperseded(existingValue, targetValue) {
-  return existingValue !== null && targetValue !== null && existingValue > targetValue;
+// One monotonically increasing release acknowledgement per source database.
+// It crosses snapshot installation as application state. START may arrive
+// after RELEASE when the workflow reply was lost before the source proposed.
+function releasedMirrorAttemptIn(db, state) {
+  if (!state.statement(STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
+    .get('_partition_mirror_release')) return 0;
+  return state.statement('SELECT attempt FROM _partition_mirror_release WHERE singleton = 1').get().attempt;
 }
 
-function canReleaseSameWorkflowCustody(existingCustody, targetCustody) {
-  return !isOrdinalSuperseded(existingCustody.workflowAttempt, targetCustody.workflowAttempt) &&
-    !isOrdinalSuperseded(existingCustody.workflowFenceToken, targetCustody.workflowFenceToken);
-}
-
-function canReleaseCustodyForTarget(existingCustody, targetCustody) {
-  if (!existingCustody || !targetCustody?.workflowId || !existingCustody.workflowId) {
-    return true;
-  }
-  if (existingCustody.workflowId === targetCustody.workflowId) {
-    return canReleaseSameWorkflowCustody(existingCustody, targetCustody);
-  }
-  return existingCustody.targetPartitionVersion !== null &&
-    targetCustody.targetPartitionVersion !== null &&
-    targetCustody.targetPartitionVersion >= existingCustody.targetPartitionVersion;
+function recordMirrorReleaseIn(db, state, attempt) {
+  db.exec('CREATE TABLE IF NOT EXISTS _partition_mirror_release ' +
+    '(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), attempt INTEGER NOT NULL)');
+  state.runNonApplication('INSERT INTO _partition_mirror_release VALUES (1, ?) ' +
+    'ON CONFLICT(singleton) DO UPDATE SET attempt = MAX(attempt, excluded.attempt)', attempt);
 }
 
 function applyMirrorRetentionCustodyCommand(service, committed) {
@@ -611,48 +269,42 @@ function applyMirrorRetentionCustodyCommand(service, committed) {
     return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
   }
   const state = sqliteConnectionState(service.db);
-  const custody = buildMirrorRetentionCustodyRecord(command.custody, 0);
-  const compactedIndex = service.partitionId ?
-    Number(readSnapshotIndexIn(service.db, service.partitionId)) : 0;
-  if (command.action === MIRROR_RETENTION_CUSTODY_ACTION.PIN) {
-    writeDurableMirrorRetentionCustodyIn(service, state, custody, custody.barrierIndex);
-    if (capturedRowEffectsTableExistsIn(service.db)) {
-      pruneEffectsThroughFloorIn(state, Math.max(compactedIndex, custody.barrierIndex));
-    }
-  } else {
-    const existing = readDurableMirrorRetentionCustodyIn(service.db);
-    if (canReleaseCustodyForTarget(existing, custody)) {
+  const custody = command.custody;
+  const existing = readDurableMirrorRetentionCustodyIn(service.db);
+  const acquiring = command.action === MIRROR_RETENTION_CUSTODY_ACTION.PIN;
+  const released = releasedMirrorAttemptIn(service.db, state);
+  const matches = acquiring ?
+    custody.workflowAttempt > released && (!existing || canAssumeMirrorCustody(existing, custody)) :
+    !existing || sameMirrorCustody(existing, custody) || custody.workflowAttempt <= released;
+  if (matches && acquiring) {
+    // The first committed acquisition protects every subsequently owed effect.
+    const barrierIndex = existing?.barrierIndex ?? custody.barrierIndex;
+    writeDurableMirrorRetentionCustodyIn(service, state, {...custody, barrierIndex});
+    pruneEffectsThroughFloorIn(state, barrierIndex);
+  } else if (matches && !acquiring && custody.workflowAttempt > released) {
+    recordMirrorReleaseIn(service.db, state, custody.workflowAttempt);
+    if (existing) {
       deleteDurableMirrorRetentionCustodyIn(service, state);
-      if (capturedRowEffectsTableExistsIn(service.db)) {
-        const floor = Math.max(
-          compactedIndex,
-          custody.barrierIndex,
-          Number(index) - STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
-        );
-        pruneEffectsThroughFloorIn(state, floor);
-      }
+      pruneEffectsThroughFloorIn(state, index);
     }
   }
   committed.afterCommit(() => {
+    if (matches && !acquiring) {
+      // Every replica consumes the terminal release, including a former
+      // leader whose local execution still appears in the topology census.
+      void service.retireReleasedMirrorHandle(custody).catch((error) => service.logger.error(
+        'Committed mirror release could not retire its local handle', {partitionId: service.partitionId, error},
+      ));
+    }
     if (command.proposedBy === service.replicaId) {
       service.resolveCommittedWrite(command.entryId, {
-        success: true,
+        success: matches,
         partitionId: service.partitionId,
         logIndex: index,
       });
     }
   });
   return PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED;
-}
-
-function extractHandleOrMetadata(handleOrMetadata) {
-  if (!handleOrMetadata || typeof handleOrMetadata !== 'object') {
-    return {handle: null, metadata: null};
-  }
-  if (handleOrMetadata.metadata && typeof handleOrMetadata.metadata === 'object') {
-    return {handle: handleOrMetadata, metadata: handleOrMetadata.metadata};
-  }
-  return {handle: null, metadata: handleOrMetadata};
 }
 
 let custodySequenceCounter = 0;
@@ -663,7 +315,7 @@ function canProposeReplicatedCustody(service) {
   return Boolean(
     service?.raft &&
     Array.isArray(service.replicaIds) &&
-    service.replicaIds.length > 1 &&
+    service.replicaIds.length > 0 &&
     typeof service.partitionId === 'string' &&
     service.partitionId.length > 0 &&
     checkRefusal &&
@@ -672,30 +324,11 @@ function canProposeReplicatedCustody(service) {
   );
 }
 
-function applyLocalMirrorRetentionCustody(service, action, custody) {
-  const {barrierIndex} = custody;
-  if (action === MIRROR_RETENTION_CUSTODY_ACTION.PIN) {
-    pruneSettledMirrorOutcomeEffects(service, barrierIndex, {
-      establishObligation: true,
-      custody,
-    });
-    return;
-  }
-  if (!canMutateMirrorOutcomeEffectsIn(service)) return;
-  const existing = readDurableMirrorRetentionCustodyIn(service.db);
-  if (canReleaseCustodyForTarget(existing, custody)) {
-    pruneSettledMirrorOutcomeEffects(service, barrierIndex, {
-      releaseObligation: true,
-      custody,
-    });
-  }
-}
-
 function buildMirrorRetentionCustodyCommand(service, action, custody, nowMs) {
   custodySequenceCounter += 1;
-  const workflowKey = custody.workflowId || LOCAL_WORKFLOW_KEY;
-  const attemptKey = custody.workflowAttempt ?? 0;
-  const fenceKey = custody.workflowFenceToken ?? 0;
+  const workflowKey = custody.workflowId;
+  const attemptKey = custody.workflowAttempt;
+  const fenceKey = custody.workflowFenceToken;
   return Object.freeze({
     type: PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY,
     entryId: `${CUSTODY_ENTRY_ID_PREFIX}:${service.partitionId}:${action}:` +
@@ -710,28 +343,14 @@ function buildMirrorRetentionCustodyCommand(service, action, custody, nowMs) {
   });
 }
 
-function resolveCustodyReplicationRequest(handleOrMetadata, options = {}) {
-  const {handle, metadata} = extractHandleOrMetadata(handleOrMetadata);
-  const action = options.action === MIRROR_RETENTION_CUSTODY_ACTION.RELEASE ?
-    MIRROR_RETENTION_CUSTODY_ACTION.RELEASE :
-    MIRROR_RETENTION_CUSTODY_ACTION.PIN;
-  const rawBarrier = options.barrierIndex ??
-    (handle ? resolveHandleWatermarkBarrier(handle) : 0);
-  const barrierIndex = normalizeSafeNonNegativeInt(rawBarrier, 0);
-  const custody = buildCustodyFromMetadata(metadata, barrierIndex, options.family ?? null);
-  return {action, custody};
-}
-
-async function replicateSourceMirrorRetentionCustody(
-  service,
-  handleOrMetadata,
-  options,
-) {
-  if (!service) return {replicated: false};
-  const {action, custody} = resolveCustodyReplicationRequest(handleOrMetadata, options);
-  applyLocalMirrorRetentionCustody(service, action, custody);
+async function proposeMirrorCustody(service, metadata, {family, barrierIndex}, action) {
+  const custody = buildCustodyFromMetadata(metadata, barrierIndex, family);
+  if (!validMirrorCustody(custody)) {
+    throw Object.assign(new TypeError(MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES),
+      {code: MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES});
+  }
   if (!canProposeReplicatedCustody(service)) {
-    return {replicated: false, custody};
+    throw new Error('Mirror retention custody proposal unavailable');
   }
   const nowMs = service.timeSource?.now?.() ?? Date.now();
   const command = buildMirrorRetentionCustodyCommand(service, action, custody, nowMs);
@@ -739,14 +358,18 @@ async function replicateSourceMirrorRetentionCustody(
     service,
     {entry: command, phaseTimings: null, applyStartMs: nowMs},
   );
-  return {replicated: result?.success === true, custody, result};
+  if (result?.success !== true) {
+    throw new Error('Mirror retention custody commitment unconfirmed', {cause: result});
+  }
+  return Object.freeze({partitionId: service.partitionId, action, custody, logIndex: result.logIndex});
 }
 
-function releaseSourceMirrorRetentionCustody(service, handleOrMetadata, options = {}) {
-  return replicateSourceMirrorRetentionCustody(service, handleOrMetadata, {
-    ...options,
-    action: MIRROR_RETENTION_CUSTODY_ACTION.RELEASE,
-  });
+function replicateSourceMirrorRetentionCustody(service, metadata, options) {
+  return proposeMirrorCustody(service, metadata, options, MIRROR_RETENTION_CUSTODY_ACTION.PIN);
+}
+
+function releaseSourceMirrorRetentionCustody(service, metadata, options) {
+  return proposeMirrorCustody(service, metadata, options, MIRROR_RETENTION_CUSTODY_ACTION.RELEASE);
 }
 
 export {
@@ -758,15 +381,13 @@ export {
   applyMirrorRetentionCustodyCommand,
   isPinnedMirrorRetentionCustodyCommand,
   partitionOwesDurableMirrorEffects,
-  pruneSettledMirrorOutcomeEffects,
   readCapturedRowEffectsIn,
-  readDurableMirrorRetentionBarrierIn,
+  readMirrorReplayCommandsIn,
+  pruneCompactedStatementOutcomeEffectsIn,
   readDurableMirrorRetentionCustodyIn,
   reconcileCommittedStatementMirrorEffects,
   registerMirrorRetentionRaftHooks,
   releaseSourceMirrorRetentionCustody,
   replicateSourceMirrorRetentionCustody,
   resolveActiveMirrorRetentionBarrierIndex,
-  resolveActiveMirrorRetentionCustody,
-  resolveLeaderMirrorRetentionStamp,
 };

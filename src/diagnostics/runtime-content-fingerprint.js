@@ -303,6 +303,17 @@ async function productionDependencyRecords(root, lock) {
   return batches.flat();
 }
 
+function shortSourceFingerprint(source) {
+  return computeContentRecordsFingerprint(source.map(toShortSourceRecord))
+    .slice(0, FINGERPRINT_HEX_LENGTH);
+}
+
+// A campaign checkout uses the same source walk and framing as source-mode boot.
+async function measureCheckoutSourceFingerprint(root) {
+  return shortSourceFingerprint(await contentRecords(path.join(root, SOURCE_DIRECTORY),
+    SOURCE_DIRECTORY));
+}
+
 /**
  * Measure an installed source/build tree. Used by the boot owner and SEA
  * producer; no expected digest, environment value or package version wins
@@ -323,11 +334,9 @@ async function measureRuntimeContent(root) {
     {relativePath: PACKAGE_MANIFEST, content: await readFile(path.join(root, PACKAGE_MANIFEST))},
   ];
   if (lockBytes !== null) manifests.push({relativePath: DEPENDENCY_LOCK, content: lockBytes});
-  const shortSourceRecords = source.map(toShortSourceRecord);
   return Object.freeze({
     sourceDigest: computeContentRecordsFingerprint(source),
-    shortSourceFingerprint: computeContentRecordsFingerprint(shortSourceRecords)
-      .slice(0, FINGERPRINT_HEX_LENGTH),
+    shortSourceFingerprint: shortSourceFingerprint(source),
     dependencyDigest: computeContentRecordsFingerprint(dependencies),
     manifestDigest: computeContentRecordsFingerprint(manifests),
     dependencyFileCount: dependencies.length,
@@ -340,4 +349,4 @@ async function measurePackagedDependencies(root) {
     new Set(), CONTENT_LAYOUT.BUNDLED));
 }
 
-export {RUNTIME_BUILD_MANIFEST, measurePackagedDependencies, measureRuntimeContent};
+export {RUNTIME_BUILD_MANIFEST, measureCheckoutSourceFingerprint, measurePackagedDependencies, measureRuntimeContent};

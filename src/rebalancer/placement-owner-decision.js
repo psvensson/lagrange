@@ -182,15 +182,15 @@ function calculateDataAffinityScoreDimensions(candidate, evidence) {
   return dimensions;
 }
 
-function calculateScoreDimensions(candidate, evidence) {
+function calculateScoreDimensions(candidate, evidence, compareHostCpu) {
   const dimensions = [];
-  if (
+  if (compareHostCpu && (
     evidence.scoreProfile === PLACEMENT_OWNER_SCORE_PROFILE.LOAD ||
     evidence.placementConstraints.considerCpuLoad === true
-  ) {
+  )) {
     dimensions.push(buildScoreDimension(
       PLACEMENT_OWNER_SCORE_DIMENSION.CPU_LOAD,
-      candidate.cpuUsagePercent,
+      candidate.hostCpuUtilizationPercent,
     ));
   }
   if (
@@ -239,9 +239,12 @@ function getTieBreakerScore(dimensions) {
 }
 
 function buildPlacementOwnerScoreResult(evidence, filterResult) {
+  const compareHostCpu = filterResult.acceptedCandidates.every(
+    (candidate) => Number.isFinite(candidate.hostCpuUtilizationPercent),
+  );
   const scoreVector = filterResult.acceptedCandidates
     .map((candidate) => {
-      const dimensions = calculateScoreDimensions(candidate, evidence);
+      const dimensions = calculateScoreDimensions(candidate, evidence, compareHostCpu);
       return Object.freeze({
         node: candidate.node,
         nodeId: candidate.nodeId,

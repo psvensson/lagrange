@@ -6,6 +6,8 @@
  * priority-partition terminal coverage, step-entry timing, and exact aggregate
  * counters.
  */
+import {COPY_PHASE_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
+import {OperationType} from '../rebalancer/replica-operation-progress.js';
 import {isReplicaOperationInFlight} from '../rebalancer/replica-operation-liveness.js';
 import {ADMIN_CONTROL_SNAPSHOT} from './admin-constants.js';
 
@@ -231,6 +233,30 @@ function partitionCandidatesByLiveness(allRows, livenessOptions) {
   return {inFlightCandidates, terminalCandidates};
 }
 
+// Report the most recent completed visit to each copy phase in this operation.
+// Adjacency and the owner's previousStep link are both required.
+function completedCopyStages(row) {
+  if (row.type !== OperationType.ADD && row.type !== OperationType.REPLACE) return null;
+  const history = row.stepsHistory;
+  if (!Array.isArray(history)) return null;
+  const stages = {};
+  for (let index = 1; index < history.length; index += 1) {
+    const start = history[index - 1];
+    const end = history[index];
+    if (!COPY_PHASE_WORKFLOW_STEPS.has(start?.step) || end?.previousStep !== start.step ||
+        typeof end.step !== 'string' || !end.step || end.step === start.step ||
+        (start.ownerKey && start.ownerKey !== row.operationId) ||
+        (end.ownerKey && end.ownerKey !== row.operationId) ||
+        !Number.isFinite(start.timestamp) || !Number.isFinite(end.timestamp) ||
+        end.timestamp < start.timestamp) continue;
+    stages[start.step] = {
+      startedAtMs: start.timestamp, endedAtMs: end.timestamp, nextStep: end.step,
+      durationMs: end.timestamp - start.timestamp,
+    };
+  }
+  return Object.keys(stages).length ? stages : null;
+}
+
 function buildCompactedCandidateOutputs(retainedCandidates, sourceTimelines, limits) {
   const rows = [];
   const operationTimelineById = {};
@@ -243,7 +269,7 @@ function buildCompactedCandidateOutputs(retainedCandidates, sourceTimelines, lim
         limits.maxLength,
       ) :
       compactTerminalStepsHistory(row.stepsHistory, row.workflowStep, limits.maxLength);
-    rows.push({...row, stepsHistory});
+    rows.push({...row, stepsHistory, completedCopyStages: completedCopyStages(row)});
     const operationId = row.operationId;
     if (
       typeof operationId === 'string' &&

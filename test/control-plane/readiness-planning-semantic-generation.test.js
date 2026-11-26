@@ -98,7 +98,7 @@ function nodeRow(nodeId) {
     [COLUMN.CONNECTION_STATE]: 'ready',
     [COLUMN.LAST_HEARTBEAT]: 1_000,
     [COLUMN.READY_LEASE_EXPIRES_AT]: 2_000,
-    [COLUMN.CPU_USAGE_PERCENT]: 10,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 10,
     [COLUMN.MEMORY_USAGE_PERCENT]: 20,
     [COLUMN.DISK_USAGE_PERCENT]: 30,
   };
@@ -160,13 +160,27 @@ test('direct planning table classifier keeps raw cadence separate from node ' +
       'rescanning unrelated control-plane rows',
   );
 
+  const workload = fixture.apply(TABLES.NODES, CDC_OPERATION.UPDATE, {
+    [COLUMN.NODE_ID]: NODE_A,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 95,
+    [COLUMN.MEMORY_USAGE_PERCENT]: 42,
+    [COLUMN.DISK_USAGE_PERCENT]: 67,
+  });
+  t.equal(workload.semanticChanged, false, 'new samples preserve the load-ready verdict');
+  t.ok(planningIdentitiesEqual(beforeA, fixture.tracker.captureIdentity(NODE_A)),
+    'equivalent load readings preserve the completed planning identity');
   const load = fixture.apply(TABLES.NODES, CDC_OPERATION.UPDATE, {
-    [COLUMN.CPU_USAGE_PERCENT]: 95,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 100,
     [COLUMN.NODE_ID]: NODE_A,
   });
   t.equal(load.globalChanged, false, 'load is node-local planning evidence');
   t.same(load.affectedNodeIds, [NODE_A],
-    'the load change invalidates only its node');
+    'crossing the load threshold invalidates only its node');
+  const recovery = fixture.apply(TABLES.NODES, CDC_OPERATION.UPDATE, {
+    [COLUMN.NODE_ID]: NODE_A,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 99,
+  });
+  t.same(recovery.affectedNodeIds, [NODE_A], 'load recovery invalidates the blocked verdict');
   t.end();
 });
 

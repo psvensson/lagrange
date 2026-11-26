@@ -17,6 +17,7 @@ import {
   GlobalIndexLifecycleCoordinator,
   parseGlobalIndexDdl,
 } from './global-index-lifecycle-coordinator.js';
+import {getGlobalIndexDatasetName} from './global-index-dataset-manager.js';
 import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
 import {isTransientGlobalIndexError} from './global-index-catalog-contract.js';
 import {buildProductionCoordinatorOptions} from './global-index-production-wiring.js';
@@ -158,27 +159,6 @@ const INCOMPLETE_GSI_STATES = new Set([
   GLOBAL_INDEX_STATE.BACKFILLING,
 ]);
 
-function collectIncompleteFromEntryPairs(entries, names, requireGlobal) {
-  if (!entries) return;
-  for (const [indexName, item] of entries) {
-    const matchesGlobal = !requireGlobal || Boolean(item?.isGlobal || item?.global);
-    if (matchesGlobal && INCOMPLETE_GSI_STATES.has(item?.state)) {
-      names.add(indexName);
-    }
-  }
-}
-
-function collectIncompleteGlobalIndexNames(indexService) {
-  const names = new Set();
-  collectIncompleteFromEntryPairs(
-    indexService.globalIndexCoordinator?.catalog?.entries(),
-    names,
-    false,
-  );
-  collectIncompleteFromEntryPairs(indexService.indices?.entries(), names, true);
-  return names;
-}
-
 function resolveGsiRecoveryRetryDelayMs(indexService) {
   const configured = indexService.sqlQueryEngine?.tableCreationService?.
     schemaProvisioningJobOwner?.retryAfterMs;
@@ -191,12 +171,26 @@ function resolveGsiRecoveryRetryDelayMs(indexService) {
   return DEFAULT_GSI_RECOVERY_RETRY_DELAY_MS;
 }
 
-async function runRecoveredGsiProvisioningOnce(indexService, intent) {
-  const globalIndex = intent?.globalIndex;
+async function runRecoveredGsiProvisioningOnce(indexService, context) {
   if (!indexService.initialized && indexService.initialize) {
     await indexService.initialize({skipSchemaJobRecovery: true});
   }
   const coordinator = indexService.getGlobalIndexCoordinator();
+  let intent = context.intent;
+  if (!intent) {
+    const observed = await coordinator.refreshCatalogRecord(context.name, context.indexId);
+    if (!observed.available || !observed.row) return null;
+    const record = coordinator.catalog.get(context.name);
+    if (!record || !INCOMPLETE_GSI_STATES.has(record.state) ||
+        record.index_id !== context.indexId) return null;
+    const owner = indexService.sqlQueryEngine.tableCreationService.schemaProvisioningJobOwner;
+    const dataset = getGlobalIndexDatasetName(record.table_name, context.name);
+    intent = await owner.findSucceededGlobalIndexIntent(dataset, record.index_generation);
+    if (!intent || intent.globalIndex?.indexName !== context.name ||
+        intent.globalIndex.indexId !== context.indexId) return null;
+  }
+  if (indexService.shuttingDown) return null;
+  const globalIndex = intent.globalIndex;
   const outcome = await coordinator.completeRecoveredProvisioning({
     ...globalIndex,
     tableId: intent.tableId,
@@ -222,18 +216,6 @@ function ensureGsiRecoveryQueue(indexService) {
     });
   }
   return indexService._gsiRecoveryQueue;
-}
-
-function isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent) {
-  const gsi = intent?.globalIndex;
-  if (!gsi?.indexName || !incompleteNames.has(gsi.indexName)) {
-    return false;
-  }
-  const record = coordinator.catalog.get(gsi.indexName);
-  if (!record || !INCOMPLETE_GSI_STATES.has(record.state)) {
-    return false;
-  }
-  return !gsi.indexId || record.index_id === gsi.indexId;
 }
 
 const indexServiceGlobalMethods = {
@@ -438,7 +420,7 @@ const indexServiceGlobalMethods = {
     }
     const queue = ensureGsiRecoveryQueue(this);
     const recoveryKey = globalIndex.indexId || globalIndex.indexName;
-    return queue.enqueueAndWait(recoveryKey, GSI_RECOVERY_REASON, intent);
+    return queue.enqueueAndWait(recoveryKey, GSI_RECOVERY_REASON, {intent});
   },
 
   /**
@@ -446,29 +428,27 @@ const indexServiceGlobalMethods = {
    * @param {Object} [options={}]
    * @return {Promise<Array>}
    */
-  async recoverIncompleteGlobalIndexesFromSchemaJobs(options = {}) {
-    const jobOwner =
-      this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
-    if (!jobOwner?.listSucceededGlobalIndexIntents) {
-      return [];
+  async recoverIncompleteGlobalIndexesFromSchemaJobs() {
+    const jobOwner = this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
+    if (!jobOwner || this.shuttingDown) return [];
+    if (!this.initialized) await this.initialize({skipSchemaJobRecovery: true});
+    // A cache apply can outlive its listener. Reuse catalog hydration when
+    // the indices projection changed, including cache replacement.
+    const cache = this.systemTableCache;
+    const version = cache?.getTableMutationVersion?.(TABLES.INDICES);
+    if (cache !== this._recoveryCache || version !== this._recoveryIndicesVersion) {
+      this.syncGlobalIndexesFromCache();
+      this._recoveryCache = cache;
+      this._recoveryIndicesVersion = version;
     }
-    if (!this.initialized && this.initialize) {
-      await this.initialize({skipSchemaJobRecovery: true});
+    const pending = this._incompleteGlobalIndexes;
+    if (!pending?.size) return [];
+    const queue = ensureGsiRecoveryQueue(this);
+    const completions = [];
+    for (const [name, indexId] of pending) {
+      completions.push(queue.enqueueAndWait(indexId, GSI_RECOVERY_REASON, {name, indexId}));
     }
-    const incompleteNames = collectIncompleteGlobalIndexNames(this);
-    if (incompleteNames.size === 0) {
-      return [];
-    }
-    const coordinator = this.getGlobalIndexCoordinator();
-    const intents = Array.isArray(options?.intents) ?
-      options.intents :
-      await jobOwner.listSucceededGlobalIndexIntents();
-    const matchingIntents = intents.filter(
-      (intent) => isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent),
-    );
-    return Promise.all(
-      matchingIntents.map((intent) => this.completeRecoveredGlobalIndexProvisioning(intent)),
-    );
+    return Promise.all(completions);
   },
 
   /**
@@ -480,6 +460,18 @@ const indexServiceGlobalMethods = {
       this.indices = new Map();
     }
     this.indices.set(metadata.indexName, metadata);
+    if (metadata.isGlobal && INCOMPLETE_GSI_STATES.has(metadata.state)) {
+      this._incompleteGlobalIndexes ??= new Map();
+      const changed = this._incompleteGlobalIndexes.get(metadata.indexName) !== metadata.indexId;
+      this._incompleteGlobalIndexes.set(metadata.indexName, metadata.indexId);
+      const owner = this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
+      if (changed && this.initialized && !this.shuttingDown && owner?.ownsRecoveryDiscovery?.()) {
+        ensureGsiRecoveryQueue(this).enqueue(metadata.indexId, GSI_RECOVERY_REASON,
+          {name: metadata.indexName, indexId: metadata.indexId});
+      }
+    } else {
+      this._incompleteGlobalIndexes?.delete(metadata.indexName);
+    }
 
     const {tableId, indexName} = metadata;
     if (tableId) {
@@ -496,6 +488,7 @@ const indexServiceGlobalMethods = {
    * @param {string} [tableId] - Table ID.
    */
   _removeIndexFromCache(indexName, tableId) {
+    this._incompleteGlobalIndexes?.delete(indexName);
     if (this.indices) {
       this.indices.delete(indexName);
     }

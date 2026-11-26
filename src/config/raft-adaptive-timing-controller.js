@@ -114,7 +114,7 @@ const ADAPTIVE_TIMING_PROFILE_DEFAULT = Object.freeze({
 });
 
 const LOAD_SIGNAL = Object.freeze({
-  CPU_PERCENT: 'cpuPercent',
+  CPU_PERCENT: 'processCpuPercentOfHostCores',
   WRITE_BYTES_PER_SEC: 'writeBytesPerSec',
   RSS_GROWTH_BYTES_PER_MIN: 'rssGrowthBytesPerMin',
 });
@@ -492,7 +492,7 @@ class RaftAdaptiveTimingController {
   extractSignals(report) {
     return {
       [LOAD_SIGNAL.CPU_PERCENT]:
-        report?.latest?.process?.cpuPercent,
+        report?.latest?.process?.processCpuPercentOfHostCores,
       [LOAD_SIGNAL.WRITE_BYTES_PER_SEC]:
         report?.latest?.io?.writeBytesPerSec,
       [LOAD_SIGNAL.RSS_GROWTH_BYTES_PER_MIN]:

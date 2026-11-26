@@ -1,97 +1,86 @@
-// Generation-fenced in-flight CREATE acknowledgement state for the operation
-// workflow owner. Once a target node answers INITIATED or IN_PROGRESS under
-// its current boot incarnation, routine CDC echoes of the owner's own
-// SENDING -> CREATING write (and routine node heartbeats under the same boot
-// incarnation) do not re-send duplicate CREATE_REPLICA RPCs. Any process
-// restart, target boot-incarnation change, or explicit progress-reconcile /
-// dispatch-retry rearm clears the acknowledgement immediately.
-import {resolveTargetNodeIncarnationSnapshot} from './replica-status.js';
-import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+// A transport ACK answers the request. Reusing that answer also requires the
+// target's proof of physical worker custody and the current durable grant.
+import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
+import {replicaCreateInstallAuthoritiesEqual} from '../node/replica-create-admission-evidence.js';
+import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../constants/index.js';
+import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
+  './replica-operation-constants.js';
+import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
-const {
-  OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
-  WORKFLOW_STEP,
-} = OPERATION_WORKFLOW_OWNER_SHARED;
-
-const EXPLICIT_REARM_BOUNDARIES = Object.freeze(new Set([
-  'dispatch_retry',
-  OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE_RECONCILE,
-]));
-
-function currentTargetBootIncarnation(owner, targetNodeId) {
-  const systemTableCache = owner?.repository?.systemTableCache;
-  if (!targetNodeId || !systemTableCache) return null;
-  return resolveTargetNodeIncarnationSnapshot(
-    systemTableCache, targetNodeId,
-  ).bootIncarnation;
+function clearAcknowledgedCreateInFlight(owner, operationId) {
+  owner.acknowledgedCreateByOperationId?.delete(operationId);
 }
 
-function recordAcknowledgedCreateInFlight(owner, operation, replaceRemovePhase = false) {
-  if (!owner || !operation?.operationId || replaceRemovePhase === true) return;
-  if (operation.type !== OperationType.ADD && operation.type !== OperationType.REPLACE) {
-    return;
-  }
-  const targetBootIncarnation = currentTargetBootIncarnation(
-    owner, operation.targetNodeId,
-  );
-  // Fail closed: without an authoritative target boot incarnation we cannot
-  // generation-fence an in-flight CREATE against target restarts.
-  if (targetBootIncarnation === null) {
-    clearAcknowledgedCreateInFlight(owner, operation.operationId);
-    return;
-  }
-  if (!owner.acknowledgedCreateByOperationId) {
-    owner.acknowledgedCreateByOperationId = new Map();
-  }
-  owner.acknowledgedCreateByOperationId.set(operation.operationId, {
-    targetNodeId: operation.targetNodeId ?? null,
-    replicaId: operation.replicaId ?? null,
-    targetBootIncarnation,
+function currentBoot(owner, targetNodeId) {
+  const cache = owner.repository?.systemTableCache;
+  if (!cache || !targetNodeId) return null;
+  const nodeBoot = cache.get('nodes', targetNodeId)?.boot_incarnation;
+  const endpointBoot = cache.get('node_endpoints', `ep-${targetNodeId}-ws`)?.boot_incarnation;
+  return Number.isSafeInteger(nodeBoot) && nodeBoot > 0 && nodeBoot === endpointBoot ? nodeBoot : null;
+}
+
+function workerMatchesRequest(worker, request, targetNodeId, boot) {
+  if (!worker || boot === null ||
+      request.entityType !== UNIFIED_SERVICE_TYPE.PARTITION) return false;
+  const {ownerIncarnation, ...authority} = worker;
+  return ownerIncarnation === boot && replicaCreateInstallAuthoritiesEqual(authority, {
+    operationId: request.operationId, operationType: request.operationType,
+    entityType: request.entityType, entityId: request.entityId, partitionId: request.partitionId,
+    replicaId: request.replicaId, targetNodeId, admissionToken: request.createAdmissionToken,
+    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq,
+    workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt, replicaCreatedAt: worker.replicaCreatedAt,
   });
 }
 
-function clearAcknowledgedCreateInFlight(owner, operationId) {
-  if (!operationId || !owner?.acknowledgedCreateByOperationId) return;
-  owner.acknowledgedCreateByOperationId.delete(operationId);
+function grantMatchesWorker(operation, worker) {
+  return Boolean(worker) &&
+    (operation.createAdmissionState === CREATE_ADMISSION_STATE.ADMITTED ||
+     operation.createAdmissionState === CREATE_ADMISSION_STATE.MATERIALIZED) &&
+    operation.createAdmissionOwnerIncarnation === worker.ownerIncarnation &&
+    operation.createAdmissionReplicaCreatedAt === worker.replicaCreatedAt &&
+    operation.createAdmissionToken === worker.admissionToken &&
+    operation.createAdmissionAttemptToken === worker.attemptToken &&
+    operation.createAdmissionAttemptSeq === worker.attemptSeq &&
+    operation.createAdmissionWorkflowUpdatedAt === worker.workflowUpdatedAt;
 }
 
-function ackMatchesOperation(owner, ack, operation) {
-  if (ack.targetNodeId !== (operation.targetNodeId ?? null) ||
-      ack.replicaId !== (operation.replicaId ?? null)) {
-    return false;
+async function deliverCreateWithReceipt(owner, operation, targetNodeId, request, routineWake, send) {
+  if (request.type !== ReplicaOperationMessageType.CREATE_REPLICA) return send();
+  const boot = currentBoot(owner, targetNodeId);
+  const prior = owner.acknowledgedCreateByOperationId?.get(request.operationId);
+  const grantMatches = grantMatchesWorker(operation, prior?.worker);
+  const createPending = operation.workflowStep === WORKFLOW_STEP.SENDING ||
+    operation.workflowStep === WORKFLOW_STEP.CREATING;
+  const receiptMatches = workerMatchesRequest(prior?.worker, request, targetNodeId, boot) &&
+    prior.sourceNodeId === request.sourceNodeId &&
+    prior.membershipPublicationEpoch === request.membershipPublicationEpoch;
+  if (routineWake && createPending && grantMatches && receiptMatches) {
+    return prior.delivery;
   }
-  const currentBoot = currentTargetBootIncarnation(owner, operation.targetNodeId);
-  return ack.targetBootIncarnation !== null &&
-    currentBoot !== null &&
-    ack.targetBootIncarnation === currentBoot;
+
+  clearAcknowledgedCreateInFlight(owner, request.operationId);
+  const delivery = await send({
+    routineWake, createPending, grantMatches, receiptMatches, targetBootIncarnation: boot,
+    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq,
+    grantState: operation.createAdmissionState ?? null,
+    grantOwnerIncarnation: operation.createAdmissionOwnerIncarnation ?? null,
+    priorReceiptStatus: prior ? deliveryAnswerOf(prior.delivery).status : null,
+  });
+  const reply = deliveryAnswerOf(delivery);
+  if (isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) && reply?.success !== false &&
+      (reply?.status === ReplicaOperationResponseStatus.INITIATED ||
+       reply?.status === ReplicaOperationResponseStatus.IN_PROGRESS) &&
+      reply.operationId === request.operationId && reply.replicaId === request.replicaId &&
+      reply.nodeId === targetNodeId && workerMatchesRequest(reply.createWorkerReceipt, request, targetNodeId, boot) &&
+      currentBoot(owner, targetNodeId) === boot) {
+    owner.acknowledgedCreateByOperationId ??= new Map();
+    owner.acknowledgedCreateByOperationId.set(request.operationId, {
+      worker: Object.freeze({...reply.createWorkerReceipt}), delivery,
+      sourceNodeId: request.sourceNodeId, membershipPublicationEpoch: request.membershipPublicationEpoch,
+    });
+  }
+  return delivery;
 }
 
-function isRoutineCreateWakeOptions(options) {
-  return options?.routineCreateRearmWake === true &&
-    !EXPLICIT_REARM_BOUNDARIES.has(options?.boundary);
-}
-
-function isAcknowledgedCreateStillInFlight(owner, operation, options = {}) {
-  const operationId = operation?.operationId;
-  if (!operationId || operation.workflowStep !== WORKFLOW_STEP.CREATING) {
-    return false;
-  }
-  if (!isRoutineCreateWakeOptions(options)) {
-    clearAcknowledgedCreateInFlight(owner, operationId);
-    return false;
-  }
-  const ack = owner?.acknowledgedCreateByOperationId?.get(operationId);
-  if (!ack) return false;
-  if (!ackMatchesOperation(owner, ack, operation)) {
-    clearAcknowledgedCreateInFlight(owner, operationId);
-    return false;
-  }
-  return true;
-}
-
-export {
-  clearAcknowledgedCreateInFlight,
-  isAcknowledgedCreateStillInFlight,
-  recordAcknowledgedCreateInFlight,
-};
+export {clearAcknowledgedCreateInFlight, deliverCreateWithReceipt};

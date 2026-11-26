@@ -40,6 +40,7 @@ test('evaluateControlPlaneWriteRetryDecision is total, deterministic, and satisf
     isRetryable: fc.boolean(),
     isDeferredFailure: fc.boolean(),
     isRemovalFencedFailure: fc.boolean(),
+    isTargetConnectionClosed: fc.boolean(),
   });
 
   fc.assert(
@@ -55,7 +56,9 @@ test('evaluateControlPlaneWriteRetryDecision is total, deterministic, and satisf
       );
       assert.equal(allowedStates.has(first.state), true);
 
-      if (
+      if (facts.isSystemTableWrite && facts.isTargetConnectionClosed) {
+        assert.equal(first.state, 'widen_to_recovery_candidate');
+      } else if (
         facts.isSystemTableWrite &&
         facts.isPriorityControlPlaneWrite &&
         facts.isRetryable &&

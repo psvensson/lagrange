@@ -57,7 +57,7 @@ function createFixture(options = {}) {
         [COLUMN.LAST_HEARTBEAT]:
           NOW_MS - (options.nodeAHeartbeatAgeMs ?? 2),
         [COLUMN.READY_LEASE_EXPIRES_AT]: NOW_MS + 100,
-        [COLUMN.CPU_USAGE_PERCENT]: 10,
+        [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 10,
         [COLUMN.MEMORY_USAGE_PERCENT]: 20,
         [COLUMN.DISK_USAGE_PERCENT]: 30,
         [COLUMN.STORAGE_BUDGET_BYTES]: 1_000_000,
@@ -68,7 +68,7 @@ function createFixture(options = {}) {
         [COLUMN.CONNECTION_STATE]: 'ready',
         [COLUMN.LAST_HEARTBEAT]: NOW_MS,
         [COLUMN.READY_LEASE_EXPIRES_AT]: NOW_MS + 100,
-        [COLUMN.CPU_USAGE_PERCENT]: 10,
+        [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 10,
         [COLUMN.MEMORY_USAGE_PERCENT]: 20,
         [COLUMN.DISK_USAGE_PERCENT]: 30,
         [COLUMN.STORAGE_BUDGET_BYTES]: 1_000_000,
