@@ -311,10 +311,34 @@ for (const family of Object.keys(FAMILY)) {
     // Reconstruct the owner on its actual durable rows. Its startup scan must
     // positively finish the same terminal cleanup without the old RPC reply.
     clock.now++;
-    const restarted = owner(spec, store, {name: 'A2', workflowOwnerId: original.workflowOwnerId, clock});
+    const diagnostics = recordingLogger();
+    const restarted = owner(spec, store, {name: 'A2', workflowOwnerId: original.workflowOwnerId,
+      clock, logger: diagnostics.logger});
     source.sqlQueryEngine.managedSplitWorkflow = restarted;
-    for (let turn = 0; turn < 500 && children.some((id) => store.partitionRow(id)); turn++) await turns(1);
-    t.same(children.map((id) => store.partitionRow(id)), [null, null], 'fresh owner retired both children');
+    // A already removed the right descriptor. A2 nevertheless reconciles
+    // that child's frozen membership and renews the TABLES record. Let the
+    // retry read that record before A2 finishes its last real owner turn.
+    let reachedFinalChild = false;
+    const finishCleanup = Promise.withResolvers();
+    const teardown = restarted.teardownAbortedSplitChild.bind(restarted);
+    restarted.teardownAbortedSplitChild = async (...args) => {
+      if (args[2] !== children[1]) return teardown(...args);
+      reachedFinalChild = true;
+      await finishCleanup.promise;
+      return teardown(...args);
+    };
+    const cleanup = Promise.withResolvers();
+    const teardownAll = restarted.teardownAbortedSplitChildren.bind(restarted);
+    restarted.teardownAbortedSplitChildren = (...args) => {
+      const run = teardownAll(...args);
+      run.then(cleanup.resolve, cleanup.reject);
+      return run;
+    };
+    t.teardown(() => finishCleanup.resolve());
+    for (let turn = 0; !reachedFinalChild && turn < 500; turn++) await turns(1);
+    if (!reachedFinalChild) throw new Error('startup cleanup did not reach its last child: ' +
+      JSON.stringify({rows: store.partitionIds(), events: diagnostics.lines}));
+    t.same(children.map((id) => store.partitionRow(id)), [null, null], 'both old child descriptors are absent');
     t.ok(store.partitionDeletesBy('A2').includes(child), 'reconstructed writer applied the held child deletion');
     source.systemTableCache.applySystemTableChange('tables', 'INSERT', store.tablesRow());
     t.equal(await reconcileFailedMirrorCustody(source), true);
@@ -325,11 +349,35 @@ for (const family of Object.keys(FAMILY)) {
     // fixture's planner would otherwise mint these same deterministic IDs.
     restarted.buildManagedSplitPlan = () => { throw new Error('retry replanned the split'); };
     clock.now++;
-    await spec.start(restarted);
+    const capture = restarted.resolveTopologySnapshot.bind(restarted);
+    restarted.resolveTopologySnapshot = async (...args) => {
+      const snapshot = await capture(...args);
+      finishCleanup.resolve();
+      await cleanup.promise;
+      return snapshot;
+    };
+    const beforeCleanup = store.tablesRow().partition_transition_generation;
+    let raced;
+    try {
+      raced = await spec.start(restarted);
+    } finally {
+      finishCleanup.resolve();
+      await cleanup.promise;
+      restarted.resolveTopologySnapshot = capture;
+    }
+    t.equal(raced.reason, RECORD_MOVED, 'the final cleanup renewal supersedes the first retry read');
+    t.ok(store.tablesRow().partition_transition_generation > beforeCleanup);
+    t.equal(store.metadata().workflowAttempt, attempt, 'stale registration created no successor');
+    const writeStart = store.writes.length;
+    const logStart = diagnostics.lines.length;
+    const retryAnswer = await spec.start(restarted);
     const successor = store.metadata();
     if (!(successor.workflowAttempt > attempt && successor.workflowFenceToken > fence &&
         store.tablesRow().partition_transition_state === STATE.SPLIT_BACKFILLING)) {
-      throw new Error('successor did not enter backfill: ' + JSON.stringify(store.tablesRow()));
+      throw new Error('successor did not enter backfill: ' + JSON.stringify({
+        retryAnswer, record: store.tablesRow(), partitions: store.partitionIds().map(store.partitionRow),
+        writesDuringRetry: store.writes.slice(writeStart), ownerEvents: diagnostics.lines.slice(logStart),
+      }));
     }
     t.same(successor.targetPartitionIds, children);
     const before = store.partitionRow(child);
