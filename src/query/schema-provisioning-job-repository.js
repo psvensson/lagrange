@@ -148,6 +148,13 @@ function canPersistWorkflowCandidate(repository, candidate) {
     typeof repository.gateway?.submitMutation === 'function';
 }
 
+function isMatchingPersistedWorkflowRow(observed, nextWorkflow, nextRowVersion) {
+  return Boolean(observed) &&
+    normalizeNumber(observed.row_version) === nextRowVersion &&
+    normalizeNumber(observed.workflow_fence_token) === (nextWorkflow.fenceToken ?? 0) &&
+    (observed.workflow_owner_id ?? null) === (nextWorkflow.workflowOwnerId ?? null);
+}
+
 function buildWorkflowMutationWhere(candidate, previousWorkflow, context) {
   const whereClause = {
     job_id: candidate.workflowId,
@@ -250,6 +257,12 @@ class SchemaProvisioningJobRepository {
     }, WRITE_OPTIONS);
     const affectedRows = resolveAffectedRows(result);
     if (result?.success === false || affectedRows !== 1) {
+      const observed = current?.table_identity_key ?
+        await this.findByTableIdentity(current.table_identity_key).catch(() => null) :
+        null;
+      if (isMatchingPersistedWorkflowRow(observed, nextWorkflow, nextRowVersion)) {
+        return {accepted: true, workflow: rowToWorkflow(observed)};
+      }
       return {accepted: false};
     }
     const row = {...current, ...data};

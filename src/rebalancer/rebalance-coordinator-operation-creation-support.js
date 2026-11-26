@@ -25,7 +25,7 @@ import {
 import {resolveEntryId} from '../partition/partition-write-kernel.js';
 import {
   PLACEMENT_CLASS, PLACEMENT_COPY_CAPACITY, PLACEMENT_FORMATION_GATED_CLASSES,
-  PLACEMENT_OUTCOME, PLACEMENT_WAITING_REASON,
+  PLACEMENT_OUTCOME, PLACEMENT_WAITING_CLEARING_TRIGGER, PLACEMENT_WAITING_REASON,
 } from './replica-placement-owner-constants.js';
 import {
   buildPlacementAdmissionStatement, buildRuntimeServiceAdmissionStatement,
@@ -183,7 +183,8 @@ const TRANSIENT_PLACEMENT_ADMISSION_REFUSAL_REASONS = Object.freeze(new Set([
   'SOURCE_COPY_CAPACITY_REACHED', 'TARGET_COPY_CAPACITY_REACHED',
   'SOURCE_AT_CAPACITY', 'TARGET_AT_CAPACITY', 'COPY_OCCUPANCY_LIMIT_REACHED',
   'CDC_CAPACITY', 'placement_owner_unavailable', PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE,
-  'FORMATION_NOT_LATCHED', 'NODES_NOT_READY',
+  'FORMATION_NOT_LATCHED', 'NODES_NOT_READY', 'placement_repair_pending',
+  ...Object.keys(PLACEMENT_WAITING_CLEARING_TRIGGER),
 ]));
 
 function attachTransientPlacementAdmissionRefusal(error, failureCode, answer, options) {
@@ -433,13 +434,11 @@ const operationCreationSupportMethods = {
         !this.repository?.queryAuthoritativeOperationById) {
       return [];
     }
-    const operations = [];
-    for (let idx = 0; idx < operationIds.length; idx += 1) {
-      const operation = await this.repository.queryAuthoritativeOperationById(operationIds[idx]);
-      if (!operation) return [];
-      requireCreationReplayOutcome(operation);
-      operations.push(operation);
-    }
+    const operations = await Promise.all(
+      operationIds.map((id) => this.repository.queryAuthoritativeOperationById(id)),
+    );
+    if (operations.some((operation) => !operation)) return [];
+    for (const operation of operations) requireCreationReplayOutcome(operation);
     return operations;
   },
 
@@ -594,8 +593,11 @@ const operationCreationSupportMethods = {
       move, normalizedMoveType, resolvedSourceNodeId,
     );
     const placementClass = classifyPlacementClass(partitionId);
+    let formationLatchEpoch = null;
     let copyLimits = null;
     const prepareFreshPlacement = async () => {
+      formationLatchEpoch =
+        this.resolveFormationLatchEpochForPlacement(placementClass, partitionId);
       if (normalizedMoveType === OperationType.REMOVE) {
         const scope = await readPartitionVoterRemovalScope(this, partitionId, move);
         if (scope === null) {
@@ -612,8 +614,7 @@ const operationCreationSupportMethods = {
       {
         sourceNodeId: resolvedSourceNodeId,
         repairWaitingSourceNodeIds: new Set(),
-        formationLatchEpoch:
-          this.resolveFormationLatchEpochForPlacement(placementClass, partitionId),
+        formationLatchEpoch,
         membershipPublicationEpoch: move.membershipPublicationEpoch ?? null,
         positions: move?.positions || {},
         kSrc: copyLimits.kSrc,
@@ -730,12 +731,12 @@ const operationCreationSupportMethods = {
     });
     const outcome = buildOperationTransitionOutcome(persistResult,
       {repository: this.repository, requestedOperation: released});
-    if (!outcome.committed) {
+    if (!outcome.committed && persistResult?.persisted !== true) {
       return buildBootstrapTopologyHoldReleaseOutcome(
         false, await this.repository.queryAuthoritativeOperationById(operationId),
       );
     }
-    return buildBootstrapTopologyHoldReleaseOutcome(true, released);
+    return buildBootstrapTopologyHoldReleaseOutcome(true, outcome.operation || released);
   },
 
   async armCoordinatorCreatedOperationProgress(operation, armContext = {}) {

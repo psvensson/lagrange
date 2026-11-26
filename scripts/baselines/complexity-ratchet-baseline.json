@@ -723,7 +723,7 @@
   "src/query/sql-query-engine-bootstrap-routing-overlay.js::Method 'resolveBootstrapRoutingOverlayRetentionMode'#1": 13,
   "src/query/sql-query-engine-bootstrap-routing-overlay.js::Method 'resolveBootstrapRoutingOverlayReuseDecision'#1": 19,
   "src/query/sql-query-engine-bootstrap-routing-overlay.js::Method 'seedBootstrapRoutingOverlayFromSnapshots'#1": 22,
-  "src/query/sql-query-engine-initial-partition-provisioning.js::Async method 'provisionInitialTablePartition'#1": 111,
+  "src/query/sql-query-engine-initial-partition-provisioning.js::Async method 'provisionInitialTablePartition'#1": 98,
   "src/query/sql-query-engine-instance-initializer.js::Function 'initializeSqlQueryEngineInstance'#1": 51,
   "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js::Async method 'shutdown'#1": 13,
   "src/query/sql-query-engine-provision-target-methods.js::Async method 'waitForProvisionTargetNodeIds'#1": 33,

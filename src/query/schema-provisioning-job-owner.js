@@ -31,16 +31,14 @@ import {rowToWorkflow, serializeWorkflow} from
 import {
   runAdminActivity,
 } from '../diagnostics/formation-owner-attribution.js';
+import {
+  PLACEMENT_WAITING_CLEARING_TRIGGER,
+} from '../rebalancer/replica-placement-owner-constants.js';
 
 const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
   CANCEL_CODE: 'CANCEL',
   CANCEL_MESSAGE: 'cancel',
-  // A zero-change idempotent re-create whose leader read-back cannot yet
-  // prove visibility is a timing outcome, not a semantic failure: the
-  // durable row exists (often already COMPLETED from the prior attempt) and
-  // the job's next retry attaches to it. Terminal-failing it poisoned every
-  // later CREATE of the same table via the schema_operations short-circuit
-  // (round-7 root cause; local repro + archived run 22-15-08).
+  // Zero-change idempotent re-create with pending leader visibility is retryable.
   NOT_CONFIRMED_MESSAGE: 'authoritative replica operation not confirmed',
   STALE_FENCE_MESSAGE: 'stale fence',
   TIMEOUT_CODE: 'TIMEOUT',
@@ -51,8 +49,14 @@ const TRANSIENT_PROVISIONING_CODES = new Set([
   QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
   QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE,
   SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER,
+  'PLACEMENT_LEDGER_LEADER_UNAVAILABLE',
+  'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED',
 ]);
-const TRANSIENT_FAILURE_CODES = new Set(['FORMATION_NOT_LATCHED']);
+const TRANSIENT_FAILURE_CODES = new Set([
+  'FORMATION_NOT_LATCHED',
+  'PLACEMENT_REPAIR_PENDING',
+  ...Object.keys(PLACEMENT_WAITING_CLEARING_TRIGGER),
+]);
 const TRANSIENT_SKIP_REASONS = new Set(['deferred_retry_pending']);
 const TRANSIENT_CODE_FRAGMENTS = Object.freeze([
   TRANSIENT_ERROR_FRAGMENT.TIMEOUT_CODE,
@@ -145,9 +149,10 @@ function buildInitialRow(intent, workflow) {
 const DEFERRED_AUTHORITY_MESSAGE = 'Placement authority temporarily unavailable';
 
 function isDeferredAuthorityError(error) {
-  const failureCode = String(error?.failureCode || '').toUpperCase();
+  const failureCode = String(error?.failureCode || error?.code || '').toUpperCase();
   const skipReason = String(error?.rebalanceSkipReason || '').toLowerCase();
-  return TRANSIENT_FAILURE_CODES.has(failureCode) ||
+  return error?.deferRetry === true ||
+    TRANSIENT_FAILURE_CODES.has(failureCode) ||
     TRANSIENT_SKIP_REASONS.has(skipReason);
 }
 

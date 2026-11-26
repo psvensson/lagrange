@@ -1,5 +1,11 @@
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
+import {createAdaptivePlacementBudgetController} from
+  '../../src/rebalancer/replica-placement-adaptive-budget.js';
+import {PLACEMENT_REPAIR_PREPARE_TYPE} from
+  '../../src/partition/partition-placement-admission-constants.js';
+import {requestPlacementRepairPreparation} from
+  '../../src/partition/partition-placement-repair-preparation.js';
 import {buildOperationUpdateOutcome} from
   '../../src/rebalancer/replica-operation-update-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
@@ -53,13 +59,30 @@ async function publishLedgerLeader(cache, leader) {
  * @param {Function} answer - (address, message, options) => the ledger answer.
  * @return {{deliver: Function}} The router's delivery seam.
  */
+function ensureLeaderPlacementOwnerSink(leader) {
+  if (leader && !leader.rebalancerLeadershipSink) {
+    leader.rebalancerLeadershipSink = {
+      isLeader: true,
+      now: () => (leader.timeSource ? leader.timeSource.now() : Date.now()),
+      adaptiveBudgetController: createAdaptivePlacementBudgetController(),
+    };
+  }
+}
+
 function ledgerLeaderTransport(leader, answer) {
+  ensureLeaderPlacementOwnerSink(leader);
   const {address} = PartitionServiceRowOwner.buildServiceRow({partitionId: leader.partitionId,
     replicaId: leader.replicaId, nodeId: leader.nodeId});
   return {
     async deliver(target, message, options) {
       if (target !== address) {
         throw new Error(`ledger delivery addressed ${target}; the published endpoint is ${address}`);
+      }
+      if (message?.type === PLACEMENT_REPAIR_PREPARE_TYPE) {
+        return buildDeliveryEnvelope(
+          {acknowledged: true},
+          requestPlacementRepairPreparation(leader, message),
+        );
       }
       return buildDeliveryEnvelope({acknowledged: true}, await answer(target, message, options));
     },
@@ -229,6 +252,7 @@ function createCoordinatorWithLedger(leader, options = {}) {
   coordinator.runOperationCreationImmediateOrQueued =
     async (_context, fn) => fn();
   if (options.registerLocalLeader !== false) {
+    ensureLeaderPlacementOwnerSink(leader);
     coordinator.registerLedgerPartitionService(leader);
   } else {
     coordinator.placementAdmissionEnabled = true;
