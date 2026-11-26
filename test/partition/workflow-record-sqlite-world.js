@@ -19,11 +19,15 @@
  * snapshot the test freezes (a lagging control-plane cache).
  */
 import Database from 'better-sqlite3';
+import {deriveParticipantEntryId} from '../../src/query/distributed/participant-entry-id.js';
+import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {resumeFixtureParticipantGroupAdmission} from '../test-helpers/participant-transaction-fixture.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {
   PARTITIONS_SCHEMA,
   TABLES_SCHEMA,
   generateCreateTableSQL,
+  getInitialPartitionId,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 
 const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
@@ -61,7 +65,10 @@ function insertPartitions(db, {tableId, tableName}, partitions) {
 // One write applied to the shared database, observed at its apply.
 function applyWrite(store, {writer, sql, params}) {
   const info = store.db.prepare(sql).run(...params);
-  const write = {writer, sql, params, changes: info.changes};
+  return observeWrite(store, {writer, sql, params, changes: info.changes});
+}
+
+function observeWrite(store, write) {
   store.writes.push(write);
   for (const observe of store.observers) {
     observe(write);
@@ -107,8 +114,8 @@ const DEFAULT_SCHEMA_DEFINITION = JSON.stringify({
 });
 
 function openRecordStore({tableId = 'tbl-users', tableName = 'users',
-  partitions = [], schemaDefinition} = {}) {
-  const db = new Database(':memory:');
+  partitions = [], schemaDefinition, descriptorLeader = null} = {}) {
+  const db = descriptorLeader ? descriptorLeader.db : new Database(':memory:');
   db.exec(generateCreateTableSQL(TABLES_SCHEMA));
   db.exec(generateCreateTableSQL(PARTITIONS_SCHEMA));
   const resolvedSchema = (schemaDefinition !== undefined && schemaDefinition !== null) ?
@@ -147,7 +154,7 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
   // the one authoritative database.
   store.cdcFor = (writer) => {
     const engine = {
-      async executeQuery(sql, params = []) {
+      async executeQuery(sql, params = [], options = {}) {
         await new Promise((resolve) => setImmediate(resolve));
         if (sql.trim().toUpperCase().startsWith(SELECT)) {
           return {success: true, rows: db.prepare(sql).all(...params)};
@@ -157,6 +164,13 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
         if (store.holdSubmission?.({writer, sql, params})) {
           store.applyHeldSubmission = () => applyWrite(store, {writer, sql, params});
           throw new Error(SUBMIT_FAILED);
+        }
+        if (Object.hasOwn(options, 'splitDescriptorIntent')) {
+          if (!descriptorLeader) throw new Error('split descriptor witness requires an admitted PARTITIONS leader');
+          const entryId = deriveParticipantEntryId(options.idempotencyKey, descriptorLeader.partitionId);
+          const result = await descriptorLeader.executeQuery(sql, params, {...options, entryId});
+          observeWrite(store, {writer, sql, params, changes: result.changes, result});
+          return result;
         }
         return submitWrite(store, writer, sql, params);
       },
@@ -172,6 +186,21 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
   store.partitionDeletesBy = (writer) => store.writes.filter((write) =>
     write.writer === writer && /^DELETE FROM partitions/u.test(write.sql) &&
     write.changes > 0).map((write) => write.params.at(-1));
+  return store;
+}
+
+// Full receipt-producing destination for split aborts. The workflow views,
+// the gateway SQL probe and the committed destination all see the same rows.
+async function openDescriptorRecordStore(t, options) {
+  const tableName = PARTITIONS_SCHEMA.tableName;
+  const partitionId = getInitialPartitionId(tableName);
+  const group = await formAdmittedGroup({partitionId,
+    members: [[partitionId + '-r1', 'node-a']], tempPrefix: 'split-descriptor-',
+    serviceOptions: {tableId: tableName, tableName, schema: PARTITIONS_SCHEMA}, budgetMs: 5000});
+  t.teardown(() => group.dispose());
+  await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
+  const store = openRecordStore({...options, descriptorLeader: group.services[0]});
+  store.waitFor = group.waitFor;
   return store;
 }
 
@@ -223,6 +252,7 @@ async function turns(count = 50) {
 }
 
 export {
+  openDescriptorRecordStore,
   openRecordStore,
   openView,
   parsePartitionTransition,

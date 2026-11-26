@@ -21,6 +21,8 @@ import {
   isPartitionDescriptorEpochAccepted,
 } from './partition-descriptor-epoch-contract.js';
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
+import {splitDescriptorWriteKey} from './partition-split-descriptor-command.js';
+import {childIntent} from './managed-split-descriptor-cleanup.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -37,6 +39,15 @@ const LOCAL_STR_PARTITION_VERSION = 'partition_version';
 const LOCAL_STR_EPOCH_EFFECT_DETAIL =
   ': expected exactly 1 tables row update for workflow ';
 const LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_M = 'Managed split child partition metadata mismatch for ';
+
+function assertChildDescriptorWritten(result, partitionId) {
+  const changes = result?.partitionResult?.affectedRows ?? result?.affectedRows;
+  if (result?.success !== true || changes !== 1) {
+    throw Object.assign(new Error(result?.error || `Split descriptor write refused for ${partitionId}`), {
+      code: 'split_child_descriptor_write_refused', cause: result,
+    });
+  }
+}
 
 class ManagedSplitWorkflowPersistenceMethods {
   /**
@@ -414,15 +425,22 @@ class ManagedSplitWorkflowPersistenceMethods {
           code: 'split_child_descriptor_owner_invalid', partitionId: expected.partition_id,
         });
       }
-      if (previous === next) continue;
       const acquired = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: TABLES.PARTITIONS,
-        whereClause: {table_id: expected.table_id, partition_version: expected.partition_version,
-          split_descriptor_attempt: previous, partition_id: expected.partition_id},
+        whereClause: {
+          table_id: expected.table_id,
+          table_name: expected.table_name,
+          partition_key_start: expected.partition_key_start,
+          partition_key_end: expected.partition_key_end,
+          partition_key_type: expected.partition_key_type,
+          partition_version: expected.partition_version,
+          split_descriptor_attempt: previous,
+          partition_id: expected.partition_id,
+        },
         data: {split_descriptor_attempt: next},
       }, this.buildManagedSplitMutationOptions());
-      this.assertSplitEpochMutationEffect(acquired, {workflowId: expected.partition_id});
+      assertChildDescriptorWritten(acquired, expected.partition_id);
     }
   }
 
@@ -530,38 +548,34 @@ class ManagedSplitWorkflowPersistenceMethods {
    * @private
    */
   async insertPartitionMetadata(partitionMetadata) {
-    const cdcIntegrationService = this.getCDCIntegrationService();
-    if (!cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
-      return;
-    }
-    await this.getControlPlaneSystemTableGateway().submitMutation({
+    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
       tableName: TABLES.PARTITIONS,
       row: partitionMetadata,
     }, this.buildManagedSplitMutationOptions());
+    assertChildDescriptorWritten(result, partitionMetadata.partition_id);
   }
 
   async finalizeAbortedSplitChild(workflow, partitionId) {
     const {tableId, workflowId} = workflow;
     const workflowAttempt = workflow.metadata?.workflowAttempt;
-    if (!tableId || !workflowId || !Number.isSafeInteger(workflowAttempt) || workflowAttempt < 1) {
-      throw Object.assign(new Error('Invalid terminal split descriptor identity'), {
-        code: 'split_child_descriptor_owner_invalid',
-      });
-    }
-    const splitDescriptorIntent = {action: 'finalizeChild', tableId, partitionId,
-      workflowId, workflowAttempt};
-    return this.getControlPlaneSystemTableGateway().submitMutation({
+    const splitDescriptorIntent = childIntent(tableId, workflowId, workflowAttempt, partitionId);
+    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
       tableName: TABLES.PARTITIONS,
       whereClause: {table_id: tableId, split_descriptor_attempt: workflowAttempt,
         partition_id: partitionId},
-    }, {...this.buildManagedSplitMutationOptions(), splitDescriptorIntent});
+    }, {...this.buildManagedSplitMutationOptions(), splitDescriptorIntent,
+      idempotencyKey: splitDescriptorWriteKey(splitDescriptorIntent)});
+    if (result?.success !== true) {
+      throw Object.assign(new Error(result?.error || 'Split descriptor submission failed'),
+        {cause: result});
+    }
+    return result.partitionResult;
   }
 
   /**
-   * Delete one partition metadata row (orphan-child cleanup before a
-   * split retry re-inserts both children).
+   * Delete the dissolved source descriptor after successful cutover.
    * @param {string} partitionId - Partition row identity.
    * @return {Promise<Object|null>} The gateway mutation result, or null
    *   when no mutation path is wired.

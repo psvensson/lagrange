@@ -1,3 +1,5 @@
+import {decodeSplitDescriptorCommand, descriptorRefusal, finalizeChildReceipt,
+  SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from './partition-split-descriptor-command.js';
 import {requestPlacementRepairPreparation} from './partition-placement-repair-preparation.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
@@ -540,6 +542,13 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       rollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK,
         effect)});
     const commandType = command.type;
+    const descriptor = usesSplitDescriptorIdentity(command) ? decodeSplitDescriptorCommand(this, command) : null;
+    if (usesSplitDescriptorIdentity(command) && descriptor === null) {
+      const code = SPLIT_DESCRIPTOR_ERROR.BYTES;
+      throw committedCommandRefusal(this, {command, index, rollback: (effect) =>
+        scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)},
+      {message: code, code, outcome: code, reason: code});
+    }
     // Witness the committed entry's HLC on EVERY replica (leader and follower),
     // before any branch/early-return, so this clock advances past every entry it
     // applies. Without this, a new leader whose wall clock lags the old leader
@@ -588,6 +597,11 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         deterministic: true,
       });
       if (lockConflict !== null) {
+        if (descriptor) {
+          afterCommit(() => this.resolveCommittedWrite(command.entryId,
+            {...lockConflict, success: false, failureCode: lockConflict.errorCode, retryable: true, deferRetry: true}));
+          return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
+        }
         return settleLockingReadRefusedCommittedStatement(
           this, {lockConflict, command, entryKey, index, term, identity, afterCommit});
       }
@@ -595,13 +609,24 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       try {
         info = runCommittedPartitionStatement(this, command);
       } catch (error) {
+        if (descriptor) {
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () => this.rejectCommittedWrite(command.entryId, error));
+          throw error;
+        }
         return settleFailedCommittedStatement(this, {
           error, command, entryKey, index, term, identity, afterCommit,
           afterRollback: (effect) =>
             scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect),
         });
       }
+      const receipt = descriptor ? finalizeChildReceipt(this.db, descriptor.intent, info.changes) : null;
+      if (descriptor && receipt === null) {
+        afterCommit(() => this.resolveCommittedWrite(command.entryId,
+          descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.UNRESOLVED, true)));
+        return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
+      }
       recordCommittedStatementOutcome(this, {
+        ...(descriptor ? {ownerResultText: JSON.stringify(receipt), commandDigest: descriptor.digest} : {}),
         entryKey,
         outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
         index,
@@ -609,14 +634,16 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         result: info,
         command,
       });
-      recordCommittedStatementCdc(this, {command, index, term, afterCommit},
-        {entryKey, result: info});
-      advancePartitionWriteGeneration(this.db);
-      const committedGeneration = readPartitionWriteGeneration(this.db);
-      recordCommittedAutocommitRowKeys(this, command, committedGeneration);
-      scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
-        resetParticipantRowKeyHistory(this));
-      recordCommittedWriteTraffic(this, afterCommit, 1);
+      if (!descriptor || info.changes > 0) {
+        recordCommittedStatementCdc(this, {command, index, term, afterCommit},
+          {entryKey, result: info});
+        advancePartitionWriteGeneration(this.db);
+        const committedGeneration = readPartitionWriteGeneration(this.db);
+        recordCommittedAutocommitRowKeys(this, command, committedGeneration);
+        scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
+          resetParticipantRowKeyHistory(this));
+        recordCommittedWriteTraffic(this, afterCommit, 1);
+      }
       if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||
           /^\s*(?:CREATE|DROP)\s+TABLE\b/iu.test(String(command.sql || ''))) {
         afterCommit(() => invalidateParticipantDeterminismSelfCheck(this.db));
@@ -627,7 +654,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       afterCommit(() => {
         this.resolveCommittedWrite(
           command.entryId,
-          buildAppliedStatementResolutionAnswer(info, identity),
+          {...buildAppliedStatementResolutionAnswer(info, identity),
+            ...(receipt ? {splitDescriptorReceipt: receipt, committed: true, term} : {})},
+          descriptor?.digest,
         );
       });
     }

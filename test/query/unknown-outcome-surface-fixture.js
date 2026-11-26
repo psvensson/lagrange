@@ -117,6 +117,8 @@ function rowsOf(dbPath, table, keyColumn) {
 // The partition schema of a table: a witness table's own columns, or a
 // system table's real columns and key.
 function partitionSchemaOf(table) {
+  // Opening the catalog validates its complete DDL, including constraints.
+  if (table === TABLES.PARTITIONS) return getSchemaByTableName(table);
   if (table === USER_TABLE) {
     return {columns: [
       {name: 'node_id', type: 'TEXT', primaryKey: true},

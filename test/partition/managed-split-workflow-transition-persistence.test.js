@@ -133,7 +133,7 @@ test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
       },
       async insertSystemTableRow(tableName, row) {
         insertCalls.push({tableName, row});
-        return {success: true};
+        return {success: true, affectedRows: 1};
       },
     },
   });
@@ -200,7 +200,7 @@ test('ManagedSplitWorkflow wraps partition metadata insertion in ' +
       },
       async insertSystemTableRow(tableName, row) {
         insertCalls.push({tableName, partitionId: row.partition_id});
-        return {success: true};
+        return {success: true, affectedRows: 1};
       },
     },
   });
@@ -305,7 +305,7 @@ test('ManagedSplitWorkflow silently falls back to sequential writes ' +
       },
       async insertSystemTableRow(tableName, row) {
         insertCalls.push({tableName, partitionId: row.partition_id});
-        return {success: true};
+        return {success: true, affectedRows: 1};
       },
     },
   });
@@ -683,7 +683,7 @@ test('ManagedSplitWorkflow proceeds on committed durable split transition ' +
       },
       async insertSystemTableRow(tableName, row) {
         updateCalls.push({tableName, row, options: null});
-        return {success: true, committed: true};
+        return {success: true, committed: true, affectedRows: 1};
       },
     },
   });

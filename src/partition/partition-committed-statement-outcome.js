@@ -1,3 +1,5 @@
+import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, retainedSplitDescriptorAnswer,
+  SPLIT_DESCRIPTOR_ERROR} from './partition-split-descriptor-command.js';
 // The terminal outcome of every committed statement: the one owner of what a
 // committed statement's result is, for the partition's committed-entry
 // application (APPLIED, STATEMENT_FAILED, or STATEMENT_ENVIRONMENT_FAILED).
@@ -6,6 +8,8 @@
 // Nullable insert-result contract (TX1 0.0.14): lastInsertRowid is retained
 // only for INSERT/REPLACE without DO UPDATE that changed >= 1 row.
 
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schema-shared-constants.js';
+import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
 import {detectCommittedStatementOutcomeFormat} from './partition-committed-statement-format.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
@@ -133,13 +137,17 @@ function committedStatementOutcomeFormatError(decision, partitionId = null) {
  * decision of store open.
  * @param {Object} db - The partition's connection.
  * @param {string|null} [partitionId] - The partition opened, for the refusal.
+ * @param {string|null} [tableName] - PARTITIONS retains its terminal descriptor receipts here.
  */
-function createCommittedStatementOutcomeTable(db, partitionId = null) {
+function createCommittedStatementOutcomeTable(db, partitionId = null, tableName = null) {
   const format = detectCommittedStatementOutcomeFormat(db);
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
     throw committedStatementOutcomeFormatError(format, partitionId);
   }
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT) {
+    if (tableName === SYSTEM_TABLE_NAME.PARTITIONS && RaftRsDurableStore.hasDurableRecordIn(db, partitionId)) {
+      throw committedStatementOutcomeFormatError(format, partitionId);
+    }
     db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
   }
 }
@@ -233,16 +241,13 @@ function readSettledOwnerCommandIn(db, {entryId, commandDigest}) {
       recordClass: committedRecordClassOf(recorded)});
 }
 
-const PENDING_OWNER_COMMAND_DIGESTS = 'pendingOwnerCommandDigests';
+// The promise identifies the exact pending registration, even if a later
+// leadership tenure registers the same entry before the old caller settles.
+const pendingOwnerCommandDigests = new WeakMap();
 const PROPOSE = Object.freeze({state: PARTITION_OWNER_COMMAND_PRELUDE.PROPOSE});
 
-function pendingOwnerCommandDigestsOf(service) {
-  let digests = service[PENDING_OWNER_COMMAND_DIGESTS];
-  if (digests === undefined) {
-    digests = new Map();
-    service[PENDING_OWNER_COMMAND_DIGESTS] = digests;
-  }
-  return digests;
+function pendingOwnerDigestOf(promise) {
+  return pendingOwnerCommandDigests.get(promise);
 }
 
 function answered(answer) {
@@ -277,7 +282,7 @@ function ownerCommandPrelude(service, request) {
   if (paused !== null) return answered(paused);
   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
   if (pending === null) return PROPOSE;
-  return answered(pendingOwnerCommandDigestsOf(service).get(command.entryId) ===
+  return answered(pendingOwnerDigestOf(pending) ===
     commandDigest ? pending : request.answerCollision());
 }
 
@@ -289,12 +294,8 @@ function ownerCommandPrelude(service, request) {
  * @param {Promise<Object>} commitPromise - Its commit.
  * @return {Promise<Object>} The commit.
  */
-function trackPendingOwnerCommand(service, {command, commandDigest}, commitPromise) {
-  const digests = pendingOwnerCommandDigestsOf(service);
-  digests.set(command.entryId, commandDigest);
-  Promise.resolve(commitPromise).finally(() => {
-    if (digests.get(command.entryId) === commandDigest) digests.delete(command.entryId);
-  }).catch(() => {});
+function trackPendingOwnerCommand(service, {commandDigest}, commitPromise) {
+  pendingOwnerCommandDigests.set(commitPromise, commandDigest);
   return commitPromise;
 }
 
@@ -448,7 +449,17 @@ function lockingReadReplayFieldsOf(failureCode) {
 }
 
 function answerSettledStatement(service, {recorded, command}) {
+  let descriptorFields;
+  if (Object.hasOwn(command, 'splitDescriptorIntent')) {
+    const descriptor = decodeSplitDescriptorCommand(service, command);
+    if (!descriptor) return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+    descriptorFields = retainedSplitDescriptorAnswer(descriptor, recorded);
+    if (descriptorFields.success === false) return descriptorFields;
+  } else if (isSplitDescriptorDigest(recorded.commandDigest)) {
+    return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.COLLISION);
+  }
   const settledAt = {
+    ...descriptorFields,
     partitionId: service.partitionId,
     logIndex: recorded.logIndex,
     replayOfLogIndex: recorded.logIndex,
@@ -493,8 +504,11 @@ function answerSettledStatement(service, {recorded, command}) {
  */
 function settleRecordedCommittedStatement(service, {recorded, command,
   afterCommit}) {
-  afterCommit(() => service.resolveCommittedWrite(command.entryId,
-    answerSettledStatement(service, {recorded, command})));
+  const answer = answerSettledStatement(service, {recorded, command});
+  afterCommit(() => service.resolveCommittedWrite(command.entryId, answer, recorded.commandDigest));
+  if (answer.failureCode === SPLIT_DESCRIPTOR_ERROR.COLLISION) {
+    return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
+  }
   if (recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
     return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
   }
@@ -593,7 +607,7 @@ export {
   applyMirrorRetentionCustodyCommand,
   committedStatementEntryKey, committedStatementOutcomeFormatError,
   detectCommittedStatementOutcomeFormat, isCommittedStatementKeyed,
-  ownerCommandPrelude, partitionOwesDurableMirrorEffects,
+  ownerCommandPrelude, pendingOwnerDigestOf, partitionOwesDurableMirrorEffects,
   readCommittedStatementCensusIn,
   readDurableMirrorRetentionCustodyIn,
   readSettledOwnerCommandIn, answerSettledStatement,

@@ -1,3 +1,5 @@
+import {openRecordStore, parsePartitionTransition, readAuthoritativelyFrom, turns} from
+  './workflow-record-sqlite-world.js';
 import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -277,4 +279,74 @@ async (t) => {
     PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
     'the rejected abort never landed',
   );
+});
+
+test('an accepted split failure survives a lost ACK and a new owner fence', async (t) => {
+  const store = openRecordStore();
+  t.teardown(() => store.db.close());
+  let now = 1000;
+  function build(holder) {
+    const {workflow} = buildWorkflow({workflowOwnerId: holder, now: () => now,
+      cdcIntegrationService: store.cdcFor(holder), parsePartitionTransition,
+      listTableInfos: () => [store.tablesRow()], getTableInfo: () => store.tablesRow()});
+    readAuthoritativelyFrom(workflow, store);
+    return workflow;
+  }
+  const original = build('first-holder');
+  const fenceToken = await registerClaimedWorkflow(original);
+  const attempt = store.metadata().workflowAttempt;
+  const ack = {participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+    status: SPLIT_ACK_STATUS.SNAPSHOT_FAILED, fenceToken, attempt};
+  const coordinator = original.workflowCoordinator;
+  const acknowledge = coordinator.acknowledgeParticipant.bind(coordinator);
+  coordinator.acknowledgeParticipant = async (...args) => {
+    const accepted = await acknowledge(...args);
+    t.equal(accepted.result, 'accepted');
+    throw new Error('reply lost after participant ACK committed');
+  };
+  await t.rejects(original.acknowledgeSourceParticipant(WORKFLOW_ID, ack),
+    /reply lost after participant ACK committed/);
+  const authorization = store.metadata().splitSourceFailure;
+  t.same(authorization, {workflowId: WORKFLOW_ID, workflowAttempt: attempt,
+    participantKey: ack.participantKey, status: ack.status, fenceToken});
+  t.equal(store.tablesRow().partition_transition_state, PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING);
+  const denied = await coordinator.registerWorkflowFromRead(buildAbortingRecord(), store.tablesRow());
+  t.equal(denied.reason, 'split-source-failure-pending');
+  now = store.metadata().workflowLeaseExpiresAt + 1;
+  const restarted = build('next-holder');
+  for (let i = 0; i < 500 && store.tablesRow().partition_transition_state !== PARTITION_TRANSITION_STATE.FAILED; i++) {
+    await turns(1);
+  }
+  await restarted.settleSplitOwnerLaneForWorkflow(WORKFLOW_ID);
+  t.equal(store.tablesRow().partition_transition_state, PARTITION_TRANSITION_STATE.FAILED);
+  const terminal = store.metadata();
+  t.ok(terminal.workflowFenceToken > fenceToken);
+  t.equal(terminal.splitDescriptorCleanup.decisionFence, terminal.workflowFenceToken);
+  t.same(terminal.failure.sourceFailure, authorization);
+  t.same(terminal.splitSourceFailure, authorization);
+  t.equal(terminal.workflowAttempt, attempt);
+  t.equal(await restarted.abortSplitOnSourceFailure(WORKFLOW_ID, {...authorization, workflowAttempt: attempt + 1}),
+    false, 'a different attempt cannot claim this decision');
+});
+
+test('lost CATCHUP_READY reply cannot authorize an earlier backfill failure', async (t) => {
+  const {workflow, durableRow} = buildWorkflow({});
+  const fenceToken = await registerClaimedWorkflow(workflow);
+  const coordinator = workflow.workflowCoordinator;
+  const send = (status) => workflow.acknowledgeSourceParticipant(WORKFLOW_ID, {
+    participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION, status, fenceToken});
+  t.equal((await send(SPLIT_ACK_STATUS.SNAPSHOT_STARTED)).result, 'accepted');
+  const acknowledge = coordinator.acknowledgeParticipant.bind(coordinator);
+  coordinator.acknowledgeParticipant = async (...args) => {
+    const result = await acknowledge(...args);
+    t.equal(result.result, 'accepted');
+    throw new Error('lost accepted checkpoint reply');
+  };
+  await t.rejects(send(SPLIT_ACK_STATUS.CATCHUP_READY), /lost accepted checkpoint reply/);
+  coordinator.acknowledgeParticipant = acknowledge;
+  const committed = durableRow.partition_transition_metadata;
+  t.equal((await send(SPLIT_ACK_STATUS.BACKFILL_FAILED)).result, 'invalid_transition');
+  t.equal(durableRow.partition_transition_metadata, committed);
+  t.equal(JSON.parse(committed).participants[SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION].status,
+    SPLIT_ACK_STATUS.CATCHUP_READY);
 });

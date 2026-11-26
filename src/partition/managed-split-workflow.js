@@ -512,7 +512,9 @@ class ManagedSplitWorkflow {
           assertCurrentAttempt();
           return {...current,
             status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-            metadata: {...current.metadata, ...planDelta}};
+            metadata: {...current.metadata, ...planDelta,
+              splitIssuedChildren: [splitPlan.leftPartition.partitionId,
+                splitPlan.rightPartition.partitionId]}};
         });
       const transitionMetadata = prepared.metadata;
 

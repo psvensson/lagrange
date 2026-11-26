@@ -45,7 +45,7 @@ import {
   refuseRecordChange,
 } from './managed-workflow-record-store.js';
 import {SPLIT_ACK_CHECKPOINT_FIELD} from './split-ack-constants.js';
-import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
+import {PARTITION_TRANSITION_STATE, workflowAttemptOf} from './partition-constants.js';
 import {
   TARGET_PROVISIONING,
   targetProvisioningOf,
@@ -62,7 +62,13 @@ const GROUP_MEMBER_CHECKPOINT_FIELD = Object.freeze({
 
 // Why a required member is still listed, owner side (the handler's typed
 // refusals ride along unchanged).
+function holdsRetirementSubject(workflow, evidence) {
+  return workflow?.workflowId === evidence.workflowId && workflow.tableId === evidence.tableId &&
+    workflowAttemptOf(workflow.metadata) === evidence.attempt && workflow.fenceToken === evidence.fenceToken;
+}
+
 const GROUP_MEMBER_REFUSAL = Object.freeze({
+  SUBJECT_MOVED: 'group-retirement-subject-moved',
   MEMBERSHIP_UNAVAILABLE: 'group-retirement-membership-unavailable',
   MEMBER_UNADDRESSABLE: 'group-retirement-member-unaddressable',
   PROGRESS_UNRECORDED: 'group-retirement-progress-unrecorded',
@@ -237,6 +243,9 @@ async function recordProgress(owner, group, fields) {
   const {participantKey} = group;
   const updated = await owner.workflowCoordinator.updateWorkflow(
     group.workflow.workflowId, (current) => {
+      if (!holdsRetirementSubject(current, group.evidence)) {
+        return refuseRecordChange(GROUP_MEMBER_REFUSAL.SUBJECT_MOVED, {superseded: true});
+      }
       const participant = current.participants.get(participantKey);
       if (!participant) {
         return refuseRecordChange(GROUP_MEMBER_REFUSAL.MEMBERSHIP_UNAVAILABLE);
@@ -396,8 +405,12 @@ async function addressBookOf(owner, group, required, partitionId) {
  * @return {Promise<string[]>} Every positively answered replica id.
  */
 async function retireFrozenGroupMembers(owner, {workflowId, participantKey,
-  partitionId, deliver}) {
+  partitionId, evidence, deliver}) {
   const workflow = owner.resolveWorkflowState(workflowId);
+  if (!holdsRetirementSubject(workflow, evidence)) {
+    throw Object.assign(new Error(GROUP_MEMBER_REFUSAL.SUBJECT_MOVED),
+      {superseded: true, unacknowledged: [], acknowledgedReplicaIds: []});
+  }
   if (!participantOf(workflow, participantKey)) {
     throw membershipUnavailableError(partitionId);
   }
@@ -406,7 +419,7 @@ async function retireFrozenGroupMembers(owner, {workflowId, participantKey,
   // pass; anyone else stops here as superseded.
   await assertWorkflowRecordHeld(owner, workflowId);
   // The projection after the renewal (the record's own participant).
-  const group = {workflow, participantKey,
+  const group = {workflow, evidence, participantKey,
     participant: participantOf(workflow, participantKey)};
   if (!group.participant) {
     throw membershipUnavailableError(partitionId);

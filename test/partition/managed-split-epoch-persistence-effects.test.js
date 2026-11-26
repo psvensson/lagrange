@@ -186,7 +186,7 @@ test('split sibling promotion refuses a zero-row partition epoch ' +
         return {success: true, affectedRows: 0};
       },
       async insertSystemTableRow() {
-        return {success: true};
+        return {success: true, affectedRows: 1};
       },
       async deleteSystemTableRow() {
         return {success: true};
@@ -376,11 +376,13 @@ test('split retry adopts a matching child and inserts only its missing peer', as
       state: 'NORMAL',
     },
   };
+  let cachedLeft;
   const acquisitions = [];
   const insertCalls = [];
   const {workflow} = buildWorkflow({
     transactionCoordinator: createTransactionCoordinator(),
-    getPartitionInfo: (partitionId) => partitionInfos[partitionId] || null,
+    getPartitionInfo: (partitionId) => partitionId === 'users-p-left' && cachedLeft ?
+      cachedLeft : partitionInfos[partitionId] || null,
     cdcIntegrationService: {
       async updateSystemTableRow(_tableName, where, data) {
         acquisitions.push({where, data});
@@ -420,7 +422,8 @@ test('split retry adopts a matching child and inserts only its missing peer', as
   });
 
   t.same(acquisitions, [{
-    where: {table_id: 'tbl-users', partition_version: 2, split_descriptor_attempt: 4,
+    where: {table_id: 'tbl-users', table_name: 'users', partition_key_start: null,
+      partition_key_end: 'm', partition_key_type: 'TEXT', partition_version: 2, split_descriptor_attempt: 4,
       partition_id: 'users-p-left'},
     data: {split_descriptor_attempt: 8},
   }]);
@@ -431,6 +434,14 @@ test('split retry adopts a matching child and inserts only its missing peer', as
     rightPartitionMetadata: {...childRow('users-p-right', 'm', null), split_descriptor_attempt: 4},
   }), {code: 'split_child_descriptor_owner_invalid'});
   t.equal(acquisitions.length, 1, 'an old attempt cannot acquire the successor row');
+  cachedLeft = {...partitionInfos['users-p-left']};
+  partitionInfos['users-p-left'].partition_key_end = 'z';
+  await t.rejects(workflow.ensureChildPartitionMetadata({
+    leftPartitionMetadata: childRow('users-p-left', null, 'm'),
+    rightPartitionMetadata: childRow('users-p-right', 'm', null),
+  }), {code: 'split_child_descriptor_write_refused'});
+  t.equal(partitionInfos['users-p-left'].partition_key_end, 'z',
+    'a matching cached attempt cannot authorize acquisition of a changed durable range');
   t.ok(
     partitionInfos['users-p-left'] && partitionInfos['users-p-right'],
     'both child rows must exist after recovery',

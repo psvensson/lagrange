@@ -1,3 +1,4 @@
+import {PRE_CUTOVER_SPLIT_STATES} from './managed-split-descriptor-cleanup.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
   phaseChange,
@@ -61,13 +62,16 @@ async function buildAcceptedSplitAckOutcome(owner, workflow, workflowId,
     workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
   let terminalCustody = null;
   let cutoverReadiness = null;
-  if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
-    owner.abortSplitOnSourceFailure(workflowId, ackStatus).catch((error) => {
+  if (ackResult.splitSourceFailure) {
+    owner.abortSplitOnSourceFailure(workflowId, ackResult.splitSourceFailure).catch((error) => {
       owner.logger.error(MANAGED_SPLIT_LOG_MSG.ABORT_DISPATCH_FAILED, {
         workflowId, ackStatus, error: error?.message || error,
       });
     });
     splitCutoverApplied = false;
+  } else if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
+    owner.logger.error(MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
+      {workflowId, status: workflow.status, ackStatus});
   }
   if (ackStatus === SPLIT_ACK_STATUS.CATCHUP_READY) {
     const outcome = await owner.resolveSplitCutoverOutcome(workflowId);
@@ -87,19 +91,6 @@ const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const MANAGED_SPLIT_MUTATION_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.CRITICAL,
 });
-
-/**
- * Workflow states from which the durable cutover may still be applied —
- * and, conversely, in which a source failure ack aborts the split
- * fail-safe (post-cutover failures cannot un-promote the epoch).
- * @type {ReadonlySet<string>}
- */
-const PRE_CUTOVER_SPLIT_STATES = Object.freeze(new Set([
-  PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
-  PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-  PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
-  PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
-]));
 
 /**
  * Lane-key suffix for runStep calls made INSIDE a FIFO owner-lane slot
@@ -385,8 +376,13 @@ class ManagedSplitWorkflowExecutionGateMethods {
       this, workflowId, ackResult, ackStatus);
     if (duplicateOutcome.handled) return duplicateOutcome.outcome;
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
-      await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult,
-        ack);
+      const failure = this.resolveWorkflowState(workflowId)?.metadata?.splitSourceFailure;
+      if (ackResult.result === PARTICIPANT_ACK_RESULT.DUPLICATE &&
+          failure?.status === ackStatus && failure.participantKey === ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]) {
+        await this.abortSplitOnSourceFailure(workflowId, failure);
+      } else {
+        await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult, ack);
+      }
       return this.buildRejectedSplitAckOutcome(workflowId, ackResult);
     }
 

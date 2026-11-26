@@ -1,9 +1,11 @@
+import {sameSourceFailure} from './managed-split-descriptor-cleanup.js';
+import {refuseRecordChange} from './managed-workflow-record-store.js';
 import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
-  abortChange,
+  RECORD_CHANGE_REFUSAL, abortChange,
   refusedStepAs,
 } from './managed-workflow-record-changes.js';
 import {
@@ -45,12 +47,15 @@ class ManagedSplitWorkflowAbortMethods {
    * @return {Promise<boolean>} True when the split is (now) aborted.
    * @private
    */
-  async abortSplitOnSourceFailure(workflowId, ackStatus) {
+  async abortSplitOnSourceFailure(workflowId, authorization) {
+    const ackStatus = authorization.status;
     const workflow = this.resolveWorkflowState(workflowId);
-    if (this.isSplitWorkflowStateUnavailable(workflow)) {
+    if (this.isSplitWorkflowStateUnavailable(workflow) ||
+        !sameSourceFailure(authorization, workflow.metadata?.splitSourceFailure)) {
       return false;
     }
     if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
+      this.groupRetirementRedrive.settle(workflowId, workflow.metadata.sourcePartitionId);
       return true;
     }
     if (!PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
@@ -65,8 +70,18 @@ class ManagedSplitWorkflowAbortMethods {
     // lane slot: nothing can interleave a cutover between them, and any
     // cutover step enqueued later re-validates against the FAILED
     // status.
-    return this.runSerializedOwnerStep(workflow.ownerKey, () =>
-      this.runSplitAbortStep(workflowId, workflow.ownerKey, ackStatus));
+    const partitionId = workflow.metadata.sourcePartitionId;
+    try {
+      const completed = await this.runSerializedOwnerStep(workflow.ownerKey, () =>
+        this.runSplitAbortStep(workflowId, workflow.ownerKey, authorization));
+      if (completed) this.groupRetirementRedrive.settle(workflowId, partitionId);
+      return completed;
+    } catch (error) {
+      this.groupRetirementRedrive.report({workflowId, partitionId, unacknowledged: [],
+        superseded: error?.superseded === true,
+        redrive: () => this.abortSplitOnSourceFailure(workflowId, authorization)});
+      throw error;
+    }
   }
 
   /**
@@ -84,14 +99,15 @@ class ManagedSplitWorkflowAbortMethods {
    * @return {Promise<boolean>} True when the split is (now) aborted.
    * @private
    */
-  async runSplitAbortStep(workflowId, ownerKey, ackStatus) {
+  async runSplitAbortStep(workflowId, ownerKey, authorization) {
+    const ackStatus = authorization.status;
     const abortOutcome = await this.workflowStepRunner.runStep({
       workflowId,
       ownerKey: ownerKey + SPLIT_OWNER_STEP_LANE_SUFFIX,
       stepName: PARTITION_TRANSITION_STATE.FAILED,
       execute: async ({workflow: currentWorkflow}) =>
         this.buildSplitAbortStepResult(workflowId, ackStatus, currentWorkflow, {
-          ownership: await this.renewSplitWorkflowOwnership(workflowId),
+          authorization, ownership: await this.renewSplitWorkflowOwnership(workflowId),
         }),
     }).catch(refusedStepAs(SPLIT_ABORT_OUTCOME.REFUSED_POST_CUTOVER));
 
@@ -99,7 +115,8 @@ class ManagedSplitWorkflowAbortMethods {
       return abortOutcome === SPLIT_ABORT_OUTCOME.ALREADY_ABORTED;
     }
     const abortedWorkflow = this.resolveWorkflowState(workflowId);
-    if (!this.isSplitWorkflowStateUnavailable(abortedWorkflow)) {
+    if (abortedWorkflow?.status === PARTITION_TRANSITION_STATE.FAILED &&
+        sameSourceFailure(authorization, abortedWorkflow.metadata.splitSourceFailure)) {
       await this.teardownAbortedSplitChildren(workflowId, abortedWorkflow);
       await this.restoreAbortedSplitSiblings(abortedWorkflow);
     }
@@ -137,6 +154,10 @@ class ManagedSplitWorkflowAbortMethods {
       );
       return {result: SPLIT_ABORT_OUTCOME.REFUSED_POST_CUTOVER};
     }
+    const failure = {classification: LOCAL_STR_SPLIT_SOURCE_EXECUTION_FAILURE,
+      message: ackStatus, failedAt: new Date(this.now()).toISOString(), retryable: true,
+      sourceFailure: options.authorization};
+    const abort = abortChange(PRE_CUTOVER_SPLIT_STATES, failure);
     return {
       nextStep: PARTITION_TRANSITION_STATE.FAILED,
       reason: PARTITION_TRANSITION_STATE.FAILED,
@@ -144,12 +165,9 @@ class ManagedSplitWorkflowAbortMethods {
       ownerId: options.ownership?.ownerId,
       // Re-checked on the record at the change's turn: FAILED already is
       // unchanged; a cutover that landed first refuses the abort.
-      change: abortChange(PRE_CUTOVER_SPLIT_STATES, {
-        classification: LOCAL_STR_SPLIT_SOURCE_EXECUTION_FAILURE,
-        message: ackStatus,
-        failedAt: new Date(this.now()).toISOString(),
-        retryable: true,
-      }),
+      change: (record) => sameSourceFailure(record.metadata.splitSourceFailure, options.authorization) &&
+        record.participants.get(options.authorization.participantKey)?.status === ackStatus ?
+        abort(record) : refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED),
       result: SPLIT_ABORT_OUTCOME.ABORTED,
     };
   }

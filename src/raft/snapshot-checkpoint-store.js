@@ -124,7 +124,7 @@ function readRaftRsCheckpoint(copyDb, groupId) {
   };
 }
 
-function prepareRaftRsCheckpointCopy(copyDb, groupId, entityKind) {
+function prepareRaftRsCheckpointCopy(copyDb, groupId, entity) {
   if (hasPendingPreparedParticipantTransactions(copyDb)) {
     return {gate: creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING,
       [RAFT_RS_CHECKPOINT_REASON.PREPARED_TRANSACTIONS])};
@@ -135,7 +135,7 @@ function prepareRaftRsCheckpointCopy(copyDb, groupId, entityKind) {
       [RAFT_RS_CHECKPOINT_REASON.BOUNDARY])};
   }
   const maxCommittedHlc = computeRaftRsMaxCommittedHlc(copyDb, groupId);
-  scrubRaftRsCheckpointPayload(copyDb, entityKind);
+  scrubRaftRsCheckpointPayload(copyDb, entity.kind, entity.id);
   return {
     gate: creationResult(CREATION.CREATED),
     watermarks: {committedIndex: Number(raftRsDescriptor.appliedIndex)},
@@ -223,7 +223,7 @@ async function createSqliteStateMachineCheckpoint(options) {
     let prepared;
     try {
       prepared = prepareRaftRsCheckpointCopy(
-        copyDb, raftRsGroupId, identity?.entity?.kind);
+        copyDb, raftRsGroupId, identity.entity);
     } finally {
       copyDb.close();
     }
