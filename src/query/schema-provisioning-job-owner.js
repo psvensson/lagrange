@@ -355,6 +355,7 @@ class SchemaProvisioningJobOwner {
     this.shuttingDown = false;
     this.workflowCoordinator = createWorkflowCoordinator(this, options);
     this.discoveryRetries = new Map();
+    this.discoveryReads = new Map();
   }
 
   setBackgroundJobSucceededHandler(handler) {
@@ -444,6 +445,7 @@ class SchemaProvisioningJobOwner {
     this.shuttingDown = true;
     for (const timer of this.discoveryRetries.values()) this.retryClearTimeoutFn(timer);
     this.discoveryRetries.clear();
+    this.discoveryReads.clear();
     this.retryCompletionHandlers.clear();
     for (const workflowId of [...this.retryTimersByWorkflowId.keys()]) {
       this.clearScheduledRetry(workflowId);
@@ -822,31 +824,49 @@ class SchemaProvisioningJobOwner {
     }));
   }
 
-  async discover(read, resume) {
-    if (this.shuttingDown) return [];
-    let rows;
-    try {
-      rows = await read.call(this);
-    } catch (error) {
-      if (!this.shuttingDown && !this.discoveryRetries.has(read)) {
-        const timer = this.retrySetTimeoutFn(() => {
-          if (this.discoveryRetries.get(read) !== timer) return;
-          this.discoveryRetries.delete(read);
-          void this.discover(read, resume).catch((failure) =>
-            this.logger?.warn?.(QUERY_LOG_MSG.SCHEMA_PROVISIONING_RECOVERY_DEFERRED,
-              {error: failure.message}));
-        }, this.retryAfterMs);
-        this.discoveryRetries.set(read, timer);
-        timer?.unref?.();
-      }
-      throw error;
-    }
-    if (this.shuttingDown) return [];
-    if (this.discoveryRetries.has(read)) {
-      this.retryClearTimeoutFn(this.discoveryRetries.get(read));
+  scheduleDiscovery(read, resume, delayMs) {
+    if (this.shuttingDown) return;
+    const timer = this.retrySetTimeoutFn(() => {
+      if (this.discoveryRetries.get(read) !== timer) return;
       this.discoveryRetries.delete(read);
-    }
-    return resume(rows);
+      this.discoveryReads.delete(read);
+      void this.discover(read, resume).catch((error) =>
+        this.logger?.warn?.(QUERY_LOG_MSG.SCHEMA_PROVISIONING_RECOVERY_DEFERRED,
+          {error: error.message}));
+    }, delayMs);
+    this.discoveryRetries.set(read, timer);
+    timer?.unref?.();
+  }
+
+  discover(read, resume) {
+    if (this.shuttingDown) return Promise.resolve([]);
+    const active = this.discoveryReads.get(read);
+    if (active) return active;
+    const scan = Promise.resolve().then(async () => {
+      if (this.shuttingDown) return [];
+      let rows;
+      try {
+        rows = await read.call(this);
+      } catch (error) {
+        this.scheduleDiscovery(read, resume, this.retryAfterMs);
+        throw error;
+      }
+      if (this.shuttingDown) return [];
+      // schema_operations does not propagate cache changes. Arm the next
+      // inventory before dispatch so a busy executor cannot stall discovery.
+      if (read === this.readNonterminalRows) {
+        this.scheduleDiscovery(read, resume, this.leaseMs);
+      }
+      return resume(rows);
+    }).finally(() => {
+      // A timer retains this scan for all activation triggers until it fires.
+      // An older execution can settle after the timer started its successor.
+      if (!this.discoveryRetries.has(read) && this.discoveryReads.get(read) === scan) {
+        this.discoveryReads.delete(read);
+      }
+    });
+    this.discoveryReads.set(read, scan);
+    return scan;
   }
 
   async readNonterminalRows() {
@@ -856,7 +876,8 @@ class SchemaProvisioningJobOwner {
 
   async resumeNonterminal(executor) {
     const [outcomes] = await Promise.all([
-      this.discover(this.readNonterminalRows, (rows) => this.resumeRows(rows, executor)),
+      this.discover(this.readNonterminalRows,
+        (rows) => this.resumeRows(rows, executor)),
       this.discover(this.listSucceededGlobalIndexIntents,
         (intents) => this.resumeSucceededGlobalIndexContinuations(intents)),
     ]);
@@ -866,6 +887,8 @@ class SchemaProvisioningJobOwner {
   async resumeRows(rows, executor) {
     const executions = [];
     for (const {row, intent} of rows) {
+      if (this.retryTimersByWorkflowId.has(intent.workflowId) ||
+          this.workflowCoordinator.hasInFlightExecution(intent.ownerKey)) continue;
       executions.push(this.workflowCoordinator.runExclusive(
         intent.ownerKey,
         () => {

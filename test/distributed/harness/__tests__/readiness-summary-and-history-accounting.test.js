@@ -319,7 +319,7 @@ describe('readiness summary and canonical history outcome accounting', () => {
     async () => {
       let attempt = 1;
       const {ctx, now, sshRun} = createStageObservationContext({
-        inFlightCount: () => attempt === 5 ? 1 : 0,
+        inFlightCount: () => attempt === 8 ? 1 : 0,
       });
       const roles = arrayMap([1, 2, 3], (n) => ({
         host: `10.166.0.1${n}`,
@@ -328,7 +328,7 @@ describe('readiness summary and canonical history outcome accounting', () => {
       const sqlAttempts = [];
       const factsAttempts = [];
       const laneAttempts = [];
-      ctx.budget.attempts = 7;
+      ctx.budget.attempts = 10;
       ctx.sleep = async () => { attempt++; };
       ctx.sshRun = async (host, opts, command, timeoutMs) => {
         if (stringIncludes(command, '/management/v1/facts')) {
@@ -351,18 +351,51 @@ describe('readiness summary and canonical history outcome accounting', () => {
         if (attempt === 1 && stringIncludes(sql, 'FROM services')) return [];
         return healthyQuery(sql);
       }, roles);
-      assert.equal(ready.attempts, 7);
-      assert.deepEqual(factsAttempts, [2, 3, 4, 5]);
-      assert.deepEqual(sqlAttempts, [1, 5, 6, 7].flatMap((n) => Array(4).fill(n)));
-      assert.deepEqual(laneAttempts, [1, 5, 6, 7].flatMap((n) => Array(3).fill(n)));
+      assert.equal(ready.attempts, 10);
+      assert.deepEqual(factsAttempts, [2, 3, 4, 8]);
+      assert.deepEqual(sqlAttempts, [1, 8, 9, 10].flatMap((n) => Array(4).fill(n)));
+      assert.deepEqual(laneAttempts, [1, 8, 9, 10].flatMap((n) => Array(3).fill(n)));
       assert.equal(ready.evidence.sampling.sqlBatches, 4);
       assert.equal(ready.evidence.sampling.factsChecks, 4);
     });
 
+  it('defers repeat positive facts but forces refresh at attempt 15 and fresh quiet polls', async () => {
+    const {ctx, now, sshRun} = createStageObservationContext();
+    let attempt = 1;
+    const facts = [];
+    const batches = [];
+    const lanes = [];
+    Object.assign(ctx.budget, {attempts: 17, stablePolls: 3});
+    ctx.sleep = async () => { attempt++; };
+    ctx.sshRun = async (host, opts, command, timeout) => {
+      if (command.includes('/management/v1/facts')) {
+        facts.push(attempt);
+        return JSON.stringify({facts: {topology: {state: 'observed',
+          underReplicatedPartitionCount: 1}}}) + '\nhttp_status=200';
+      }
+      if (command.includes('/api/admin/control-snapshot')) lanes.push(attempt);
+      return sshRun(host, opts, command, timeout);
+    };
+    const roles = [1, 2, 3].map((n) => ({host: `10.166.0.1${n}`,
+      nodeId: `00000000-0000-4000-8000-00000000000${n}`}));
+    const query = createSystemTableQueryStub(now);
+    const ready = await clusterReady(ctx, 'lagrange-system-tables', (sql) => {
+      if (sql.includes('FROM services')) {
+        batches.push(attempt);
+        if (attempt === 1) return [];
+      }
+      return query(sql);
+    }, roles);
+    assert.deepEqual(facts, [2, 6, 10, 14, 15]);
+    assert.deepEqual(batches, [1, 15, 16, 17]);
+    assert.deepEqual(lanes, [1, 15, 16, 17].flatMap((n) => Array(3).fill(n)));
+    assert.equal(ready.evidence.sampling.factsDeferred, 9);
+  });
+
   it('retains the observed under-replication and probe costs on facts exhaustion', async () => {
     const {ctx, now, sshRun} = createStageObservationContext();
     let attempt = 1;
-    ctx.budget.attempts = 3;
+    ctx.budget.attempts = 6;
     ctx.sleep = async () => { attempt++; };
     ctx.sshRun = async (host, opts, command, timeoutMs) => {
       if (!stringIncludes(command, '/management/v1/facts')) {
@@ -385,6 +418,8 @@ describe('readiness summary and canonical history outcome accounting', () => {
       assert.equal(lastProbeError.reason, 'replication_topology_unavailable');
       assert.equal(lastProbeError.sampling.factsChecks, 2);
       assert.equal(lastProbeError.sampling.sqlBatches, 1);
+      assert.equal(error.diagnostic.completedAttempts, 2);
+      assert.equal(error.diagnostic.sampling.factsDeferred, 3);
       return true;
     });
   });

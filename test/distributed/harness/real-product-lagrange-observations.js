@@ -790,6 +790,7 @@ function recordTableRoutability(tableReadyAt, tables, context) {
 }
 
 const SYSTEM_TABLE_FACTS_PRECHECK_REFRESH_INTERVAL = 15;
+const UNDER_REPLICATION_FACTS_STRIDE = 4;
 
 async function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
   const expectedNodeIds = arrayMap(nodeRoles, (role) => role.nodeId);
@@ -799,10 +800,18 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
   const seedHost = nodeRoles[0]?.host ?? null;
   let lastTablesObservedAt = null;
   let lastVerdictReady = false;
-  const sampling = {factsChecks: 0, factsElapsedMs: 0, sqlBatches: 0, sqlElapsedMs: 0};
+  let nextFactsAttempt = 0;
+  const sampling = {factsStride: UNDER_REPLICATION_FACTS_STRIDE, factsDeferred: 0,
+    factsChecks: 0, factsElapsedMs: 0, sqlBatches: 0, sqlElapsedMs: 0};
   const readiness = await readinessOf(ctx, component, async (pollContext) => {
     const attempt = pollContext?.attempt ?? 1;
     if (requiredTables === null && lastTablesObservedAt !== null && !lastVerdictReady) {
+      const refreshDue = attempt % SYSTEM_TABLE_FACTS_PRECHECK_REFRESH_INTERVAL === 0;
+      if (!refreshDue && attempt < nextFactsAttempt) {
+        sampling.factsDeferred++;
+        return {ready: false, deferredObservation: true, diagnostic: null};
+      }
+      nextFactsAttempt = 0;
       const factsStartedAt = clock();
       sampling.factsChecks++;
       const answer = await getFacts(ctx, seedHost, pollContext);
@@ -812,8 +821,8 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
         return {...failure, diagnostic: {...failure.diagnostic, sampling: {...sampling}}};
       }
       const {underReplicatedPartitionCount} = answer.json.facts.topology;
-      if (underReplicatedPartitionCount > 0 &&
-          attempt % SYSTEM_TABLE_FACTS_PRECHECK_REFRESH_INTERVAL !== 0) {
+      if (underReplicatedPartitionCount > 0 && !refreshDue) {
+        nextFactsAttempt = attempt + UNDER_REPLICATION_FACTS_STRIDE;
         return {ready: false, diagnostic: {
           denials: ['under_replicated_partitions'],
           underReplicatedPartitionCount,
@@ -881,7 +890,10 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
         tableTimeToRoutableMs: {...tableReadyAt},
       },
     };
-  }, ctx.budget.stablePolls);
+  }, ctx.budget.stablePolls).catch((error) => {
+    if (error.diagnostic) error.diagnostic.sampling = {...sampling};
+    throw error;
+  });
   const enriched = requiredTables ?
     {...readiness, tableTimeToRoutableMs: {...tableReadyAt}} :
     readiness;

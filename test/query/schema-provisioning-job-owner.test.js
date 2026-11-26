@@ -562,7 +562,7 @@ for (const recreateOwner of [false, true]) {
     refusal = {epoch: {publicationEpoch: 8},
       reasons: ['committed_lease_unavailable'], retryAfterMs: 275};
     if (recreateOwner) {
-      timers.at(-1).callback();
+      service.schemaProvisioningJobOwner.retryTimersByWorkflowId.get(jobId).timerId.callback();
       for (let turn = 0; turn < 100; turn += 1) {
         await new Promise((resolve) => setImmediate(resolve));
         if (provisionCalls.length === 2 &&
@@ -581,7 +581,7 @@ for (const recreateOwner of [false, true]) {
     t.equal(provisionCalls.length, 2, 'latest refusal comes from a new attempt');
 
     quorumAvailable = true;
-    timers.at(-1).callback();
+    service.schemaProvisioningJobOwner.retryTimersByWorkflowId.get(jobId).timerId.callback();
     for (let turn = 0; turn < 100; turn += 1) {
       if (gateway.rows.get(jobKey).status === 'SUCCEEDED') break;
       await new Promise((resolve) => setImmediate(resolve));
@@ -715,6 +715,7 @@ test('durable schema job resumes after crash immediately after intent insert',
 
     const resumedCalls = [];
     const resumedOwner = createService(gateway, resumedCalls);
+    t.teardown(() => resumedOwner.shutdown());
     const [result] = await resumedOwner.resumeDurableProvisioningJobs();
     t.equal(result.contractState, OWNER_CONTRACT_STATE.READY,
       'READY activation resumes the authoritative nonterminal job');
@@ -774,6 +775,7 @@ test('durable schema recovery preserves NOT NULL DEFAULT metadata identity',
       now: () => now.value,
       schemaProvisioningOwnerId: 'schema-worker-restart',
     });
+    t.teardown(() => resumedOwner.shutdown());
     const [result] = await resumedOwner.resumeDurableProvisioningJobs();
 
     t.equal(result.contractState, OWNER_CONTRACT_STATE.READY,
@@ -825,6 +827,7 @@ test('durable schema recovery preserves COLLATE and CHECK metadata identity',
       now: () => now.value,
       schemaProvisioningOwnerId: 'schema-worker-restart',
     });
+    t.teardown(() => resumedOwner.shutdown());
     const [result] = await resumedOwner.resumeDurableProvisioningJobs();
     t.equal(result.contractState, OWNER_CONTRACT_STATE.READY);
     const tableRow = gateway.rows.get(`tables:${result.tableId}`);
@@ -1313,10 +1316,12 @@ test('READY recovery retains both unavailable scans and shutdown cancels discove
   t.equal(calls.length, 1, 'recovered without a new CREATE or activation');
   t.same(continued, [index.jobId], 'succeeded index continuation was rediscovered');
 
+  const periodic = owner.discoveryRetries.get(owner.readNonterminalRows);
   available = false;
+  periodic.callback();
   await engine.activateDistributedTransactionRecovery();
   await new Promise((resolve) => setImmediate(resolve));
-  const outstanding = timers.slice(2);
+  const outstanding = [...owner.discoveryRetries.values()];
   t.equal(outstanding.length, 2);
   await service.shutdown();
   for (const timer of outstanding) {
@@ -1454,9 +1459,11 @@ for (const interruption of ['lost reply', 'expired lease', 'transient refusal'])
     t.same(reconciledFences, [expectedFence], 'rereads the committed claim after discovery');
     t.equal(observed.status, 'PENDING');
     t.equal(provisioned.length, 0);
-    t.equal(clock.timers.length, 1);
-
-    await clock.advance(clock.timers[0].at - clock.now);
+    const owner = service.schemaProvisioningJobOwner;
+    const retry = owner.retryTimersByWorkflowId.get(intent.workflowId).timerId;
+    t.equal(owner.discoveryRetries.size, 1, 'one lease-period inventory wake');
+    t.equal(clock.timers.filter((timer) => !timer.cleared).length, 2, 'inventory and per-job wake');
+    await clock.advance(retry.at - clock.now);
     const completed = gateway.rows.get(key);
     t.equal(completed.status, 'SUCCEEDED');
     t.equal(completed.workflow_fence_token, expectedFence + 1);
@@ -1479,15 +1486,154 @@ test('a committed claim rejection is propagated without scheduling takeover', as
   gateway.submitMutation = async () => { throw rejection; };
   await t.rejects(service.resumeDurableProvisioningJobs(), rejection);
 
+  const second = createService(gateway, provisioned);
+  t.teardown(() => second.shutdown());
   gateway.submitMutation = async () => ({
     success: false, error: rejection.message, committed: true, outcome: rejection.outcome,
     failureCode: rejection.failureCode,
   });
-  await t.rejects(service.resumeDurableProvisioningJobs(), {
+  await t.rejects(second.resumeDurableProvisioningJobs(), {
     message: rejection.message, committed: true, failureCode: rejection.failureCode,
   });
   t.equal(owner.retryTimersByWorkflowId.size, 0);
-  t.equal(owner.discoveryRetries.size, 0);
+  t.same([...owner.discoveryRetries.keys()], [owner.readNonterminalRows],
+    'only the regular inventory wake is armed');
   t.equal(provisioned.length, 0);
   t.equal(gateway.rows.get('schema_operations:' + intent.jobId).workflow_fence_token, 0);
+});
+
+test('READY owner discovers a CREATE accepted during its empty scan and waits for the remote lease', async (t) => {
+  const gateway = createGateway();
+  const clock = createServeRefreshClock();
+  const timing = {
+    now: () => clock.now, schemaProvisioningLeaseMs: 4000,
+    schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+    schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
+  };
+  const calls = [];
+  const survivor = createService(gateway, calls, {...timing, schemaProvisioningOwnerId: 'survivor',
+    schemaProvisioningLeaseMs: 2000});
+  const stalled = Promise.withResolvers();
+  const entered = Promise.withResolvers();
+  const original = createService(gateway, [], {...timing, schemaProvisioningOwnerId: 'original',
+    async partitionProvisioner() {
+      entered.resolve();
+      await stalled.promise;
+      return {resolvedReplicaCount: 3, routableReplicaCount: 3, committedReplicaCount: 3,
+        fullReplicaCountConverged: true, contractState: 'ready', nextAction: 'proceed'};
+    }});
+  t.teardown(() => original.shutdown());
+  t.teardown(() => survivor.shutdown());
+  const read = gateway.readRows.bind(gateway);
+  const snapshot = Promise.withResolvers();
+  const deliver = Promise.withResolvers();
+  let scans = 0;
+  gateway.readRows = async (table, sql, params, options) => {
+    const result = await read(table, sql, params, options);
+    if (table === TABLES.SCHEMA_OPERATIONS && sql.includes('NOT IN') && ++scans === 1) {
+      snapshot.resolve();
+      await deliver.promise;
+    }
+    return result;
+  };
+  const activation = survivor.resumeDurableProvisioningJobs();
+  await snapshot.promise;
+  const duplicate = survivor.resumeDurableProvisioningJobs();
+  const submitting = original.createTable(createAst());
+  await entered.promise;
+  const intent = canonicalizeSchemaProvisioningIntent(createAst());
+  const key = 'schema_operations:' + intent.jobId;
+  const held = {...gateway.rows.get(key)};
+  deliver.resolve();
+  await Promise.all([activation, duplicate]);
+  t.equal(scans, 1, 'overlapping activations share the same empty snapshot');
+  const wake = survivor.schemaProvisioningJobOwner.discoveryRetries.get(
+    survivor.schemaProvisioningJobOwner.readNonterminalRows);
+  await survivor.resumeDurableProvisioningJobs();
+  t.equal(scans, 1, 'reactivation while armed waits for the same lease-period boundary');
+  t.same(clock.timers.filter((timer) => !timer.cleared), [wake], 'one unchanged inventory wake');
+  await clock.advance(2000);
+  t.equal(scans, 2, 'same READY observer discovers the later accepted job');
+  t.equal(survivor.schemaProvisioningJobOwner.retryTimersByWorkflowId.size, 1);
+  await clock.advance(held.workflow_lease_expires_at - clock.now - 1);
+  t.equal(calls.length, 0);
+  await clock.advance(1);
+  const completed = gateway.rows.get(key);
+  t.equal(completed.status, 'SUCCEEDED');
+  t.equal(calls.length, 1, 'discovery and lease timer coalesce to one execution');
+  t.equal(completed.table_id, held.table_id);
+  t.equal(completed.workflow_fence_token, held.workflow_fence_token + 1);
+  stalled.resolve();
+  await submitting;
+});
+
+test('shutdown during an authoritative recovery scan disarms later execution and discovery', async (t) => {
+  const gateway = createGateway();
+  const calls = [];
+  const clock = createServeRefreshClock();
+  const service = createService(gateway, calls, {
+    now: () => clock.now, schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+    schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
+  });
+  const owner = service.schemaProvisioningJobOwner;
+  await owner.insertOrAttach(canonicalizeSchemaProvisioningIntent(createAst()));
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const read = gateway.readRows.bind(gateway);
+  gateway.readRows = async (table, sql, params, options) => {
+    const result = await read(table, sql, params, options);
+    if (table === TABLES.SCHEMA_OPERATIONS && sql.includes('NOT IN')) {
+      entered.resolve();
+      await release.promise;
+    }
+    return result;
+  };
+  const activation = service.resumeDurableProvisioningJobs();
+  await entered.promise;
+  await service.shutdown();
+  release.resolve();
+  await activation;
+  t.equal(clock.timers.length, 0);
+  t.equal(calls.length, 0);
+});
+
+test('one lease scan continues discovering independent work while a recovered job is running', async (t) => {
+  const gateway = createGateway();
+  const clock = createServeRefreshClock();
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const attempts = [];
+  const service = createService(gateway, [], {
+    now: () => clock.now, schemaProvisioningLeaseMs: 2000,
+    schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+    schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
+    async partitionProvisioner(context) {
+      attempts.push(context.tableName);
+      if (context.tableName === 'users') {
+        started.resolve();
+        await release.promise;
+      }
+      return {resolvedReplicaCount: 3, routableReplicaCount: 3, committedReplicaCount: 3,
+        fullReplicaCountConverged: true, contractState: 'ready', nextAction: 'proceed'};
+    },
+  });
+  t.teardown(() => service.shutdown());
+  const owner = service.schemaProvisioningJobOwner;
+  await owner.insertOrAttach(canonicalizeSchemaProvisioningIntent(createAst()));
+  const first = service.resumeDurableProvisioningJobs();
+  await started.promise;
+  const duplicate = service.resumeDurableProvisioningJobs();
+  const other = canonicalizeSchemaProvisioningIntent({...createAst(), tableName: 'orders'});
+  await owner.insertOrAttach(other);
+  await clock.advance(2000);
+  t.same(attempts, ['users', 'orders']);
+  t.equal(gateway.rows.get('schema_operations:' + other.jobId).status, 'SUCCEEDED');
+  t.equal(clock.timers.filter((timer) => !timer.cleared).length, 1);
+  release.resolve();
+  const [outcomes, shared] = await Promise.all([first, duplicate]);
+  t.same(shared, outcomes);
+  await clock.advance(2000);
+  t.same(attempts, ['users', 'orders']);
+  await service.shutdown();
+  t.equal(clock.timers.filter((timer) => !timer.cleared).length, 0);
 });
