@@ -27,7 +27,8 @@ import {createHash} from 'node:crypto';
 // `command_digest` (committedCommandDigest): the CHECK makes an owner result
 // without its identity, or an identity without a result, impossible to write.
 // `last_insert_rowid` is only ever the inserted-row identity of an SQL
-// statement (the nullable insert-result contract).
+// statement (the nullable insert-result contract). mirror_effect_required marks
+// captured changes whose replay bytes must survive above a protected cursor.
 const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
   TABLE: '_partition_statement_outcomes',
   CREATE_TABLE: `
@@ -42,22 +43,23 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
         last_insert_rowid INTEGER,
         owner_result_text TEXT,
         command_digest TEXT,
+        mirror_effect_required INTEGER NOT NULL CHECK (mirror_effect_required IN (0, 1)),
         CHECK ((owner_result_text IS NULL) = (command_digest IS NULL))
       )
     `,
   SELECT_BY_ENTRY_KEY:
     'SELECT outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text, command_digest ' +
+    'changes, last_insert_rowid, owner_result_text, command_digest, mirror_effect_required ' +
     'FROM _partition_statement_outcomes WHERE entry_key = ?',
   SELECT_ALL:
     'SELECT entry_key, outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text, command_digest ' +
+    'changes, last_insert_rowid, owner_result_text, command_digest, mirror_effect_required ' +
     'FROM _partition_statement_outcomes ORDER BY log_index, entry_key',
   INSERT:
     'INSERT INTO _partition_statement_outcomes ' +
     '(entry_key, outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text, command_digest) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'changes, last_insert_rowid, owner_result_text, command_digest, mirror_effect_required) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   TABLE_COLUMNS: 'PRAGMA table_info(_partition_statement_outcomes)',
   // The store-open format probe: proves the table is readable without
   // reading a row; the decision is the table's definition (CREATE_TABLE).
@@ -74,7 +76,7 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
 // Such a data directory is re-founded (docs/operations-readiness.md).
 const PARTITION_COMMITTED_STATEMENT_COLUMNS = Object.freeze([
   'entry_key', 'outcome', 'log_index', 'term', 'failure_code', 'failure_message',
-  'changes', 'last_insert_rowid', 'owner_result_text', 'command_digest',
+  'changes', 'last_insert_rowid', 'owner_result_text', 'command_digest', 'mirror_effect_required',
 ]);
 
 // The format decision at store open (detectCommittedStatementOutcomeFormat).

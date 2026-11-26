@@ -4,28 +4,20 @@
  * snapshot backfill) and the replay watermark (the highest log index
  * whose delta has been mirrored to the target). Both are persisted with
  * the transition metadata via the source ack checkpoint so a restarted
- * source replays deltas from the durable Raft log — never from the
- * volatile in-memory pendingEntries array. The durable Raft log is the
- * rs-raft durable store (partition-committed-log.js).
+ * source replays the committed statement effects and commands retained by
+ * the partition state machine, including across snapshot installation.
  */
 
+import {readMirrorReplayCommandsIn} from './partition-mirror-effect-retention.js';
 import {TABLES} from '../constants/tables.js';
-import {
-  PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
-} from './partition-committed-statement-outcome-constants.js';
+import {assertAppliedMirrorEffect} from './partition-mirror-custody-codec.js';
 import {
   committedStatementEntryKey,
-  pruneSettledMirrorOutcomeEffects,
   readCommittedStatementOutcome,
 } from './partition-committed-statement-outcome.js';
 import {
   readPartitionAppliedIndex,
-  readPartitionCommittedCommands,
 } from './partition-committed-log.js';
-import {
-  PARTITION_COMMITTED_COMMAND_OUTCOME,
-  PARTITION_SERVICE_OPERATION,
-} from './partition-service-constants.js';
 import {decodeTypedParams} from '../query/sql-value-codec.js';
 
 /**
@@ -93,45 +85,9 @@ function buildReplayCursorCheckpoint(
   };
 }
 
-/**
- * The operation types whose committed log entries carry mirrorable
- * writes (mirrors the applyCommittedEntry predicate in
- * partition-service-entry-apply-base.js).
- */
-const MIRRORABLE_LOG_OPERATION_TYPES = Object.freeze(new Set([
-  PARTITION_SERVICE_OPERATION.WRITE,
-  PARTITION_SERVICE_OPERATION.INSERT,
-  PARTITION_SERVICE_OPERATION.UPDATE,
-  PARTITION_SERVICE_OPERATION.DELETE,
-  PARTITION_SERVICE_OPERATION.UPSERT,
-  PARTITION_SERVICE_OPERATION.QUERY,
-]));
-
-/**
- * Load the durable deltas behind the persisted replay watermark from
- * the source partition's rs-raft log: every applied write entry with
- * `index > watermarkIndex`, in log order, each stamped with
- * its logIndex so the drain advances the watermark per delivery.
- * Returns an empty list when the partition has no open database or no
- * watermark is available — the caller then falls back to the volatile
- * queue only for writes that arrive AFTER resumption.
- * @param {Object} service - PartitionService-like context.
- * @param {number|null} watermarkIndex - Persisted replay watermark.
- * @return {Array<Object>}
- */
-function appendAppliedDeltaAtLogIndex(service, command, logIndex, deltas) {
-  const entryKey = committedStatementEntryKey(command);
-  if (!entryKey) {
-    return;
-  }
-  const recorded = readCommittedStatementOutcome(service, entryKey);
-  if (
-    recorded.state !== PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED ||
-    recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED ||
-    recorded.logIndex !== logIndex
-  ) {
-    return;
-  }
+function appendAppliedDeltaAtLogIndex(service, command, logIndex, previousIndex, deltas) {
+  const recorded = readCommittedStatementOutcome(service, committedStatementEntryKey(command));
+  assertAppliedMirrorEffect(command, logIndex, previousIndex, recorded.affectedRows?.length, recorded);
   deltas.push({
     ...command,
     ...(command?.typedParams ?
@@ -157,16 +113,11 @@ function loadDurableDeltasBehindWatermark(service, watermarkIndex) {
   if (!service?.db?.open) {
     return [];
   }
-  pruneSettledMirrorOutcomeEffects(service, watermarkIndex);
   const deltas = [];
-  for (const entry of readPartitionCommittedCommands(service)) {
-    const logIndex = Number(entry.index);
-    const command = entry.command;
-    if (logIndex <= watermarkIndex ||
-      !MIRRORABLE_LOG_OPERATION_TYPES.has(command?.type)) {
-      continue;
-    }
-    appendAppliedDeltaAtLogIndex(service, command, logIndex, deltas);
+  let previousIndex = watermarkIndex;
+  for (const entry of readMirrorReplayCommandsIn(service.db, watermarkIndex)) {
+    appendAppliedDeltaAtLogIndex(service, entry.command, entry.index, previousIndex, deltas);
+    previousIndex = entry.index;
   }
   return deltas;
 }

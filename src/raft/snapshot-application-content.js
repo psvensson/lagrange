@@ -1,3 +1,9 @@
+import {assertMirrorReplayCoverageIn} from '../partition/partition-mirror-effect-retention.js';
+import {assertAppliedMirrorEffect, decodeMirrorCustodyRow, decodeMirrorReplayRecord} from '../partition/partition-mirror-custody-codec.js';
+import {detectCommittedStatementOutcomeFormat} from '../partition/partition-committed-statement-format.js';
+import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, PARTITION_COMMITTED_STATEMENT_FORMAT,
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
+  '../partition/partition-committed-statement-outcome-constants.js';
 // Application and durable partition table policy for raft-rs replica-image
 // checkpoints (SN1 / F5). Separates partition state-machine payloads (which
 // preserve user tables and canonical partition metadata tables while scrubbing
@@ -14,8 +20,6 @@ const RAFT_RS_PEER_TABLE = 'raft_rs_peer_identity';
 const RAFT_INTERNAL_TABLE_PREFIX = '_raft_';
 const PARTICIPANT_TRANSACTIONS_TABLE = '_participant_transactions';
 const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
-const MIRROR_RETENTION_BARRIER_ENTRY_KEY = '__mirror_retention_barrier__';
-const MIRROR_RETENTION_BARRIER_KIND = 'PINNED';
 const PREPARED_PARTICIPANT_STATE = 'PREPARED';
 const IDENTIFIER_QUOTE = '"';
 const IDENTIFIER_ESCAPED_QUOTE = '""';
@@ -30,8 +34,6 @@ const SELECT_RAFT_LOCAL_TABLES_SQL =
   'SELECT name FROM sqlite_master WHERE type = \'table\' AND name LIKE \'_raft_%\'';
 const SELECT_USER_TABLES_SQL =
   'SELECT name FROM sqlite_master WHERE type = \'table\'';
-const DELETE_SETTLED_OUTCOME_EFFECTS_SQL =
-  `DELETE FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} WHERE log_index > 0`;
 const SELECT_OUTCOME_EFFECTS_ROWS_SQL =
   'SELECT entry_key, log_index, mutation_kind, typed_effects_json ' +
   `FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE}`;
@@ -103,35 +105,52 @@ function computeRaftRsMaxCommittedHlc(copyDb, groupId) {
  * @param {Object} copyDb - Open better-sqlite3 checkpoint copy.
  * @param {string} [entityKind] - Descriptor entity kind.
  */
-function isValidRetainedCustodyRow(row) {
-  return Boolean(
-    row &&
-    row.entry_key === MIRROR_RETENTION_BARRIER_ENTRY_KEY &&
-    Number(row.log_index) === 0 &&
-    row.mutation_kind === MIRROR_RETENTION_BARRIER_KIND &&
-    typeof row.typed_effects_json === 'string' &&
-    row.typed_effects_json.length > 0,
+function validatePinnedReplayRows(db) {
+  const pin = db.prepare(SELECT_OUTCOME_EFFECTS_ROWS_SQL + ' WHERE entry_key = ?')
+    .get(MIRROR_RETENTION_BARRIER_ENTRY_KEY);
+  if (!pin) return false;
+  const custody = decodeMirrorCustodyRow(pin);
+  assertMirrorReplayCoverageIn(db, custody.barrierIndex);
+  const rows = db.prepare(
+    'SELECT e.entry_key, e.log_index, e.mutation_kind, e.typed_effects_json, ' +
+    'o.outcome, o.log_index AS outcome_index, o.changes, o.mirror_effect_required ' +
+    `FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} e ` +
+    `LEFT JOIN ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} o ON o.entry_key = e.entry_key ` +
+    'WHERE e.entry_key != ? ORDER BY e.log_index',
   );
+  let previousIndex = custody.barrierIndex;
+  for (const row of rows.iterate(MIRROR_RETENTION_BARRIER_ENTRY_KEY)) {
+    const {command, typedEffects} = decodeMirrorReplayRecord(row);
+    assertAppliedMirrorEffect(command, row.log_index, previousIndex, typedEffects.rows.length, {
+      mutationKind: row.mutation_kind,
+      outcome: row.outcome,
+      logIndex: row.outcome_index,
+      changes: row.changes,
+      mirrorEffectRequired: row.mirror_effect_required,
+    });
+    previousIndex = row.log_index;
+  }
+  return true;
 }
 
 function scrubStatementOutcomeEffectsTable(copyDb, entityKind) {
-  const present = copyDb.prepare(SELECT_TABLE_PRESENT_SQL)
-    .get(STATEMENT_OUTCOME_EFFECTS_TABLE);
-  if (!present) return;
-  if (entityKind === ENTITY_TYPE.PARTITION) {
-    copyDb.exec(DELETE_SETTLED_OUTCOME_EFFECTS_SQL);
-    const remainingRows = copyDb.prepare(SELECT_OUTCOME_EFFECTS_ROWS_SQL).all();
-    if (remainingRows.length === 1 && isValidRetainedCustodyRow(remainingRows[0])) {
-      return;
-    }
+  if (!copyDb.prepare(SELECT_TABLE_PRESENT_SQL).get(STATEMENT_OUTCOME_EFFECTS_TABLE)) return;
+  if (entityKind === ENTITY_TYPE.PARTITION && copyDb.prepare(
+    SELECT_OUTCOME_EFFECTS_ROWS_SQL + ' WHERE entry_key = ?',
+  ).get(MIRROR_RETENTION_BARRIER_ENTRY_KEY)) {
+    if (!validatePinnedReplayRows(copyDb)) throw new Error('Invalid pinned mirror replay rows');
+    return;
   }
-  copyDb.exec(`DROP TABLE IF EXISTS ${quotedIdentifier(STATEMENT_OUTCOME_EFFECTS_TABLE)}`);
+  copyDb.exec(`DROP TABLE ${quotedIdentifier(STATEMENT_OUTCOME_EFFECTS_TABLE)}`);
 }
 
 function hasValidPayloadStatementOutcomeEffectsTable(payloadDb, tables) {
   if (!tables.includes(STATEMENT_OUTCOME_EFFECTS_TABLE)) return true;
-  const rows = payloadDb.prepare(SELECT_OUTCOME_EFFECTS_ROWS_SQL).all();
-  return rows.length === 1 && isValidRetainedCustodyRow(rows[0]);
+  try {
+    return validatePinnedReplayRows(payloadDb);
+  } catch {
+    return false;
+  }
 }
 
 function scrubRaftRsCheckpointPayload(copyDb, entityKind) {
@@ -170,7 +189,9 @@ function validateRaftRsPayloadTables(payloadDb, descriptor) {
     .map(({name}) => name)
     .filter((name) => !name.startsWith('sqlite_'));
   if (descriptor.entity?.kind === ENTITY_TYPE.PARTITION) {
-    if (!tables.includes(RAFT_RS_PEER_TABLE)) {
+    if (!tables.includes(RAFT_RS_PEER_TABLE) ||
+        detectCommittedStatementOutcomeFormat(payloadDb).outcome ===
+          PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
       return false;
     }
     if (tables.some((name) => name.startsWith(RAFT_INTERNAL_TABLE_PREFIX)) ||

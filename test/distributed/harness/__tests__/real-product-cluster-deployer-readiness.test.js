@@ -72,6 +72,22 @@ test('D05/J7: Lagrange readiness never reached throws readiness_exhausted with t
     'no workload or proof process starts on an unready cluster');
 });
 
+test('membership requires formation for the deployed number of hosts', async () => {
+  for (const formation of [undefined, {state: 'FORMED', declaredHostCount: 1}]) {
+    const ledger = createContainerLedger();
+    const {sshRun} = createScriptedSsh([
+      [/\/management\/v1\/facts/u, http(200, {facts: {
+        cluster: {formation}, release: {version: '0.4.0'},
+        topology: {state: 'observed', readyNodeCount: HOSTS.length, underReplicatedPartitionCount: 0},
+      }})],
+      ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+    ]);
+    await assert.rejects(deployers.deployLagrangeCluster(baseInput(sshRun)),
+      (error) => error.code === 'readiness_exhausted' &&
+        error.diagnostic.component === 'lagrange-membership');
+  }
+});
+
 test('D05: PostgreSQL pg_isready exhaustion throws readiness_exhausted', {timeout: 300000},
   async () => {
     const ledger = createContainerLedger();
@@ -332,6 +348,7 @@ const LAGRANGE_DEPLOYMENT_FACT_ENV = Object.freeze({
   PGWIRE_AUTH_PASSWORD: 'client credential',
   PGWIRE_AUTH_DATABASE: 'client credential',
   SEED_NODE_ADDRESS: 'the seed a joiner joins',
+  FORMATION_DECLARED_HOST_COUNT: 'the number of data hosts the seed is founding',
 });
 
 // The words of a command the remote shell receives (shellWord / shellQuote).
@@ -412,11 +429,12 @@ test('Lagrange runs at its shipped defaults: every node environment variable is 
         `deployment fact: ${undeclared.join(', ')}`);
       // Every fact is present (the seed alone joins nobody).
       const expected = arrayFilter(Object.keys(LAGRANGE_DEPLOYMENT_FACT_ENV),
-        (key) => index > 0 || key !== 'SEED_NODE_ADDRESS').sort();
+        (key) => key !== (index === 0 ? 'SEED_NODE_ADDRESS' : 'FORMATION_DECLARED_HOST_COUNT')).sort();
       assert.deepEqual(keys, expected);
       assert.equal(census.env.NODE_HOST_ID, dataHostName(HOSTS[index]));
       assert.equal(census.env.NODE_ADDRESS, `${HOSTS[index]}:8080`);
       if (index > 0) assert.equal(census.env.SEED_NODE_ADDRESS, `${HOSTS[0]}:8080`);
+      else assert.equal(census.env.FORMATION_DECLARED_HOST_COUNT, String(HOSTS.length));
       assert.deepEqual([census.env.REST_API_PORT, census.env.ADMIN_WS_PORT,
         census.env.TRANSPORT_WS_PORT], ['8080', '8081', '8082'],
       'the product\'s own port model: REST, REST + 1, REST + 2');

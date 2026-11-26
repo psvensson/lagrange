@@ -120,6 +120,15 @@ async function ackSourceThroughGraph(
   );
 }
 
+// Read the row on which the recording CDC applies its generation-fenced CAS.
+// Successful execute releases its in-memory projection before returning.
+function bindCommittedWorkflowRecord(fixture) {
+  const row = fixture.durableTableRow;
+  fixture.workflow.readAuthoritativeWorkflowRecord = async (tableId) =>
+    tableId === row.table_id ? {...row} : null;
+  return JSON.parse(row.partition_transition_metadata).workflowFenceToken;
+}
+
 async function startMergedFixture(t, options = {}) {
   const fixture = buildMergeWorkflow(options);
   const result = await fixture.workflow.execute({
@@ -130,8 +139,7 @@ async function startMergedFixture(t, options = {}) {
   // The workflow's claim fence epoch: every source ack is stamped with
   // it (PartitionService reads it from normalized metadata in
   // production).
-  const fenceToken = fixture.workflow.workflowCoordinator
-    .getWorkflowById(result.workflowId)?.fenceToken;
+  const fenceToken = bindCommittedWorkflowRecord(fixture);
   return {...fixture, result, fenceToken};
 }
 
@@ -699,8 +707,7 @@ async (t) => {
   });
   t.equal(result.success, true);
 
-  const r1FenceToken = fixture.workflow.workflowCoordinator
-    .getWorkflowById(result.workflowId)?.fenceToken;
+  const r1FenceToken = bindCommittedWorkflowRecord(fixture);
   // A catches up cleanly; B's catch-up ack begins the cutover, whose
   // MERGE_CATCHUP durable write is held in flight.
   await ackSourceThroughGraph(

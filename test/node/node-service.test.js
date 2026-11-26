@@ -184,7 +184,7 @@ test('NodeService', async (t) => {
     // CPU stats
     t.ok(stats.cpu, 'should have CPU stats');
     t.ok(stats.cpu.count > 0, 'should have CPU count');
-    t.type(stats.cpu.usagePercent, 'number', 'should have CPU usage');
+    t.ok(Object.hasOwn(stats.cpu, 'hostUtilizationPercent'), 'reports host interval availability');
 
     // Memory stats
     t.ok(stats.memory, 'should have memory stats');

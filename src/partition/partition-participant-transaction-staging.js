@@ -53,6 +53,7 @@ import {
 import {
   canAdvanceRowKeySessionGeneration,
   canRebaseEmptyWaitingSession,
+  sessionReadDependenciesCurrent,
   checkAndRecordSessionRowKey,
   findParticipantSession,
   isRowKeyConcurrencyEnabled,
@@ -557,6 +558,13 @@ function stageWrite(service, session, request, params) {
     return runStaged(service, operation);
   };
   const validationState = readValidationState(service.db);
+  if (!sessionReadDependenciesCurrent(service, session, validationState.generation)) {
+    session.phase = PHASE.DOOMED;
+    session.doomCode = CODE.STALE_READ;
+    revertSessionRowKeyCheck(service, session, rowKeyCheck);
+    notifyRowKeySettlementWaiters(service);
+    return refused(CODE.STALE_READ);
+  }
   const outcome = canDirectValidateDisjoint(session, rowKeyCheck, validationState) ?
     validateDirectDisjointWrite(service, session, runWithSequentialLockCheck) :
     validateOverReplay(service, session, runWithSequentialLockCheck, validationState);

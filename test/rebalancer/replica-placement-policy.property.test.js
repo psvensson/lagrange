@@ -38,7 +38,7 @@ const nodeArb = fc.record({
   connection_state: fc.constant('ready'),
   ready_lease_expires_at: fc.constant(Date.now() + 60000),
   status: fc.constantFrom(NodeStatus.ACTIVE, NodeStatus.FAILED),
-  cpu_usage_percent: fc.integer({min: 0, max: 100}),
+  host_cpu_utilization_percent: fc.integer({min: 0, max: 100}),
   memory_usage_percent: fc.integer({min: 0, max: 100}),
   disk_usage_percent: fc.integer({min: 0, max: 100}),
 });
@@ -158,21 +158,21 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             {
               node_id: 'node-0',
               status: NodeStatus.ACTIVE,
-              cpu_usage_percent: 10,
+              host_cpu_utilization_percent: 10,
               memory_usage_percent: 10,
               disk_usage_percent: 10,
             },
             {
               node_id: 'node-1',
               status: NodeStatus.ACTIVE,
-              cpu_usage_percent: cpuUsage,
+              host_cpu_utilization_percent: cpuUsage,
               memory_usage_percent: memoryUsage,
               disk_usage_percent: 50,
             },
             {
               node_id: 'node-2',
               status: NodeStatus.ACTIVE,
-              cpu_usage_percent: 90,
+              host_cpu_utilization_percent: 90,
               memory_usage_percent: 90,
               disk_usage_percent: 90,
             },

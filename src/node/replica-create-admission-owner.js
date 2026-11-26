@@ -18,6 +18,7 @@ import {buildReplicaCreateAttemptToken} from
 import {
   adoptReplicaCreateAdmissionGeneration,
   reserveReplicaCreateAdmissionGeneration,
+  replicaCreateInstallAuthority, replicaCreateInstallAuthoritiesEqual,
 } from './replica-create-admission-evidence.js';
 import {NO_ADMISSION_BASIS, claimReplicaCreateDurablePhysicalWorker,
   commitReplicaCreateSnapshotInstall, ownsReplicaCreatePhysicalWorker,
@@ -330,6 +331,20 @@ class ReplicaCreateAdmissionOwner {
   async revalidatePhysicalWorker(claim, expectedEvidence = null) {
     return revalidateReplicaCreatePhysicalWorker(
       this, claim, expectedEvidence);
+  }
+
+  async createWorkerReceipt(evidence, acquiredClaim) {
+    const claim = acquiredClaim ?? this.activePhysicalWorkerOperationIds.get(evidence.operationId);
+    if (!this.ownsPhysicalWorker(claim)) return null;
+    // A duplicate admission can reconstruct the same durable generation as
+    // a different object. Compare its full identity with the actual worker.
+    if (!acquiredClaim && !await this.revalidatePhysicalWorker(claim)) return null;
+    const authority = this.snapshotInstallAuthority(claim);
+    if (!this.ownsPhysicalWorker(claim) || evidence.ownerIncarnation !== this.ownerIncarnation ||
+        !replicaCreateInstallAuthoritiesEqual(authority, replicaCreateInstallAuthority(evidence))) {
+      return null;
+    }
+    return {...authority, ownerIncarnation: this.ownerIncarnation};
   }
 
   ownsPhysicalWorker(claim) {

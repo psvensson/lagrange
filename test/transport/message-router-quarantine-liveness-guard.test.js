@@ -242,3 +242,48 @@ test('liveness window of 0 disables the guard (pre-change behavior)',
     t.not(router.nodeConnections.get(PEER_NODE_ID), connection,
       'with the window disabled, fresh evidence must not block quarantine');
   });
+
+test('wedged recovery retains frame identities on the attempted and competing sockets',
+  async (t) => {
+    initializeEnvironment();
+    const router = await buildRouter(t);
+    const {connection, ws} = installPeerConnection(router);
+    const other = {readyState: 1, send() {}};
+    const records = [];
+    const warn = router.logger.warn.bind(router.logger);
+    router.logger.warn = (message, fields) => {
+      if (fields?.beforeRecovery) records.push(fields);
+      warn(message, fields);
+    };
+    try {
+      router.handleMessage(PEER_NODE_ID, ws, JSON.stringify({type: 'ping', pingId: 'ping-current'}));
+      router.handleMessage(PEER_NODE_ID, other, JSON.stringify({type: 'ack', messageId: 'ack-other',
+        acknowledged: true}));
+      connection.ackTimeoutStreak = 5;
+      router.quarantineConnectionAfterAckTimeout(PEER_NODE_ID, connection, 'spent', 'node-b/service/a');
+      t.equal(records.length, 1);
+      const evidence = records[0]?.beforeRecovery;
+      t.equal(records[0]?.outboundSocketWedged, true);
+      t.equal(evidence?.attemptedSocketId, evidence?.currentSocketId);
+      t.equal(evidence?.received.ping.id, 'ping-current');
+      t.equal(evidence?.rawSendReturned.pong.id, 'ping-current');
+      t.equal(evidence?.latestPeerInbound.id, 'ack-other');
+      t.not(evidence?.latestPeerInbound.socketId, evidence?.attemptedSocketId);
+      t.notOk(evidence?.received.ack);
+      t.not(router.nodeConnections.get(PEER_NODE_ID), connection);
+    } finally {
+      router.logger.warn = warn;
+    }
+  });
+
+test('unavailable socket backlog cannot prevent the delivery timeout or quarantine',
+  async (t) => {
+    initializeEnvironment();
+    const router = await buildRouter(t);
+    const {connection, ws} = installPeerConnection(router);
+    Object.defineProperty(ws, 'bufferedAmount', {get() { throw new Error('unavailable'); }});
+    ws.send = (_bytes, _options, callback) => callback();
+    const result = await router.deliver(PEER_NODE_ID + '/service/no-ack', {type: 'TEST'});
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false);
+    t.not(router.nodeConnections.get(PEER_NODE_ID), connection);
+  });

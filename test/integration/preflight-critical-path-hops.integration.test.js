@@ -349,7 +349,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
       const updateRow = {
         ...seedNodeRow,
         [COLUMN.NODE_ID]: syntheticNodeId,
-        [COLUMN.CPU_USAGE_PERCENT]: nextCpu,
+        [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: nextCpu,
         [COLUMN.UPDATED_AT]: Date.now(),
         [COLUMN.UPDATED_AT_HLC]: forwardedTimestamp,
       };
@@ -417,7 +417,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
 
         t.equal(watermarkAdvanced, true, 'cache should apply forwarded CDC event and advance watermarks');
         t.equal(
-          appliedEvent?.data?.[COLUMN.CPU_USAGE_PERCENT],
+          appliedEvent?.data?.[COLUMN.HOST_CPU_UTILIZATION_PERCENT],
           nextCpu,
           'message-group completion should carry the forwarded record for the updated table',
         );

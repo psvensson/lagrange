@@ -18,7 +18,7 @@ const nodeArb = fc.record({
   node_id: fc.string({minLength: 1, maxLength: 20}),
   node_address: fc.string({minLength: 5, maxLength: 30}),
   status: fc.constantFrom('active', 'inactive', 'failed', 'starting'),
-  cpu_usage_percent: fc.option(fc.float({min: 0, max: 100})),
+  host_cpu_utilization_percent: fc.option(fc.float({min: 0, max: 100})),
   memory_usage_percent: fc.option(fc.float({min: 0, max: 100})),
   disk_usage_percent: fc.option(fc.float({min: 0, max: 100})),
   services_count: fc.option(fc.integer({min: 0, max: 100})),
@@ -46,7 +46,7 @@ test('Property 1: View Rendering Completeness', async (t) => {
 
           // Check that all required columns are present
           const expectedColumns = [
-            'Node ID', 'Address', 'Status', 'CPU%', 'Mem%', 'Disk%',
+            'Node ID', 'Address', 'Status', 'Host CPU%', 'Mem%', 'Disk%',
             'Replicas',
           ];
           const actualColumns = result.headers;
@@ -153,7 +153,7 @@ test('Property 1: View Rendering Completeness', async (t) => {
           node_id: fc.option(fc.string({minLength: 1, maxLength: 10})),
           node_address: fc.option(fc.string({minLength: 1, maxLength: 20})),
           status: fc.option(fc.string({minLength: 1, maxLength: 10})),
-          cpu_usage_percent: fc.option(fc.float({min: 0, max: 100})),
+          host_cpu_utilization_percent: fc.option(fc.float({min: 0, max: 100})),
           memory_usage_percent: fc.option(fc.float({min: 0, max: 100})),
           disk_usage_percent: fc.option(fc.float({min: 0, max: 100})),
           services_count: fc.option(fc.integer({min: 0, max: 100})),

@@ -7,6 +7,7 @@ import {
 } from '../constants/index.js';
 import {OWNER_FACT_UNAVAILABLE_REASON} from
   '../control-plane/control-plane-owner-fact-read-contract.js';
+import {isWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {
@@ -15,6 +16,9 @@ import {
   observePersistedPartitionTerm,
 } from '../storage/retained-read-view-custody.js';
 import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  buildDeliveryEnvelope,
+  classifyThrownDeliveryError,
   deliveryAnswerOf,
   deliveryReadingOf,
 } from '../transport/transport-semantic-outcome.js';
@@ -659,6 +663,15 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
     }
     const succeeded = Boolean(isSuccessfulResponse(delivery));
     const reading = deliveryReadingOf(delivery);
+    if (!forRead) {
+      rawOptions.onWriteReply?.(delivery);
+      if (!succeeded && !executionOptions.isSuccessfulResponse && reading.committed === true &&
+          rawOptions.finishCommittedFailure) {
+        return {accepted: false, settledFailure: rawOptions.finishCommittedFailure(reading, ticket),
+          state: READ_COMPLETION_STATE.REJECTED_RESPONSE};
+      }
+      if (isWriteOutcomeUnknown(reading)) return completeUnsettledOrRejectedWrite(reading, routes);
+    }
     const factKind = classifyCompletionFact(succeeded, reading);
     if (factKind === COMPLETION_FACT_KIND.SETTLED_WRITE_OUTCOME) {
       return buildAcceptedCompletion(ticket, delivery, redirectedFromAddress, routes, true);
@@ -703,10 +716,50 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
     return result;
   }
 
-  readDelivery?.bindTicketIssuer?.(issueTicket);
+  // Normalize a router-rejected close at the actual write hop. This keeps
+  // its before-send proof, or lost-answer debt, identical to a resolved close.
+  async function deliverWrite(ticket, options) {
+    try {
+      return await router.deliver(ticket.address, ticket.request, options);
+    } catch (error) {
+      const transport = classifyThrownDeliveryError(error);
+      if (transport.reasonCode !== TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED) throw error;
+      return buildDeliveryEnvelope(transport);
+    }
+  }
+
+  async function prepareSubmission(address, targetRetryTracker, buildRouterOptions) {
+    throwIfAborted();
+    if (targetRetryTracker.getRemainingDelayMs(address) > 0) {
+      const ready = await targetRetryTracker.awaitTargetReady(address);
+      throwIfAborted();
+      if (!ready) return null;
+    }
+    const routerOptions = buildRouterOptions();
+    if (routerOptions === null) return null;
+    return {
+      routerOptions,
+      submit(draft, onSubmit, signal = forRead ? executionOptions.signal : undefined) {
+        throwIfAborted();
+        if (isDeadlineExpired()) {
+          throw buildTypedAuthorityError(
+            DEADLINE_EXPIRED_COMPLETION_MSG, DEADLINE_EXPIRED_COMPLETION_CODE,
+          );
+        }
+        const ticket = issueTicket({...draft, address});
+        onSubmit?.();
+        if (!forRead) rawOptions.onWriteSubmission?.(ticket);
+        const options = signal ? {...routerOptions, signal} : routerOptions;
+        const completion = forRead ? router.deliver(address, ticket.request, options) :
+          deliverWrite(ticket, options);
+        return {ticket, completion};
+      },
+    };
+  }
 
   return Object.freeze({
     completeDelivery,
+    prepareSubmission,
     current: () => termFloor,
     finalizeAcceptedResult,
     getLatestRoutes: () => latestRoutes,

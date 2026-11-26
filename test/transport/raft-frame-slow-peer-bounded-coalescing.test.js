@@ -154,8 +154,10 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
         return null;
       });
     }
+    let writtenFrame;
     const wsToB = createFakeSocket({
       onSend: (raw) => {
+        writtenFrame = raw;
         receiver.receiveConsensusEnvelope(JSON.parse(raw), null);
       },
     });
@@ -170,11 +172,12 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
       ['g3', 2],
     ];
     let settledBeforeFlush = 0;
+    const context = 'δ "Raft"';
     const deliveries = schedule.map(([groupId, seq]) => {
-      const promise = Promise.resolve(sender.deliver(
-        `node-b/partition/${groupId}-r2`,
-        buildEnvelope(groupId, seq),
-      )).then((outcome) => {
+      const envelope = buildEnvelope(groupId, seq, context);
+      const submitted = sender.deliver(`node-b/partition/${groupId}-r2`, envelope);
+      envelope.message.context = 'changed after admission';
+      const promise = Promise.resolve(submitted).then((outcome) => {
         if (wsToB.sentFrames.length === 0) {
           settledBeforeFlush += 1;
         }
@@ -189,7 +192,10 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
     assert.ok(sender.getStats().consensusDelivery.pendingBatchBytes > 0,
       'pending application batch bytes are tracked before flush');
 
+    const admittedBytes = sender.getStats().consensusDelivery.pendingBatchBytes;
     const outcomes = await Promise.all(deliveries);
+    assert.equal(Buffer.byteLength(writtenFrame), admittedBytes,
+      'UTF-8 bytes sent match the reservation made before the flush');
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.equal(settledBeforeFlush, 0,
@@ -212,8 +218,8 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
     for (const groupId of ['g1', 'g2', 'g3']) {
       const payloads = receivedByGroup.get(groupId);
       assert.deepEqual(payloads, [
-        buildEnvelope(groupId, 1),
-        buildEnvelope(groupId, 2),
+        buildEnvelope(groupId, 1, context),
+        buildEnvelope(groupId, 2, context),
       ], `group ${groupId} received its envelopes unchanged and in FIFO order`);
     }
   } finally {

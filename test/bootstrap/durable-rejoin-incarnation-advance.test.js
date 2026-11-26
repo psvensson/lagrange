@@ -1,3 +1,5 @@
+import {PLACEMENT_RESOURCE_COLUMNS} from '../../src/diagnostics/placement-resource-sample.js';
+import {readRemoteHeartbeatObservation} from '../../src/rebalancer/replica-placement-owner-capacity.js';
 import {deriveParticipantEntryId} from '../../src/query/distributed/distributed-write-coordinator.js';
 /**
  * Durable rejoin reaches READY: the registration / durable-rejoin verb owns
@@ -187,7 +189,7 @@ function createRejoiningOwner(durable, bootIncarnation = THIS_BOOT) {
   return owner;
 }
 
-function publishReady(durable) {
+function publishReady(durable, telemetry) {
   return new NodeLifecyclePublication({
     gateway: durable.gateway,
     leaseAuthority: new NodeReadyLeaseAuthority({readyLeaseMs: 15_000}),
@@ -199,12 +201,17 @@ function publishReady(durable) {
     heartbeatOnly: true,
     heartbeatAt: NOW,
     nodeAddress: NODE_ADDRESS,
+    telemetry,
   });
 }
 
 test('durable rejoin advances the boot incarnation and the new boot reaches ' +
   'READY', async (t) => {
-  const durable = createDurableNodes(previousBootRow());
+  const sampled = Object.fromEntries(Object.values(PLACEMENT_RESOURCE_COLUMNS)
+    .map((column) => [column, 99]));
+  const durable = createDurableNodes(previousBootRow({...sampled, telemetry_sample_id: 7,
+    telemetry_sampled_at: NOW - 1, memory_mb: 1024, memory_usage_percent: 30}));
+  t.equal(readRemoteHeartbeatObservation(durable.current()).pressureSensorsComplete, true);
 
   const result = await createRejoiningOwner(durable).registerNodeInCluster();
   t.equal(result?.reusedExistingMembership, true,
@@ -214,6 +221,10 @@ test('durable rejoin advances the boot incarnation and the new boot reaches ' +
     [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
     [COLUMN.READY_LEASE_EXPIRES_AT]: null,
   }, 'reentry writes this boot incarnation with a cleared lease');
+  for (const column of [...Object.keys(sampled), 'telemetry_sample_id', 'telemetry_sampled_at']) {
+    t.equal(durable.current()[column], null, `new boot explicitly clears ${column}`);
+  }
+  t.equal(readRemoteHeartbeatObservation(durable.current()).pressureSensorsComplete, false);
   t.same(durable.endpoints().map((row) => row[COLUMN.BOOT_INCARNATION]),
     [THIS_BOOT, THIS_BOOT],
     'the reused endpoint rows advance to this boot with the node row');
@@ -227,6 +238,21 @@ test('durable rejoin advances the boot incarnation and the new boot reaches ' +
     [COLUMN.CONNECTION_STATE]: STATE.READY,
     [COLUMN.READY_LEASE_EXPIRES_AT]: NOW + 15_000,
   }, 'the rejoined node is READY with an owner-granted lease');
+});
+
+test('join registration CAS clears a recent sample when replacing an older boot', async (t) => {
+  const durable = createDurableNodes(previousBootRow({main_thread_cpu_percent: 99,
+    resource_sample_interval_ms: 100, telemetry_sampled_at: NOW - 1, telemetry_sample_id: 41}));
+  const registration = new MembershipPublicationRuntimeOwner({
+    nodeId: NODE_ID, controlPlaneSystemTableGateway: durable.gateway,
+  });
+  const next = buildNodeRegistrationRow({nodeId: NODE_ID, nodeAddress: NODE_ADDRESS,
+    hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: THIS_BOOT, now: NOW});
+  const result = await registration.registerJoinNodeAtIncarnation(next, THIS_BOOT,
+    createNodeRegistrationIssueRecord(), {nowMs: NOW});
+  t.equal(result.outcome, NODE_REGISTRATION_OUTCOME.ACCEPTED);
+  t.match(durable.current(), {boot_incarnation: THIS_BOOT, main_thread_cpu_percent: null,
+    resource_sample_interval_ms: null, telemetry_sampled_at: null, telemetry_sample_id: null});
 });
 
 test('without the registration advance, the new boot can never publish READY',
@@ -264,13 +290,19 @@ test('N4: a repeated same-boot durable-rejoin registration is CURRENT and ' +
   const owner = createRejoiningOwner(durable);
   await owner.registerNodeInCluster();
   t.equal(nodeWrites.length, 1, 'the first registration advances once');
+  const ready = await publishReady(durable, {telemetry_sampled_at: NOW, telemetry_sample_id: 8,
+    resource_sample_interval_ms: 150, main_thread_cpu_percent: 0});
+  t.equal(ready.outcome, OUTCOME.APPLIED);
+  const writesBeforeReentry = nodeWrites.length;
   const registered = JSON.stringify(durable.current());
 
   // The registration retry loop re-enters later in the same boot.
   owner.delegates.getNow = () => () => NOW + 5_000;
   const again = await owner.registerNodeInCluster();
   t.equal(again?.reusedExistingMembership, true);
-  t.equal(nodeWrites.length, 1,
+  t.equal(again.nodeRow.telemetry_sample_id, 8);
+  t.equal(again.nodeRow.main_thread_cpu_percent, 0);
+  t.equal(nodeWrites.length, writesBeforeReentry,
     'the same-boot re-entry issues no NODES write');
   t.equal(JSON.stringify(durable.current()), registered,
     'the durable row is byte-for-byte unchanged');

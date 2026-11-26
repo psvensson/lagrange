@@ -110,7 +110,7 @@ function createHeartbeatUpdateRow(nodeAddress = '10.0.0.1:8080') {
     cpu_cores: 4,
     memory_mb: 1024,
     disk_gb: 100,
-    cpu_usage_percent: 10,
+    host_cpu_utilization_percent: 10,
     memory_usage_percent: 20,
     disk_usage_percent: 30,
     status: HEARTBEAT_STATUS_ACTIVE,

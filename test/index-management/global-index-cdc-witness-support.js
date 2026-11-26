@@ -332,7 +332,8 @@ async function withIndependentCacheCdcEnvironment(callback) {
       serviceRes?.position && gatewayA.awaitProjectionAt(serviceRes.position),
       partLeaderRes?.position && gatewayA.awaitProjectionAt(partLeaderRes.position),
     ].filter(Boolean));
-    return {partitionId: ctx.partitionId, replicaIds: [replicaId]};
+    return {committedReplicaCount: 1, routableReplicaCount: 1,
+      partitionId: ctx.partitionId, replicaIds: [replicaId]};
   };
 
   const engineA = new SQLQueryEngine({

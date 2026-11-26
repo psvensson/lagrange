@@ -78,11 +78,14 @@ function offlineInstall(host) {
 const RULES = [
   [/^echo "\$\(hostname\)\|/u, (_host, _command, ip) =>
     ok(`vm-${ip}|boot-${ip}|4|15.6|ens4`)],
-  // resolvePinnedImage: the store, then every local image's id, digests and
-  // layers (a layer per image named after it, so no pinned content matches).
+  // The daemon resolves the supplied reference directly, as it does for a run.
   [/^docker info --format '\{\{\.Driver\}\}/u, () => ok('overlay2|[]')],
-  [/^docker image inspect --format '\{\{\.Id\}\}\|/u, (host) => ok(arrayJoin(arrayMap(
-    host.images, (image) => `sha256:${'d'.repeat(64)}|[]|["sha256:${image}"]`), '\n'))],
+  [/^docker image inspect --format '\{\{\.Id\}\}\|/u, (host, command) => {
+    const image = word(command, /Layers\}\}' (\S+) /u);
+    return arrayIncludes(host.images, image) ?
+      ok(`sha256:${'d'.repeat(64)}|[]|["sha256:${'a'.repeat(64)}"]`) :
+      fail(1, `Error: No such image: ${image}`);
+  }],
   [/^docker info /u, (host) => (host.docker ? ok('27.5.1') :
     fail(1, 'permission denied while trying to connect to the Docker daemon socket'))],
   [/^docker pull --quiet /u, (host, command) => {

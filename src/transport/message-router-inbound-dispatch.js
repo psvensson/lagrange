@@ -1,3 +1,4 @@
+import {observeParsedFrame} from './message-router-socket-evidence.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
 import {
@@ -71,6 +72,7 @@ class MessageRouterInboundDispatch {
     try {
       const message = JSON.parse(data.toString());
       this.recordNodeInboundActivity(connectionId);
+      observeParsedFrame(this, connectionId, ws, message);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
         type: message.type,

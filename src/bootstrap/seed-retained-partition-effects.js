@@ -89,6 +89,7 @@ function outcomeMatches(outcome, classified) {
   return outcome?.outcome === OUTCOME.APPLIED && outcome.logIndex === entry.index &&
     outcome.term === entry.term && outcome.failureCode === null &&
     outcome.failureMessage === null &&
+    outcome.mirrorEffectRequired === false &&
     outcome.ownerResultText === null && outcome.changes === FOUNDATION_CHANGED_ROWS &&
     POSITIVE_INTEGER.test(outcome.lastInsertRowid);
 }

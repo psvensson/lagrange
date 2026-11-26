@@ -63,7 +63,6 @@ function buildSeedNodeRegistrationRow(service, stats, now) {
     [COLUMN.CPU_CORES]: finiteNumberOrFallback(stats?.cpu?.count, 0),
     [COLUMN.MEMORY_MB]: totalMemoryMb,
     [COLUMN.DISK_GB]: finiteNumberOrFallback(stats?.diskGb, NUM.HUNDRED),
-    [COLUMN.CPU_USAGE_PERCENT]: finiteNumberOrFallback(stats?.cpu?.usagePercent, 0),
     [COLUMN.MEMORY_USAGE_PERCENT]: finiteNumberOrFallback(stats?.memory?.usagePercent, 0),
     [COLUMN.DISK_USAGE_PERCENT]: finiteNumberOrFallback(stats?.diskUsagePercent, 0),
     [COLUMN.STATUS]: NODE_STATE.JOINING,
@@ -79,7 +78,6 @@ function buildSeedHeartbeatStatsPayload(stats) {
   return {
     cpu: {
       count: stats?.cpu?.count,
-      usagePercent: stats?.cpu?.usagePercent,
     },
     memory: {
       totalBytes: stats?.memory?.totalBytes,

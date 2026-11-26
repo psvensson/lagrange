@@ -1,3 +1,4 @@
+import {redriveFailedMirrorRelease} from './partition-mirror-custody-lifecycle.js';
 import {PARTITION_DRAIN_CAPACITIES} from './partition-cdc-owed-admission.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {createLearnerPromotionWakeState} from './partition-service-learner-promotion-wake-methods.js';
@@ -614,6 +615,9 @@ class PartitionServiceCoreBase extends EventEmitter {
    */
   handleSystemTableCacheChange(tableName, operation, record) {
     this.observeLearnerPromotionWakeSource(tableName, operation, record);
+    if (this.isLeader && tableName === TABLES.TABLES && record?.table_id === this.tableId) {
+      redriveFailedMirrorRelease(this);
+    }
     if (tableName === TABLES.PARTITIONS && record) {
       this.handleCanonicalLeaderRowCacheChange(record);
       return;

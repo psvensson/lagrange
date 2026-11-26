@@ -56,11 +56,10 @@ class WorkflowParticipantAckMethods {
     // Fence token validation: reject stale acknowledgements.
     const ackFence = ack?.[PARTICIPANT_ACK_FIELD.FENCE_TOKEN];
     if (ackFence !== undefined && ackFence !== null) {
-      const staleRejection = this.rejectAckStaleFence(
-        workflowId, participant, participantKey, ackStatus, ackFence,
-      );
-      if (staleRejection) {
-        return staleRejection;
+      const currentFence = participant.fenceToken;
+      if (currentFence != null && !(ackFence >= currentFence)) {
+        return this.rejectAckStaleFence(workflowId, participant, participantKey,
+          ackStatus, ackFence);
       }
       participant.fenceToken = ackFence;
     }
@@ -152,25 +151,19 @@ class WorkflowParticipantAckMethods {
   }
 
   /**
-   * Fence-check one acknowledgement against the participant's current
-   * fence epoch. Returns the typed STALE_FENCE rejection when the ack
-   * carries an older epoch, else null.
+   * Report a fence rejection already decided by the acknowledgement owner.
    * @param {string} workflowId
    * @param {Object} participant - Current participant record.
    * @param {string} participantKey
    * @param {string} ackStatus
-   * @param {number} ackFence - Fence epoch carried by the ack.
-   * @return {Object|null}
+   * @param {*} ackFence - Fence offered by the caller, including an absent fence.
+   * @return {Object}
    * @private
    */
   rejectAckStaleFence(
     workflowId, participant, participantKey, ackStatus, ackFence,
   ) {
     const currentFence = participant.fenceToken;
-    if (currentFence === undefined || currentFence === null ||
-        ackFence >= currentFence) {
-      return null;
-    }
     const staleResult = {
       result: PARTICIPANT_ACK_RESULT.STALE_FENCE,
       participantKey,

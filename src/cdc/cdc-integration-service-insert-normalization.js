@@ -135,9 +135,6 @@ export function applyTableInsertDefaults(tableName, _schema, rowData, nowMs) {
   if (rowData.disk_gb == null) {
     rowData.disk_gb = 0;
   }
-  if (rowData.cpu_usage_percent == null) {
-    rowData.cpu_usage_percent = 0;
-  }
   if (rowData.memory_usage_percent == null) {
     rowData.memory_usage_percent = 0;
   }

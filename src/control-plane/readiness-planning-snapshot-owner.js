@@ -10,7 +10,7 @@ import {
 import {ReadinessPlanningSemanticGenerationTracker} from './readiness-planning-semantic-generation.js';
 import {defineRecordValue} from './readiness-planning-publication-contract.js';
 import {
-  readSharedNodeRows, readFormationBootstrapOwnerKey, readFormationEpochKey, readOwnerKey,
+  connectedFormationOwnerKey, isJoiningNodeRow, readFormationEpochKey, readOwnerKey, readSharedNodeRows,
 } from './readiness-planning-formation-source.js';
 import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
 import {ReadinessPlanningDiagnosticRetention} from './readiness-planning-diagnostic-retention.js';
@@ -304,7 +304,7 @@ class ReadinessPlanningSnapshotOwner {
     mapSet(this.completedSnapshotsByOwnerKey, ownerKey, completed);
   }
 
-  listOwnerKeys(record = null, sharedNodeRows = null) {
+  listOwnerKeys(record = null, sharedNodeRows = null, joiningOwnerKeys = []) {
     const ownerKeys = [];
     const appendUniqueOwnerKey = (ownerKey) => {
       if (ownerKey && !arrayIncludes(ownerKeys, ownerKey)) {
@@ -317,7 +317,10 @@ class ReadinessPlanningSnapshotOwner {
       sharedNodeRows :
       readSharedNodeRows(this.service);
     for (let index = 0; index < rows.length; index++) {
-      appendUniqueOwnerKey(readOwnerKey(rows[index]));
+      const row = rows[index];
+      const key = readOwnerKey(row);
+      appendUniqueOwnerKey(key);
+      if (isJoiningNodeRow(row)) appendArrayValue(joiningOwnerKeys, key);
     }
     mapForEach(this.buildOptionsByOwnerAndBuildKey, (_variants, ownerKey) => {
       appendUniqueOwnerKey(ownerKey);
@@ -326,7 +329,7 @@ class ReadinessPlanningSnapshotOwner {
       appendUniqueOwnerKey(this.service.nodeId);
     }
     const formationOwnerKey =
-      readFormationBootstrapOwnerKey(this.service, rows);
+      connectedFormationOwnerKey(this.service, joiningOwnerKeys);
     if (!formationOwnerKey || !arrayIncludes(ownerKeys, formationOwnerKey)) {
       return ownerKeys;
     }
@@ -389,11 +392,11 @@ class ReadinessPlanningSnapshotOwner {
     }
   }
 
-  promoteFormationOwner(sharedNodeRows) {
+  promoteFormationOwner(joiningOwnerKeys) {
     const formationOwnerKey =
-      readFormationBootstrapOwnerKey(this.service, sharedNodeRows);
+      connectedFormationOwnerKey(this.service, joiningOwnerKeys);
     const formationEpochKey =
-      readFormationEpochKey(this.service, sharedNodeRows);
+      readFormationEpochKey(joiningOwnerKeys);
     if (formationEpochKey !== this.formationEpochKey) {
       this.formationEpochKey = formationEpochKey;
       setClear(this.prioritizedFormationOwnerKeys);
@@ -413,7 +416,8 @@ class ReadinessPlanningSnapshotOwner {
     // formation keys below; per-callee re-reads amplified full-table reads
     // several times per enqueue on the live seed.
     const sharedNodeRows = this.readSharedNodeRowsForEnqueue();
-    const ownerKeys = this.listOwnerKeys(record, sharedNodeRows);
+    const joiningOwnerKeys = [];
+    const ownerKeys = this.listOwnerKeys(record, sharedNodeRows, joiningOwnerKeys);
     for (let index = 0; index < ownerKeys.length; index++) {
       this.enqueueOwnerVariants(
         ownerKeys[index],
@@ -422,7 +426,7 @@ class ReadinessPlanningSnapshotOwner {
         excludedQueueOwnerKey,
       );
     }
-    this.promoteFormationOwner(sharedNodeRows);
+    this.promoteFormationOwner(joiningOwnerKeys);
   }
 
   requestRefresh(ownerKey, options = {}) {

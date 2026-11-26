@@ -930,6 +930,8 @@ test('ReplicaHandler', async (t) => {
 
       t.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS,
         'in_progress');
+      t.notOk(Object.hasOwn(response, 'createWorkerReceipt'),
+        'cached CREATING alone cannot attest a physical worker');
       t.equal(response.replicaId, TEST_IN_PROGRESS_REPLICA_ID,
         'replicaId in response');
       t.same(

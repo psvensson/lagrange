@@ -41,6 +41,7 @@ import {
   deliveryTransportOf,
 } from '../transport/transport-semantic-outcome.js';
 import {
+  DEADLINE_EXPIRED_COMPLETION_CODE,
   READ_COMPLETION_STATE,
   REDIRECT_STEP_ACTION,
   createInvocationTermFloorTracker,
@@ -101,15 +102,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     this.throwIfCancelled(cancellationToken);
     const readDelivery = attemptBudget.retainsRecoveryReadResponse ?
       createRecoveryReadDelivery(this, executionOptions) : null;
+    const buildFailureResult = (errorMessage, details = {}) =>
+      unknownOutcome.finish(buildPartitionExecutionFailureResult({
+        partitionId, failedTable, errorMessage, details,
+      }), this.logger);
+    let pendingWrite = false;
     try {
       const {
         buildRouterDeliveryOptions, getRemainingExecutionBudgetMs,
         recoveryReadProbeMs, waitForRetryBudget,
       } = attemptBudget;
-      const buildFailureResult = (errorMessage, details = {}) =>
-        unknownOutcome.finish(buildPartitionExecutionFailureResult({
-          partitionId, failedTable, errorMessage, details,
-        }), this.logger);
       let candidateDeliveryAttempted = false;
       const buildPreSubmissionRouteFailureResult = (errorMessage, details = {}) => {
         const failureResult = buildFailureResult(errorMessage, details);
@@ -220,6 +222,21 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           },
         ), Boolean(readDelivery), requireCanonicalLeader);
       const invocation = createInvocationTermFloorTracker(this, partitionId, {
+        onWriteSubmission: (ticket) => {
+          executionOptions.onWriteSubmitted?.((error) => {
+            if (pendingWrite) unknownOutcome.observeLostAnswer(error);
+            return buildFailureResult(error.message, error);
+          });
+          pendingWrite = true;
+          unknownOutcome.recordDelivery(ticket.request?.entryId);
+        },
+        onWriteReply: (delivery) => {
+          pendingWrite = false;
+          unknownOutcome.observeTransport(deliveryTransportOf(delivery));
+        },
+        finishCommittedFailure: (answer, ticket) => buildFailureResult(answer.error, {
+          ...answer, participantAddress: ticket.address, participantNodeId: ticket.serviceInfo?.nodeId,
+        }),
         buildSuccessResult,
         cancellationToken,
         candidateEligibility,
@@ -384,9 +401,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               candidateQueue.push(serviceInfo);
               continue;
             }
-            if (!(await targetRetryTracker.awaitTargetReady(address))) {
-              return buildDeadlineSpentFailureResult();
-            }
           }
           const mayRetry = attempt <= currentMaxAttempts;
           if (readDelivery && !readDelivery.canSelect(serviceInfo, mayRetry)) continue;
@@ -401,17 +415,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               address, serviceCandidates.length);
             this.logger.debug(QUERY_LOG_MSG.ROUTING_QUERY_TO_PARTITION, {partitionId, address});
           };
-          if (!readDelivery) observeSubmission();
-          let deliverySubmitted = false;
           try {
             invocation.throwIfAborted();
             let request = buildRequest({
               partitionId, address, sql, params, executionOptions,
             });
-            const routerOptions = buildRouterDeliveryOptions(
-              candidateQueue, candidateIndex, attemptedAddresses,
+            const admission = await invocation.prepareSubmission(
+              address, targetRetryTracker, () => buildRouterDeliveryOptions(
+                candidateQueue, candidateIndex, attemptedAddresses),
             );
-            if (routerOptions === null) return buildDeadlineSpentFailureResult();
+            if (admission === null) return buildDeadlineSpentFailureResult();
             let delivery;
             let activeTicket;
             let deliveryError = null;
@@ -423,8 +436,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               if (inspectedRecoveryRead) readDelivery.reconcile(eligibleAtSubmit);
               if (!readDelivery.currentIn(ticket, eligibleAtSubmit)) break;
               inspectedRecoveryRead = true;
-              const selected = await readDelivery.select(ticket, routerOptions, eligibleAtSubmit,
-                recoveryReadProbeMs(routerOptions, serviceInfo));
+              const selected = await readDelivery.select(ticket, admission, eligibleAtSubmit,
+                recoveryReadProbeMs(admission.routerOptions, serviceInfo));
               if (selected === ROUTING_PROBE_ELAPSED) {
                 shouldRecheckRoutes = true;
                 if (!moreUnstarted) break;
@@ -435,20 +448,15 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               delivery = selected.delivery;
               deliveryError = selected.error ?? null;
             } else {
-              activeTicket = invocation.issueTicket({address, request, serviceInfo});
-              deliverySubmitted = true;
-              unknownOutcome.recordDelivery();
-              delivery = await this.messageRouter.deliver(address, request, routerOptions);
+              const submission = admission.submit({request, serviceInfo}, observeSubmission);
+              activeTicket = submission.ticket;
+              delivery = await submission.completion;
             }
             const completion = invocation.completeDelivery({
               ticket: activeTicket,
               delivery,
               error: deliveryError,
             });
-            if (delivery) {
-              unknownOutcome.observeTransport(deliveryTransportOf(delivery));
-            }
-            deliverySubmitted = false;
             if (completion.state === READ_COMPLETION_STATE.DEADLINE_EXPIRED) {
               attemptBudget.reportDeadlineSpentBeforeAttempt();
               return buildDeadlineSpentFailureResult();
@@ -463,6 +471,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               if (readDelivery) shouldRecheckRoutes = true;
               continue;
             }
+            if (completion.settledFailure) return completion.settledFailure;
             if (completion.accepted) {
               targetRetryTracker.clearTarget(address);
               applySuccessfulCandidateAffinity(
@@ -501,9 +510,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 invocation,
                 isLeaderPinnedDelivery,
                 markRecoverySubmission,
-                onRedirectSubmissionState: (submitted) => {
-                  deliverySubmitted = submitted;
-                },
                 onRedirectTargetSelected: (nextAddress, nextInfo) => {
                   address = nextAddress;
                   serviceInfo = nextInfo;
@@ -572,6 +578,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   deferRetry: response?.deferRetry,
                 },
                 forRead,
+                deliveryTransportOf(delivery),
               );
             if (
               controlPlaneWriteRetryDecision.state !==
@@ -640,15 +647,24 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               ),
             };
           } catch (error) {
+            if (pendingWrite) {
+              pendingWrite = false;
+              if (!this.isNoHandlerFailure(error?.message || ERRORS.QUERY_FAILED)) {
+                unknownOutcome.observeLostAnswer(error);
+              }
+            }
             invocation.throwIfAborted();
+            if (error?.code === DEADLINE_EXPIRED_COMPLETION_CODE) {
+              return buildDeadlineSpentFailureResult();
+            }
             const errorMessage =
               typeof error?.message === 'string' &&
               error.message.length > 0 ?
                 error.message :
                 ERRORS.QUERY_FAILED;
-            if (deliverySubmitted && !this.isNoHandlerFailure(errorMessage)) {
-              // Sent, and its answer never arrived: the write may have applied.
-              unknownOutcome.observeLostAnswer(error);
+            if (unknownOutcome.observeAnswer(null) === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
+              recordCandidateFailure(errorMessage, error, serviceInfo?.nodeId, address);
+              return buildLastFailureResult();
             }
             if (this.isNoHandlerFailure(errorMessage)) {
               await candidateState.handleNoHandlerCandidate(
@@ -759,6 +775,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
       }
       return returnReadAttemptsSpent();
+    } catch (error) {
+      if (unknownOutcome.isUnresolved()) return buildFailureResult(error.message, error);
+      throw error;
     } finally {
       readDelivery?.dispose();
     }

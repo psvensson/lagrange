@@ -685,17 +685,17 @@ function buildCatalogPersistenceHooks(indexService, getCoordinator = null) {
       reconcileDistributedIndexDatasetSchema(indexService, params, getCoordinator, syncRow),
     verifyCatalogOwnership: (params) =>
       verifyGlobalIndexCatalogOwnership(indexService, resolveCoordinator(), params),
-    refreshCatalogRecord: async (indexName) => {
+    refreshCatalogRecord: async (indexName, expectedIndexId) => {
       const {available, row} = await readAuthoritativeGlobalIndexRow(indexService, indexName);
+      const current = resolveCoordinator()?.catalog.get(indexName);
+      if (expectedIndexId && (row?.index_id !== expectedIndexId ||
+          current?.index_id !== expectedIndexId)) return {available, row: null};
       if (available && row) {
         syncRow(row);
-      } else if (available && !row) {
-        const coordinator = resolveCoordinator();
-        const cachedMeta = indexService.indices?.get(indexName);
-        coordinator?.catalog?.delete(indexName);
-        pruneIndexRowFromWiringState(indexService, indexName);
-        indexService._removeIndexFromCache(indexName, cachedMeta?.tableId);
       }
+      // A filtered lifecycle read can miss a generation already observed via
+      // CDC. Fence this attempt; delete and replacement catalog events retire
+      // the retained generation.
       return {available, row};
     },
   };
@@ -722,11 +722,9 @@ function buildProductionCoordinatorOptions(indexService) {
     }
     const record = coord ? coord.catalog.get(indexName) : null;
     const tableName = record ? extractTableNameFromRow(record) : null;
-    const targets = [indexName];
-    if (tableName) {
-      targets.unshift(getGlobalIndexDatasetName(tableName, indexName));
-    }
-    return discoverPartitionsForTargets(indexService, runtimeState, targets);
+    if (!tableName) return [];
+    return discoverPartitionsForTargets(indexService, runtimeState,
+      [getGlobalIndexDatasetName(tableName, indexName)]);
   };
 
   const resolveTableSchema = (tableName) => {
