@@ -545,19 +545,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             // entryId until it is settled (the one re-delivery owner), never
             // routed again without that identity.
             const unknownDecision = unknownOutcome.observeAnswer(response);
-            if (unknownDecision !== UNKNOWN_OUTCOME_DECISION.NONE) {
+            if (unknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
               recordCandidateFailure(
                 response.error || ERRORS.QUERY_FAILED,
                 response,
                 serviceInfo?.nodeId,
                 address,
               );
-              if (unknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
-                return buildLastFailureResult();
-              }
-              widenWriteCandidate(address);
-              candidateState.requestRetryCurrentAddress();
-              break;
+              return buildLastFailureResult();
             }
             if (deliveryTransportOf(delivery).reasonCode ===
                 TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
@@ -573,10 +568,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 serviceInfo?.nodeId,
                 address,
               );
-              candidateState.queueLeaderRecoveryCandidates(
-                candidateIndex,
-                serviceInfo?.nodeId || null,
-              );
+              widenWriteCandidate(address);
               continue;
             }
             const errorMessage = response.error || ERRORS.QUERY_FAILED;
@@ -611,6 +603,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               isLeaderPinnedDelivery &&
               this.isLeaderUnavailable(errorMessage, response?.errorCode)
             ) {
+              recordCandidateFailure(
+                errorMessage,
+                response,
+                serviceInfo?.nodeId,
+                address,
+              );
+              widenWriteCandidate(address);
+              continue;
+            }
+            if (unknownDecision === UNKNOWN_OUTCOME_DECISION.REDELIVER) {
               recordCandidateFailure(
                 errorMessage,
                 response,
@@ -751,9 +753,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               const unresolvedResult = settleUnresolvedCaughtWriteError({
                 executor: this, forRead, executionOptions, errorMessage, error,
                 serviceInfo, address, recordCandidateFailure,
-                widenWriteCandidate, candidateState, buildFailureResult,
+                widenWriteCandidate, buildFailureResult,
               });
-              if (unresolvedResult === null) break;
+              if (unresolvedResult === null) continue;
               return unresolvedResult;
             }
             throw error;

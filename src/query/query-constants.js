@@ -353,6 +353,8 @@ const QUERY_LOG_MSG = Object.freeze({
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
   WRITE_OP_PERSIST_FAILED:
     'Non-transactional write operation persistence failed',
+  DISTRIBUTED_TX_METADATA_PERSIST_WARN:
+    'Distributed transaction write-operation metadata persistence failed',
   DISTRIBUTED_TX_RECOVERY_REPLAY_FAILED:
     'Distributed transaction recovery replay failed',
   SCHEMA_PROVISIONING_RECOVERY_DEFERRED:

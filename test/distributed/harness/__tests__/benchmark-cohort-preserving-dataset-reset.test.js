@@ -18,7 +18,24 @@ import {
 import {
   buildObservedFaultEvidence,
   createSemanticGateStage,
+  executeRemoteGateAction,
 } from '../comparative-benchmark-semantic-gate.js';
+import {
+  clusterReady,
+  readSystemTables,
+} from '../real-product-lagrange-observations.js';
+import {
+  QueryExecutor,
+} from '../../../../src/query/query-executor.js';
+import {
+  SystemTableCache,
+} from '../../../../src/cache/system-table-cache.js';
+import {
+  createCommittedServeEligibilityOwner,
+} from '../../../control-plane/serve-eligibility-test-support.js';
+import {
+  OLTP_SCENARIO_A_PROOF_CASES,
+} from '../oltp-scenario-a-proof-cases.js';
 import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 } from '../oltp-scenario-a-semantic-gate.js';
@@ -30,6 +47,7 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
+  stringIncludes,
   stringReplace,
   stringSplit,
   stringStartsWith,
@@ -56,6 +74,7 @@ import {
 } from '../../../../src/query/query-executor-unknown-outcome.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  buildDeliveryEnvelope,
 } from '../../../../src/transport/transport-semantic-outcome.js';
 import {
   CANONICAL_REQUIRED_INDEXES,
@@ -516,6 +535,17 @@ function executeRowCountOrInsertQuery(store, normalized, params) {
     return {rows: [{row_count: store.get(table).length}]};
   }
   if (stringStartsWith(normalized, 'INSERT INTO')) {
+    const batchMatch = /^INSERT INTO\s+([a-z_]+)\s*\(([a-z_, ]+)\)\s*VALUES\s*/iu.exec(normalized);
+    if (batchMatch) {
+      const table = batchMatch[1];
+      const cols = arrayMap(stringSplit(batchMatch[2], ','), (c) => stringTrim(c));
+      if (!store.has(table)) store.set(table, []);
+      const rows = store.get(table);
+      for (let offset = 0; offset < params.length; offset += cols.length) {
+        rows.push(Object.fromEntries(arrayMap(cols, (col, idx) => [col, params[offset + idx]])));
+      }
+      return {rows: [], rowCount: Math.max(1, params.length / cols.length)};
+    }
     const table = (/^INSERT INTO\s+([a-z_]+)/u.exec(normalized) || [])[1];
     if (!store.has(table)) store.set(table, []);
     store.get(table).push(params);
@@ -524,12 +554,75 @@ function executeRowCountOrInsertQuery(store, normalized, params) {
   return null;
 }
 
+function applyWarehouseOrDistrictPayment(store, table, pred, amount) {
+  for (const r of arrayFilter(store.get(table) || [], pred)) {
+    r.ytd_cents += amount;
+  }
+  return {rows: [], rowCount: 1};
+}
+
+function applyCustomerPayment(store, params) {
+  const match = (r) =>
+    r.warehouse_id === params[2] && r.district_id === params[3] && r.customer_id === params[4];
+  for (const r of arrayFilter(store.get('customer') || [], match)) {
+    r.balance_cents -= params[0];
+    r.ytd_payment_cents += params[1];
+    r.payment_count += 1;
+  }
+  return {rows: [], rowCount: 1};
+}
+
+function executePaymentMutationQuery(store, normalized, params) {
+  if (/^UPDATE\s+warehouse\s+SET\s+ytd_cents\b/iu.test(normalized)) {
+    return applyWarehouseOrDistrictPayment(store, 'warehouse', (r) => r.id === params[1], params[0]);
+  }
+  if (/^UPDATE\s+district\s+SET\s+ytd_cents\b/iu.test(normalized)) {
+    const pred = (r) => r.warehouse_id === params[1] && r.district_id === params[2];
+    return applyWarehouseOrDistrictPayment(store, 'district', pred, params[0]);
+  }
+  if (/^UPDATE\s+customer\s+SET\s+balance_cents\s*=/iu.test(normalized)) {
+    return applyCustomerPayment(store, params);
+  }
+  return null;
+}
+
+const PAYMENT_OBSERVATION_RULES = Object.freeze([
+  [/^SELECT\s+ytd_cents\s+FROM\s+warehouse\b/iu, 'warehouse', (r, p) => r.id === p[0]],
+  [/^SELECT\s+ytd_cents\s+FROM\s+district\b/iu, 'district',
+    (r, p) => r.warehouse_id === p[0] && r.district_id === p[1]],
+  [/^SELECT\s+balance_cents,\s*ytd_payment_cents,\s*payment_count\s+FROM\s+customer\b/iu,
+    'customer',
+    (r, p) => r.warehouse_id === p[0] && r.district_id === p[1] && r.customer_id === p[2]],
+  [/^SELECT\s+amount_cents\s+FROM\s+history\b/iu, 'history',
+    (r, p) => r.phase === p[0] && r.worker_id === p[1] && r.sequence_id === p[2]],
+]);
+
+function executePaymentObservationQuery(store, normalized, params) {
+  const rule = arrayFind(PAYMENT_OBSERVATION_RULES, ([re]) => re.test(normalized));
+  if (!rule) return null;
+  const [, table, predicate] = rule;
+  return {rows: arrayFilter(store.get(table) || [], (r) => predicate(r, params))};
+}
+
+function executeSnapshotQuery(store, normalized) {
+  const snapMatch = /^SELECT\s+([a-z_, ]+)\s+FROM\s+([a-z_]+)\s+ORDER\s+BY\s+([a-z_, ]+)$/iu.exec(normalized);
+  if (!snapMatch) return null;
+  const cols = arrayMap(stringSplit(snapMatch[1], ','), (c) => stringTrim(c));
+  const rows = store.get(snapMatch[2]) || [];
+  return {
+    rows: arrayMap(rows, (row) => Object.fromEntries(arrayMap(cols, (col) => [col, row[col]]))),
+  };
+}
+
 async function runCohortResetTestQuery(state, sql, params = []) {
   state.onSql?.(sql);
-  const normalized = stringTrim(sql);
+  const normalized = stringTrim(stringReplace(String(sql), /\s+/gu, ' '));
   return executeSchemaDdlQuery(state, normalized) ||
     executeRowCountOrInsertQuery(state.store, normalized, params) ||
     executeSchemaProbeOrTruncate(state, normalized) ||
+    executePaymentMutationQuery(state.store, normalized, params) ||
+    executePaymentObservationQuery(state.store, normalized, params) ||
+    executeSnapshotQuery(state.store, normalized) ||
     {rows: [], rowCount: 0};
 }
 
@@ -812,15 +905,9 @@ test('interrupted-schema-setup-missing-index: reopening a cohort where all 9 tab
 test('truncate-unknown-outcome-and-08007-boundary: lost transport answer and leader-loss ' +
   'redeliver under same entryId, deadline expiry preserves 08007 detail instead of ' +
   'reset-unsupported, and post-truncate residual rows fail closed', async () => {
-  // 1. Unknown-outcome redelivery owner: lost transport reply (MESSAGE_TIMEOUT /
-  // CONNECTION_CLOSED after send) followed by a non-unknown transport failure or
-  // not-leader redirect returns REDELIVER under the same entryId until a committed
-  // answer settles it.
   let clockMs = 1000;
   const lostReplyOwner = createUnknownOutcomeRedelivery({
-    forRead: false,
-    entryId: 'entry-truncate-history-p1',
-    now: () => clockMs,
+    forRead: false, entryId: 'entry-truncate-history-p1', now: () => clockMs,
   });
   lostReplyOwner.recordDelivery();
   lostReplyOwner.observeTransport({
@@ -831,67 +918,47 @@ test('truncate-unknown-outcome-and-08007-boundary: lost transport answer and lea
   assert.equal(lostReplyOwner.isUnresolved(), true);
   assert.equal(
     lostReplyOwner.observeAnswer({
-      success: false,
-      errorCode: 'MESSAGE_TIMEOUT',
+      success: false, errorCode: 'MESSAGE_TIMEOUT',
       error: 'Message delivery timed out after 5000ms',
     }),
     UNKNOWN_OUTCOME_DECISION.REDELIVER,
-    'lost transport answer must return REDELIVER under the same entryId, not NONE',
   );
-  // Second attempt hits former leader returning not-leader before new leader is reached:
   lostReplyOwner.recordDelivery();
   clockMs += 150;
   assert.equal(
     lostReplyOwner.observeAnswer({
-      success: false,
-      failureCode: 'partition_write_not_leader',
-      leaderId: 'node-2',
+      success: false, failureCode: 'partition_write_not_leader', leaderId: 'node-2',
     }),
     UNKNOWN_OUTCOME_DECISION.REDELIVER,
-    'not-leader answer while write is unresolved must continue redelivering under entryId',
   );
-  // Third attempt reaches the new leader which answers a committed statement outcome:
   lostReplyOwner.recordDelivery();
   clockMs += 100;
   assert.equal(
     lostReplyOwner.observeAnswer({
-      success: false,
-      committed: true,
-      settledReplay: 'retained',
-      entryId: 'entry-truncate-history-p1',
-      changes: 0,
+      success: false, committed: true, settledReplay: 'retained',
+      entryId: 'entry-truncate-history-p1', changes: 0,
     }),
     UNKNOWN_OUTCOME_DECISION.NONE,
-    'committed answer under the same entryId settles the unknown outcome',
   );
   assert.equal(lostReplyOwner.isUnresolved(), false);
 
-  // 2. When a fault outlasts the execution deadline, PG-wire 08007 preserves
-  // entry_id, operation_id, idempotency_key, partition_id, participant_node_id,
-  // failure_code, consensus, and spent_wait in outcome.detail.
   const deadlineOwner = createUnknownOutcomeRedelivery({
-    forRead: false,
-    entryId: 'entry-truncate-history-p2',
-    now: () => clockMs,
+    forRead: false, entryId: 'entry-truncate-history-p2', now: () => clockMs,
   });
   deadlineOwner.recordDelivery();
   clockMs += 5000;
   assert.equal(
     deadlineOwner.observeAnswer({
-      success: false,
-      failureCode: 'partition_write_outcome_unknown',
-      disposition: 'proposed',
-      entryId: 'entry-truncate-history-p2',
+      success: false, failureCode: 'partition_write_outcome_unknown',
+      disposition: 'proposed', entryId: 'entry-truncate-history-p2',
       consensus: {reason: 'role-changed', logIndex: 42, term: 7},
     }),
     UNKNOWN_OUTCOME_DECISION.REDELIVER,
   );
   const exhaustedParticipant = deadlineOwner.finish({
-    partitionId: 'history-p1',
-    participantNodeId: 'node-1',
+    partitionId: 'history-p1', participantNodeId: 'node-1',
     participantAddress: 'node-1/partition/history-p1-r1',
-    errorCode: 'TIMEOUT',
-    error: 'Partition execution deadline exceeded',
+    errorCode: 'TIMEOUT', error: 'Partition execution deadline exceeded',
   });
   const pgOutcome = resolveFailedStatementOutcome({
     stateBefore: PG_TRANSACTION_STATE.IDLE,
@@ -916,25 +983,15 @@ test('truncate-unknown-outcome-and-08007-boundary: lost transport answer and lea
   assert.equal(pgOutcome.detail.partition_id, 'history-p1');
   assert.equal(pgOutcome.detail.participant_node_id, 'node-1');
   assert.equal(pgOutcome.detail.failure_code, 'partition_write_outcome_unknown');
-  assert.deepEqual(pgOutcome.detail.consensus, {
-    reason: 'role-changed',
-    logIndex: 42,
-    term: 7,
-  });
+  assert.deepEqual(pgOutcome.detail.consensus, {reason: 'role-changed', logIndex: 42, term: 7});
   assert.equal(pgOutcome.detail.spent_wait.deliveries, 1);
 
-  // 3. When 08007 reaches resetCanonicalDataset in lagrange-oltp-adapter, it
-  // is NOT wrapped into reset-unsupported (harness_fault); its 08007 code and
-  // structured detail are preserved.
   const store = new Map();
   const tableSchemas = new Map();
   const createdIndexes = new Map();
   const catalogState = {
-    store,
-    tableSchemas,
-    createdIndexes,
-    returnSchemaProbeRow: true,
-    requireTableOnTruncate: true,
+    store, tableSchemas, createdIndexes,
+    returnSchemaProbeRow: true, requireTableOnTruncate: true,
   };
   const baseClient = {
     connect: async () => {},
@@ -981,11 +1038,7 @@ test('truncate-unknown-outcome-and-08007-boundary: lost transport answer and lea
       workload: {scale: 1, workers: 1},
     }),
     (error) => {
-      assert.notEqual(
-        error.code,
-        OLTP_DATASET_RESET_OUTCOME.RESET_UNSUPPORTED,
-        '08007 must not be misclassified as reset-unsupported',
-      );
+      assert.notEqual(error.code, OLTP_DATASET_RESET_OUTCOME.RESET_UNSUPPORTED);
       assert.equal(error.code, '08007');
       assert.equal(error.sqlState, '08007');
       assert.equal(error.failureTable, 'history');
@@ -997,52 +1050,73 @@ test('truncate-unknown-outcome-and-08007-boundary: lost transport answer and lea
     },
   );
 
-  // 4. When the fault clears within the deadline (resolved inside the product's
-  // redelivery owner before returning to the PG client), resetDataset succeeds,
-  // verifies 0 rows after TRUNCATE on every table, and leaves intact seed data.
+  let faultyResetOnExistingAdapter = false;
+  const toggleableResetClient = {
+    connect: async () => {},
+    query: async (sql, params = []) => {
+      if (faultyResetOnExistingAdapter && stringTrim(sql) === 'TRUNCATE TABLE history') {
+        const err = new Error(pgOutcome.message);
+        err.code = pgOutcome.sqlState;
+        err.sqlState = pgOutcome.sqlState;
+        err.detail = JSON.stringify(pgOutcome.detail);
+        throw err;
+      }
+      return baseClient.query(sql, params);
+    },
+    end: async () => {},
+  };
+  const retryableAdapter = await createLagrangeOltpAdapter({
+    endpoint: {host: '127.0.0.1', port: 5433},
+    connection: {user: 'bench', database: 'bench'},
+    createClient: () => toggleableResetClient,
+    workload: {scale: 1, workers: 1},
+  });
+  faultyResetOnExistingAdapter = true;
+  await assert.rejects(
+    retryableAdapter.resetDataset(),
+    (error) => error.code === '08007' && error.failureTable === 'history',
+  );
+  faultyResetOnExistingAdapter = false;
   failHistoryWith08007 = false;
   store.set('history', [{history_id: 999}]);
-  const recoveredReset = await initialAdapter.resetDataset();
+  const resetCountSqls = [];
+  const previousOnSql = catalogState.onSql;
+  catalogState.onSql = (sql) => {
+    previousOnSql?.(sql);
+    if (stringStartsWith(stringTrim(sql), 'SELECT COUNT(*) AS row_count FROM')) {
+      resetCountSqls.push(stringTrim(sql));
+    }
+  };
+  const recoveredReset = await retryableAdapter.resetDataset();
+  catalogState.onSql = previousOnSql;
   assert.equal(recoveredReset.outcome, OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE);
+  assert.equal(resetCountSqls.length, 9);
+  const recoveredOutcomeUnknownAdapter = await createLagrangeOltpAdapter({
+    endpoint: {host: '127.0.0.1', port: 5433},
+    connection: {user: 'bench', database: 'bench'},
+    createClient: () => outcomeUnknownClient,
+    workload: {scale: 1, workers: 1},
+  });
+  assert.equal(recoveredOutcomeUnknownAdapter.schemaProvisioning.tables.length, 9);
+  await recoveredOutcomeUnknownAdapter.close();
   assert.ok(Number.isFinite(recoveredReset.resetDurationMs));
   assert.ok(Number.isFinite(recoveredReset.seedLoadDurationMs));
   for (const tableEntry of recoveredReset.tables) {
     assert.equal(tableEntry.postTruncateRowCount, 0);
     assert.ok(Number.isFinite(tableEntry.truncateDurationMs));
   }
-  const stateAfterReset = (await initialAdapter.getEvidence()).stateCounts;
+  const stateAfterReset = (await retryableAdapter.getEvidence()).stateCounts;
   assert.equal(stateAfterReset.orders, 0);
   assert.equal(stateAfterReset.newOrders, 0);
   assert.equal(stateAfterReset.orderLines, 0);
   assert.equal(stateAfterReset.history, 0);
-  assert.equal(
-    store.get('warehouse')?.length,
-    initialSeedCounts.warehouse,
-    'seed warehouse rows reloaded',
-  );
-  assert.equal(
-    store.get('district')?.length,
-    initialSeedCounts.district,
-    'seed district rows reloaded',
-  );
-  assert.equal(
-    store.get('customer')?.length,
-    initialSeedCounts.customer,
-    'seed customer rows reloaded',
-  );
-  assert.equal(
-    store.get('item')?.length,
-    initialSeedCounts.item,
-    'seed item rows reloaded',
-  );
-  assert.equal(
-    store.get('stock')?.length,
-    initialSeedCounts.stock,
-    'seed stock rows reloaded',
-  );
+  assert.equal(store.get('warehouse')?.length, initialSeedCounts.warehouse);
+  assert.equal(store.get('district')?.length, initialSeedCounts.district);
+  assert.equal(store.get('customer')?.length, initialSeedCounts.customer);
+  assert.equal(store.get('item')?.length, initialSeedCounts.item);
+  assert.equal(store.get('stock')?.length, initialSeedCounts.stock);
+  await retryableAdapter.close();
 
-  // 5. If TRUNCATE returns without throwing but leaves residual rows in a table,
-  // resetCanonicalDataset fails closed with truncate-residual-rows before reseeding.
   const residualClient = {
     connect: async () => {},
     query: async (sql, params = []) => {
@@ -1067,4 +1141,289 @@ test('truncate-unknown-outcome-and-08007-boundary: lost transport answer and lea
       error.residualRowCount === 1,
   );
   await initialAdapter.close();
+});
+
+test('readiness-system-tables-contract: readSystemTables -> clusterReady derives distinct ' +
+  'canonical tableNames from partitions without requiring a nonexistent tables.tables member',
+async () => {
+  const nodeIds = ['node-1', 'node-2', 'node-3'];
+  const nodeRoles = arrayMap(nodeIds, (nodeId, idx) => ({
+    role: 'lagrange-node', host: `10.0.0.${idx + 1}`, containerId: `c-${idx + 1}`, nodeId,
+  }));
+  const priorityTables = [
+    'control_plane_publications', 'replica_operations', 'schema_operations',
+    'sql_transaction_participants', 'sql_transactions', 'sql_write_operations',
+  ];
+  const partitions = [
+    ...arrayMap(priorityTables, (tableName) => ({
+      partition_id: `${tableName}-p1`, table_name: tableName,
+      replica_count: '3', leader_node_id: 'node-1',
+    })),
+    {partition_id: 'orders-p1', table_name: 'orders', replica_count: '3', leader_node_id: 'node-1'},
+    {partition_id: 'orders-p2', table_name: 'orders', replica_count: '3', leader_node_id: 'node-2'},
+  ];
+  const services = [];
+  for (const part of partitions) {
+    for (const nodeId of nodeIds) {
+      services.push({
+        partition_id: part.partition_id, node_id: nodeId, status: 'active',
+        raft_role: nodeId === part.leader_node_id ? 'leader' : 'follower',
+      });
+    }
+  }
+  const nowMs = 1_000_000;
+  const realShapeQuery = async (sql) => {
+    if (/FROM\s+nodes\b/u.test(sql)) {
+      return arrayMap(nodeIds, (nodeId) => ({
+        node_id: nodeId, status: 'active', connection_state: 'ready',
+        ready_lease_expires_at: String(nowMs + 10_000), last_heartbeat: String(nowMs - 100),
+      }));
+    }
+    if (/FROM\s+service_endpoints\b/u.test(sql)) {
+      return [{
+        service_id: 'sys-postgres-wire', node_id: 'node-1',
+        protocol: 'postgresql', port: '5432', health_status: 'healthy',
+      }];
+    }
+    if (/FROM\s+partitions\b/u.test(sql)) return partitions;
+    if (/FROM\s+services\b/u.test(sql)) return services;
+    if (/^SELECT\s+COUNT\(\*\)\s+AS\s+row_count\s+FROM\s+orders$/iu.test(stringTrim(sql))) {
+      return [{row_count: '0'}];
+    }
+    throw new Error(`Unexpected query in readSystemTables: ${sql}`);
+  };
+
+  const snapshot = await readSystemTables(realShapeQuery);
+  assert.deepEqual(Object.keys(snapshot).sort(), ['endpoints', 'nodes', 'partitions', 'services']);
+  assert.equal(Object.hasOwn(snapshot, 'tables'), false);
+
+  const readinessByNodeId = Object.fromEntries(
+    arrayMap(nodeIds, (nodeId) => [nodeId, {dimensions: {serveEligible: true}, reasons: []}]),
+  );
+  const ctx = {
+    sshRun: async (_host, _opts, cmd) => {
+      if (stringIncludes(cmd, '/api/admin/control-snapshot')) {
+        return `${JSON.stringify({
+          controlPlaneDiagnostics: {readinessByNodeId}, replicaOperations: {inFlightCount: 0},
+        })}\nhttp_status=200`;
+      }
+      return 'http_status=200';
+    },
+    opts: {}, clientIp: '10.0.0.9', sleep: async () => {}, now: () => nowMs,
+    budget: {attempts: 2, intervalMs: 10, stablePolls: 1},
+  };
+  const ready = await clusterReady(
+    ctx, 'lagrange-system-tables', realShapeQuery, nodeRoles, ['orders'],
+  );
+  assert.equal(ready.state, 'ready');
+  assert.equal(ready.attempts, 1);
+  assert.equal(ready.evidence.partitions, 8);
+  assert.equal(ready.evidence.tables, 7);
+  assert.equal(arrayIncludes(ready.evidence.tableNames, 'orders'), true);
+  assert.equal(arrayIncludes(ready.evidence.partitionIds, 'orders-p1'), true);
+  assert.equal(arrayIncludes(ready.evidence.partitionIds, 'orders-p2'), true);
+});
+
+test('unknown-outcome-real-delivery-loop-progression: unresolved write after lost answer ' +
+  'and NO_HANDLER/not-leader refusal on published route A progresses to recovery candidate B ' +
+  'under the same entryId', async () => {
+  const partitionId = 'history-p1';
+  const addrA = 'node-1/partition/history-p1-r1';
+  const addrB = 'node-2/partition/history-p1-r2';
+
+  for (const secondRefusal of ['no-handler', 'not-leader-without-redirect']) {
+    const cache = new SystemTableCache();
+    for (const nodeId of ['node-1', 'node-2']) {
+      cache.applySystemTableChange('nodes', 'INSERT', {
+        node_id: nodeId, status: 'active', connection_state: 'ready',
+        ready_lease_expires_at: Date.now() + 60_000, last_heartbeat: Date.now(),
+      });
+    }
+    cache.applySystemTableChange('partitions', 'INSERT', {
+      partition_id: partitionId, table_name: 'history',
+      leader_node_id: 'node-1', replica_count: 2,
+    });
+    cache.applySystemTableChange('services', 'INSERT', {
+      service_id: 'history-p1-r1', partition_id: partitionId, service_type: 'partition',
+      node_id: 'node-1', address: addrA, status: 'active', raft_role: 'leader',
+    });
+    cache.applySystemTableChange('services', 'INSERT', {
+      service_id: 'history-p1-r2', partition_id: partitionId, service_type: 'partition',
+      node_id: 'node-2', address: addrB, status: 'active', raft_role: 'follower',
+    });
+
+    const deliveredCalls = [];
+    const router = {
+      nodeId: 'node-1',
+      async deliver(address, request) {
+        const entryId = request?.operation?.entryId ?? request?.entryId ?? null;
+        deliveredCalls.push({address, entryId});
+        if (address === addrA && deliveredCalls.length === 1) {
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT,
+            error: 'Message delivery timed out after 5000ms',
+          });
+        }
+        if (address === addrA) {
+          if (secondRefusal === 'no-handler') {
+            return buildDeliveryEnvelope({
+              acknowledged: false, noHandler: true,
+              error: `No handler registered for address: ${addrA}`,
+            });
+          }
+          return buildDeliveryEnvelope(
+            {acknowledged: true},
+            {
+              success: false, failureCode: 'partition_write_not_leader',
+              error: 'Not the partition leader',
+            },
+          );
+        }
+        if (address === addrB) {
+          return buildDeliveryEnvelope(
+            {acknowledged: true},
+            {success: true, committed: true, settledReplay: 'retained', changes: 0, entryId},
+          );
+        }
+        throw new Error(`Unexpected delivery address ${address}`);
+      },
+    };
+
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {controlPlaneRecoveryEligible: true},
+      }),
+      messageRouter: router, nodeId: 'node-1', systemCache: cache,
+      leaderRetryDelayMs: 1, queryTimeoutMs: 5_000,
+    });
+
+    const outcome = await executor.executeOnPartition(
+      partitionId, 'TRUNCATE TABLE history', [], false, true, false, {tableName: 'history'},
+    );
+    assert.equal(outcome.success, true, `expected recovery to B for ${secondRefusal}`);
+    const bDeliveries = arrayFilter(deliveredCalls, (c) => c.address === addrB);
+    assert.equal(bDeliveries.length, 1, `B must be tried on ${secondRefusal}`);
+    assert.ok(typeof deliveredCalls[0].entryId === 'string' && deliveredCalls[0].entryId.length > 0);
+    assert.equal(bDeliveries[0].entryId, deliveredCalls[0].entryId);
+  }
+});
+
+test('remote-reset-timing-boundary: executeRemoteGateAction and createSemanticGateStage ' +
+  'preserve earlier adapter reset timings across the remote JSON boundary instead of ' +
+  'substituting case completion time', async () => {
+  const store = new Map();
+  const tableSchemas = new Map();
+  const createdIndexes = new Map();
+  const catalogState = {
+    store, tableSchemas, createdIndexes,
+    returnSchemaProbeRow: true, requireTableOnTruncate: true,
+  };
+  const fakeClient = {
+    connect: async () => {},
+    query: (sql, params = []) => runCohortResetTestQuery(catalogState, sql, params),
+    end: async () => {},
+  };
+
+  const seedAdapter = await createLagrangeOltpAdapter({
+    endpoint: {host: '10.0.0.1', port: 5433},
+    connection: {user: 'bench', database: 'bench'},
+    createClient: () => fakeClient,
+    workload: {scale: 1, workers: 1},
+  });
+  await seedAdapter.close();
+
+  const remoteReqBase = {
+    system: 'lagrange',
+    connection: {
+      endpoint: {host: '10.0.0.1', port: 5433},
+      credentials: {user: 'bench', database: 'bench'},
+    },
+    binding: {
+      campaignId: 'camp-remote-reset', containerId: 'c-lagrange-1',
+      imageId: IMAGE, endpoint: '10.0.0.1:5433',
+    },
+    persistentStorage: true,
+  };
+  const remoteActionResult = await executeRemoteGateAction(
+    {...remoteReqBase, action: 'pg-case', caseId: 'payment'},
+    {createPgClient: () => fakeClient},
+  );
+  const remoteDurabilityBeforeResult = await executeRemoteGateAction(
+    {...remoteReqBase, action: 'pg-durability-before'},
+    {createPgClient: () => fakeClient},
+  );
+  assert.equal(typeof remoteDurabilityBeforeResult.resetOutcome, 'object');
+  assert.ok(remoteDurabilityBeforeResult.resetOutcome !== null);
+  assert.equal(typeof remoteDurabilityBeforeResult.resetOutcome.resetStartedAt, 'string');
+  assert.equal(typeof remoteDurabilityBeforeResult.resetOutcome.resetEndedAt, 'string');
+  const serializedOverSsh = JSON.parse(JSON.stringify(remoteActionResult));
+  assert.equal(typeof serializedOverSsh.resetOutcome, 'object');
+  assert.ok(serializedOverSsh.resetOutcome !== null);
+  assert.equal(typeof serializedOverSsh.resetOutcome.resetStartedAt, 'string');
+  assert.equal(typeof serializedOverSsh.resetOutcome.resetEndedAt, 'string');
+  assert.ok(Number.isFinite(serializedOverSsh.resetOutcome.resetDurationMs));
+  assert.ok(Number.isFinite(serializedOverSsh.resetOutcome.seedLoadDurationMs));
+
+  const lateControllerNowMs = Date.parse(serializedOverSsh.resetOutcome.resetEndedAt) + 60_000;
+  const lateControllerIso = new Date(lateControllerNowMs).toISOString();
+  const serializedDurabilityBefore = JSON.parse(JSON.stringify(remoteDurabilityBeforeResult));
+  const ledger = createContainerLedger();
+  const baseArm = createArm(ledger, 0, {persistent: true});
+  const remotePayloadPattern = /--input-type=module -e '[^']+' ([A-Za-z0-9+/=]+)$/u;
+  const scriptedSsh = createScriptedSsh([
+    [(command, host) => host === '10.0.0.9' && stringIncludes(command, '--input-type=module'),
+      (command) => {
+        const encoded = remotePayloadPattern.exec(command)[1];
+        const req = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+        if (req.action === 'pg-durability-before') {
+          return `${JSON.stringify(serializedDurabilityBefore)}\n`;
+        }
+        if (req.action === 'pg-durability-after') {
+          return `${JSON.stringify({
+            paymentAfterRestart: serializedDurabilityBefore.paymentBeforeRestart,
+            stateAfterRestart: serializedDurabilityBefore.stateBeforeRestart,
+          })}\n`;
+        }
+        const proofCase = arrayFind(OLTP_SCENARIO_A_PROOF_CASES, (c) => c.id === req.caseId);
+        return `${JSON.stringify({
+          ...serializedOverSsh,
+          proofRecord: {
+            ...serializedOverSsh.proofRecord,
+            evidenceId: `lagrange:lagrange-${req.caseId}-v1`,
+            proofIds: proofCase?.proofIds || serializedOverSsh.proofRecord.proofIds,
+          },
+        })}\n`;
+      }],
+    ...dockerRules(ledger),
+    restartRuleForLedger(ledger),
+  ]);
+  const stage = createSemanticGateStage({
+    journey: async () => {
+      throw new Error('local journey must not be used when loadGeneratorHost is set');
+    },
+    sshRun: scriptedSsh.sshRun, opts: {},
+    loadGeneratorHost: {ip: '10.0.0.9', repoPath: '/srv/repo', nodePath: '/usr/bin/node'},
+    evidenceDirOf: () => null, now: () => lateControllerNowMs,
+  });
+
+  const staged = await stage({
+    run: {runId: 'r-remote-timing', system: 'lagrange'},
+    manifest: {campaignId: 'camp-remote-reset'},
+    deployment: baseArm,
+  });
+
+  const resetEvents = arrayFilter(staged.events, (e) => e.kind === 'dataset-reset');
+  assert.ok(resetEvents.length >= 2);
+  assert.equal(arraySome(resetEvents, (e) => e.caseId === 'durability'), true);
+  for (const event of resetEvents) {
+    const expectedReset = event.caseId === 'durability' ?
+      serializedDurabilityBefore.resetOutcome : serializedOverSsh.resetOutcome;
+    assert.equal(event.at, expectedReset.resetEndedAt);
+    assert.notEqual(event.at, lateControllerIso);
+    assert.equal(event.startedAt, expectedReset.resetStartedAt);
+    assert.equal(event.endedAt, expectedReset.resetEndedAt);
+    assert.equal(event.durationMs, expectedReset.resetDurationMs);
+    assert.equal(event.seedLoadDurationMs, expectedReset.seedLoadDurationMs);
+  }
 });

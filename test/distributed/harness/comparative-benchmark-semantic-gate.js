@@ -694,7 +694,7 @@ async function executeRemotePgCase(req, overrides) {
       proofRecord: evidence.proofRecord,
       evidence,
       datasetPrepared: true,
-      resetOutcome: adapter?.schemaProvisioning?.outcome ?? null,
+      resetOutcome: adapter?.schemaProvisioning ?? null,
     };
   } finally {
     await closePgAdapterQuietly(adapter, cleanupDiagnostics);
@@ -736,7 +736,7 @@ async function executeRemotePgDurabilityBefore(req, overrides) {
       paymentBeforeRestart,
       stateBeforeRestart,
       datasetPrepared: true,
-      resetOutcome: adapter?.schemaProvisioning?.outcome ?? null,
+      resetOutcome: adapter?.schemaProvisioning ?? null,
     };
   } finally {
     await closePgAdapterQuietly(adapter, cleanupDiagnostics);
@@ -1213,7 +1213,7 @@ function datasetResetMethodForSystem(system) {
 }
 
 function assignProvisioningResetTimings(event, provisioning) {
-  if (!provisioning) return event;
+  if (!isRecordObject(provisioning)) return event;
   if (provisioning.resetStartedAt) event.startedAt = provisioning.resetStartedAt;
   if (provisioning.resetEndedAt) event.endedAt = provisioning.resetEndedAt;
   if (numberIsFinite(provisioning.resetDurationMs)) {
@@ -1225,8 +1225,21 @@ function assignProvisioningResetTimings(event, provisioning) {
   return event;
 }
 
+function resolveCanonicalResetProvisioning(adapter, resetOutcome) {
+  if (resetOutcome !== null && resetOutcome !== undefined) {
+    if (!isRecordObject(resetOutcome)) {
+      throw new TypeError(
+        `dataset-reset event requires a canonical provisioning object, got ${typeof resetOutcome}`,
+      );
+    }
+    return resetOutcome;
+  }
+  const adapterProvisioning = ownField(adapter, 'schemaProvisioning');
+  return isRecordObject(adapterProvisioning) ? adapterProvisioning : null;
+}
+
 function buildPreparedCaseDatasetResetEvent({caseId, system, adapter, resetOutcome, at}) {
-  const provisioning = resetOutcome || adapter?.schemaProvisioning || null;
+  const provisioning = resolveCanonicalResetProvisioning(adapter, resetOutcome);
   return assignProvisioningResetTimings({
     kind: EVENT.DATASET_RESET,
     at: provisioning?.resetEndedAt ?? at(),

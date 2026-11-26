@@ -587,6 +587,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         index,
         term,
         result: info,
+        command,
       });
       recordCommittedStatementCdc(this, {command, index, term, afterCommit},
         {entryKey, result: info});

@@ -13,6 +13,7 @@ const NO_COMMITTED_HLC = '0';
 const RAFT_RS_PEER_TABLE = 'raft_rs_peer_identity';
 const RAFT_INTERNAL_TABLE_PREFIX = '_raft_';
 const PARTICIPANT_TRANSACTIONS_TABLE = '_participant_transactions';
+const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
 const PREPARED_PARTICIPANT_STATE = 'PREPARED';
 const IDENTIFIER_QUOTE = '"';
 const IDENTIFIER_ESCAPED_QUOTE = '""';
@@ -102,6 +103,7 @@ function scrubRaftRsCheckpointPayload(copyDb, entityKind) {
   for (const table of raftTables) {
     copyDb.exec(`DROP TABLE IF EXISTS ${quotedIdentifier(table)}`);
   }
+  copyDb.exec(`DROP TABLE IF EXISTS ${quotedIdentifier(STATEMENT_OUTCOME_EFFECTS_TABLE)}`);
   if (entityKind !== ENTITY_TYPE.PARTITION) {
     const tables = copyDb.prepare(SELECT_USER_TABLES_SQL)
       .all()
@@ -133,7 +135,8 @@ function validateRaftRsPayloadTables(payloadDb, descriptor) {
     if (!tables.includes(RAFT_RS_PEER_TABLE)) {
       return false;
     }
-    if (tables.some((name) => name.startsWith(RAFT_INTERNAL_TABLE_PREFIX))) {
+    if (tables.some((name) => name.startsWith(RAFT_INTERNAL_TABLE_PREFIX)) ||
+        tables.includes(STATEMENT_OUTCOME_EFFECTS_TABLE)) {
       return false;
     }
     if (hasPendingPreparedParticipantTransactions(payloadDb)) {

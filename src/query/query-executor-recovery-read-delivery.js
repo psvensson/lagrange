@@ -371,17 +371,13 @@ function handleFailedRedirectResponse(context, redirectAddress,
     isLeaderPinnedDelivery, partitionId, recordCandidateFailure, response,
     unknownOutcome, widenWriteCandidate,
   } = context;
+  candidateState.markAttemptedAddress?.(redirectAddress);
   const redirectFailureMessage = resolveRedirectFailureMessage(redirectResponse);
   const redirectUnknownDecision = unknownOutcome.observeAnswer(redirectResponse);
-  if (redirectUnknownDecision !== UNKNOWN_OUTCOME_DECISION.NONE) {
+  if (redirectUnknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
     recordCandidateFailure(
       redirectFailureMessage, redirectResponse, redirectParticipantNodeId, redirectAddress);
-    if (redirectUnknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
-      return {action: REDIRECT_STEP_ACTION.RETURN, useLastFailure: true};
-    }
-    widenWriteCandidate(redirectAddress);
-    candidateState.requestRetryCurrentAddress();
-    return {action: REDIRECT_STEP_ACTION.BREAK};
+    return {action: REDIRECT_STEP_ACTION.RETURN, useLastFailure: true};
   }
   const redirectRetryDecision = executor.resolveControlPlaneWriteRetryDecision(
     partitionId, redirectResponse, forRead);
@@ -392,8 +388,9 @@ function handleFailedRedirectResponse(context, redirectAddress,
       {action: REDIRECT_STEP_ACTION.BREAK} :
       {action: REDIRECT_STEP_ACTION.CONTINUE, candidateIndex};
   }
-  if (isLeaderPinnedDelivery &&
-      executor.isLeaderUnavailable(redirectFailureMessage, redirectResponse?.errorCode)) {
+  if (redirectUnknownDecision === UNKNOWN_OUTCOME_DECISION.REDELIVER ||
+      (isLeaderPinnedDelivery &&
+       executor.isLeaderUnavailable(redirectFailureMessage, redirectResponse?.errorCode))) {
     widenWriteCandidate(response.leaderAddress);
   }
   return {action: REDIRECT_STEP_ACTION.CONTINUE, candidateIndex};

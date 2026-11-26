@@ -72,7 +72,6 @@ function createPartitionCandidateDeliveryState({
 }) {
   const attemptedAddresses = new Set();
   let leaderRecoveryQueued = false;
-  let retryCurrentAddressOnNextAttempt = false;
   let deferPartitionRetryOnNextAttempt = false;
 
   const getRecoveryCandidateSelectionOptions = () => ({
@@ -163,14 +162,8 @@ function createPartitionCandidateDeliveryState({
         ...retainedTailCandidates,
       );
     },
-    requestRetryCurrentAddress() {
-      retryCurrentAddressOnNextAttempt = true;
-    },
     requestDeferredPartitionRetry() {
       deferPartitionRetryOnNextAttempt = true;
-    },
-    shouldRetryCurrentAddress() {
-      return retryCurrentAddressOnNextAttempt;
     },
     shouldDeferPartitionRetry() {
       return deferPartitionRetryOnNextAttempt;

@@ -258,13 +258,11 @@ function settleUnresolvedCaughtWriteError({
   address,
   recordCandidateFailure,
   widenWriteCandidate,
-  candidateState,
   buildFailureResult,
 }) {
   if (hasNonEmptyWriteEntryId(executionOptions)) {
     recordCandidateFailure(errorMessage, error, serviceInfo?.nodeId, address);
     widenWriteCandidate(address);
-    candidateState.requestRetryCurrentAddress();
     return null;
   }
   return buildFailureResult(

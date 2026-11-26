@@ -48,6 +48,9 @@ import {
 import {
   compactRaftRsCommittedEntries,
 } from '../raft/snapshot-compaction.js';
+import {
+  resolveActiveMirrorRetentionBarrierIndex,
+} from './partition-committed-statement-outcome.js';
 import {resolveReplicaCheckpointsRoot} from '../raft/snapshot-install.js';
 import {
   gatherRetentionPins,
@@ -213,12 +216,21 @@ function isLeaderReady(service) {
 }
 
 function compactToGeneration(service, creation) {
+  const mirrorBarrierIndex = resolveActiveMirrorRetentionBarrierIndex(service);
+  const lastIncludedIndex = creation.descriptor.lastIncludedIndex;
+  const retentionFloorIndex = mirrorBarrierIndex !== null ?
+    Math.min(lastIncludedIndex, mirrorBarrierIndex) :
+    undefined;
+  const toIndex = retentionFloorIndex !== undefined ?
+    retentionFloorIndex :
+    lastIncludedIndex;
   return compactRaftRsCommittedEntries(
     service.db,
     service.partitionId,
     {
-      toIndex: creation.descriptor.lastIncludedIndex,
+      toIndex,
       proof: {checkpointDir: creation.checkpointDir},
+      ...(retentionFloorIndex !== undefined ? {retentionFloorIndex} : {}),
     },
   );
 }

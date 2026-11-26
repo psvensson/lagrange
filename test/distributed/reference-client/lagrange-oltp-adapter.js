@@ -798,10 +798,6 @@ async function resetCanonicalDataset(
       throw enrichTruncateExecutionFailure(table, error);
     }
     const truncateEndedMs = Date.now();
-    const observed = await observeTableState(client, table);
-    if (observed !== TABLE_PRESENT) {
-      throw observed.error;
-    }
     const postTruncateRowCount = await countRows(client, table);
     if (postTruncateRowCount !== ZERO) {
       const residualError = new Error(

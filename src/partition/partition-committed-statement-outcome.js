@@ -31,57 +31,21 @@ import {
 } from './partition-statement-admission-constants.js';
 import {LOCKING_READ_ERROR_CODE, LOCKING_READ_SQL_STATE} from
   '../query/sql-locking-read-constants.js';
-import {TABLES} from '../constants/tables.js';
-import {materializeTypedRowSetObjects} from '../query/sql-value-codec.js';
+import {
+  STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
+  partitionOwesDurableMirrorEffects,
+  pruneSettledMirrorOutcomeEffects,
+  readCapturedRowEffectsIn,
+  reconcileCommittedStatementMirrorEffects,
+  resolveActiveMirrorRetentionBarrierIndex,
+  resolveLeaderMirrorRetentionStamp,
+} from './partition-mirror-effect-retention.js';
 
-const SYSTEM_TABLE_NAMES_SET = Object.freeze(new Set(Object.values(TABLES)));
 const NO_COMMITTED_STATEMENT_KEY = null;
 const COLUMN_LIST_SEPARATOR = ', ';
 const FORMAT_UNSUPPORTED_REMEDY =
   'format is refused, never migrated; re-found the data directory';
 const OWNER_IDENTITY_RULE = 'an owner result is recorded with exactly its command digest';
-const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
-const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
-  CREATE_TABLE:
-    'CREATE TABLE IF NOT EXISTS _partition_statement_outcome_effects (' +
-    'entry_key TEXT PRIMARY KEY, log_index INTEGER NOT NULL, ' +
-    'mutation_kind TEXT, typed_effects_json TEXT NOT NULL)',
-  CREATE_LOG_INDEX_IDX:
-    'CREATE INDEX IF NOT EXISTS idx_partition_statement_outcome_effects_log_index ' +
-    'ON _partition_statement_outcome_effects (log_index)',
-  TABLE_EXISTS: 'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?',
-  INSERT:
-    'INSERT INTO _partition_statement_outcome_effects ' +
-    '(entry_key, log_index, mutation_kind, typed_effects_json) VALUES (?, ?, ?, ?)',
-  SELECT_BY_ENTRY_KEY:
-    'SELECT mutation_kind, typed_effects_json ' +
-    'FROM _partition_statement_outcome_effects WHERE entry_key = ?',
-  DELETE_THROUGH_LOG_INDEX:
-    'DELETE FROM _partition_statement_outcome_effects WHERE log_index <= ?',
-  DELETE_ALL: 'DELETE FROM _partition_statement_outcome_effects',
-});
-
-function hasActiveVolatileMirrorHandle(service) {
-  return Boolean(
-    service.splitReplication || service.mergeReplication || service.captureDurableMirrorEffects,
-  );
-}
-
-function isUserTableNameEligibleForMirror(tableName) {
-  return typeof tableName === 'string' && tableName.length > 0 &&
-    !SYSTEM_TABLE_NAMES_SET.has(tableName);
-}
-
-// Every user-table partition replica (leader and followers alike) persists
-// committed statement mirror effects inside the apply transaction so a
-// follower promoted after a crash or split transition start has all committed
-// row effects regardless of when its local system-table cache observed the
-// transition row.
-function partitionOwesDurableMirrorEffects(service, tableName = service?.tableName) {
-  if (!service) return false;
-  if (hasActiveVolatileMirrorHandle(service)) return true;
-  return isUserTableNameEligibleForMirror(tableName);
-}
 
 // The same identity is used by apply, replay answers and cold observation.
 // The one key is the command's entryId; a command without one (not a
@@ -214,75 +178,6 @@ function createCommittedStatementOutcomeTable(db, partitionId = null) {
 const UNSETTLED_RECORD = Object.freeze({
   state: PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED,
 });
-
-function capturedRowEffectsTableExistsIn(db) {
-  const state = sqliteConnectionState(db);
-  return state.committedFact(
-    STATEMENT_OUTCOME_EFFECTS_TABLE,
-    STATEMENT_OUTCOME_EFFECTS_TABLE,
-    () => state
-      .statement(STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
-      .get(STATEMENT_OUTCOME_EFFECTS_TABLE) !== undefined,
-  );
-}
-
-function persistCapturedRowEffectsIn(
-  service,
-  state,
-  entryKey,
-  logIndex,
-  mutationKind,
-  typedEffects,
-) {
-  if (!capturedRowEffectsTableExistsIn(service.db)) {
-    service.db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
-    service.db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_LOG_INDEX_IDX);
-    state.forgetFact(STATEMENT_OUTCOME_EFFECTS_TABLE, STATEMENT_OUTCOME_EFFECTS_TABLE);
-  }
-  state.runNonApplication(
-    STATEMENT_OUTCOME_EFFECTS_SQL.INSERT,
-    entryKey,
-    logIndex,
-    typeof mutationKind === 'string' ? mutationKind : null,
-    JSON.stringify(typedEffects),
-  );
-}
-
-function readCapturedRowEffectsIn(db, entryKey) {
-  if (!capturedRowEffectsTableExistsIn(db)) {
-    return null;
-  }
-  const row = sqliteConnectionState(db)
-    .statement(STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
-    .get(entryKey);
-  if (typeof row?.typed_effects_json !== 'string') {
-    return null;
-  }
-  return {
-    mutationKind:
-      typeof row.mutation_kind === 'string' ? row.mutation_kind : null,
-    affectedRows: materializeTypedRowSetObjects(
-      JSON.parse(row.typed_effects_json),
-    ),
-  };
-}
-
-function pruneSettledMirrorOutcomeEffects(service, settledThroughLogIndex) {
-  if (
-    !service?.db?.open ||
-    service.db.inTransaction === true ||
-    !Number.isSafeInteger(settledThroughLogIndex) ||
-    settledThroughLogIndex <= 0 ||
-    !capturedRowEffectsTableExistsIn(service.db)
-  ) {
-    return 0;
-  }
-  const info = sqliteConnectionState(service.db).runNonApplication(
-    STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_THROUGH_LOG_INDEX,
-    settledThroughLogIndex,
-  );
-  return Number(info?.changes) || 0;
-}
 
 function readCommittedStatementOutcomeIn(db, entryKey) {
   const row = sqliteConnectionState(db)
@@ -445,20 +340,14 @@ function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
   throw error;
 }
 
-function reconcileCommittedStatementMirrorEffects(service, state, entryKey, index, result) {
-  if (!result?.typedEffects || !partitionOwesDurableMirrorEffects(service)) return;
-  persistCapturedRowEffectsIn(
-    service, state, entryKey, index, result.mutationKind, result.typedEffects,
-  );
-}
-
 /**
  * Record an entry key's terminal outcome inside the application transaction.
  * @param {Object} service - The partition (its `db`).
  * @param {Object} outcome - Outcome record fields.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
-  term, error = null, result = null, ownerResultText = null, commandDigest = null}) {
+  term, error = null, result = null, ownerResultText = null, commandDigest = null,
+  command = null}) {
   assertOwnerIdentity(entryKey, ownerResultText, commandDigest);
   const state = sqliteConnectionState(service.db);
   const insert = state.statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
@@ -469,7 +358,9 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
     result === null ? null : result.changes,
     result === null ? null : result.lastInsertRowid,
     ownerResultText, commandDigest);
-  reconcileCommittedStatementMirrorEffects(service, state, entryKey, index, result);
+  reconcileCommittedStatementMirrorEffects(
+    service, state, entryKey, index, result, command,
+  );
 }
 
 /**
@@ -725,6 +616,7 @@ function settleLockingReadRefusedCommittedStatement(service, {
 }
 
 export {
+  STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
   committedStatementEntryKey, committedStatementOutcomeFormatError,
   detectCommittedStatementOutcomeFormat, isCommittedStatementKeyed,
   ownerCommandPrelude, partitionOwesDurableMirrorEffects,
@@ -732,6 +624,7 @@ export {
   readSettledOwnerCommandIn, answerSettledStatement,
   createCommittedStatementOutcomeTable, isDeterministicStatementFailure,
   readCommittedStatementOutcome, recordCommittedStatementOutcome,
+  resolveActiveMirrorRetentionBarrierIndex, resolveLeaderMirrorRetentionStamp,
   settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
   settleRecordedCommittedStatement, statementEnvironmentFailure,
   trackPendingOwnerCommand,

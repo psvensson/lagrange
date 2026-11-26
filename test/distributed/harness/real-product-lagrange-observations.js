@@ -802,10 +802,10 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
     const denials = [...verdict.denials, ...lane.denials, ...routing];
     const partitionIds = arrayMap(
       tables.partitions,
-      (row) => row?.partition_id || row?.id || null,
+      (row) => row.partition_id,
     );
     const tableNames = [...new Set(arrayFilter(
-      arrayMap(tables.partitions, (row) => row?.table_name || null),
+      arrayMap(tables.partitions, (row) => row.table_name),
       Boolean,
     ))];
     return {

@@ -21,6 +21,7 @@ import {
 import {
   answerSettledStatement,
   readCommittedStatementOutcome,
+  resolveLeaderMirrorRetentionStamp,
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
@@ -693,11 +694,17 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
    */
   async applyWrite(entry, phaseTimings = null) {
     const applyStartMs = this.timeSource.now();
-    entry = buildPartitionWriteEntry(entry, {
-      timestamp: entry?.timestamp,
-      proposedBy: entry?.proposedBy || this.replicaId,
-      proposedAt: entry?.proposedAt,
-    });
+    entry = buildPartitionWriteEntry(
+      {
+        ...resolveLeaderMirrorRetentionStamp(this),
+        ...entry,
+      },
+      {
+        timestamp: entry?.timestamp,
+        proposedBy: entry?.proposedBy || this.replicaId,
+        proposedAt: entry?.proposedAt,
+      },
+    );
     const schemaRefusal = transactionSchemaWriteRefusal(this.db, this.tableName,
       readPartitionWriteOrigin(this.db) !== null);
     if (schemaRefusal !== null) {
@@ -729,35 +736,16 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       );
       return committedCommandRefusalResult(admission, this.partitionId);
     }
-    // A settled entry key is answered from its durable outcome row, before
-    // anything is proposed: a retry never adds a log entry, and its answer is
-    // the same in process and after a restart.
     const settledAnswer = this.answerSettledWrite(entry, entryKey);
     if (settledAnswer !== undefined) {
       this.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-        applyStartMs,
-      );
+        phaseTimings, WRITE_PHASE_FIELD_APPLY_WRITE_MS, applyStartMs);
       return settledAnswer;
     }
-    // The write commit owner: parked unproposed while a prepared participant
-    // transaction reserves the partition (re-admitted by its decision);
-    // otherwise only the consensus leader proposes, once, through the port,
-    // and the committed-entry application answers it with its durable commit
-    // witness.
     return startAdmittedPartitionWrite(this, {
-      entry,
-      phaseTimings,
-      applyStartMs,
-    });
+      entry, phaseTimings, applyStartMs});
   }
-  async applyWriteSideEffectPlan({
-    entry,
-    result,
-    sideEffectPlan,
-    commitPromise,
-  }) {
+  async applyWriteSideEffectPlan({entry, result, sideEffectPlan, commitPromise}) {
     if (commitPromise) {
       this.setPendingCommittedWriteResult(entry.entryId, result);
     }

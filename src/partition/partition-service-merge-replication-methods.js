@@ -144,7 +144,9 @@ async function runMergeCutoverPhase(owner, handle, metadata) {
     mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
     mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
   if (handle.terminal) {
-    pruneSettledMirrorOutcomeEffects(owner, settledWatermark);
+    pruneSettledMirrorOutcomeEffects(owner, settledWatermark, {
+      releaseObligation: true,
+    });
   }
 }
 

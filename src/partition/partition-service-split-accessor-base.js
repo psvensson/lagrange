@@ -163,7 +163,9 @@ async function runSplitCutoverPhase(owner, handle, metadata) {
   );
   handle.terminal = cleanupAck?.splitSourceRetired === true;
   if (handle.terminal) {
-    pruneSettledMirrorOutcomeEffects(owner, settledWatermark);
+    pruneSettledMirrorOutcomeEffects(owner, settledWatermark, {
+      releaseObligation: true,
+    });
   }
 }
 

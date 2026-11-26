@@ -38,6 +38,11 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {
+  openGroupWriteAdmission,
+  settleGroupLeader,
+  transferGroupLeadership,
+} from './partition-group-raft-controls.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -65,10 +70,18 @@ import {
   PARTITION_SETTLED_REPLAY,
 } from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {
+  STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
   partitionOwesDurableMirrorEffects,
   pruneSettledMirrorOutcomeEffects,
   readCommittedStatementOutcome,
 } from '../../src/partition/partition-committed-statement-outcome.js';
+import {
+  createPartitionSnapshotCadence,
+  RAFT_SNAPSHOT_CADENCE_OUTCOME,
+} from '../../src/partition/partition-snapshot-cadence.js';
+import {
+  RAFT_CHECKPOINT_PAYLOAD_FILE,
+} from '../../src/raft/snapshot-checkpoint-constants.js';
 import {
   loadDurableDeltasBehindWatermark,
 } from '../../src/partition/partition-mirror-replay-cursor.js';
@@ -1170,113 +1183,304 @@ test('durable split effects: committed writes retain canonical affectedRows and 
   });
 });
 
-test('L9-RETENTION-2: follower with stale inactive system-table cache retains durable mirror effects across >1,000 writes and replays broad UPDATE/DELETE after promotion',
-  {timeout: TEST_TIMEOUT_MS}, async () => {
+test('L9-RETENTION-2: follower with stale inactive system-table cache retains durable mirror effects across >1,000 writes, promotes to leader, and replays into real child partitions while steady-state operation bounds and retires history',
+  {timeout: TEST_TIMEOUT_MS * 2}, async () => {
+    quietEnvironment();
     const partitionId = 'outcome-follower-stale-cache';
     const userTableName = 'user_orders';
-    await withPartition(partitionId, async ({open}) => {
-      const staleCache = {
-        get(table, key) {
-          if (table === 'tables' && key === userTableName) {
-            return {
-              table_name: userTableName,
-              partition_transition_state: 'active',
-              partition_transition_metadata: null,
-            };
-          }
-          return null;
-        },
-      };
-      const follower = await open();
-      follower.tableName = userTableName;
-      follower.systemTableCache = staleCache;
-      follower.db.exec(
-        `CREATE TABLE IF NOT EXISTS ${userTableName} ` +
-        '(group_id TEXT PRIMARY KEY, representative_node_id TEXT)',
-      );
-      const seedWrite = await follower.applyWrite({
+    const userTableSchema = Object.freeze({
+      columns: [
+        {name: 'group_id', type: 'TEXT', primaryKey: true},
+        {name: 'representative_node_id', type: 'TEXT'},
+      ],
+    });
+    const members = [
+      [`${partitionId}-r1`, 'node-1'],
+      [`${partitionId}-r2`, 'node-2'],
+      [`${partitionId}-r3`, 'node-3'],
+    ];
+    const group = await formAdmittedGroup({
+      partitionId, members, tempPrefix: TEMP_PREFIX,
+      serviceOptions: {
+        ...partitionOptions(partitionId, null),
+        tableId: userTableName, tableName: userTableName, schema: userTableSchema,
+      },
+      budgetMs: GROUP_BUDGET_MS,
+    });
+    await openGroupWriteAdmission(group, group.services[0]);
+    const childDir = fs.mkdtempSync(path.join(os.tmpdir(), `${TEMP_PREFIX}children-`));
+    const childServices = [];
+    const openChildPartition = async (childPartitionId) => {
+      const childDbPath = path.join(childDir, `${childPartitionId}.sqlite`);
+      const child = new PartitionService(withFoundingStamp({
+        ...partitionOptions(childPartitionId, childDbPath),
+        tableId: userTableName, tableName: userTableName, schema: userTableSchema,
+      }));
+      childServices.push(child);
+      await child.initialize();
+      await resumeFixtureParticipantAdmission(child);
+      return child;
+    };
+
+    try {
+      const [initialLeader, follower, thirdReplica] = group.services;
+      const leaderCache = initialLeader.systemTableCache;
+      const staleFollowerCache = follower.systemTableCache;
+      const thirdCache = thirdReplica.systemTableCache;
+      for (const cache of [leaderCache, staleFollowerCache, thirdCache]) {
+        cache.applySystemTableChange('tables', 'INSERT', {
+          table_id: userTableName, table_name: userTableName,
+          partition_transition_state: 'active', partition_transition_metadata: null,
+        });
+      }
+
+      const seedWrite = await initialLeader.applyWrite({
         type: PARTITION_SERVICE_OPERATION.INSERT,
         sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
-        params: ['A-seed', 'node-0'],
-        entryId: 'entry-follower-stale-seed',
+        params: ['A-seed', 'node-0'], entryId: 'entry-follower-stale-seed',
       });
       assert.equal(seedWrite.success, true);
-      const firstWrite = await follower.applyWrite({
+
+      const splitMetadata = {
+        workflowId: 'wf-split-stale-follower', workflowAttempt: 1, workflowFenceToken: 1,
+        primaryKeyColumn: 'group_id', sourcePartitionId: partitionId, splitKey: 'M',
+        targetPartitionIds: ['orders-left', 'orders-right'], targetPartitionVersion: 2,
+        sourceCheckpoint: {
+          snapshotBarrierIndex: seedWrite.logIndex, replayWatermarkIndex: seedWrite.logIndex,
+        },
+      };
+      leaderCache.applySystemTableChange('tables', 'UPDATE', {
+        table_id: userTableName, table_name: userTableName,
+        partition_transition_state: 'split_catchup',
+        partition_transition_metadata: JSON.stringify(splitMetadata),
+      });
+
+      const firstWrite = await initialLeader.applyWrite({
         type: PARTITION_SERVICE_OPERATION.INSERT,
         sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?), (?, ?)`,
-        params: ['B-early', 'node-1', 'Z-early', 'node-1'],
-        entryId: 'entry-follower-stale-1',
+        params: ['B-early', 'node-1', 'Z-early', 'node-1'], entryId: 'entry-follower-stale-1',
       });
       assert.equal(firstWrite.success, true);
-      // Broad UPDATE (WHERE on non-PK column) and trim(?) DELETE before >1,000 subsequent writes:
-      const earlyBroadUpdate = await follower.applyWrite({
+
+      const earlyBroadUpdate = await initialLeader.applyWrite({
         type: PARTITION_SERVICE_OPERATION.UPDATE,
         sql: `UPDATE ${userTableName} SET representative_node_id = ? WHERE representative_node_id = ?`,
-        params: ['node-2', 'node-1'],
-        entryId: 'entry-follower-stale-broad-update',
+        params: ['node-2', 'node-1'], entryId: 'entry-follower-stale-broad-update',
       });
       assert.equal(earlyBroadUpdate.success, true);
-      const earlyTrimDelete = await follower.applyWrite({
+
+      const earlyTrimDelete = await initialLeader.applyWrite({
         type: PARTITION_SERVICE_OPERATION.DELETE,
         sql: `DELETE FROM ${userTableName} WHERE group_id = trim(?)`,
-        params: [' Z-early '],
-        entryId: 'entry-follower-stale-trim-delete',
+        params: [' Z-early '], entryId: 'entry-follower-stale-trim-delete',
       });
       assert.equal(earlyTrimDelete.success, true);
 
-      // Apply 1,005 additional writes while follower's systemTableCache still says 'active'
-      // and no volatile mirror handle exists:
+      let lastBulkLogIndex = earlyTrimDelete.logIndex;
       for (let i = 1; i <= 1005; i += 1) {
-        const bulkWrite = await follower.applyWrite({
+        const bulkWrite = await initialLeader.applyWrite({
           type: PARTITION_SERVICE_OPERATION.INSERT,
           sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
           params: [`N-bulk-${String(i).padStart(4, '0')}`, 'node-bulk'],
           entryId: `entry-follower-bulk-${i}`,
         });
         assert.equal(bulkWrite.success, true);
+        lastBulkLogIndex = bulkWrite.logIndex;
       }
 
-      const deltas = loadDurableDeltasBehindWatermark(follower, seedWrite.logIndex);
       assert.equal(
-        deltas.length,
-        1008,
-        'follower retains all 1,008 post-barrier durable mirror effects across >1,000 writes',
+        await group.waitFor(
+          () => durableRecord(group.dbFileOf(members[1]), partitionId).appliedIndex >=
+            lastBulkLogIndex,
+        ),
+        true,
+        'follower replica applied all 1,008 post-barrier writes',
       );
-      assert.equal(deltas[0].entryId, 'entry-follower-stale-1');
-      assert.equal(deltas[1].entryId, 'entry-follower-stale-broad-update');
-      assert.equal(deltas[1].affectedRows?.length, 2);
-      assert.equal(deltas[2].entryId, 'entry-follower-stale-trim-delete');
-      assert.equal(deltas[2].affectedRows?.length, 1);
+      assert.equal(
+        staleFollowerCache.get('tables', userTableName)?.partition_transition_state,
+        'active',
+      );
 
-      // Replay the early deltas through real replaySplitEntry after promotion:
-      const routed = [];
-      const metadata = {
-        primaryKeyColumn: 'group_id',
-        splitKey: 'M',
-        targetPartitionIds: ['orders-left', 'orders-right'],
-      };
-      const queryExecutor = {
-        async executeOnPartition(targetPartitionId, sql, params, _r, _w, _tx, options) {
-          routed.push({targetPartitionId, sql, params, entryId: options?.entryId});
-          return {success: true};
-        },
-      };
-      for (const delta of deltas.slice(0, 3)) {
-        await replaySplitEntry(delta, metadata, {
-          tableName: userTableName,
-          queryExecutor,
+      // Transfer actual Raft leadership from initialLeader to follower through real consensus:
+      leaderCache.applySystemTableChange('tables', 'UPDATE', {
+        table_id: userTableName, table_name: userTableName,
+        partition_transition_state: 'active', partition_transition_metadata: null,
+      });
+      await transferGroupLeadership(group, initialLeader, follower);
+      await settleGroupLeader(group, follower);
+      assert.equal(
+        await group.waitFor(() =>
+          group.services.every((svc) => {
+            const st = svc.raft.readStatus();
+            return st.leaderId === follower.replicaId &&
+              st.appliedIndex === st.commitIndex && st.commitIndex === st.lastIndex;
+          }),
+        ),
+        true,
+        'all group replicas converged and drained at the new leader term',
+      );
+      await openGroupWriteAdmission(group, follower);
+      assert.equal(follower.raft.readStatus().role, 'leader');
+
+      // Even after promotion, while every replica's cache still says 'active', a write on the
+      // promoted leader preserves all post-barrier effects from the durable SQLite barrier:
+      const postPromotionWrite = await follower.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.INSERT,
+        sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
+        params: ['N-bulk-1006', 'node-promoted'], entryId: 'entry-follower-post-promotion',
+      });
+      assert.equal(postPromotionWrite.success, true, JSON.stringify(postPromotionWrite));
+
+      const deltasBeforeResume = loadDurableDeltasBehindWatermark(follower, seedWrite.logIndex);
+      assert.equal(deltasBeforeResume.length, 1009);
+      assert.equal(deltasBeforeResume[0].entryId, 'entry-follower-stale-1');
+      assert.equal(deltasBeforeResume[1].entryId, 'entry-follower-stale-broad-update');
+      assert.equal(deltasBeforeResume[1].affectedRows?.length, 2);
+      assert.equal(deltasBeforeResume[2].entryId, 'entry-follower-stale-trim-delete');
+      assert.equal(deltasBeforeResume[2].affectedRows?.length, 1);
+
+      const leftChild = await openChildPartition('orders-left');
+      const rightChild = await openChildPartition('orders-right');
+      const childById = new Map([['orders-left', leftChild], ['orders-right', rightChild]]);
+      const childSeed = await leftChild.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.INSERT,
+        sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
+        params: ['A-seed', 'node-0'], entryId: 'entry-child-snapshot-seed',
+      });
+      assert.equal(childSeed.success, true);
+
+      for (const targetId of ['orders-left', 'orders-right']) {
+        staleFollowerCache.applySystemTableChange('partitions', 'INSERT', {
+          partition_id: targetId, table_name: userTableName, partition_version: 2,
         });
       }
-      assert.deepEqual(
-        routed.map((r) => ({target: r.targetPartitionId, entryId: r.entryId})),
-        [
-          {target: 'orders-left', entryId: 'entry-follower-stale-1'},
-          {target: 'orders-right', entryId: 'entry-follower-stale-1'},
-          {target: 'orders-left', entryId: 'entry-follower-stale-broad-update'},
-          {target: 'orders-right', entryId: 'entry-follower-stale-broad-update'},
-          {target: 'orders-right', entryId: 'entry-follower-stale-trim-delete'},
-        ],
-        'promoted follower replays early broad UPDATE and trim(?) DELETE across >1,000-write window without losing row effects',
+      staleFollowerCache.applySystemTableChange('tables', 'UPDATE', {
+        table_id: userTableName, table_name: userTableName,
+        active_partition_version: 1, pending_partition_version: 2,
+        partition_transition_state: 'split_catchup',
+        partition_transition_metadata: JSON.stringify(splitMetadata),
+      });
+
+      const ackStatuses = [];
+      follower.sqlQueryEngine = {
+        queryExecutor: {
+          async executeOnPartition(targetPartitionId, sql, params, _r, _w, _tx, options) {
+            const targetChild = childById.get(targetPartitionId);
+            assert.ok(targetChild, `unknown target child partition ${targetPartitionId}`);
+            return targetChild.applyWrite({
+              type: PARTITION_SERVICE_OPERATION.QUERY, sql, params, entryId: options?.entryId,
+            });
+          },
+        },
+        managedSplitWorkflow: {
+          async acknowledgeSourceParticipant(_workflowId, ack) {
+            ackStatuses.push(ack.status);
+            return {
+              result: 'accepted',
+              splitCutoverApplied: ack.status === 'catchup_ready',
+              splitSourceRetired: ack.status === 'cleanup_completed',
+            };
+          },
+        },
+      };
+
+      const resumed = await follower.startOrResumeSplitReplicationFromDurable();
+      assert.equal(resumed, true);
+      await follower.splitReplicationRun;
+      assert.deepEqual(ackStatuses, ['snapshot_started', 'catchup_ready', 'cleanup_completed']);
+
+      const leftRows = leftChild.db
+        .prepare(`SELECT group_id, representative_node_id FROM ${userTableName} ORDER BY group_id`)
+        .all();
+      const rightRows = rightChild.db
+        .prepare(`SELECT group_id, representative_node_id FROM ${userTableName} ORDER BY group_id`)
+        .all();
+      assert.deepEqual(leftRows, [
+        {group_id: 'A-seed', representative_node_id: 'node-0'},
+        {group_id: 'B-early', representative_node_id: 'node-2'},
+      ]);
+      assert.equal(rightRows.some((r) => r.group_id === 'Z-early'), false);
+      assert.equal(rightRows.length, 1006);
+      assert.equal(rightRows[1005].group_id, 'N-bulk-1006');
+
+      const remainingSourceEffects = follower.db
+        .prepare('SELECT COUNT(*) AS count FROM _partition_statement_outcome_effects WHERE log_index > 0')
+        .get().count;
+      assert.equal(remainingSourceEffects, 0);
+    } finally {
+      for (const child of childServices) await child.shutdown();
+      fs.rmSync(childDir, {recursive: true, force: true});
+      await group.dispose();
+      resetEnvironment();
+    }
+
+    const steadyPartitionId = 'steady-state-user-orders-p1';
+    await withPartition(steadyPartitionId, async ({dbPath, open}) => {
+      const stable = await open();
+      stable.tableId = userTableName;
+      stable.tableName = userTableName;
+      stable.db.exec(
+        `CREATE TABLE IF NOT EXISTS ${userTableName} ` +
+        '(group_id TEXT PRIMARY KEY, representative_node_id TEXT)',
       );
+      stable.systemTableCache.applySystemTableChange('tables', 'INSERT', {
+        table_id: userTableName, table_name: userTableName,
+        partition_transition_state: 'active', partition_transition_metadata: null,
+      });
+      stable.systemTableCache.applySystemTableChange('partitions', 'INSERT', {
+        partition_id: steadyPartitionId, table_name: userTableName, replica_count: 1,
+      });
+
+      const seed = await stable.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.INSERT,
+        sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
+        params: ['row-hot', 'v-0'], entryId: 'entry-steady-seed',
+      });
+      assert.equal(seed.success, true);
+
+      const totalSteadyUpdates = STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW + 350;
+      for (let i = 1; i <= totalSteadyUpdates; i += 1) {
+        const upd = await stable.applyWrite({
+          type: PARTITION_SERVICE_OPERATION.UPDATE,
+          sql: `UPDATE ${userTableName} SET representative_node_id = ? WHERE group_id = ?`,
+          params: [`v-${i}`, 'row-hot'], entryId: `entry-steady-upd-${i}`,
+        });
+        assert.equal(upd.success, true);
+      }
+
+      const retainedInSteadyState = stable.db
+        .prepare(
+          'SELECT COUNT(*) AS count, MIN(log_index) AS minIndex, MAX(log_index) AS maxIndex ' +
+          'FROM _partition_statement_outcome_effects WHERE log_index > 0',
+        )
+        .get();
+      assert.ok(retainedInSteadyState.count <= STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW);
+      assert.ok(retainedInSteadyState.minIndex > 300);
+
+      const cadence = createPartitionSnapshotCadence({service: stable, entryThreshold: 1});
+      const tickOutcome = await cadence.tick(Date.now());
+      assert.equal(tickOutcome.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.COMPACTED);
+
+      const retainedAfterCompaction = stable.db
+        .prepare('SELECT COUNT(*) AS count FROM _partition_statement_outcome_effects WHERE log_index > 0')
+        .get().count;
+      assert.equal(retainedAfterCompaction, 0);
+
+      const checkpointPayloadPath = path.join(
+        tickOutcome.creation.checkpointDir, RAFT_CHECKPOINT_PAYLOAD_FILE,
+      );
+      const payloadDb = new Database(checkpointPayloadPath, {readonly: true});
+      try {
+        const effectsTableInSnapshot = payloadDb
+          .prepare(
+            'SELECT 1 AS present FROM sqlite_master ' +
+            'WHERE type = \'table\' AND name = \'_partition_statement_outcome_effects\'',
+          )
+          .get();
+        assert.equal(effectsTableInSnapshot, undefined);
+      } finally {
+        payloadDb.close();
+      }
+      assert.ok(fs.existsSync(dbPath));
     });
   });
