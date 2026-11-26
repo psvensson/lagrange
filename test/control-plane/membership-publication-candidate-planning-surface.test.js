@@ -92,3 +92,57 @@ test('a nested derivation still derives no planning evidence', async (t) => {
   t.same(calls, [], 'and reads neither surface');
   t.end();
 });
+
+test('synchronous planning selects both publication answers from one inventory', (t) => {
+  const row = (id, epoch, status, kind = 'cluster_membership') => ({
+    publication_id: id, publication_kind: kind, publication_epoch: epoch, status,
+    published_active_node_ids: JSON.stringify([id]),
+  });
+  const pending = row('pending-first', '9', 'pending');
+  const published = row('previous-first', 8, 'published');
+  const mixed = [row('foreign', 30, 'published', 'other'), pending,
+    row('pending-tie', 9, 'pending'), published, row('previous-tie', '8', 'published')];
+  const supplied = {publicationId: 'supplied', status: 'PENDING'};
+  const previous = {publicationId: 'prior', status: 'PUBLISHED'};
+  const reference = createCoordinator({calls: []});
+  reference.resolvePlanningPublicationRowsSync = (options) => {
+    const latestPublicationRow = options.latestPublicationRow || reference.getLatestPublicationRowSync(options);
+    const latestPublishedPublicationRow = options.latestPublishedPublicationRow ||
+      (latestPublicationRow?.status?.toUpperCase() === 'PUBLISHED' ? latestPublicationRow :
+        reference.getLatestPublishedPublicationRowSync(options));
+    return {latestPublicationRow, latestPublishedPublicationRow};
+  };
+  const coordinator = createCoordinator({calls: []});
+  for (const [rows, inputs, scans, preloaded = false] of [
+    [mixed, {}, 1], [[published], {}, 1],
+    [[pending], {}, 1], [[], {}, 1], [mixed, {}, 1, true],
+    [mixed, {latestPublicationRow: supplied}, 1],
+    [mixed, {latestPublishedPublicationRow: previous}, 1],
+    [mixed, {latestPublicationRow: previous}, 0],
+    [mixed, {latestPublicationRow: supplied, latestPublishedPublicationRow: previous}, 0],
+  ]) {
+    let reads = 0;
+    let normalizations = 0;
+    const observed = rows.map((raw) => ({...raw,
+      // The canonical normalizer reads publication_id exactly once on entry.
+      get publication_id() { normalizations++; return raw.publication_id; },
+    }));
+    coordinator.systemTableCache.getAll = () => { reads++; return observed; };
+    const options = {nodeRows: [], serviceRows: [], nodeEndpointRows: [], replicaOperationRows: [],
+      partitionRows: [], readinessEntries: [], ...inputs};
+    reference.systemTableCache.getAll = coordinator.systemTableCache.getAll;
+    const request = preloaded ? {...options, publicationRows: observed} : options;
+    const expected = reference.readPublicationPlanningSnapshotSync(request);
+    const originalScans = scans + Number(!inputs.latestPublicationRow && !inputs.latestPublishedPublicationRow &&
+      expected.latestPublicationRow?.status !== 'PUBLISHED');
+    t.equal(reads, preloaded ? 0 : originalScans, 'original inventory reads');
+    t.equal(normalizations, originalScans * rows.length, 'original normalized row count');
+    reads = 0;
+    normalizations = 0;
+    const actual = coordinator.readPublicationPlanningSnapshotSync(request);
+    t.same(actual, expected, 'complete planning outcome matches independent selectors');
+    t.equal(reads, preloaded ? 0 : scans, 'publication inventory reads');
+    t.equal(normalizations, scans * rows.length, 'actual normalized row count');
+  }
+  t.end();
+});

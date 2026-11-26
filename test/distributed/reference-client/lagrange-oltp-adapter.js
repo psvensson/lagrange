@@ -278,15 +278,30 @@ async function rollbackAfterAbortedCommit(rollback, commitError) {
 function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
   const useNativeForUpdate = lockingReadMode === NATIVE_LOCKING_READ_MODE;
   const strippedSet = new Set(LAGRANGE_OLTP_TRANSLATION_AUDIT.strippedStatementIds);
+  // Owed by this worker connection even after the failed invocation has
+  // returned its statement and rollback errors to the operation recorder.
+  let rollbackPending = false;
+  async function rollback() {
+    rollbackPending = true;
+    await client.query('ROLLBACK');
+    rollbackPending = false;
+  }
   const session = {
     async transaction(callback) {
+      if (rollbackPending) {
+        try {
+          await rollback();
+        } catch (cause) {
+          throw new Error('Previous transaction rollback failed before BEGIN', {cause});
+        }
+      }
       await client.query('BEGIN');
       let result;
       try {
         result = await callback(session);
       } catch (error) {
         try {
-          await client.query('ROLLBACK');
+          await rollback();
         } catch (rollbackError) {
           throw new AggregateError(
             [error, rollbackError],
@@ -305,7 +320,7 @@ function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
         // or a typed unknown outcome leaves the commit unresolved.
         if (resolveOltpCommitFailureOutcome(commitError) ===
             OLTP_COMMIT_FAILURE_OUTCOME.ABORTED) {
-          await rollbackAfterAbortedCommit(() => client.query('ROLLBACK'), commitError);
+          await rollbackAfterAbortedCommit(rollback, commitError);
           if (commitError && typeof commitError === 'object') {
             commitError.commitAborted = true;
           }

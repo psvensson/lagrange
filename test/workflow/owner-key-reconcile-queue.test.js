@@ -1160,6 +1160,7 @@ test('OwnerKeyReconcileQueue - retry exhaustion is loud and only a new ' +
   let callCount = 0;
   let shouldSucceed = false;
   const exhausted = [];
+  const comparisons = [];
   const queue = new OwnerKeyReconcileQueue({
     name: 'bounded-retry-queue',
     reconcileFn: async () => {
@@ -1173,8 +1174,10 @@ test('OwnerKeyReconcileQueue - retry exhaustion is loud and only a new ' +
       getRetryAfterMs: () => 1,
       getFailureReason: () => 'bounded_failure',
       maxAttempts: 3,
-      shouldResetAttempts: (previous, next) =>
-        previous?.generation !== next?.generation,
+      shouldResetAttempts: (previous, next) => {
+        comparisons.push(previous);
+        return previous?.generation !== next?.generation;
+      },
     },
   });
   queue.on('retryable_drain_exhausted', (event) => exhausted.push(event));
@@ -1210,13 +1213,14 @@ test('OwnerKeyReconcileQueue - retry exhaustion is loud and only a new ' +
   t.ok(retained.reasons.has('retained_observation'), 'retains the additional reason');
   await t.rejects(queue.enqueueAndWait('owner-a', 'source_changed',
     {generation: 2}, {fenceToken: 6}), /stale fence token/i,
-  'a stale fence cannot reopen the key');
+    'a stale fence cannot reopen the key');
   await new Promise((resolve) => setTimeout(resolve, 5));
   t.equal(callCount, 3,
     'same-generation nudges cannot reset an exhausted retry forever');
 
   shouldSucceed = true;
-  queue.enqueue('owner-a', 'source_changed', {generation: 2});
+  queue.enqueue('owner-a', 'source_changed', {generation: 2}, {fenceToken: 7});
+  t.equal(comparisons.at(-1), latest, 'reset uses the last accepted observation');
   await new Promise((resolve) => setTimeout(resolve, 5));
   t.equal(callCount, 4, 'a new semantic generation receives a fresh attempt');
   t.same(queue.getDiagnostics().exhaustedRetryKeys, [],
@@ -1277,6 +1281,7 @@ test('OwnerKeyReconcileQueue - same-owner in-flight enqueue cannot evade ' +
   const scheduled = [];
   const timers = [];
   let callCount = 0;
+  const completions = [];
   const queue = new OwnerKeyReconcileQueue({
     name: 'self-enqueue-bounded-retry-queue',
     scheduleDrainFn: (callback) => scheduled.push(callback),
@@ -1295,7 +1300,8 @@ test('OwnerKeyReconcileQueue - same-owner in-flight enqueue cannot evade ' +
     },
     reconcileFn: async () => {
       callCount++;
-      queue.enqueue('owner-a', 'same_generation_wake', {generation: 1});
+      const waiter = queue.enqueueAndWait('owner-a', 'same_generation_wake', {generation: 1});
+      completions.push(waiter.catch((error) => error));
       throw new Error('self-enqueued retryable failure');
     },
   });
@@ -1313,6 +1319,9 @@ test('OwnerKeyReconcileQueue - same-owner in-flight enqueue cannot evade ' +
     'self-enqueue exhaustion remains loud and typed');
   t.same(diagnostics.exhaustedRetryKeys, ['owner-a'],
     'the exhausted owner remains diagnosable rather than pending forever');
+  const errors = await Promise.all(completions);
+  t.same(errors.map((error) => error.code), Array(3).fill('retryable_drain_exhausted'),
+    'waiters merged during each in-flight failure settle at the same finite bound');
   t.equal(queue.size, 0, 'no live retry work survives exhaustion');
   queue.shutdown();
 });

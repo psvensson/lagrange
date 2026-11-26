@@ -267,6 +267,28 @@ class MembershipPublicationCoordinatorReads {
     return normalizedRows[0] || null;
   }
 
+  readPlanningPublicationPairSync(options) {
+    const rows = Array.isArray(options.publicationRows) ? options.publicationRows :
+      typeof this.systemTableCache?.getAll === 'function' ?
+        this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] : [];
+    let latestPublicationRow = null;
+    let latestPublishedPublicationRow = null;
+    for (const raw of rows) {
+      const row = normalizeControlPlanePublicationRow(raw);
+      if (row.publicationKind !== MEMBERSHIP_PUBLICATION_KIND) continue;
+      const epoch = row.publicationEpoch || 0;
+      // Strict comparison preserves the inventory's first row among equal epochs.
+      if (!latestPublicationRow || epoch > (latestPublicationRow.publicationEpoch || 0)) {
+        latestPublicationRow = row;
+      }
+      if (row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+          (!latestPublishedPublicationRow || epoch > (latestPublishedPublicationRow.publicationEpoch || 0))) {
+        latestPublishedPublicationRow = row;
+      }
+    }
+    return {latestPublicationRow, latestPublishedPublicationRow};
+  }
+
   getLatestPublicationRowSync(options = {}) {
     const preloadedRows = Array.isArray(options.publicationRows) ? options.publicationRows : null;
     const publicationRows =

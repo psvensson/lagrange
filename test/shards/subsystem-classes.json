@@ -11,9 +11,9 @@
     "convergence-topology": 88,
     "distributed-harness": 226,
     "examples-e2e": 8,
-    "pgwire-compat": 27,
+    "pgwire-compat": 28,
     "placement-rebalance": 313,
-    "query-sql": 228,
+    "query-sql": 229,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2832,
-  "digest": "fnv1a32-1186c2b1",
+  "censusSize": 2834,
+  "digest": "fnv1a32-5e6c37f7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-bc6b7aa0",
+  "observationDigest": "fnv1a32-7d268d26",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1136,6 +1136,7 @@
     "test/index-management/global-index-maintenance-mode-seal.test.js": "query-sql",
     "test/index-management/global-index-production-construction.test.js": "query-sql",
     "test/index-management/global-index-production-tx1-distributed.test.js": "query-sql",
+    "test/index-management/global-index-recovery-exhaustion.test.js": "query-sql",
     "test/index-management/global-secondary-index-lifecycle.test.js": "query-sql",
     "test/index-management/global-secondary-index-routing.test.js": "query-sql",
     "test/index-management/index-maintenance-consistency.property.test.js": "query-sql",
@@ -1205,6 +1206,7 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-command-tag-real-engine.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-rebalance.integration.test.js": "pgwire-compat",
+    "test/integration/pgwire-rollback-recovery.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-schema-owner-loss.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-schema-provisioning-deadline.integration.test.js": "pgwire-compat",
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
@@ -11345,6 +11347,48 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/index-management/global-index-recovery-exhaustion.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-shared.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-constants.js",
+        "src/partition/partition-placement-admission.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
+        "src/partition/partition-placement-repair-preparation.js",
+        "src/partition/partition-replica-membership-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
+        "src/rebalancer/replica-operation-update-outcome.js",
+        "src/rebalancer/replica-placement-adaptive-budget.js",
+        "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "src/rebalancer/replica-placement-owner-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/index-management/index-maintenance-consistency.property.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -12379,6 +12423,20 @@
         "src/logging/logging-service.js",
         "src/rebalancer/move-planner.js",
         "src/rebalancer/replica-status.js"
+      ]
+    },
+    "test/integration/pgwire-rollback-recovery.integration.test.js": {
+      "files": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "src",
+        "wit"
       ]
     },
     "test/integration/pgwire-schema-owner-loss.integration.test.js": {

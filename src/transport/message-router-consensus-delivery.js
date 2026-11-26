@@ -83,10 +83,12 @@ function buildConsensusBatchFrame(sourceNodeId, envelopes) {
   };
 }
 
-function frameWrapperBytes(router) {
-  return Buffer.byteLength(
-    JSON.stringify(buildConsensusBatchFrame(router.nodeId, [])),
-  );
+// The last field of the canonical frame is its envelopes array. Keep the
+// encoded wrapper and fill it with the same JSON fragments admitted below.
+const CONSENSUS_FRAME_END = ']}';
+
+function emptyEncodedFrame(router) {
+  return JSON.stringify(buildConsensusBatchFrame(router.nodeId, []));
 }
 
 function socketBufferedBytes(connection) {
@@ -213,13 +215,11 @@ function flushPendingConsensusBatch(router, batch) {
   }
   detachPendingBatch(router, batch);
   const items = batch.items.splice(TRANSPORT_NUM.ZERO);
-  const frame = buildConsensusBatchFrame(
-    router.nodeId,
-    items.map((item) => item.entry),
-  );
+  const entries = items.map((item) => item.encodedEntry).join(',');
+  const frame = batch.framePrefix + entries + CONSENSUS_FRAME_END;
   let sendError = null;
   try {
-    batch.ws.send(JSON.stringify(frame));
+    batch.ws.send(frame);
   } catch (error) {
     sendError = error;
   }
@@ -281,11 +281,12 @@ function inspectBatchBufferBounds(router, targetNodeId, connection, batch, added
 }
 
 function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry) {
-  const entryBytes = Buffer.byteLength(JSON.stringify(entry));
+  const encodedEntry = JSON.stringify(entry);
+  const entryBytes = Buffer.byteLength(encodedEntry);
   let batch = activeBatchForConnection(router, targetNodeId, connection);
-  const addedBytes = batch === null ?
-    frameWrapperBytes(router) + entryBytes :
-    TRANSPORT_NUM.ONE + entryBytes;
+  const wrapper = batch === null ? emptyEncodedFrame(router) : null;
+  const addedBytes = entryBytes + (wrapper === null ?
+    TRANSPORT_NUM.ONE : Buffer.byteLength(wrapper));
   const bufferRefusal = inspectBatchBufferBounds(
     router, targetNodeId, connection, batch, addedBytes);
   if (bufferRefusal !== null) {
@@ -306,6 +307,7 @@ function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry)
       connection,
       connectionId: connection.connectionId ?? null,
       ws: connection.ws,
+      framePrefix: wrapper.slice(0, -CONSENSUS_FRAME_END.length),
       byteLength: TRANSPORT_NUM.ZERO,
       settled: false,
       items: [],
@@ -316,7 +318,7 @@ function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry)
   batch.byteLength += addedBytes;
   router.consensusDelivery.pendingBatchBytes += addedBytes;
   return new Promise((resolve) => {
-    batch.items.push({entry, resolve});
+    batch.items.push({encodedEntry, resolve});
   });
 }
 

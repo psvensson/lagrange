@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2806,
+    "ordinary": 2808,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2832,
-  "digest": "fnv1a32-31b9ef4d",
+  "censusSize": 2834,
+  "digest": "fnv1a32-33449a35",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1116,6 +1116,7 @@
     "test/index-management/global-index-maintenance-mode-seal.test.js": "ordinary",
     "test/index-management/global-index-production-construction.test.js": "ordinary",
     "test/index-management/global-index-production-tx1-distributed.test.js": "ordinary",
+    "test/index-management/global-index-recovery-exhaustion.test.js": "ordinary",
     "test/index-management/global-secondary-index-lifecycle.test.js": "ordinary",
     "test/index-management/global-secondary-index-routing.test.js": "ordinary",
     "test/index-management/index-maintenance-consistency.property.test.js": "ordinary",
@@ -1185,6 +1186,7 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "ordinary",
     "test/integration/pgwire-command-tag-real-engine.integration.test.js": "ordinary",
     "test/integration/pgwire-rebalance.integration.test.js": "ordinary",
+    "test/integration/pgwire-rollback-recovery.integration.test.js": "ordinary",
     "test/integration/pgwire-schema-owner-loss.integration.test.js": "ordinary",
     "test/integration/pgwire-schema-provisioning-deadline.integration.test.js": "ordinary",
     "test/integration/preflight-critical-path-hops.integration.test.js": "ordinary",

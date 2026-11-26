@@ -180,15 +180,19 @@ async function runRecoveredGsiProvisioningOnce(indexService, context) {
   let intent = context.intent;
   if (!intent) {
     const observed = await coordinator.refreshCatalogRecord(context.name, context.indexId);
-    if (!observed.available || !observed.row) return null;
+    const identity = {indexName: context.name, indexId: context.indexId};
     const record = coordinator.catalog.get(context.name);
-    if (!record || !INCOMPLETE_GSI_STATES.has(record.state) ||
-        record.index_id !== context.indexId) return null;
+    if (!record || record.index_id !== context.indexId) return {...identity, fenced: true};
+    if (!observed.available || !observed.row) return {...identity, deferred: true};
+    if (record.state === GLOBAL_INDEX_STATE.READ_WRITE) {
+      return coordinator.getCatalogRecord(context.name);
+    }
+    if (!INCOMPLETE_GSI_STATES.has(record.state)) return {...identity, fenced: true};
     const owner = indexService.sqlQueryEngine.tableCreationService.schemaProvisioningJobOwner;
     const dataset = getGlobalIndexDatasetName(record.table_name, context.name);
     intent = await owner.findSucceededGlobalIndexIntent(dataset, record.index_generation);
     if (!intent || intent.globalIndex?.indexName !== context.name ||
-        intent.globalIndex.indexId !== context.indexId) return null;
+        intent.globalIndex.indexId !== context.indexId) return {...identity, deferred: true};
   }
   if (indexService.shuttingDown) return null;
   const globalIndex = intent.globalIndex;
@@ -456,7 +460,8 @@ const indexServiceGlobalMethods = {
           queue.enqueue(indexId, GSI_INVENTORY_REASON, {name, indexId});
         }
       } else {
-        completions.push(queue.enqueueAndWait(indexId, GSI_RECOVERY_REASON, {name, indexId}));
+        completions.push(queue.enqueueAndWait(indexId, GSI_RECOVERY_REASON,
+          {name, indexId}, {preserveOwnedContext: true}));
       }
     }
     return Promise.all(completions);
@@ -478,7 +483,7 @@ const indexServiceGlobalMethods = {
       const owner = this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
       if (changed && this.initialized && !this.shuttingDown && owner?.ownsRecoveryDiscovery?.()) {
         ensureGsiRecoveryQueue(this).enqueue(metadata.indexId, GSI_RECOVERY_REASON,
-          {name: metadata.indexName, indexId: metadata.indexId});
+          {name: metadata.indexName, indexId: metadata.indexId}, {preserveOwnedContext: true});
       }
     } else {
       this._incompleteGlobalIndexes?.delete(metadata.indexName);
