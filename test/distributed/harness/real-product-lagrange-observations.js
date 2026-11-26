@@ -468,6 +468,10 @@ function membershipReady(ctx, seedHost, nodeCount) {
   return readinessOf(ctx, 'lagrange-membership', async (pollContext) => {
     const answer = await getFacts(ctx, seedHost, pollContext);
     const facts = answer.json?.facts;
+    if (ctx && typeof ctx === 'object' &&
+        numberIsInteger(facts?.topology?.underReplicatedPartitionCount)) {
+      ctx.supportsFactsUnderReplicatedCount = true;
+    }
     return {
       ready:
         facts?.topology?.readyNodeCount === nodeCount &&
@@ -773,13 +777,40 @@ function recordTableRoutability(tableReadyAt, tables, context) {
   }
 }
 
+const SYSTEM_TABLE_FACTS_PRECHECK_REFRESH_INTERVAL = 15;
+
+async function hasUnderReplicatedPartitionsInFacts(ctx, seedHost, pollContext) {
+  if (!ctx?.supportsFactsUnderReplicatedCount || !seedHost) return false;
+  try {
+    const answer = await getFacts(ctx, seedHost, pollContext);
+    const count = answer?.json?.facts?.topology?.underReplicatedPartitionCount;
+    return answer?.status === HTTP_OK && numberIsInteger(count) && count > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
   const expectedNodeIds = arrayMap(nodeRoles, (role) => role.nodeId);
   const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
   const startedAt = clock();
   const tableReadyAt = {};
+  const seedHost = nodeRoles[0]?.host ?? null;
+  let lastTables = null;
+  let lastVerdictReady = false;
   const readiness = await readinessOf(ctx, component, async (pollContext) => {
-    const tables = await readSystemTables(query, ctx, pollContext);
+    const attempt = pollContext?.attempt ?? 1;
+    const canReuseTablesWhileUnderReplicated =
+      requiredTables === null &&
+      lastTables !== null &&
+      !lastVerdictReady &&
+      attempt > 1 &&
+      attempt % SYSTEM_TABLE_FACTS_PRECHECK_REFRESH_INTERVAL !== 0 &&
+      (await hasUnderReplicatedPartitionsInFacts(ctx, seedHost, pollContext));
+    const tables = canReuseTablesWhileUnderReplicated ?
+      lastTables :
+      await readSystemTables(query, ctx, pollContext);
+    lastTables = tables;
     const now = clock();
     recordTableRoutability(tableReadyAt, tables, {
       requiredTables,
@@ -794,7 +825,8 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
       requiredTables,
       now,
     });
-    const shouldInspectServeLane = verdict.ready || (pollContext?.attempt ?? 1) <= 1;
+    lastVerdictReady = verdict.ready && !canReuseTablesWhileUnderReplicated;
+    const shouldInspectServeLane = lastVerdictReady || attempt <= 1;
     const lane = shouldInspectServeLane ?
       evaluateLagrangeServeLane({
         snapshots: await controlSnapshots(ctx, nodeRoles, pollContext),
