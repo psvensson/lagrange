@@ -201,7 +201,7 @@ const FAMILY = {
 
 function owner(spec, store, options) {
   const workflow = spec.build(store, {sent: [], ...options});
-  workflow.workflowOwnerId = `owner-${options.name}`;
+  workflow.workflowOwnerId = options.workflowOwnerId ?? `owner-${options.name}`;
   readAuthoritativelyFrom(workflow, store);
   members(workflow);
   return workflow;
@@ -289,8 +289,10 @@ for (const family of Object.keys(FAMILY)) {
     const [child] = children;
     t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken, fence);
     let intercepted = false;
-    store.holdSubmission = ({sql, params}) => {
-      if (intercepted || !/^DELETE FROM partitions\b/i.test(sql) || !params.includes(child)) return false;
+    store.holdSubmission = ({writer, sql, params}) => {
+      if (writer !== 'A' || !/^DELETE FROM partitions\b/i.test(sql) || !params.includes(child)) return false;
+      // The abandoned owner cannot finish this child via a second RPC.
+      if (intercepted) throw new Error('old sender unavailable after submission');
       intercepted = true;
       return true;
     };
@@ -309,10 +311,11 @@ for (const family of Object.keys(FAMILY)) {
     // Reconstruct the owner on its actual durable rows. Its startup scan must
     // positively finish the same terminal cleanup without the old RPC reply.
     clock.now++;
-    const restarted = owner(spec, store, {name: 'A', clock});
+    const restarted = owner(spec, store, {name: 'A2', workflowOwnerId: original.workflowOwnerId, clock});
     source.sqlQueryEngine.managedSplitWorkflow = restarted;
     for (let turn = 0; turn < 500 && children.some((id) => store.partitionRow(id)); turn++) await turns(1);
     t.same(children.map((id) => store.partitionRow(id)), [null, null], 'fresh owner retired both children');
+    t.ok(store.partitionDeletesBy('A2').includes(child), 'reconstructed writer applied the held child deletion');
     source.systemTableCache.applySystemTableChange('tables', 'INSERT', store.tablesRow());
     t.equal(await reconcileFailedMirrorCustody(source), true);
     t.equal(readDurableMirrorRetentionCustodyIn(source.db), null);
