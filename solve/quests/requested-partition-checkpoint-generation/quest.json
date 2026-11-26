@@ -1,0 +1,20 @@
+{
+  "schema": "solve-quest/2",
+  "id": "requested-partition-checkpoint-generation",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A requested partition checkpoint carries its cluster publication epoch and the group membership generation at the applied boundary. A generation may be published only after the production reader accepts the staged bytes. A message-group learner checkpoint retains its exact generation equality and typed moved refusal.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/requested-partition-checkpoint-generation/evidence/receipt.json",
+      "requiredReceipts": [
+        "requested-partitions-install-reopen",
+        "message-group-moved-refusal",
+        "prepublication-reader-refusal",
+        "independent-verification"
+      ]
+    }
+  },
+  "sealedAt": "32cc9b66615b7f7fbafd3739fd426b175d8727e5"
+}

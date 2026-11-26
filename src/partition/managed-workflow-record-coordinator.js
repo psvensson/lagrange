@@ -377,7 +377,10 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
         this.requireWorkflow(workflowId).fenceToken, change) : change);
     const key = String(ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]);
     if (write.outcome === RECORD_CHANGE_OUTCOME.ACCEPTED) {
+      const failure = write.workflow?.metadata?.splitSourceFailure;
       return {result: PARTICIPANT_ACK_RESULT.ACCEPTED, participantKey: key,
+        ...(failure?.participantKey === key && failure.status === ack[PARTICIPANT_ACK_FIELD.STATUS] ?
+          {splitSourceFailure: failure} : {}),
         acknowledgedAt: write.workflow?.participants?.get(key)
           ?.acknowledgedAt ?? this.now()};
     }

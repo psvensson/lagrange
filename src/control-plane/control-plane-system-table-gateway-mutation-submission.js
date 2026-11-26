@@ -1,3 +1,6 @@
+import {SPLIT_DESCRIPTOR_ERROR, SPLIT_DESCRIPTOR_FINALIZE_SQL,
+  descriptorRefusal, isSplitDescriptorReceiptFor, splitDescriptorWriteKey} from
+  '../partition/partition-split-descriptor-command.js';
 import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
 import {resolveControlPlaneQueryTimeoutMs} from './timeout-budget.js';
 import {
@@ -198,6 +201,20 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       operation,
       tableName,
     );
+    const hasDescriptor = Object.hasOwn(options, 'splitDescriptorIntent');
+    if (hasDescriptor) {
+      const intent = options.splitDescriptorIntent;
+      const key = splitDescriptorWriteKey(intent);
+      const plan = this.buildSqlMutationPlan(normalizedMutation);
+      if (plan.sql !== SPLIT_DESCRIPTOR_FINALIZE_SQL || plan.params.length !== 3 ||
+          plan.params[0] !== intent.tableId || plan.params[1] !== intent.workflowAttempt ||
+          plan.params[2] !== intent.partitionId ||
+          (options.idempotencyKey !== undefined && options.idempotencyKey !== key)) {
+        return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+      }
+      options = {...options, splitDescriptorIntent: Object.freeze({...intent}),
+        idempotencyKey: key, coalescingKey: key};
+    }
     const mutationOptions = applyReplicaOperationMutationCoalescingFallback(
       tableName,
       normalizedMutation,
@@ -365,7 +382,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       this.nodeId, tableName);
     const command = {mutation: normalizedMutation, ignoreExisting: writeOptions.ignoreExisting,
       sessionId: writeOptions.sessionId};
-    const executionFactory = () => {
+    const deliverMutation = () => {
       if (executesStartupSql) {
         return this.executeStartupSqlMutation(normalizedMutation, {
           ...mutationOptions, ...writeOptions,
@@ -377,6 +394,17 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       }, command, route, executeIntent);
     };
 
+    const executionFactory = hasDescriptor ? async () => {
+      const result = await deliverMutation();
+      if (result?.success !== true) return result;
+      const answer = executesStartupSql ? result : result.partitionResult;
+      if (!isSplitDescriptorReceiptFor(answer?.splitDescriptorReceipt, mutationOptions.splitDescriptorIntent) ||
+          answer.committed !== true || !Number.isSafeInteger(answer.logIndex) || answer.logIndex < 1 ||
+          !Number.isSafeInteger(answer.term) || answer.term < 1) {
+        return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.RECEIPT, true);
+      }
+      return executesStartupSql ? {...result, partitionResult: answer} : result;
+    } : deliverMutation;
 
     if (
       mergePolicy === CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING &&

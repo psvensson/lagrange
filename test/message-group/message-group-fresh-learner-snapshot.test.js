@@ -16,7 +16,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {TABLES} from '../../src/constants/index.js';
+import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../src/raft/raft-rs-peer-identity.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -99,7 +99,7 @@ async function hostAt(root) {
 
 function createAdmission() {
   const row = {operation_id: 'fresh-install', type: OperationType.REPLACE,
-    entity_type: 'message-group', entity_id: GROUP, partition_id: GROUP,
+    entity_type: SERVICE_TYPE.MESSAGE_GROUP, entity_id: GROUP, partition_id: GROUP,
     replica_id: TARGET, target_node_id: NODE, workflow_step: 'SENDING',
     updated_at: 11, completed_at: null, create_admission_state: null,
     create_admission_token: null, create_admission_replica_created_at: null,
@@ -159,7 +159,7 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
     const senderRoot = path.join(root, 'sender');
     const receiverRoot = path.join(root, 'receiver');
     const identity = {clusterId: 'fresh-cluster', raftGroupId: GROUP,
-      entity: {kind: 'message-group', id: GROUP},
+      entity: {kind: SERVICE_TYPE.MESSAGE_GROUP, id: GROUP},
       membershipEpoch: boundary.membershipGenerationIndex};
     const created = await createSqliteStateMachineCheckpoint({db: sourceDb,
       identity, checkpointsRoot: senderRoot, raftRsGroupId: GROUP});

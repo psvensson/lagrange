@@ -81,6 +81,9 @@ async function sealLeaderImage(leader, options, stamp) {
     stamp.membershipGenerationIndex);
   const created = await createSqliteStateMachineCheckpoint({db: leader.db, identity,
     checkpointsRoot: options.checkpointsRoot, raftRsGroupId: leader.groupId});
+  if (created.outcome === RAFT_CHECKPOINT_CREATION_OUTCOME.IMAGE_REJECTED) {
+    return {refusal: REFUSAL.DESCRIPTOR_MOVED, detail: created.validation.outcome};
+  }
   if (created.outcome !== RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED) {
     return {refusal: REFUSAL.DESCRIPTOR_UNAVAILABLE, detail: created.outcome};
   }

@@ -5,6 +5,7 @@
 // is one typed outcome from RAFT_CHECKPOINT_VALIDATION_OUTCOME with reasons —
 // a checkpoint that fails any check here is never recovery progress.
 
+import {SERVICE_TYPE} from '../constants/service.js';
 import {exactKeys, validHex256} from '../runtime/oci-host-agent-durable-files.js';
 
 import {
@@ -163,8 +164,11 @@ function raftRsDescriptorMatchesEnvelope(descriptor) {
     raftRs.groupId === descriptor.raftGroupId &&
     BigInt(raftRs.appliedIndex) === BigInt(descriptor.lastIncludedIndex) &&
     BigInt(raftRs.appliedTerm) === BigInt(descriptor.lastIncludedTerm) &&
-    BigInt(raftRs.membershipGenerationIndex) ===
-      BigInt(descriptor.membershipEpoch);
+    // Partition epochs come from cluster publication. Only message-group
+    // learner images use their committed configuration generation as the epoch.
+    (descriptor.entity.kind === SERVICE_TYPE.PARTITION ||
+      (descriptor.entity.kind === SERVICE_TYPE.MESSAGE_GROUP &&
+        BigInt(raftRs.membershipGenerationIndex) === BigInt(descriptor.membershipEpoch)));
 }
 
 // Structural field checks beyond exact-object shape, evaluated as one table:

@@ -263,9 +263,11 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       // reached through a snapshot image of one) is refused typed, never
       // migrated, and the handle is closed with the refusal.
       try {
-        createCommittedStatementOutcomeTable(this.db, this.partitionId);
+        createCommittedStatementOutcomeTable(this.db, this.partitionId, this.tableName);
         openParticipantTransactionStore(this.db);
-        if (this.schema || this.tableName === SYSTEM_TABLE_NAME.NODES) this.createTable();
+        if (this.schema || this.tableName === SYSTEM_TABLE_NAME.NODES || this.tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
+          this.createTable();
+        }
       } catch (error) {
         this.db.close();
         this.db = null;

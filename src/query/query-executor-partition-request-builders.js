@@ -1,3 +1,4 @@
+import {splitDescriptorCommitFields, splitDescriptorIntentFields} from './split-descriptor-delivery-fields.js';
 import {
   deliveryAnswerOf,
   deliveryTransportOf,
@@ -142,6 +143,7 @@ function createDefaultPartitionRequestBuilder({
 
   return () => {
     const request = {
+      ...splitDescriptorIntentFields(executionOptions),
       type: QUERY_MESSAGE_TYPE.QUERY,
       sql,
       params: wireParams,
@@ -316,6 +318,7 @@ function buildDecodedPartitionSuccessResult(partitionId, response, decodedPayloa
     partitionId,
     success: true,
     ...(hasLazyRows ? {} : {rows: decodedPayload.rows}),
+    ...splitDescriptorCommitFields(response),
     changes: response.changes,
     durableCommitWitness: response.durableCommitWitness,
     originHlc: response.originHlc,

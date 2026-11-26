@@ -1,3 +1,5 @@
+import {splitDescriptorIntentFields} from './split-descriptor-delivery-fields.js';
+import {SPLIT_DESCRIPTOR_ERROR, descriptorRefusal} from '../partition/partition-split-descriptor-command.js';
 import {
   STATEMENT_INGRESS_FIELD,
   resolveStatementIngress,
@@ -143,6 +145,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       queryOptions.deliveryPriority,
     );
     return this.applyWriteExecutionDeliverySource({
+      ...splitDescriptorIntentFields(queryOptions),
       sessionId,
       deliveryPriority,
       timeoutMs: queryOptions.timeoutMs,
@@ -594,6 +597,12 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
    * @private
    */
   async runOwnedWriteStatementAttempt(statement, attempt, firstAttemptState) {
+    if (Object.hasOwn(statement.queryOptions, 'splitDescriptorIntent') &&
+        (statement.writePlan.partitionStatements.size !== 1 ||
+         this.resolveWriteTransactionOwnership(statement.sessionId, statement.writePlan) !==
+           WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT)) {
+      return {settled: descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.UNRESOLVED, true)};
+    }
     const writeTransaction = await this.openWriteTransaction(
       statement.sessionId,
       statement.writePlan,

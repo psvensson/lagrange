@@ -1,3 +1,5 @@
+import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from
+  './partition-split-descriptor-command.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
 import {unreplicatedLocalMutationRefusal} from './partition-local-mutation-admission.js';
@@ -19,7 +21,7 @@ import {
   PARTITION_STATEMENT_PATH,
 } from './partition-statement-admission-constants.js';
 import {
-  answerSettledStatement,
+  answerSettledStatement, pendingOwnerDigestOf,
   readCommittedStatementOutcome,
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
@@ -73,6 +75,7 @@ function buildQueryOperation(sql, params, options) {
     operationId: options.operationId || null,
     idempotencyKey: options.idempotencyKey || null,
     splitMirrorOrigin: options.splitMirrorOrigin || null,
+    ...(Object.hasOwn(options, 'splitDescriptorIntent') ? {splitDescriptorIntent: options.splitDescriptorIntent} : {}),
   };
 }
 
@@ -200,6 +203,9 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       // its outcome row by applyWrite (nothing is proposed), before any
       // admission rule or the ceiling pre-check: state that changed after the
       // write committed never turns its outcome into a refusal.
+      if (usesSplitDescriptorIdentity(operation) && !decodeSplitDescriptorCommand(this, operation)) {
+        return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+      }
       if (this.isSettledRedelivery(operation)) {
         return this.proposeWrite(operation);
       }
@@ -717,8 +723,16 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       entryType: entry.type,
     });
     const entryKey = this.getCommittedEntryKey(entry);
+    const descriptor = usesSplitDescriptorIdentity(entry) ? decodeSplitDescriptorCommand(this, entry) : null;
+    if (usesSplitDescriptorIdentity(entry) && descriptor === null) {
+      return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+    }
     const pendingOutcome = this.getPendingCommittedWriteOutcome(entry.entryId);
     if (pendingOutcome) {
+      const digest = pendingOwnerDigestOf(pendingOutcome);
+      if ((descriptor || isSplitDescriptorDigest(digest)) && descriptor?.digest !== digest) {
+        return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.COLLISION);
+      }
       return pendingOutcome;
     }
     // A command the application would refuse, or consume without answering
@@ -741,7 +755,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       return settledAnswer;
     }
     return startAdmittedPartitionWrite(this, {
-      entry, phaseTimings, applyStartMs});
+      entry, phaseTimings, applyStartMs, commandDigest: descriptor?.digest});
   }
   async applyWriteSideEffectPlan({entry, result, sideEffectPlan, commitPromise}) {
     if (commitPromise) {

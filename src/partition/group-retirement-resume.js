@@ -1,3 +1,6 @@
+import {storedTransitionOf} from './managed-workflow-record-store.js';
+import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
+import {PRE_CUTOVER_SPLIT_STATES, cleanupRecord} from './managed-split-descriptor-cleanup.js';
 /**
  * Owner contract:
  * Owner: a split/merge workflow owner resuming, from the durable record, a
@@ -88,6 +91,24 @@ function resumeKey(workflowId) {
  */
 function attachGroupRetirementResume(owner, spec) {
   const scheduler = spec.scheduler || globalThis;
+  // A failed split owns destination outcomes even after the descriptors
+  // disappear. Before FAILED, the committed source failure owns the abort.
+  const workIn = (row) => {
+    if (spec.family === WORKFLOW_FAMILY.SPLIT) {
+      const record = storedTransitionOf(row);
+      const metadata = record?.metadata;
+      if (metadata?.sourcePartitionId && record.state === PARTITION_TRANSITION_STATE.FAILED) {
+        const {pendingChildren} = cleanupRecord(metadata);
+        return {retiring: pendingChildren.length > 0, family: spec.family, aborted: true,
+          workflowId: metadata.workflowId, retiringPartitionIds: pendingChildren, manifest: true};
+      }
+      if (metadata?.splitSourceFailure && PRE_CUTOVER_SPLIT_STATES.has(record.state)) {
+        return {retiring: true, family: spec.family, workflowId: metadata.workflowId,
+          retiringPartitionIds: [], failure: metadata.splitSourceFailure};
+      }
+    }
+    return retiringWorkflowOf(row);
+  };
   const leaseWaits = new Map();
   const resuming = new Set();
   const refusedVersions = new Map();
@@ -110,7 +131,7 @@ function attachGroupRetirementResume(owner, spec) {
     const timer = scheduler.setTimeout(() => {
       leaseWaits.delete(workflowId);
       const record = currentRecord(owner, tablesRow);
-      if (retiringWorkflowOf(record).retiring) {
+      if (workIn(record).retiring) {
         reportWaitBoundSpent(owner.logger, {
           wait: FOREIGN_LEASE_WAIT,
           awaited: AWAITED_FOREIGN_LEASE,
@@ -194,7 +215,7 @@ function attachGroupRetirementResume(owner, spec) {
     return false;
   };
   resume = async (tablesRow, trigger) => {
-    const retiring = retiringWorkflowOf(tablesRow);
+    const retiring = workIn(tablesRow);
     if (!isResumable(owner, spec.family, retiring) ||
         resuming.has(retiring.workflowId)) {
       return false;
@@ -208,7 +229,8 @@ function attachGroupRetirementResume(owner, spec) {
       owner.logger.warn(RESUME_LOG_MSG.RESUMED, {workflowId, trigger,
         retiringPartitionIds: retiring.retiringPartitionIds});
       return await owner.groupRetirementRedrive.exclusive(
-        resumeKey(workflowId), () => retiring.aborted ?
+        resumeKey(workflowId), () => retiring.failure ?
+          owner.abortSplitOnSourceFailure(workflowId, retiring.failure) : retiring.aborted ?
           spec.teardown(workflowId, owner.resolveWorkflowState(workflowId)) :
           spec.finalize(workflowId));
     } finally {
@@ -242,7 +264,7 @@ function isResumable(owner, family, retiring) {
       owner.groupRetirementRedrive.isDriving(retiring.workflowId)) {
     return false;
   }
-  return !retiring.aborted || retiring.retiringPartitionIds.some((id) =>
+  return retiring.manifest || !retiring.aborted || retiring.retiringPartitionIds.some((id) =>
     owner.getPartitionInfo(id));
 }
 

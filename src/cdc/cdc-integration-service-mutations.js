@@ -1,3 +1,4 @@
+import {splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {committedWritePosition} from './cdc-committed-write-answer.js';
 import {classifyControlPlaneMutationResult} from
@@ -282,6 +283,7 @@ function prepareBatchUpsertRows(context, tableName, rows) {
 
 function buildSqlExecutionOptions(options = {}) {
   return {
+    ...splitDescriptorIntentFields(options),
     queryTimeoutMs: options?.queryTimeoutMs,
     cancellationToken: options?.cancellationToken || null,
     sessionId: options?.sessionId,

@@ -512,7 +512,9 @@ class ManagedSplitWorkflow {
           assertCurrentAttempt();
           return {...current,
             status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-            metadata: {...current.metadata, ...planDelta}};
+            metadata: {...current.metadata, ...planDelta,
+              splitIssuedChildren: [splitPlan.leftPartition.partitionId,
+                splitPlan.rightPartition.partitionId]}};
         });
       const transitionMetadata = prepared.metadata;
 
@@ -534,6 +536,7 @@ class ManagedSplitWorkflow {
         partition_key_end: splitPlan.leftPartition.keyRange.end,
         partition_key_type: sourcePartitionKeyType,
         partition_version: targetVersion,
+        split_descriptor_attempt: transitionMetadata.workflowAttempt,
         replica_count: replicaCount,
         size_bytes: 0,
         leader_node_id: null,
@@ -549,6 +552,7 @@ class ManagedSplitWorkflow {
         partition_key_end: splitPlan.rightPartition.keyRange.end,
         partition_key_type: sourcePartitionKeyType,
         partition_version: targetVersion,
+        split_descriptor_attempt: transitionMetadata.workflowAttempt,
         replica_count: replicaCount,
         size_bytes: 0,
         leader_node_id: null,

@@ -1,3 +1,4 @@
+import {splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 import {mintControlPlaneWriteKey} from
   '../control-plane/control-plane-write-identity.js';
 import {createRoutedWriteUncertainty} from './cdc-routed-write-uncertainty.js';
@@ -158,7 +159,7 @@ class CDCRoutedMutationReadiness {
   }
 
   async tryExecuteLocalSystemTableWrite(sql, params = [],
-    idempotencyKey = null) {
+    idempotencyKey = null, options = {}) {
     if (!sql || typeof sql !== 'string') {
       return {
         handled: false,
@@ -206,7 +207,8 @@ class CDCRoutedMutationReadiness {
           localLegWriteIdentity(idempotencyKey, partitionService);
         const localResult = await submitRoutedMutationHop(this,
           CDC_TERMINAL_STAGE.LOCAL_LEADER_WRITE,
-          () => partitionService.executeQuery(sql, params, legIdentity),
+          () => partitionService.executeQuery(sql, params,
+            {...legIdentity, ...splitDescriptorIntentFields(options)}),
           issued.answer);
         const result = this.normalizeLocalSystemTableWriteResult(localResult);
         if (this.isLocalSystemTableWriteRoutedOn(result, {
@@ -273,8 +275,8 @@ class CDCRoutedMutationReadiness {
     }
   }
 
-  async executeSQLDirectToLocalPartition(sql, params = [], _options = {}) {
-    return executeBootstrapDirectSql(this, sql, params);
+  async executeSQLDirectToLocalPartition(sql, params = [], options = {}) {
+    return executeBootstrapDirectSql(this, sql, params, options);
   }
 
   extractTableNameFromSQL(sql) {
@@ -499,6 +501,7 @@ class CDCRoutedMutationReadiness {
       coalescingKey,
     });
     const baseQueryOptions = {
+      ...splitDescriptorIntentFields(options),
       recoveryCandidateSelectionKey:
         this.resolveSystemWriteRecoveryCandidateSelectionKey(
           tableName,
@@ -585,6 +588,7 @@ class CDCRoutedMutationReadiness {
             sql,
             params,
             baseQueryOptions.idempotencyKey,
+            baseQueryOptions,
           );
           uncertainty.observe(localWriteResult.priorAnswer);
           if (localWriteResult.handled) {

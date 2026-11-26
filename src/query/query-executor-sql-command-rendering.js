@@ -1,3 +1,7 @@
+import {splitDescriptorCommitFields} from './split-descriptor-delivery-fields.js';
+import {SQLParser} from './sql-parser.js';
+import {SPLIT_DESCRIPTOR_ERROR, SPLIT_DESCRIPTOR_FINALIZE_SQL, descriptorRefusal}
+  from '../partition/partition-split-descriptor-command.js';
 import {EXPR_TYPE, SQL_STORAGE_CLASS} from './parser-constants.js';
 import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
@@ -83,6 +87,7 @@ function buildDistributedMutationResult(
     originHlc.length > 0 &&
     results.every((result) => result.originHlc === originHlc);
   const commonResult = {
+    ...(results.length === 1 ? splitDescriptorCommitFields(results[0]) : {}),
     operation,
     ...mutationResult,
     partitions: partitionIds,
@@ -514,7 +519,17 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeDelete(ast, partitionIds, params = [], executionOptions = {}) {
     const targetParams = [...params];
-    const sql = this.buildDeleteSQL(ast, targetParams);
+    let sql = this.buildDeleteSQL(ast, targetParams);
+    if (Object.hasOwn(executionOptions, 'splitDescriptorIntent')) {
+      // The renderer parenthesizes binary expressions. Check the complete
+      // rendered shape, then send the exact statement the local leg commits.
+      const canonicalAst = new SQLParser(SPLIT_DESCRIPTOR_FINALIZE_SQL).parse();
+      if (ast.rawSql !== SPLIT_DESCRIPTOR_FINALIZE_SQL ||
+          sql !== this.buildDeleteSQL(canonicalAst, [...params])) {
+        return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+      }
+      sql = SPLIT_DESCRIPTOR_FINALIZE_SQL;
+    }
     return this.executeDistributedMutation(
       ast,
       partitionIds,

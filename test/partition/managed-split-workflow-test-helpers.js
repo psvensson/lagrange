@@ -76,6 +76,7 @@ function buildWorkflow(options = {}) {
       options.transactionCoordinator :
       createTransactionCoordinator(options.now || (() => 1000));
   const workflow = new ManagedSplitWorkflow({
+    workflowOwnerId: options.workflowOwnerId,
     nodeId: 'node-a',
     cdcIntegrationService: options.cdcIntegrationService || {
       async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
@@ -110,7 +111,7 @@ function buildWorkflow(options = {}) {
       },
       async insertSystemTableRow(tableName, row, options) {
         insertCalls.push({tableName, row, options});
-        return {success: true};
+        return {success: true, affectedRows: 1};
       },
     },
     getPartitionInfo: options.getPartitionInfo || (() => ({

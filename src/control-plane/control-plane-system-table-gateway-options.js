@@ -1,3 +1,4 @@
+import {splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
@@ -28,6 +29,7 @@ function buildGatewayQueryOptions(gateway, options = {}, context = {}) {
     coalescingKey: options?.coalescingKey || null,
   });
   let queryOptions = {
+    ...splitDescriptorIntentFields(options),
     ...buildControlPlaneQueryOptions({
       requestedTimeoutMs,
       timeoutBudget: options?.timeoutBudget,
@@ -87,6 +89,7 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
     coalescingKey: options?.coalescingKey || null,
   });
   let writeOptions = {
+    ...splitDescriptorIntentFields(options),
     routingReadinessDimension:
       options?.routingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
