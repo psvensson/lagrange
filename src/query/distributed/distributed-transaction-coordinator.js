@@ -423,6 +423,7 @@ class DistributedTransactionCoordinator {
       participants: new Map(),
       readOnlyParticipants: new Map(),
       writeOperations: [],
+      pendingWriteOperationPersists: [],
       telemetry: createTransactionTelemetry(transactionId, sessionId),
       createdAt: now,
       updatedAt: now,
@@ -449,13 +450,6 @@ class DistributedTransactionCoordinator {
     );
   }
 
-
-  /**
-   * Record distributed write operation metadata under a transaction.
-   * @param {string} sessionId - Session ID.
-   * @param {Object} operation - Operation metadata.
-   * @return {Promise<void>}
-   */
   async recordWriteOperation(sessionId, operation, options = {}) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx) {
@@ -487,26 +481,13 @@ class DistributedTransactionCoordinator {
     }
   }
 
-  /**
-   * Mark one recorded write operation with execution outcome.
-   * @param {string} sessionId - Session ID.
-   * @param {string} operationId - Operation identifier.
-   * @param {Object} result - Aggregated write result.
-   * @return {Promise<void>}
-   */
-  async markWriteOperationResult(sessionId, operationId, result) {
+  async markWriteOperationResult(sessionId, operationId, result, options = {}) {
     const tx = this.transactionsBySession.get(sessionId);
-    if (!tx) {
-      return;
-    }
-
+    if (!tx) return;
     const operation = tx.writeOperations.find(
       (entry) => entry.operationId === operationId,
     );
-    if (!operation) {
-      return;
-    }
-
+    if (!operation) return;
     operation.status =
       result?.success === true ?
         WRITE_OPERATION_STATUS.SUCCEEDED :
@@ -520,10 +501,15 @@ class DistributedTransactionCoordinator {
         result?.error || QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
     operation.updatedAt = this.now();
     tx.updatedAt = operation.updatedAt;
-
     this.noteMetadataMutation?.(tx);
-    await this.persistWriteOperationRecord(tx, operation);
+    const persistPromise = this.persistWriteOperationRecord(tx, operation);
+    if (options?.deferPersistenceAwait === true) {
+      this.enqueueDeferredWriteOperationPersist(tx, persistPromise);
+      return;
+    }
+    await persistPromise;
   }
+
 
   /**
    * Commit a distributed transaction across all enlisted participants.

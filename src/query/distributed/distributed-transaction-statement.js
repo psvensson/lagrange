@@ -17,6 +17,14 @@ const LOCAL_STR_TYPED_CANCELLED = 'typed_transaction_cancelled';
 const ROW_KEY_WAIT_CYCLE_DETECTED = 'ROW_KEY_WAIT_CYCLE_DETECTED';
 const SETTLED_STATUS_REJECTED = 'rejected';
 
+function enqueueDeferredWriteOperationPersist(tx, persistPromise) {
+  if (!Array.isArray(tx.pendingWriteOperationPersists)) {
+    tx.pendingWriteOperationPersists = [];
+  }
+  persistPromise.catch(() => {});
+  tx.pendingWriteOperationPersists.push(persistPromise);
+}
+
 function settledCycleRollbacksOf(coordinator) {
   if (coordinator.settledCycleRollbacksBySession === undefined) {
     coordinator.settledCycleRollbacksBySession = new Map();
@@ -94,6 +102,10 @@ const distributedTransactionStatementMethods = {
   async rollbackTransaction(sessionId, options = {}) {
     return this.rollback(sessionId, options);
   },
+
+  enqueueDeferredWriteOperationPersist(tx, persistPromise) {
+    enqueueDeferredWriteOperationPersist(tx, persistPromise);
+  },
   /**
    * Queue transaction operations in FIFO order for one session.
    * Unlike workflow single-flight, distinct calls never share a result.
@@ -170,6 +182,7 @@ const distributedTransactionStatementMethods = {
         sessionId,
         operation.operationId,
         result,
+        {deferPersistenceAwait: true},
       );
       if (tx?.telemetry) {
         tx.telemetry.statementsMs += Math.max(0, resolveNowMs() - startedAtMs);

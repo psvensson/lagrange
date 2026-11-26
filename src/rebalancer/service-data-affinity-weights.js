@@ -24,7 +24,6 @@
 
 import {
   COLUMN,
-  META_SERVICE_ID,
   SERVICE_PARTITION_ACCESS_COL as SPA_COL,
   SERVICE_PARTITION_ACCESS_KIND,
   SERVICE_STATUS,
@@ -36,11 +35,6 @@ import {
 // default 30s), so a departed or wedged node's stale counts age out of
 // the matrix instead of steering placement forever.
 const SERVICE_PARTITION_ACCESS_MAX_AGE_MS = 120000;
-const INITIAL_POSTGRES_WIRE_AFFINITY_PARTITIONS = Object.freeze([
-  `${TABLES.SQL_TRANSACTIONS}-p1`,
-  `${TABLES.SQL_TRANSACTION_PARTICIPANTS}-p1`,
-  `${TABLES.SQL_WRITE_OPERATIONS}-p1`,
-]);
 
 function parseAccessJson(row) {
   try {
@@ -109,28 +103,6 @@ function resolvePartitionLeaderNodeId(cache, partitionId) {
   return partitionRow?.[COLUMN.LEADER_NODE_ID] || null;
 }
 
-function seedInitialServicePartitionCounts(
-  cache,
-  serviceId,
-  countsByPartition,
-) {
-  if (
-    countsByPartition.size > 0 ||
-    serviceId !== META_SERVICE_ID.POSTGRES_WIRE
-  ) {
-    return countsByPartition;
-  }
-  for (const partitionId of INITIAL_POSTGRES_WIRE_AFFINITY_PARTITIONS) {
-    if (resolvePartitionLeaderNodeId(cache, partitionId)) {
-      countsByPartition.set(partitionId, {
-        [SERVICE_PARTITION_ACCESS_KIND.READ]: 0,
-        [SERVICE_PARTITION_ACCESS_KIND.WRITE]: 1,
-      });
-    }
-  }
-  return countsByPartition;
-}
-
 function accumulateAffinityScores(cache, countsByPartition) {
   const scoreByNode = new Map();
   const scoreByGroup = new Map();
@@ -197,15 +169,11 @@ function buildServiceDataAffinityWeights(options = {}) {
     Number.isFinite(options.maxAgeMs) && options.maxAgeMs > 0 ?
       options.maxAgeMs :
       SERVICE_PARTITION_ACCESS_MAX_AGE_MS;
-  const countsByPartition = seedInitialServicePartitionCounts(
+  const countsByPartition = sumFreshPartitionCounts(
     cache,
     serviceId,
-    sumFreshPartitionCounts(
-      cache,
-      serviceId,
-      options.nowMs,
-      maxAgeMs,
-    ),
+    options.nowMs,
+    maxAgeMs,
   );
   const {scoreByNode, scoreByGroup} =
     accumulateAffinityScores(cache, countsByPartition);

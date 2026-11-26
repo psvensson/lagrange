@@ -177,6 +177,11 @@ const distributedTransactionParticipantSetMethods = {
   },
 
   async freezeParticipantSet(tx, options = {}) {
+    if (Array.isArray(tx.pendingWriteOperationPersists) &&
+        tx.pendingWriteOperationPersists.length > 0) {
+      const pending = tx.pendingWriteOperationPersists.splice(0);
+      await settleAllOrThrow(pending);
+    }
     const pairs = readParticipantSet(tx.transactionId, tx.participantSetText);
     if (!pairs || pairs.length !== tx.participants.size ||
         pairs.some((pair) => !tx.participants.has(pair[1]))) throw incompleteParticipantSet();
