@@ -317,7 +317,17 @@ for (const family of Object.keys(FAMILY)) {
           {managedMergeWorkflow: restarted};
         // The first ACK reaches SQLite, but its reply is lost. The exact
         // metadata/generation reread still proves that fence's receipt.
-        store.loseAckOnce(({sql}) => sql.startsWith('UPDATE tables SET partition_transition_metadata'));
+        let lostReleaseWrite;
+        store.loseAckOnce((write) => {
+          if (write.changes !== 1 || !write.sql.startsWith(
+            'UPDATE tables SET partition_transition_metadata = ?, partition_transition_generation = ?')) return false;
+          const before = JSON.parse(write.params[3]).mirrorCustodyGrants;
+          const after = JSON.parse(write.params[0]).mirrorCustodyGrants;
+          const first = (grant) => grant.partitionId === partitionId && grant.fence === firstFence;
+          if (!before.some(first) || after.some(first)) return false;
+          lostReleaseWrite = write;
+          return true;
+        });
         source.systemTableCache.applySystemTableChange('tables', 'INSERT', store.tablesRow());
         for (const fence of [firstFence, secondFence]) {
           const start = store.writes.length;
@@ -335,7 +345,12 @@ for (const family of Object.keys(FAMILY)) {
           t.same(outstanding, fence === firstFence ? [secondFence] : [],
             'one committed release receipt discharges exactly its source and fence');
         }
-        t.equal(store.lostAcks.length, 0, 'the release ACK traversed the lost-reply injection');
+        t.ok(lostReleaseWrite, 'SQLite applied the first fence removal before its reply was lost');
+        // Finish this owner's target retirement before reconstructing another
+        // owner or deriving a successor registration from the current record.
+        const targets = store.metadata().targetPartitionIds;
+        t.ok(await group.waitFor(() => targets.every((id) => !store.partitionRow(id))),
+          'recovered retirement removed its targets while release receipts progressed');
       } finally {
         await group.dispose();
       }

@@ -81,8 +81,7 @@ function pickDispatchFields(operation, fieldNames) {
   return picked;
 }
 
-// Bounded memory for the first-attempt dispatch log discrimination; clearing
-// on overflow only means one extra info line per live operation step.
+// Bounded diagnostic state only. Evict the oldest operation when admitting a new ID.
 const SEND_OPERATION_LOG_KEY_CAP = 2048;
 const CREATE_DISPATCH_IDENTITY_FIELDS = Object.freeze([
   'operationId', 'type', 'entityType', 'entityId', 'partitionId', 'replicaId', 'targetNodeId',
@@ -92,20 +91,26 @@ const REFUSED_CREATE_DISPATCH_AUTHORITY = Object.freeze({
   action: CREATE_DISPATCH_AUTHORITY_ACTION.REFUSE, operation: null,
 });
 
-// First dispatch attempt per (operation, step) logs at info; retries stay at debug.
+// Preserve first-send visibility for each workflow step. Also surface the first
+// actual CREATE resend, even when it happens before the durable step changes.
 function logSendOperationAttempt(owner, operation, payload) {
-  const sendOperationLogKey = `${operation.operationId}:${operation.workflowStep}`;
-  if (!owner.sendOperationInfoLoggedKeys) {
-    owner.sendOperationInfoLoggedKeys = new Set();
+  const records = owner.sendOperationLogById ??= new Map();
+  let record = records.get(operation.operationId);
+  if (!record) {
+    if (records.size >= SEND_OPERATION_LOG_KEY_CAP) records.delete(records.keys().next().value);
+    record = {seenSteps: new Set(), createSends: 0};
+    records.set(operation.operationId, record);
   }
-  if (owner.sendOperationInfoLoggedKeys.size > SEND_OPERATION_LOG_KEY_CAP) {
-    owner.sendOperationInfoLoggedKeys.clear();
-  }
-  const firstAttemptForStep = !owner.sendOperationInfoLoggedKeys.has(sendOperationLogKey);
-  owner.sendOperationInfoLoggedKeys.add(sendOperationLogKey);
-  const sendOperationLog = firstAttemptForStep ?
-    owner.logger.info.bind(owner.logger) : owner.logger.debug.bind(owner.logger);
-  sendOperationLog(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {...payload, firstAttemptForStep});
+  const workflowStep = operation.workflowStep;
+  const firstAttemptForStep = !record.seenSteps.has(workflowStep);
+  record.seenSteps.add(workflowStep);
+  const isCreate = payload.type === ReplicaOperationMessageType.CREATE_REPLICA;
+  const firstRepeatCreate = isCreate && record.createSends === 1;
+  if (isCreate && record.createSends < 2) record.createSends += 1;
+  const level = firstAttemptForStep || firstRepeatCreate ? 'info' : 'debug';
+  owner.logger[level](REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
+    ...payload, workflowStep, firstAttemptForStep, firstRepeatCreate,
+  });
 }
 
 function isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) {
@@ -708,7 +713,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         (createReceipt) => logSendOperationAttempt(this, operation, {
           operationId: operation.operationId, target, type: messageType, entityType,
           entityId, replaceRemovePhase: replaceRemoveDispatchPhase,
-          ...(createReceipt ? {createReceipt} : {}),
+          ...(createReceipt ? {
+            createReceipt,
+            boundary: options?.boundary ?? null,
+            cause: options?.cause ?? null,
+            dispatchWake: options?.dispatchWake ?? null,
+          } : {}),
         }));
       if (wait) return wait;
       transport = deliveryTransportOf(delivery);

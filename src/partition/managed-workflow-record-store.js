@@ -510,8 +510,25 @@ async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
         (grant.release || (metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(state))))) {
     throw new TypeError('Mirror release acknowledgement does not match terminal workflow');
   }
+  const observed = await enqueueChange(owner, custody.workflowId, async () => {
+    const confirmed = await commitReleaseReceipt(owner, row, receipt);
+    // Other changes on this owner start from its acknowledged lineage.
+    if (lineagesOf(owner).has(custody.workflowId)) {
+      lineagesOf(owner).set(custody.workflowId, confirmed);
+    }
+    return confirmed;
+  });
+  // Retirement can enqueue more changes on this workflow. Wake it after
+  // leaving the record turn.
+  if (!endsSourceExecutionAttempt(storedRecordOf(observed).state)) {
+    await owner.resumeGroupRetirement?.(observed, 'source-custody-released');
+  }
+  return true;
+}
+
+async function commitReleaseReceipt(owner, row, {partitionId, custody}) {
   const matchesReceipt = (grant) => grant.partitionId === partitionId && grant.fence === custody.workflowFenceToken;
-  let base = row;
+  let base = await authoritativeRecordOf(owner, row.table_id);
   let lastObservation;
   function unresolved(reason) {
     throw Object.assign(new Error('Committed mirror release awaiting workflow acknowledgement', {
@@ -522,8 +539,21 @@ async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
       reason, observation: lastObservation,
     });
   }
-  for (let attempt = 0; attempt < MAX_COMPARE_AND_SWAP_ATTEMPTS; attempt++) {
+  for (let attempt = 0; ; attempt++) {
+    if (!base) unresolved('authoritative-row-unavailable');
+    if (generationOf(base) < generationOf(row)) unresolved('authoritative-generation-behind');
     const current = storedRecordOf(base);
+    if (current.workflowId !== custody.workflowId ||
+        current.metadata.workflowAttempt !== custody.workflowAttempt ||
+        current.metadata.targetPartitionVersion !== custody.targetPartitionVersion) {
+      unresolved('workflow-identity-changed');
+    }
+    const grant = current.metadata.mirrorCustodyGrants.find(matchesReceipt);
+    if (!grant) return base;
+    if (!grant.release && !(current.metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(current.state))) {
+      unresolved('release-authorization-changed');
+    }
+    if (attempt === MAX_COMPARE_AND_SWAP_ATTEMPTS) unresolved('conditional-write-unconfirmed');
     const remaining = current.metadata.mirrorCustodyGrants.filter((grant) => !matchesReceipt(grant));
     const encoded = withNextGeneration({data: {partition_transition_metadata:
       JSON.stringify({...current.metadata, mirrorCustodyGrants: remaining})},
@@ -539,10 +569,7 @@ async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
       cause: result.submitError ?? result.submission?.error,
     };
     if (observed && sameBytes(observed, written)) {
-      if (!endsSourceExecutionAttempt(current.state)) {
-        await owner.resumeGroupRetirement?.(observed, 'source-custody-released');
-      }
-      return true;
+      return observed;
     }
     if (!observed) {
       unresolved('authoritative-row-unavailable');
@@ -551,16 +578,8 @@ async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
       continue;
     }
     if (rereadLagsBase(observed, base)) unresolved('authoritative-generation-behind');
-    const moved = storedRecordOf(observed);
-    if (moved.workflowId !== custody.workflowId ||
-        moved.metadata?.workflowAttempt !== custody.workflowAttempt ||
-        moved.metadata.targetPartitionVersion !== custody.targetPartitionVersion) unresolved('workflow-identity-changed');
-    const grant = moved.metadata.mirrorCustodyGrants.find(matchesReceipt);
-    if (!grant) return true;
-    if (!grant.release && !(moved.metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(moved.state))) unresolved('release-authorization-changed');
     base = observed;
   }
-  unresolved('conditional-write-unconfirmed');
 }
 
 export async function hasPendingSourceGrants(owner, workflow) {

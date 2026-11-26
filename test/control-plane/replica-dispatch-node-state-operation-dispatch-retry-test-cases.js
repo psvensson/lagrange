@@ -384,6 +384,8 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       await Promise.all(service.operationDispatchQueues.map((queue) => queue.awaitCurrentWorkIdle()));
       t.equal(dispatchOptions[1]?.routineCreateRearmWake, true,
         'the cache-visibility retry reaches the workflow receipt check through the owner queue');
+      t.same(dispatchOptions[1].dispatchWake,
+        {reasons: [RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY], handoffMode: null});
 
       const id = operationRow.operation_id;
       service.deferOperationDispatchRetry(id, service.buildReplicaOperationVisibilityLagError(id), operationRow);
@@ -409,6 +411,8 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
         await Promise.all(service.operationDispatchQueues.map((queue) => queue.awaitCurrentWorkIdle()));
         t.equal(dispatchOptions.at(-1)?.routineCreateRearmWake === true, reusable,
           `the remote ${mode} ingress preserves its delivery intent`);
+        t.same(dispatchOptions.at(-1).dispatchWake,
+          {reasons: [RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST], handoffMode: mode});
       }
     } finally {
       service.stop();

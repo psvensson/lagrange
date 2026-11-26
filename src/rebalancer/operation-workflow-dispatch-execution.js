@@ -461,9 +461,14 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
    * @private
    */
   async advanceReservationClearedDispatch(operationInput, operation, options = {}) {
-    const deliveryOptions = {routineCreateRearmWake: options.routineCreateRearmWake === true &&
-      options.boundary !== 'dispatch_retry' &&
-      options.boundary !== OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE_RECONCILE};
+    const deliveryOptions = {
+      boundary: options.boundary,
+      cause: options.cause,
+      dispatchWake: options.dispatchWake,
+      routineCreateRearmWake: options.routineCreateRearmWake === true &&
+        options.boundary !== 'dispatch_retry' &&
+        options.boundary !== OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE_RECONCILE,
+    };
     const replaceRemoveDispatchPhase =
       this.repository.isReplaceRemoveDispatchPhase(operation);
     const dispatchableWorkflowStep = operation.workflowStep;

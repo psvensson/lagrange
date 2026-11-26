@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {test} from '../../src/test-helpers/tap.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {isVoterRaftRole} from '../../src/raft/replica-voter-readiness.js';
 import {readPersistedLocalClusterId} from '../../src/bootstrap/rejoin-hints.js';
 import {createEmbeddedCluster, readUntil} from './helpers/embedded-cluster-harness.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
@@ -11,7 +13,9 @@ import {enablePasswordPgwire} from './helpers/public-binding-seam-harness.js';
 const ports = createPortAllocator(import.meta.url);
 const workerPath = fileURLToPath(new URL('./helpers/schema-provisioning-wire-worker.js', import.meta.url));
 const tableName = 'wire_deadline_orders';
-const configuration = {formation: {declaredHostCount: 1}, partition: {defaultReplicaCount: 1}};
+// Three logical placement hosts in one lab test process tree.
+const hostIds = ['wire-host-a', 'wire-host-b', 'wire-host-c'];
+const configuration = {formation: {declaredHostCount: hostIds.length}};
 
 async function observe(node, op, input) {
   const reply = await node.channel.request(op, input);
@@ -30,7 +34,16 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
     const dataDir = t.testdir();
     const cluster = createEmbeddedCluster(t);
     const listenerPorts = ports.getListenerPorts();
-    const node = await cluster.startEmbeddedNode({workerPath, dataDir, configuration, listenerPorts});
+    const node = await cluster.startEmbeddedNode({
+      workerPath, dataDir, configuration, listenerPorts, hostId: hostIds[0],
+    });
+    for (const hostId of hostIds.slice(1)) {
+      await cluster.startEmbeddedNode({
+        workerPath, role: 'joiner', hostId, seedRestPort: node.restPort,
+        listenerPorts: ports.getListenerPorts(),
+      });
+    }
+    await cluster.waitForClusterSize(hostIds.length);
     const endpoint = await enablePasswordPgwire({
       query: async (sql, params) => ({rows: await cluster.seedQueryRows(sql, params)}),
     }, ports.getPort(), {
@@ -39,9 +52,11 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
       pause: () => managedSleep(t, 100),
     });
     const original = await cluster.createPgClient(endpoint);
-    await observe(node, 'holdProvisioning', {tableName});
+    await Promise.all(cluster.nodes.map((member) => observe(member, 'holdProvisioning', {tableName})));
     let pending;
-    const catalogCommitted = observe(node, 'catalogCommitted');
+    const catalogCommitted = Promise.any(cluster.nodes.map(async (member) => ({
+      member, identity: await observe(member, 'catalogCommitted'),
+    })));
     const create = original.query(`CREATE TABLE ${tableName} (id TEXT PRIMARY KEY, payload TEXT)`);
     const deadline = assert.rejects(create, (error) => {
       assert.equal(error.code, '55P03');
@@ -50,7 +65,7 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
       return true;
     });
     try {
-      const identity = await Promise.race([catalogCommitted, deadline.then(() => {
+      const {member, identity} = await Promise.race([catalogCommitted, deadline.then(() => {
         throw new Error('CREATE answered before the catalog-commit barrier');
       })]);
       await deadline;
@@ -59,8 +74,8 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
         'SELECT table_id, status FROM schema_operations WHERE job_id = $1', [identity.jobId]);
       assert.deepEqual(active.rows, [{table_id: identity.tableId, status: 'RUNNING'}]);
       await original.end();
-      await observe(node, 'releaseProvisioning');
-      const terminal = await observe(node, 'terminalProvisioning');
+      await Promise.all(cluster.nodes.map((worker) => observe(worker, 'releaseProvisioning')));
+      const terminal = await observe(member, 'terminalProvisioning');
       assert.deepEqual(terminal, {jobId: identity.jobId, status: 'SUCCEEDED'});
 
       const fresh = await cluster.createPgClient(endpoint);
@@ -72,16 +87,14 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
       const expectedRows = [{payload: 'after deadline'}];
       assert.deepEqual((await fresh.query(select, ['first'])).rows, expectedRows);
       await fresh.end();
-      // A completed founder needs current members for durable rejoin. Keep
-      // the one-host declaration truthful: these are separate local processes.
-      for (const count of [2, 3]) {
-        await cluster.startEmbeddedNode({
-          role: 'joiner', hostId: node.hostId, seedRestPort: node.restPort,
-          listenerPorts: ports.getListenerPorts(),
-          configuration: {partition: configuration.partition},
-        });
-        await cluster.waitForClusterSize(count);
-      }
+      // Rejoin must read lifecycle authority from the services partition
+      // while the founder is down. ACTIVE node membership alone cannot prove it.
+      const survivorIds = cluster.nodes.slice(1).map((peer) => peer.nodeId);
+      const beforeStop = await node.openApplicationDatabase('wire-restart-authority');
+      await readUntil(t, node, beforeStop,
+        'SELECT node_id, status, raft_role FROM services WHERE partition_id = ?',
+        ['services-p1'], (rows) => survivorIds.every((id) => rows.some((row) =>
+          row.node_id === id && row.status === ReplicaStatus.ACTIVE && isVoterRaftRole(row.raft_role))));
       const identitySql = 'SELECT config_value FROM config WHERE config_key = ?';
       const clusterKey = ['cluster_id'];
       const [{config_value: clusterId}] = await cluster.seedQueryRows(identitySql, clusterKey);
@@ -91,7 +104,7 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
 
       const reopened = createEmbeddedCluster(t);
       const restored = await reopened.startEmbeddedNode({
-        workerPath, configuration: {partition: configuration.partition}, dataDir,
+        workerPath, dataDir,
         nodeId: node.nodeId, hostId: node.hostId,
         listenerPorts,
       });
@@ -104,6 +117,7 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
       await checkCompletedJob(reader, identity.jobId, identity.tableId);
       assert.deepEqual((await reader.query(select, ['first'])).rows, expectedRows);
     } finally {
-      if (!node.channel.exitState()) await observe(node, 'releaseProvisioning');
+      await Promise.all(cluster.nodes.filter((worker) => !worker.channel.exitState())
+        .map((worker) => observe(worker, 'releaseProvisioning')));
     }
   });

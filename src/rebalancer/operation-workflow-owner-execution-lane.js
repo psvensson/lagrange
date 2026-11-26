@@ -294,7 +294,7 @@ class OperationWorkflowOwnerExecutionLane
       return this.dispatchOperationInternal(operationInput, options);
     }
     if (action === OPERATION_OWNER_ACTION.EXECUTE) {
-      return this.executeOperationInternal(operationInput);
+      return this.executeOperationInternal(operationInput, {boundary: options.boundary, cause: options.cause});
     }
     if (action === OPERATION_OWNER_ACTION.FAIL) {
       return this.failOperation(

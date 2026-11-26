@@ -296,6 +296,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       ) {
         dispatchResult =
           await this.rebalanceCoordinator.dispatchOperation(rowOperation, {
+            ...(options.dispatchWake ? {dispatchWake: options.dispatchWake} : {}),
             ...(options.routineCreateRearmWake === true ? {routineCreateRearmWake: true} : {}),
             cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
           });

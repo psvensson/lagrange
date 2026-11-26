@@ -271,6 +271,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       return;
     }
 
+    const dispatchWake = {reasons, handoffMode: context?.[ControlPlaneField.HANDOFF_MODE] ?? null};
     try {
       if (this.shouldExecuteOperationFromDispatchReplay(row, context)) {
         this.clearDeferredOperationDispatchRetry(operationId);
@@ -279,6 +280,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
           typeof this.rebalanceCoordinator.dispatchOperation === 'function'
         ) {
           await this.rebalanceCoordinator.dispatchOperation(operation, {
+            dispatchWake,
             cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
             ...(this.isRuntimeTargetProgressWakeOperation(row, context) ?
               {ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN} :
@@ -314,6 +316,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
           await this.rebalanceCoordinator.dispatchOperation(
             this.buildOperationFromRow(row),
             {
+              dispatchWake,
               cause:
                 REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
               ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,
@@ -324,6 +327,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       }
 
       await this.dispatchOperationRow(row, {
+        dispatchWake,
         routineCreateRearmWake: isRoutineCreateRearmWake(context, reasons),
         readyNodeId:
           typeof context?.readyNodeId === 'string' &&
