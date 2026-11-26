@@ -62,6 +62,7 @@ const RAFT_RS_CHECKPOINT_REASON = Object.freeze({
 // Typed creation outcomes. CREATED is the only success; every other outcome
 // must never be advertised as recovery progress.
 const RAFT_CHECKPOINT_CREATION_OUTCOME = Object.freeze({
+  IMAGE_REJECTED: 'image_rejected',
   CREATED: 'created',
   UNSUPPORTED_ADAPTER: 'unsupported_adapter',
   APPLY_WATERMARK_DIVERGENCE: 'apply_watermark_divergence',

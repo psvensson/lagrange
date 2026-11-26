@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
 
 import {
   RAFT_CHECKPOINT_ENVELOPE_VERSION,
@@ -186,6 +187,26 @@ function raftRsDescriptor(reservation) {
     },
   });
 }
+
+test('raft-rs image epochs bind to the creating entity authority', async (t) => {
+  const base = raftRsDescriptor({nodeId: RAFT_RS_NODE});
+  const outcome = RAFT_CHECKPOINT_VALIDATION_OUTCOME;
+  const messageGroup = {kind: SERVICE_TYPE.MESSAGE_GROUP, id: base.raftGroupId};
+  const cases = [
+    ['earlier publication', {...base, membershipEpoch: 0}, outcome.VALID],
+    ['later publication', {...base, membershipEpoch: SEALED_INDEX + 1}, outcome.VALID],
+    ['matching message-group stamp', {...base, entity: messageGroup}, outcome.VALID],
+    ['moved message-group stamp', {...base, entity: messageGroup, membershipEpoch: 0}, outcome.CORRUPT_DESCRIPTOR],
+    ['unknown entity', {...base, entity: {kind: 'unknown', id: base.entity.id}}, outcome.CORRUPT_DESCRIPTOR],
+    ['foreign group', {...base, raftGroupId: 'another-group'}, outcome.CORRUPT_DESCRIPTOR],
+    ['generation beyond applied', {...base, raftRs: {...base.raftRs,
+      membershipGenerationIndex: String(SEALED_INDEX + 1)}}, outcome.CORRUPT_DESCRIPTOR],
+    ['invalid learner origin', raftRsDescriptor({learnerAdmission: '{}'}), outcome.CORRUPT_DESCRIPTOR],
+  ];
+  for (const [label, descriptor, expected] of cases) {
+    t.equal(validateCheckpointDescriptor(descriptor).outcome, expected, label);
+  }
+});
 
 test('a raft-rs image descriptor carries a reservation\'s committed nodeId ' +
   'exactly when recorded', async (t) => {

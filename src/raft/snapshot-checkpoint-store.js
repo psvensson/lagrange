@@ -235,17 +235,22 @@ async function createSqliteStateMachineCheckpoint(options) {
       fs.rmSync(sidecar, {force: true});
     }
     fsyncFile(stagingPayload);
-    const payloadBytes = fs.readFileSync(stagingPayload);
     const descriptor = buildCreatedCheckpointDescriptor(
-      identity, prepared, payloadBytes);
+      identity, prepared, fs.readFileSync(stagingPayload));
+    const stagedDescriptor = path.join(stagingDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE);
+    writeAtomicDurable(stagedDescriptor, descriptor);
+    const validation = readCheckpoint({checkpointDir: stagingDir});
+    if (validation.outcome !== VALIDATION.VALID) {
+      return creationResult(CREATION.IMAGE_REJECTED, validation.reasons, {validation});
+    }
     const generationDir = path.join(
       checkpointsRoot, String(watermarks.committedIndex));
     ensureDirectory(generationDir);
     const finalPayload = path.join(generationDir, RAFT_CHECKPOINT_PAYLOAD_FILE);
     fs.renameSync(stagingPayload, finalPayload);
     fsyncDirectory(generationDir);
-    writeAtomicDurable(
-      path.join(generationDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE), descriptor);
+    fs.renameSync(stagedDescriptor, path.join(generationDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE));
+    fsyncDirectory(generationDir);
     // Opportunistic bounded-retention sweep (S5): the one production-adjacent
     // moment S1 owns. The full pin set travels on EVERY invocation — durable
     // install/transfer markers plus the caller's in-process pins — and the
