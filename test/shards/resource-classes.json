@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2805,
+    "ordinary": 2806,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2831,
-  "digest": "fnv1a32-a818c99f",
+  "censusSize": 2832,
+  "digest": "fnv1a32-31b9ef4d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -755,6 +755,7 @@
     "test/control-plane/service-install-catalog-owner.test.js": "ordinary",
     "test/control-plane/service-instance-creation-cas.test.js": "ordinary",
     "test/control-plane/service-instance-selection-admission.test.js": "ordinary",
+    "test/control-plane/services-publication-leader-loss.test.js": "ordinary",
     "test/control-plane/shared-node-readiness-policy.test.js": "ordinary",
     "test/control-plane/single-readiness-owner.receipt.test.js": "ordinary",
     "test/control-plane/startup-authority-serve-eligible-spread-satisfied.repro.test.js": "ordinary",

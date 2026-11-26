@@ -5,14 +5,23 @@
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": false,
+      "campaign": "bench-review-ce2-three-1613",
+      "sourceCommit": "ce239691db8ed7249ed724ea8e7b1d49d580aa8c",
+      "observed": "readiness_exhausted; 11 of 46 system partitions below RF3 in the last predeadline census; workload not reached",
+      "evidenceFile": "bench-review-ce2-three-1613/result.json",
+      "evidenceSha256": "571933432bd409e8bfc762368abe4ccccba9d8b3d3f27c9c4c717033dcb8b4cc"
+    }
+  ],
+  "priorObservations": [
+    {
+      "id": "scenario-a-three-physical-hosts",
+      "passed": false,
       "campaign": "bench-review-c0a-three-1538",
       "sourceCommit": "c0a6dcc12b5debf5b7fb3be6dfb06c80ca762a38",
       "observed": "9/9 semantic cases passed; 43/100 measured commits; final state unobserved; admission failed",
       "evidenceFile": "bench-review-c0a-three-1538/result.json",
       "evidenceSha256": "4d6b8fce21192a104b8e7699339b21bafe784475fa68cbde411bca713d55ae21"
-    }
-  ],
-  "priorObservations": [
+    },
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": false,

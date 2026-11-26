@@ -16,6 +16,9 @@ import {
   observePersistedPartitionTerm,
 } from '../storage/retained-read-view-custody.js';
 import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  buildDeliveryEnvelope,
+  classifyThrownDeliveryError,
   deliveryAnswerOf,
   deliveryReadingOf,
 } from '../transport/transport-semantic-outcome.js';
@@ -713,6 +716,18 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
     return result;
   }
 
+  // Normalize a router-rejected close at the actual write hop. This keeps
+  // its before-send proof, or lost-answer debt, identical to a resolved close.
+  async function deliverWrite(ticket, options) {
+    try {
+      return await router.deliver(ticket.address, ticket.request, options);
+    } catch (error) {
+      const transport = classifyThrownDeliveryError(error);
+      if (transport.reasonCode !== TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED) throw error;
+      return buildDeliveryEnvelope(transport);
+    }
+  }
+
   async function prepareSubmission(address, targetRetryTracker, buildRouterOptions) {
     throwIfAborted();
     if (targetRetryTracker.getRemainingDelayMs(address) > 0) {
@@ -735,7 +750,9 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
         onSubmit?.();
         if (!forRead) rawOptions.onWriteSubmission?.(ticket);
         const options = signal ? {...routerOptions, signal} : routerOptions;
-        return {ticket, completion: router.deliver(address, ticket.request, options)};
+        const completion = forRead ? router.deliver(address, ticket.request, options) :
+          deliverWrite(ticket, options);
+        return {ticket, completion};
       },
     };
   }

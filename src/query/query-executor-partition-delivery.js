@@ -578,6 +578,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   deferRetry: response?.deferRetry,
                 },
                 forRead,
+                deliveryTransportOf(delivery),
               );
             if (
               controlPlaneWriteRetryDecision.state !==
@@ -661,6 +662,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               error.message.length > 0 ?
                 error.message :
                 ERRORS.QUERY_FAILED;
+            if (unknownOutcome.observeAnswer(null) === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
+              recordCandidateFailure(errorMessage, error, serviceInfo?.nodeId, address);
+              return buildLastFailureResult();
+            }
             if (this.isNoHandlerFailure(errorMessage)) {
               await candidateState.handleNoHandlerCandidate(
                 serviceInfo,

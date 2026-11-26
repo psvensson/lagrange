@@ -1027,10 +1027,10 @@ function createProcessAbortableProxy(target) {
       if (typeof value === 'function') {
         return (...args) => {
           if (dead) {
-            return Promise.reject(Object.assign(
-              new Error('Simulated process crash'),
-              {code: 'SCHEMA_JOB_STALE_OWNER'},
-            ));
+            // Callers include synchronous capability predicates. Throw at the
+            // dead boundary so the current call owns the failure.
+            throw Object.assign(new Error('Simulated process crash'),
+              {code: 'SCHEMA_JOB_STALE_OWNER'});
           }
           return value.apply(obj, args);
         };

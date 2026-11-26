@@ -7,7 +7,7 @@
     "bootstrap-membership": 358,
     "cdc-metadata": 81,
     "cli-tooling": 99,
-    "control-plane": 243,
+    "control-plane": 244,
     "convergence-topology": 88,
     "distributed-harness": 226,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2831,
-  "digest": "fnv1a32-8cc995db",
+  "censusSize": 2832,
+  "digest": "fnv1a32-1186c2b1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e00b958e",
+  "observationDigest": "fnv1a32-708051a3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -775,6 +775,7 @@
     "test/control-plane/service-install-catalog-owner.test.js": "control-plane",
     "test/control-plane/service-instance-creation-cas.test.js": "control-plane",
     "test/control-plane/service-instance-selection-admission.test.js": "control-plane",
+    "test/control-plane/services-publication-leader-loss.test.js": "control-plane",
     "test/control-plane/shared-node-readiness-policy.test.js": "control-plane",
     "test/control-plane/single-readiness-owner.receipt.test.js": "control-plane",
     "test/control-plane/startup-authority-serve-eligible-spread-satisfied.repro.test.js": "control-plane",
@@ -6884,6 +6885,12 @@
         "src/query/query-executor-partition-failure.js",
         "src/service/service-lifecycle-command-contract.js",
         "src/service/service-lifecycle-command-owner.js"
+      ]
+    },
+    "test/control-plane/services-publication-leader-loss.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/control-plane/shared-node-readiness-policy.test.js": {

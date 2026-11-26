@@ -1,3 +1,4 @@
+import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
 import {RealTimeSource} from '../time/time-source.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {
@@ -342,7 +343,7 @@ function resolveRedirectFailureMessage(redirectResponse) {
 }
 
 function handleFailedRedirectResponse(context, redirectAddress,
-  redirectParticipantNodeId, redirectResponse, redirectUnknownDecision) {
+  redirectParticipantNodeId, redirectResponse, redirectUnknownDecision, transport) {
   const {
     candidateIndex, candidateState, executor, followRetryDecision, forRead,
     isLeaderPinnedDelivery, partitionId, recordCandidateFailure, response,
@@ -356,7 +357,7 @@ function handleFailedRedirectResponse(context, redirectAddress,
     return {action: REDIRECT_STEP_ACTION.RETURN, useLastFailure: true};
   }
   const redirectRetryDecision = executor.resolveControlPlaneWriteRetryDecision(
-    partitionId, redirectResponse, forRead);
+    partitionId, redirectResponse, forRead, transport);
   recordCandidateFailure(
     redirectFailureMessage, redirectResponse, redirectParticipantNodeId, redirectAddress);
   if (redirectRetryDecision.state !== CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE) {
@@ -460,7 +461,8 @@ async function executePartitionLeaderRedirectAttempt(context) {
   await candidateState.handleRedirectTransportNoHandler(
     redirectDelivery, nextServiceInfo, redirectAddress, candidateIndex);
   const failureStep = handleFailedRedirectResponse(
-    context, redirectAddress, redirectParticipantNodeId, redirectCompletion.response, unknownDecision);
+    context, redirectAddress, redirectParticipantNodeId, redirectCompletion.response, unknownDecision,
+    deliveryTransportOf(redirectDelivery));
   return {
     ...failureStep, address: redirectAddress,
     ...(failureStep.useLastFailure ? {result: buildLastFailureResult()} : {}),
