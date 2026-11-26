@@ -31,7 +31,8 @@ import {TRANSACTION_RELEASE_CENSUS_STATE} from
 import {TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
+  PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_PHASE as PHASE,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 
@@ -90,8 +91,12 @@ async function enableAndObserveCohort(handler, release, attempt, census, local,
 }
 
 async function actOnCohort(handler, release, attempt, action, census, fields = {}) {
-  return Promise.all(census.map((facts) => askParticipantRelease(handler,
-    facts.generation.nodeId, requestFor(release, attempt, action, facts, fields), releaseTrace(attempt))));
+  return Promise.all(census.map((facts) => askParticipantRelease(
+    handler,
+    facts.generation.nodeId,
+    requestFor(release, attempt, action, facts, fields),
+    releaseTrace(attempt),
+  )));
 }
 
 function attemptRefusal(request, outcome, fields = {}) {
@@ -119,7 +124,12 @@ async function resumeCohort(handler, service, request, release, attempt, census,
   fields = {}) {
   // Both first-origin and current-origin releases must re-establish control
   // authority after their own paused census, before any member can reopen.
-  const currentControlOwner = await releaseControlOwnerFirst(handler, service, request, 'control_before_resume');
+  const currentControlOwner = await releaseControlOwnerFirst(
+    handler,
+    service,
+    request,
+    PHASE.CONTROL_BEFORE_RESUME,
+  );
   if (currentControlOwner !== null) return currentControlOwner;
   const followers = census.filter((facts) =>
     facts.generation.replicaId !== service.replicaId);
@@ -210,20 +220,43 @@ function controlReleaseAnswerValid(answer, targetBuildDigest) {
 }
 
 function currentControlNodeId(handler, service, partitionId) {
-  const localControlLeader = [...handler.localServices.values()].find((candidate) =>
-    candidate.initialized && !candidate.isShutdown &&
-    candidate.partitionId === partitionId &&
-    candidate.raft?.readStatus().role === RAFT_ROLE.LEADER);
-  if (localControlLeader) return handler.nodeId;
+  for (const candidate of handler.localServices.values()) {
+    if (!candidate.initialized || candidate.isShutdown ||
+        candidate.partitionId !== partitionId) {
+      continue;
+    }
+    const status = candidate.raft?.readStatus();
+    if (status?.role === RAFT_ROLE.LEADER) return handler.nodeId;
+    const leaderNodeId = releaseNodeOfAddress(status?.leaderAddress);
+    if (leaderNodeId !== null) return leaderNodeId;
+  }
   return releaseQueryEngine(handler, service)?.queryExecutor?.bootstrapTopologySnapshotOwner
     ?.resolveCanonicalPartitionLeaderNodeId?.(partitionId) ?? null;
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function alternateControlPeerNodeIds(handler, partitionId, excludedNodeId) {
+  const rows = handler.systemTableCache?.servicesForPartition?.(partitionId) ?? [];
+  const nodeIds = [];
+  for (const row of rows) {
+    const candidateNodeId = row?.node_id;
+    if (isNonEmptyString(candidateNodeId) &&
+        candidateNodeId !== excludedNodeId &&
+        !nodeIds.includes(candidateNodeId)) {
+      nodeIds.push(candidateNodeId);
+    }
+  }
+  return nodeIds;
 }
 
 async function releaseControlOwnerFirst(handler, service, request, phase) {
   if (service.tableName === TABLES.SQL_TRANSACTIONS) return null;
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
-  const nodeId = currentControlNodeId(handler, service, partitionId);
-  if (typeof nodeId !== 'string' || nodeId.length === 0) {
+  let nodeId = currentControlNodeId(handler, service, partitionId);
+  if (!isNonEmptyString(nodeId)) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.CURRENT_CONTROL_OWNER});
   }
@@ -232,9 +265,33 @@ async function releaseControlOwnerFirst(handler, service, request, phase) {
       request.targetBuildDigest);
   const trigger = request.trigger === TRIGGER.FRESH_CREATE ?
     TRIGGER.EXISTING_ORIGIN : request.trigger;
-  const answer = await requestParticipantRelease(handler, {partitionId, nodeId,
+  let answer = await requestParticipantRelease(handler, {partitionId, nodeId,
     targetBuildDigest: request.targetBuildDigest, trigger,
     deadlineAtMs: request.deadlineAtMs, authorization}, releaseTrace(request), phase);
+  if (answer?.outcome === OUTCOME.UNAVAILABLE &&
+      answer?.missingFact === MISSING_FACT.REPLICA_RELEASE_REPLY &&
+      !isNonEmptyString(answer?.inspectNodeId)) {
+    for (const candidateNodeId of alternateControlPeerNodeIds(handler, partitionId, nodeId)) {
+      const redirected = await requestParticipantRelease(handler, {
+        partitionId,
+        nodeId: candidateNodeId,
+        targetBuildDigest: request.targetBuildDigest,
+        trigger,
+        deadlineAtMs: request.deadlineAtMs,
+        authorization,
+      }, releaseTrace(request), phase);
+      if (controlReleaseAnswerValid(redirected, request.targetBuildDigest)) {
+        answer = redirected;
+        nodeId = candidateNodeId;
+        break;
+      }
+      if (isNonEmptyString(redirected?.inspectNodeId)) {
+        answer = redirected;
+        nodeId = candidateNodeId;
+        break;
+      }
+    }
+  }
   if (answer?.outcome === OUTCOME.BUILD_MISMATCH) {
     return releaseAnswer(OUTCOME.BUILD_MISMATCH, request,
       {controlPartitionId: partitionId});
@@ -339,7 +396,12 @@ async function runCutoverAttempt(handler, request) {
   const localRefusal = request.trigger === TRIGGER.FRESH_CREATE ? null :
     await localReleaseRefusal(handler, service, request);
   if (localRefusal !== null) return localRefusal;
-  const controlOwner = await releaseControlOwnerFirst(handler, service, request, 'control_before_pause');
+  const controlOwner = await releaseControlOwnerFirst(
+    handler,
+    service,
+    request,
+    PHASE.CONTROL_BEFORE_PAUSE,
+  );
   if (controlOwner !== null) return controlOwner;
   // Close the current leader before any awaited remote observation. A
   // missing member cannot leave reachable members open on a failed release.

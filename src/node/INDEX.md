@@ -56,6 +56,7 @@ documentClass: generated
 - [replica-handler-learner-retirement-authority.js](replica-handler-learner-retirement-authority.js) - No leading comment; first export: admitsLearnerRetirement. (importers: few)
 - [replica-handler-lifecycle-methods.js](replica-handler-lifecycle-methods.js) - ReplicaHandler lifecycle + message dispatch methods. (importers: one)
 - [replica-handler-membership-methods.js](replica-handler-membership-methods.js) - Owner contract: Owner: the replica handler's witness seam for the REPLACE owner (quest replace-source-removal-owner,... (importers: few)
+- [replica-handler-membership-recovery.js](replica-handler-membership-recovery.js) - Owner: ReplicaHandler's old-quorum permanent member loss recovery execution and target learner... (importers: one)
 - [replica-handler-membership-relay.js](replica-handler-membership-relay.js) - Owner contract: Owner: the replica handler's tracked-service registry as the node's single relay of partition... (importers: many)
 - [replica-handler-participant-cutover.js](replica-handler-participant-cutover.js) - No leading comment; first export: runParticipantCutover. (importers: few)
 - [replica-handler-participant-release.js](replica-handler-participant-release.js) - The lifecycle recipient survives a PartitionService replacement. (importers: one)

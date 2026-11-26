@@ -89,6 +89,8 @@ documentClass: generated
 - [partition-locking-read-service.js](partition-locking-read-service.js) - Authoritative partition leader and Raft apply handler for LOCKING_READ_RESERVATION commands and RPC requests. (importers: few)
 - [partition-locking-read-store.js](partition-locking-read-store.js) - Durable SQLite store for participant locking-read reservations (_lagrange_locking_read_reservations). (importers: many)
 - [partition-locking-read-write-check.js](partition-locking-read-write-check.js) - Authoritative partition-side write conflict & read-generation validation for SELECT ... (importers: many)
+- [partition-membership-recovery-constants.js](partition-membership-recovery-constants.js) - Constants and schema definitions for group-bound old-quorum permanent member loss recovery intents, generation... (importers: many)
+- [partition-membership-recovery.js](partition-membership-recovery.js) - Public entry: ensureMembershipRecoveryTables, recordPartitionMemberBinding, readPartitionMemberBinding,... (importers: many)
 - [partition-mirror-custody-codec.js](partition-mirror-custody-codec.js) - No leading comment; first export: MIRROR_CUSTODY_FORMAT. (importers: many)
 - [partition-mirror-custody-lifecycle.js](partition-mirror-custody-lifecycle.js) - No leading comment; first export: reconcileFailedMirrorCustody. (importers: many)
 - [partition-mirror-effect-retention.js](partition-mirror-effect-retention.js) - Committed retention custody and retirement of committed statement mirror effects (_partition_statement_outcome_effects). (importers: many)

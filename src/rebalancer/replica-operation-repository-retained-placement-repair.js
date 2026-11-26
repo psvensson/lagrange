@@ -77,6 +77,13 @@ function assignRetainedPlacementRepairMethods(Repository) {
     async repairRetainedOperation(operation) {
       if (this.isShuttingDownRequested()) return false;
       let attempt = this.retainedPlacementRepairs.get(operation.operationId);
+      if (attempt && !isDeepStrictEqual(attempt.operation, operation) &&
+          attempt.decision.state === RUN.IDLE && attempt.awaitingCallers === 0 &&
+          attempt.operation?.createdAt === operation?.createdAt) {
+        this.clearRetainedRepairTimer(attempt);
+        attempt = null;
+        this.retainedPlacementRepairs.delete(operation.operationId);
+      }
       if (!attempt) {
         attempt = retainedRepairRecord(operation, ORIGIN.CALLER);
         this.retainedPlacementRepairs.set(operation.operationId, attempt);
@@ -524,7 +531,9 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (row) {
         const operation = this.rowToOperation(row);
         const exact = operation.createdAt === attempt.operation.createdAt &&
-          this.isReplicaOperationUpdateSatisfied(attempt.operation, operation);
+          (this.isReplicaOperationUpdateSatisfied(attempt.operation, operation) ||
+            this.isOperationProgressAheadOrEqual?.(operation.workflowStep,
+              attempt.operation.workflowStep) === true);
         return {state: exact ? DECISION.EXACT : DECISION.CHANGED, operation,
           observedTerm: authority.witness.term};
       }

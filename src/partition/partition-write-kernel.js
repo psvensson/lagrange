@@ -19,6 +19,8 @@ import {PARTITION_CDC_COMMAND_TYPES} from
   './partition-cdc-obligation-constants.js';
 import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
   './partition-participant-transaction-constants.js';
+import {PARTITION_MEMBERSHIP_RECOVERY_TYPE} from
+  './partition-membership-recovery-constants.js';
 import {PARTITION_SETTLED_REPLAY} from
   './partition-committed-statement-outcome-constants.js';
 import {
@@ -578,6 +580,7 @@ function hasWriteSideEffects(entry, executionResult) {
   return (
     executionResult?.success === true &&
     entry?.type !== PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY &&
+    entry?.type !== PARTITION_MEMBERSHIP_RECOVERY_TYPE &&
     !PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(entry?.type) &&
     !PARTITION_CDC_COMMAND_TYPES.includes(entry?.type)
   );

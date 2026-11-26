@@ -36,6 +36,13 @@ import {createParticipantReleaseAuthorizationOwner} from
   './participant-release-authorization-owner.js';
 import {assignReplicaHandlerMembershipMethods} from
   './replica-handler-membership-methods.js';
+import {
+  executePermanentMemberLossRecovery,
+  handleMaterializeRecoveryLearner,
+  handleObserveRecoveryLearner,
+  stagePermanentMemberLossRecovery,
+  tryAutonomousPermanentMemberLossRecovery,
+} from './replica-handler-membership-recovery.js';
 import {assignReplicaHandlerCommittedMembershipMethods} from
   './replica-handler-committed-membership-methods.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
@@ -230,6 +237,7 @@ class ReplicaHandler extends EventEmitter {
         this.buildReplicaCreationProgressContext(progress, status, error),
     });
     this.creationProgressByReplica = new Map();
+    this.membershipRecoveryInFlight = new Map();
     this.initialized = false;
     this.participantReleaseAuthorizationOwner =
       createParticipantReleaseAuthorizationOwner(this);
@@ -249,6 +257,32 @@ Object.assign(ReplicaHandler.prototype, {
     return [...this.localServices.values()].filter((service) =>
       service?.partitionId === partitionId && service.initialized === true &&
       service.isShutdown !== true);
+  },
+  handleMaterializeRecoveryLearner(request) {
+    return handleMaterializeRecoveryLearner(this, request);
+  },
+  handleObserveRecoveryLearner(request) {
+    return handleObserveRecoveryLearner(this, request);
+  },
+  stagePermanentMemberLossRecovery(request) {
+    return stagePermanentMemberLossRecovery(this, request);
+  },
+  executePermanentMemberLossRecovery(request) {
+    return executePermanentMemberLossRecovery(this, request);
+  },
+  tryAutonomousPermanentMemberLossRecovery(
+    leaderService,
+    hintedDeadNodeId = null,
+    hintedDeadReplicaId = null,
+    deadlineAtMs = null,
+  ) {
+    return tryAutonomousPermanentMemberLossRecovery(
+      this,
+      leaderService,
+      hintedDeadNodeId,
+      hintedDeadReplicaId,
+      deadlineAtMs,
+    );
   },
 });
 assignReplicaHandlerLifecycleMethods(ReplicaHandler);
