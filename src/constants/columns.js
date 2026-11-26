@@ -4,7 +4,7 @@ const COLUMN = Object.freeze({
   CPU_CORES: 'cpu_cores',
   MEMORY_MB: 'memory_mb',
   DISK_GB: 'disk_gb',
-  CPU_USAGE_PERCENT: 'cpu_usage_percent',
+  HOST_CPU_UTILIZATION_PERCENT: 'host_cpu_utilization_percent',
   MEMORY_USAGE_PERCENT: 'memory_usage_percent',
   DISK_USAGE_PERCENT: 'disk_usage_percent',
   STATUS: 'status',

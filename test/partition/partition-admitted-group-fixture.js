@@ -62,6 +62,7 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
   const ownsTransport = transport === null;
   const services = [];
   const caches = [];
+  const replicaOptions = [];
   const operations = members.slice(1).map((member) =>
     committedAddOperation(partitionId, member));
   const waitFor = async (predicate) => {
@@ -99,7 +100,7 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       cache.applySystemTableChange(
         TABLES.SERVICES, CDCOperation.INSERT, serviceRow(row));
     }
-    const service = new PartitionService(withFoundingStamp({
+    const options = withFoundingStamp({
       ...serviceOptions,
       partitionId,
       replicaId: member[0],
@@ -110,7 +111,9 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       transport: network,
       systemTableCache: cache,
       ...extra,
-    }));
+    });
+    replicaOptions.push(options);
+    const service = new PartitionService(options);
     answerCommittedOperations(service, operations);
     services.push(service);
     caches.push(cache);
@@ -167,7 +170,14 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
     }
     throw error;
   }
-  return {services, dbFileOf, addressOf, waitFor, dispose};
+  const reopen = async (index) => {
+    const replica = new PartitionService({...replicaOptions[index], deferElection: false});
+    answerCommittedOperations(replica, operations);
+    services[index] = replica;
+    await replica.initialize();
+    return replica;
+  };
+  return {services, dbFileOf, addressOf, waitFor, dispose, reopen};
 }
 
 export {formAdmittedGroup};

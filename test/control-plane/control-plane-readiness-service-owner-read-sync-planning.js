@@ -667,7 +667,7 @@ test('ControlPlaneReadinessService marks hard-pressure nodes ineligible',
   async (t) => {
     const overloadedNode = {
       ...createActiveNode('node-3'),
-      [COLUMN.CPU_USAGE_PERCENT]: 100,
+      [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 100,
     };
     const cache = createCache({
       nodes: [overloadedNode],

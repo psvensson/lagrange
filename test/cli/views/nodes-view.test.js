@@ -13,7 +13,7 @@ function createNode(overrides = {}) {
     node_id: 'node-1',
     node_address: '192.168.1.1:8080',
     status: 'active',
-    cpu_usage_percent: 45.5,
+    host_cpu_utilization_percent: 45.5,
     memory_usage_percent: 60.0,
     disk_usage_percent: 50.0,
     services_count: 5,
@@ -39,7 +39,7 @@ test('NodesView', async (t) => {
     t.equal(columns[0].label, 'Node ID');
     t.equal(columns[1].key, 'node_address');
     t.equal(columns[2].key, 'status');
-    t.equal(columns[3].key, 'cpu_usage_percent');
+    t.equal(columns[3].key, 'host_cpu_utilization_percent');
     t.equal(columns[4].key, 'memory_usage_percent');
     t.equal(columns[5].key, 'disk_usage_percent');
     t.equal(columns[6].key, 'services_count');
@@ -67,7 +67,7 @@ test('NodesView', async (t) => {
       node_id: null,
       node_address: undefined,
       status: null,
-      cpu_usage_percent: null,
+      host_cpu_utilization_percent: null,
       memory_usage_percent: undefined,
       disk_usage_percent: null,
       services_count: null,
@@ -88,7 +88,7 @@ test('NodesView', async (t) => {
     const view = new NodesView();
     const node = createNode({
       status: 'active',
-      cpu_usage_percent: 50,
+      host_cpu_utilization_percent: 50,
       memory_usage_percent: 50,
       disk_usage_percent: 50,
     });
@@ -106,7 +106,7 @@ test('NodesView', async (t) => {
   t.test('getRowStatus returns WARNING for high CPU usage', async (t) => {
     const view = new NodesView();
     const node = createNode({
-      cpu_usage_percent: WARNING_THRESHOLDS.CPU_PERCENT + 1,
+      host_cpu_utilization_percent: WARNING_THRESHOLDS.CPU_PERCENT + 1,
     });
 
     t.equal(view.getRowStatus(node), ROW_STATUS.WARNING);
@@ -133,7 +133,7 @@ test('NodesView', async (t) => {
   t.test('getRowStatus handles null resource values', async (t) => {
     const view = new NodesView();
     const node = createNode({
-      cpu_usage_percent: null,
+      host_cpu_utilization_percent: null,
       memory_usage_percent: null,
       disk_usage_percent: null,
     });
@@ -260,12 +260,12 @@ test('NodesView', async (t) => {
   t.test('sort works correctly', async (t) => {
     const view = new NodesView();
     const nodes = [
-      createNode({node_id: 'node-3', cpu_usage_percent: 30}),
-      createNode({node_id: 'node-1', cpu_usage_percent: 10}),
-      createNode({node_id: 'node-2', cpu_usage_percent: 20}),
+      createNode({node_id: 'node-3', host_cpu_utilization_percent: 30}),
+      createNode({node_id: 'node-1', host_cpu_utilization_percent: 10}),
+      createNode({node_id: 'node-2', host_cpu_utilization_percent: 20}),
     ];
     view.setData(nodes);
-    view.setSort('cpu_usage_percent', 'asc');
+    view.setSort('host_cpu_utilization_percent', 'asc');
 
     const result = view.render();
 

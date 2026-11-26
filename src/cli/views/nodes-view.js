@@ -25,8 +25,8 @@ const LOCAL_STR_ADDRESS = 'Address';
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_STATUS_2 = 'Status';
 const LOCAL_NUM_TEN = 10;
-const LOCAL_STR_CPU_USAGE_PERCENT = 'cpu_usage_percent';
-const LOCAL_STR_CPU = 'CPU%';
+const LOCAL_STR_HOST_CPU_UTILIZATION_PERCENT = 'host_cpu_utilization_percent';
+const LOCAL_STR_CPU = 'Host CPU%';
 const LOCAL_NUM_EIGHT = 8;
 const LOCAL_STR_MEMORY_USAGE_PERCENT = 'memory_usage_percent';
 const LOCAL_STR_MEM = 'Mem%';
@@ -85,7 +85,7 @@ export class NodesView extends BaseView {
       {key: LOCAL_STR_NODE_ID, label: LOCAL_STR_NODE_ID_2, width: LOCAL_NUM_TWENTY},
       {key: LOCAL_STR_NODE_ADDRESS, label: LOCAL_STR_ADDRESS, width: LOCAL_NUM_TWENTY},
       {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_TEN},
-      {key: LOCAL_STR_CPU_USAGE_PERCENT, label: LOCAL_STR_CPU, width: LOCAL_NUM_EIGHT},
+      {key: LOCAL_STR_HOST_CPU_UTILIZATION_PERCENT, label: LOCAL_STR_CPU, width: LOCAL_NUM_EIGHT},
       {key: LOCAL_STR_MEMORY_USAGE_PERCENT, label: LOCAL_STR_MEM, width: LOCAL_NUM_EIGHT},
       {key: LOCAL_STR_DISK_USAGE_PERCENT, label: LOCAL_STR_DISK, width: LOCAL_NUM_EIGHT},
       {key: LOCAL_STR_SERVICES_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_TEN},
@@ -103,7 +103,7 @@ export class NodesView extends BaseView {
       node.node_id || LOCAL_STR_N_A,
       node.node_address || LOCAL_STR_N_A,
       displayState(node.status, DISPLAY_STATE.UNKNOWN),
-      this.formatPercent(node.cpu_usage_percent),
+      this.formatPercent(node.host_cpu_utilization_percent),
       this.formatPercent(node.memory_usage_percent),
       this.formatPercent(node.disk_usage_percent),
       String(node.services_count ?? 0),
@@ -148,7 +148,7 @@ export class NodesView extends BaseView {
    * @return {boolean} True if node has warning conditions
    */
   hasWarningCondition(node) {
-    const cpuUsage = node.cpu_usage_percent;
+    const cpuUsage = node.host_cpu_utilization_percent;
     const memUsage = node.memory_usage_percent;
     const diskUsage = node.disk_usage_percent;
 
@@ -234,7 +234,7 @@ export class NodesView extends BaseView {
       {
         title: 'Resource Statistics',
         fields: [
-          {label: 'CPU Usage', value: this.formatPercent(node.cpu_usage_percent)},
+          {label: 'Host CPU utilization', value: this.formatPercent(node.host_cpu_utilization_percent)},
           {label: 'Memory Usage', value: this.formatPercent(node.memory_usage_percent)},
           {label: 'Memory Total', value: this.formatBytes(node.memory_total_bytes)},
           {label: 'Memory Used', value: this.formatBytes(node.memory_used_bytes)},

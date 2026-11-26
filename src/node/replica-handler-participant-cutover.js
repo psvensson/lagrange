@@ -1,3 +1,4 @@
+import {releaseTrace, bindReleaseTrace} from './participant-release-hop-observation.js';
 // The release sequence runs at the existing replica lifecycle owner, using
 // only per-attempt memory. A retry reconstructs from owners; no phase marker
 // grants permission, and an unavailable member keeps admission closed.
@@ -61,10 +62,10 @@ function cohortOf(handler, facts) {
   return routes.includes(null) ? null : routes;
 }
 
-async function readCohort(handler, partitionId, cohort, deadlineAtMs) {
+async function readCohort(handler, partitionId, cohort, deadlineAtMs, trace) {
   return Promise.all(cohort.map((member) => askParticipantRelease(handler, member.nodeId,
     {partitionId, replicaId: member.replicaId, action: ACTION.INSPECT,
-      deadlineAtMs})));
+      deadlineAtMs}, trace)));
 }
 
 function requestFor(release, attempt, action, facts, fields = {}) {
@@ -81,7 +82,7 @@ async function enableAndObserveCohort(handler, release, attempt, census, local,
   queryDrainProof) {
   const enabled = await askParticipantRelease(handler, handler.nodeId,
     requestFor(release, attempt, ACTION.ENABLE, local,
-      {census, queryDrainProof}));
+      {census, queryDrainProof}), releaseTrace(attempt));
   if (enabled.outcome !== OUTCOME.OBSERVED) return enabled;
   const applied = await actOnCohort(handler, release, attempt,
     ACTION.OBSERVE_APPLIED_POSITION, census, {origin: enabled.origin});
@@ -90,7 +91,7 @@ async function enableAndObserveCohort(handler, release, attempt, census, local,
 
 async function actOnCohort(handler, release, attempt, action, census, fields = {}) {
   return Promise.all(census.map((facts) => askParticipantRelease(handler,
-    facts.generation.nodeId, requestFor(release, attempt, action, facts, fields))));
+    facts.generation.nodeId, requestFor(release, attempt, action, facts, fields), releaseTrace(attempt))));
 }
 
 function attemptRefusal(request, outcome, fields = {}) {
@@ -118,7 +119,7 @@ async function resumeCohort(handler, service, request, release, attempt, census,
   fields = {}) {
   // Both first-origin and current-origin releases must re-establish control
   // authority after their own paused census, before any member can reopen.
-  const currentControlOwner = await releaseControlOwnerFirst(handler, service, request);
+  const currentControlOwner = await releaseControlOwnerFirst(handler, service, request, 'control_before_resume');
   if (currentControlOwner !== null) return currentControlOwner;
   const followers = census.filter((facts) =>
     facts.generation.replicaId !== service.replicaId);
@@ -184,7 +185,7 @@ async function settleQueryRelease(handler, service, release, attempt, cohort, ce
   });
   if (transactions === null) return null;
   const refreshed = await readCohort(handler, service.partitionId, cohort,
-    attempt.deadlineAtMs);
+    attempt.deadlineAtMs, releaseTrace(attempt));
   if (unavailableCensus(refreshed) !== null) return null;
   const current = refreshed.find((facts) =>
     facts.generation.replicaId === service.replicaId);
@@ -213,13 +214,12 @@ function currentControlNodeId(handler, service, partitionId) {
     candidate.initialized && !candidate.isShutdown &&
     candidate.partitionId === partitionId &&
     candidate.raft?.readStatus().role === RAFT_ROLE.LEADER);
-  const topologyOwner = releaseQueryEngine(handler, service)?.queryExecutor
-    ?.bootstrapTopologySnapshotOwner;
-  return localControlLeader ? handler.nodeId :
-    topologyOwner?.resolveCanonicalPartitionLeaderNodeId?.(partitionId) ?? null;
+  if (localControlLeader) return handler.nodeId;
+  return releaseQueryEngine(handler, service)?.queryExecutor?.bootstrapTopologySnapshotOwner
+    ?.resolveCanonicalPartitionLeaderNodeId?.(partitionId) ?? null;
 }
 
-async function releaseControlOwnerFirst(handler, service, request) {
+async function releaseControlOwnerFirst(handler, service, request, phase) {
   if (service.tableName === TABLES.SQL_TRANSACTIONS) return null;
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
   const nodeId = currentControlNodeId(handler, service, partitionId);
@@ -234,7 +234,7 @@ async function releaseControlOwnerFirst(handler, service, request) {
     TRIGGER.EXISTING_ORIGIN : request.trigger;
   const answer = await requestParticipantRelease(handler, {partitionId, nodeId,
     targetBuildDigest: request.targetBuildDigest, trigger,
-    deadlineAtMs: request.deadlineAtMs, authorization});
+    deadlineAtMs: request.deadlineAtMs, authorization}, releaseTrace(request), phase);
   if (answer?.outcome === OUTCOME.BUILD_MISMATCH) {
     return releaseAnswer(OUTCOME.BUILD_MISMATCH, request,
       {controlPartitionId: partitionId});
@@ -339,7 +339,7 @@ async function runCutoverAttempt(handler, request) {
   const localRefusal = request.trigger === TRIGGER.FRESH_CREATE ? null :
     await localReleaseRefusal(handler, service, request);
   if (localRefusal !== null) return localRefusal;
-  const controlOwner = await releaseControlOwnerFirst(handler, service, request);
+  const controlOwner = await releaseControlOwnerFirst(handler, service, request, 'control_before_pause');
   if (controlOwner !== null) return controlOwner;
   // Close the current leader before any awaited remote observation. A
   // missing member cannot leave reachable members open on a failed release.
@@ -355,13 +355,14 @@ async function runCutoverAttempt(handler, request) {
   const attempt = Object.freeze({leaderReplicaId: service.replicaId,
     term: own.membership.term, leaderLifecycleIncarnation: own.generation.lifecycleIncarnation,
     deadlineAtMs: request.deadlineAtMs});
+  bindReleaseTrace(attempt, releaseTrace(request));
   const cohort = cohortOf(handler, own);
   if (cohort === null) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.COMMITTED_REPLICA_ROUTES});
   }
   let census = await readCohort(handler, service.partitionId, cohort,
-    request.deadlineAtMs);
+    request.deadlineAtMs, releaseTrace(request));
   let unavailable = unavailableCensus(census);
   if (unavailable !== null) {
     await actOnCohort(handler, release, attempt, ACTION.PAUSE,
@@ -409,7 +410,7 @@ async function runPausedCutover(handler, service, request, release, attempt, coh
 async function finishEnabledCutover(handler, service, request, release, attempt, cohort,
   queryRelease) {
   const census = await readCohort(handler, service.partitionId, cohort,
-    request.deadlineAtMs);
+    request.deadlineAtMs, releaseTrace(request));
   const unavailable = unavailableCensus(census);
   if (unavailable !== null) {
     return normalizeMemberRefusal({...request, release}, unavailable);
@@ -509,14 +510,24 @@ async function runParticipantCutover(handler, request) {
   }
   const current = runs.get(request.partitionId);
   if (current) {
-    return current.targetBuildDigest === request.targetBuildDigest ?
-      joinParticipantCutover(handler, current, request) : releaseAnswer(OUTCOME.INVALID, request);
+    if (current.targetBuildDigest !== request.targetBuildDigest) {
+      return releaseAnswer(OUTCOME.INVALID, request);
+    }
+    const trace = releaseTrace(request);
+    if (trace) {
+      trace.joinedMessageId = current.trace.messageId;
+      trace.joinedHops = current.trace.hops;
+    }
+    return joinParticipantCutover(handler, current, request);
   }
   const originalTrigger = captureParticipantReleaseDiagnosticTrigger(request);
   const startObservation = readParticipantReleaseClock(handler.timeSource);
+  // Lifecycle recovery can own the shared run before a routed CREATE joins.
+  const trace = releaseTrace(request) ?? {messageId: null, hops: {}};
+  bindReleaseTrace(request, trace);
   const running = runCutoverAttempt(handler, request).catch((error) =>
     attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
-  const record = {targetBuildDigest: request.targetBuildDigest, originalTrigger,
+  const record = {trace, targetBuildDigest: request.targetBuildDigest, originalTrigger,
     startObservation, waiters: new Set(), settled: false, answer: null, promise: null};
   record.promise = running.then((answer) => settleCutoverWaiters(record, answer));
   runs.set(request.partitionId, record);

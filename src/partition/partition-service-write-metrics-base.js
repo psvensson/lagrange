@@ -21,7 +21,6 @@ import {
 import {
   answerSettledStatement,
   readCommittedStatementOutcome,
-  resolveLeaderMirrorRetentionStamp,
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
@@ -696,7 +695,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
     const applyStartMs = this.timeSource.now();
     entry = buildPartitionWriteEntry(
       {
-        ...resolveLeaderMirrorRetentionStamp(this),
         ...entry,
       },
       {

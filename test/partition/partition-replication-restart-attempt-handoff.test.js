@@ -1,3 +1,5 @@
+import {admittedMirrorSource, sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
+import {replicateSourceMirrorRetentionCustody} from '../../src/partition/partition-mirror-effect-retention.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {PARTITION_SERVICE_SHARED} from
@@ -121,20 +123,10 @@ function installSnapshotStorage(source, events, snapshotGate = null) {
   source.waitForMergeCutoverActivation = async () => {};
 }
 
-function buildSource(events, snapshotGate = null) {
-  const source = Object.create(PartitionService.prototype);
-  Object.assign(source, {
-    partitionId: SOURCE,
-    tableId: 'tbl-users',
-    tableName: 'users',
-    role: RaftRole.LEADER,
-    logger: QUIET,
-    splitReplication: null,
-    splitReplicationRun: null,
-    mergeReplication: null,
-    mergeReplicationRun: null,
-    timeSource: {now: () => clock.now},
-  });
+async function buildSource(t, events, snapshotGate = null) {
+  const source = await admittedMirrorSource(t, SOURCE, [
+    {name: 'id', type: 'TEXT', primaryKey: true}, {name: 'name', type: 'TEXT'},
+  ]);
   installSnapshotStorage(source, events, snapshotGate);
   return source;
 }
@@ -372,7 +364,7 @@ test('stale split and merge delta replay uses the target registry and ' +
 test('duplicate catch-up readiness re-enters the canonical split and merge ' +
   'cutover owners after durable persistence', async (t) => {
   for (const family of ['split', 'merge']) {
-    const source = buildSource([]);
+    const source = await buildSource(t, []);
     const registered = await registerRealStartAuthorization(
       source, family, family === 'split' ? splitMetadata() : mergeMetadata());
     const {metadata, workflow} = registered;
@@ -394,6 +386,9 @@ test('duplicate catch-up readiness re-enters the canonical split and merge ' +
       SPLIT_ACK_STATUS.SNAPSHOT_STARTED : MERGE_ACK_STATUS.SNAPSHOT_STARTED;
     const catchupStatus = family === 'split' ?
       SPLIT_ACK_STATUS.CATCHUP_READY : MERGE_ACK_STATUS.CATCHUP_READY;
+    t.ok(await workflow.reserveSourceMirrorCustody(family, SOURCE, startMetadata,
+      source.tableId, source.tableName));
+    await replicateSourceMirrorRetentionCustody(source, metadata, {family, barrierIndex: 0});
     const start = family === 'split' ?
       await workflow.acknowledgeSourceParticipant(
         metadata.workflowId, ack(startStatus), startContext) :
@@ -442,7 +437,7 @@ test('an accepted split START whose answer is lost stays on its durable ' +
   ]});
   const events = [];
   const snapshotGate = deferred();
-  const source = buildSource(events, snapshotGate);
+  const source = await buildSource(t, events, snapshotGate);
   let starts = 0;
   let acceptedMetadata = null;
   const router = {async deliver(_address, message) {
@@ -481,7 +476,7 @@ test('an accepted split START whose answer is lost stays on its durable ' +
   source.isShutdown = true;
   const resumedEvents = [];
   const resumedGate = deferred();
-  const resumedSource = buildSource(resumedEvents, resumedGate);
+  const resumedSource = await buildSource(t, resumedEvents, resumedGate);
   resumedSource.systemTableCache = {getAll: (table) =>
     table === 'tables' ? [store.tablesRow()] : []};
   resumedSource.sqlQueryEngine = {managedSplitWorkflow: workflow};
@@ -506,7 +501,7 @@ test('an accepted split START whose answer is lost stays on its durable ' +
     'confirmation-only still proves the previously accepted START answer');
 
   const terminalEvents = [];
-  const terminalSource = buildSource(terminalEvents);
+  const terminalSource = await buildSource(t, terminalEvents);
   terminalSource.sqlQueryEngine = {managedSplitWorkflow: workflow};
   const resurrected = await terminalSource.handleStartSplitReplication({
     tableId: 'tbl-users', tableName: 'users',
@@ -531,7 +526,7 @@ test('a split START transport failure before source acceptance defers the ' +
     {partition_id: 'users-p3'},
   ]});
   const events = [];
-  const source = buildSource(events);
+  const source = await buildSource(t, events);
   let deliveries = 0;
   const workflow = buildOwner(store, source, async () => {
     deliveries += 1;
@@ -557,7 +552,7 @@ test('the durable split record rejects altered payload at the same attempt ' +
   ]});
   const events = [];
   const snapshotGate = deferred();
-  const source = buildSource(events, snapshotGate);
+  const source = await buildSource(t, events, snapshotGate);
   let alteredResponse = null;
   let exactResponse = null;
   const workflow = buildOwner(store, source, async (service, partitionId,
@@ -598,13 +593,15 @@ test('stale and different-payload START requests perform no snapshot work',
         (source, payload) => source.handleStartMergeReplication(payload)],
     ]) {
       const events = [];
-      const source = buildSource(events);
+      const source = await buildSource(t, events);
       const decisions = ['attempt_mismatch', 'invalid_transition'];
       const owner = kind === 'split' ? {
+        reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
         acknowledgeSourceParticipant: async () => ({
           result: decisions.shift(), splitCutoverApplied: false,
         }),
       } : {
+        reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
         acknowledgeMergeSourceParticipant: async () => ({
           result: decisions.shift(), mergeCutoverApplied: false,
         }),
@@ -640,19 +637,21 @@ test('accepted START recovery and concurrent redelivery retain one physical ' +
     const events = [];
     const authorizationGate = deferred();
     const owner = kind === 'split' ? {
-      acknowledgeSourceParticipant: async (_workflowId, ack) => {
+      reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
+        acknowledgeSourceParticipant: async (_workflowId, ack) => {
         await authorizationGate.promise;
         return {result: 'accepted', splitCutoverApplied:
           ack.status === 'catchup_ready'};
       },
     } : {
-      acknowledgeMergeSourceParticipant: async (_workflowId, ack) => {
+      reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
+        acknowledgeMergeSourceParticipant: async (_workflowId, ack) => {
         await authorizationGate.promise;
         return {result: 'accepted', mergeCutoverApplied:
           ack.status === 'catchup_ready'};
       },
     };
-    const source = buildSource(events);
+    const source = await buildSource(t, events);
     source.sqlQueryEngine = kind === 'split' ?
       {managedSplitWorkflow: owner} : {managedMergeWorkflow: owner};
 
@@ -696,12 +695,14 @@ test('accepted START recovery and concurrent redelivery retain one physical ' +
     }
 
     const restartedEvents = [];
-    const restarted = buildSource(restartedEvents);
+    const restarted = await buildSource(t, restartedEvents);
     const duplicateOwner = kind === 'split' ? {
-      acknowledgeSourceParticipant: async () => ({result: 'duplicate',
+      reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
+        acknowledgeSourceParticipant: async () => ({result: 'duplicate',
         splitCutoverApplied: false}),
     } : {
-      acknowledgeMergeSourceParticipant: async () => ({result: 'duplicate',
+      reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
+        acknowledgeMergeSourceParticipant: async () => ({result: 'duplicate',
         mergeCutoverApplied: false}),
     };
     restarted.sqlQueryEngine = kind === 'split' ?
@@ -726,7 +727,7 @@ test('same-attempt owner takeover waits for predecessor quiescence and old ' +
   ]});
   const events = [];
   const predecessorGate = deferred();
-  const source = buildSource(events, predecessorGate);
+  const source = await buildSource(t, events, predecessorGate);
   let predecessorMetadata = null;
   const workflow = buildOwner(store, source, async (service, partitionId,
     tableId, tableName, transitionMetadata) => {
@@ -798,7 +799,7 @@ test('terminal quiesced predecessors admit reset workflow numbering and a ' +
   'split-to-merge successor through real record owners', async (t) => {
   clock.now = 1000;
   const events = [];
-  const source = buildSource(events);
+  const source = await buildSource(t, events);
   source.splitReplication = {
     metadata: splitMetadata({workflowId: 'older-finished-workflow',
       workflowAttempt: 9, workflowFenceToken: 19}),
@@ -888,13 +889,15 @@ test('shutdown while START authorization is pending installs no worker',
     ]) {
       const events = [];
       const authorizationGate = deferred();
-      const source = buildSource(events);
+      const source = await buildSource(t, events);
       const owner = kind === 'split' ? {
+        reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
         acknowledgeSourceParticipant: async () => {
           await authorizationGate.promise;
           return {result: 'accepted', splitCutoverApplied: false};
         },
       } : {
+        reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
         acknowledgeMergeSourceParticipant: async () => {
           await authorizationGate.promise;
           return {result: 'accepted', mergeCutoverApplied: false};

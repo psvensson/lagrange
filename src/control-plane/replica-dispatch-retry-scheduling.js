@@ -196,7 +196,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       existing?.context,
       extractOperationDispatchProgressContext(options),
     );
+    const visibilityOnly = errorLike?.code ===
+      REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_VISIBILITY_LAG;
     if (existing) {
+      existing.visibilityOnly &&= visibilityOnly;
       return updateExistingOperationDispatchDeferredRetry({
         deferredContext,
         desiredAttemptAt,
@@ -211,6 +214,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     }
 
     const deferredRetry = {
+      visibilityOnly,
       context: deferredContext,
       errorMessage,
       nextAttemptAt: desiredAttemptAt,
@@ -298,7 +302,8 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       }
       this.operationDispatchQueue.enqueue(
         operationId,
-        RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
+        deferredRetry.visibilityOnly ? RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY :
+          RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
         Object.keys(context).length > 0 ? context : undefined,
       );
       this.logger.debug(DISPATCH_LOG_MSG.OPERATION_DISPATCH_DEFERRED_RETRY, {

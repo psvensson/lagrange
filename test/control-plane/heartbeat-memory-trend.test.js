@@ -499,6 +499,51 @@ test('HeartbeatService coalesces unchanged node heartbeat writes within min inte
     }
   });
 
+test('steady heartbeat publishes placement pressure transitions within unchanged host buckets',
+  async (t) => {
+    initEnv();
+    try {
+      const writes = [];
+      const cdc = createMockCdc();
+      cdc.updateSystemTableRow = async (...args) => {
+        if (args[0] === 'nodes') writes.push(args[2]);
+        return cdcCommittedWriteAnswer('updateSystemTableRow', args);
+      };
+      let at = 100;
+      let latest;
+      const service = new HeartbeatService({
+        bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-pressure', nodeAddress: 'n:8080',
+        cdcIntegrationService: cdc, systemTableCache: createMockCache(), now: () => at,
+        nodeMetadataMinUpdateIntervalMs: 1000, nodeMetadataMaxStalenessMs: 5000,
+        resourceDiagnosticsSampler: {getSharedReport: () => ({latest})},
+      });
+      const base = {hostCpuUtilizationPercent: 10, sampleIntervalMs: 100,
+        eventLoopUtilizationPercent: 40, eventLoopDelayMs: 2, mainThreadCpuPercent: 20};
+      const stats = {cpu: {count: 4}, memory: {totalBytes: 1024 ** 3, usagePercent: 20},
+        diskGb: 100, diskUsagePercent: 30};
+      const observe = async (fields, expected) => {
+        at += 20;
+        latest = {timestamp: at, sampleId: at, process: {...base, ...fields}};
+        const count = writes.length;
+        await service.sendHeartbeat(stats, []);
+        t.equal(writes.length - count, expected ? 1 : 0);
+        if (expected) t.equal(writes.at(-1)?.telemetry_sample_id, at);
+      };
+      await observe({}, true);
+      await observe({mainThreadCpuPercent: 30}, false);
+      await observe({mainThreadCpuPercent: 90, eventLoopDelayMs: 20}, true);
+      await observe({mainThreadCpuPercent: 98, eventLoopDelayMs: 40}, true);
+      await observe({mainThreadCpuPercent: 99, eventLoopDelayMs: 42}, false);
+      await observe({eventLoopUtilizationPercent: 99, eventLoopDelayMs: 90}, true);
+      await observe({sampleIntervalMs: null}, true);
+      await observe({sampleIntervalMs: null}, false);
+      await observe({mainThreadCpuPercent: 0, eventLoopDelayMs: 0}, true);
+    } finally {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
 test('HeartbeatService forces node heartbeat refresh once max staleness elapses',
   async (t) => {
     initEnv();
@@ -675,14 +720,14 @@ test('HeartbeatService suppresses bucket-equivalent utilization churn even after
     Date.now = () => now;
     try {
       await service.sendHeartbeat({
-        cpu: {count: 4, usagePercent: 11},
+        cpu: {count: 4},
         memory: {totalBytes: 128 * 1024 * 1024, usagePercent: 21},
         diskGb: 100,
         diskUsagePercent: 31,
       }, ['partition_replica']);
       now += 1500;
       await service.sendHeartbeat({
-        cpu: {count: 4, usagePercent: 12},
+        cpu: {count: 4},
         memory: {totalBytes: 128 * 1024 * 1024, usagePercent: 22},
         diskGb: 100,
         diskUsagePercent: 33,
@@ -796,7 +841,7 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
 
   try {
     await service.sendHeartbeat({
-      cpu: {count: 4, usagePercent: 12},
+      cpu: {count: 4},
       memory: {totalBytes: 256 * 1024 * 1024, usagePercent: 34},
       diskGb: 200,
       diskUsagePercent: 56,
@@ -851,7 +896,7 @@ test('HeartbeatService promotes stopped rows back to active in reporter heartbea
       cpu_cores: 4,
       memory_mb: 256,
       disk_gb: 64,
-      cpu_usage_percent: 10,
+      host_cpu_utilization_percent: 10,
       memory_usage_percent: 20,
       disk_usage_percent: 30,
       status: SERVICE_STATUS.STOPPED,

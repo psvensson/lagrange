@@ -1,3 +1,4 @@
+import {createPlacementDecisionDiagnostics} from './replica-placement-decision-diagnostics.js';
 import {promotedVoterReplicaIdsByPartition} from './replica-placement-owner-retained-repair-statement.js';
 // Public entry: createReplicaPlacementOwner, attachReplicaPlacementOwner, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID.
 // Required collaborators: nodeId, ledgerPartitionService (replica_operations-p1, its leadershipTenure and consensus port), nodeAuthority, systemTableCache, now, logger; optional workflowOwner, storageAccountingService, timer functions.
@@ -15,7 +16,7 @@ import {PLACEMENT_RESULT_FIELD} from '../partition/partition-placement-admission
 import {LEDGER_PARTITION_ID, isOccupyingCopy, readPlacementCensus} from
   '../partition/partition-placement-admission-decision.js';
 import {COPY_MOVE_TYPES, buildPassOrderedCandidates, buildTargetCapacityRanker,
-  classifyNodeStorageExclusion, computeCopyWaitingDemand, isCopyWithinCapacity,
+  classifyNodeStorageExclusion, computeCopyWaitingDemand, decideCopyCapacity,
   recordAdmittedCopyOccupancy, resolveOwnerMoveCopyLimits, saturatedTargetsOf,
   sourceLimitOf, summarizeCopyOccupancy, targetLimitOf} from './replica-placement-owner-capacity.js';
 import {createAdaptivePlacementBudgetController} from
@@ -156,6 +157,7 @@ class ReplicaPlacementOwner {
     this.seenRowSignatures = new Map();
     this.placementResyncAdmissions = 0;
     this.lastPassSnapshot = null;
+    this.lastPlacementDecision = null;
     this.adaptiveBudgetController = options.adaptiveBudgetController ||
       createAdaptivePlacementBudgetController(options.adaptiveBudgetOptions || {});
   }
@@ -232,6 +234,7 @@ class ReplicaPlacementOwner {
   endCustody() {
     if (this.custody === null) return;
     this.custody = null;
+    this.lastPlacementDecision = null;
     this.detachListeners();
     this.pendingTriggers.clear();
   }
@@ -413,6 +416,10 @@ class ReplicaPlacementOwner {
       return tenureFenceRefusal(this.ledgerPartitionService.partitionId);
     }
     recordProposal(pass);
+    const move = body.moves?.[0];
+    if (pass.decisionDiagnostics && COPY_MOVE_TYPES.has(move?.type)) {
+      pass.decisionDiagnostics.recordProposal(entryId, body, move);
+    }
     return propose({entryId, body});
   }
 
@@ -523,27 +530,39 @@ class ReplicaPlacementOwner {
     return {partitionRows: this.systemTableCache.getAll(TABLES.PARTITIONS), servicesByPartition};
   }
 
-  evaluateAllPartitions(nodeInput, busyPartitions, saturatedTargetNodeIds,
-    storageExcludedTargets, promotedByPartition, targetCapacityRanker = null) {
+  readPassPartitionInputs(busyPartitions, promotedByPartition, diagnostics) {
     const {partitionRows, servicesByPartition} = this.readPartitionPlacementRows();
-    const evaluations = [];
     const inputsByPartition = new Map();
     for (const partitionRow of partitionRows) {
       const partitionId = partitionRow[COLUMN.PARTITION_ID];
       const status = readLowerStateField(partitionRow[COLUMN.STATUS]);
-      if (!partitionId || SKIPPED_PARTITION_STATUSES.has(status)) continue;
+      if (!partitionId) continue;
+      if (SKIPPED_PARTITION_STATUSES.has(status)) {
+        diagnostics?.observePartition(partitionId, 'excluded_status', null);
+        diagnostics?.disposition(partitionId, 'excluded_status', status);
+        continue;
+      }
       const isBusy = busyPartitions.has(partitionId);
+      diagnostics?.observePartition(partitionId, 'evaluation_unexamined', isBusy);
       const {replicationFactor} = resolveDesiredReplicationFactor(partitionRow);
       const replicaRows = buildPartitionReplicaRows(servicesByPartition.get(partitionId) || [],
         partitionRow[COLUMN.LEADER_NODE_ID], isBusy, promotedByPartition.get(partitionId));
-      inputsByPartition.set(partitionId, {replicationFactor, replicaRows});
+      inputsByPartition.set(partitionId, {replicationFactor, replicaRows, isBusy});
+    }
+    return inputsByPartition;
+  }
+
+  evaluatePassPartitions(inputsByPartition, nodeInput, saturatedTargetNodeIds,
+    storageExcludedTargets, targetCapacityRanker = null) {
+    const evaluations = [];
+    for (const [partitionId, {replicationFactor, replicaRows, isBusy}] of inputsByPartition) {
       const evaluation = evaluatePartitionDeficit({
         partitionId, replicationFactor, replicaRows, eligibility: nodeInput.eligibility,
         saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker,
       });
       evaluations.push({partitionId, isBusy, evaluation});
     }
-    return {evaluations, inputsByPartition};
+    return evaluations;
   }
 
   resolveStatementSourceNodeId(candidate, inputsByPartition) {
@@ -576,15 +595,17 @@ class ReplicaPlacementOwner {
       return this.canAdmitRemove(candidate, pass);
     }
     if (!COPY_MOVE_TYPES.has(candidate.move.type)) return true;
-    return isCopyWithinCapacity(candidate, repairWaitingSourceNodeIds, occupancy, budgetSnapshot);
+    const check = decideCopyCapacity(candidate, repairWaitingSourceNodeIds, occupancy, budgetSnapshot);
+    pass.decisionDiagnostics?.recordCopyCheck(check);
+    return check.allowed;
   }
 
-  preparePassOrderedCandidates(nodeInput, busyPartitions, saturatedTargets,
-    storageExcludedTargets, promotedByPartition, targetCapacityRanker = null) {
-    const {evaluations, inputsByPartition} = this.evaluateAllPartitions(nodeInput,
-      busyPartitions, saturatedTargets, storageExcludedTargets, promotedByPartition,
+  preparePassOrderedCandidates(nodeInput, inputsByPartition, saturatedTargets,
+    storageExcludedTargets, targetCapacityRanker = null, diagnostics) {
+    const evaluations = this.evaluatePassPartitions(inputsByPartition, nodeInput,
+      saturatedTargets, storageExcludedTargets,
       targetCapacityRanker);
-    return buildPassOrderedCandidates(evaluations, inputsByPartition, nodeInput.formation);
+    return buildPassOrderedCandidates(evaluations, inputsByPartition, nodeInput.formation, diagnostics);
   }
 
   resolveAdaptiveCopyLimitsForMove(move, nowMs = this.now()) {
@@ -595,14 +616,28 @@ class ReplicaPlacementOwner {
     const {inputsByPartition, repairWaitingSourceNodeIds, nodeInput,
       busyPartitions, occupancy, saturatedTargets, storageExcludedTargets,
       budgetSnapshot, targetCapacityRanker, pass} = context;
-    if (busyPartitions.has(rawCandidate.partitionId)) return null;
+    if (busyPartitions.has(rawCandidate.partitionId)) {
+      pass.decisionDiagnostics?.disposition(rawCandidate.partitionId, 'partition_busy');
+      return null;
+    }
     const candidate = this.reevaluateSaturatedTarget(rawCandidate, inputsByPartition,
       nodeInput, saturatedTargets, storageExcludedTargets, targetCapacityRanker);
-    if (candidate === null) return null;
+    if (candidate === null) {
+      pass.decisionDiagnostics?.disposition(rawCandidate.partitionId, 'saturated_target_reevaluation');
+      return null;
+    }
     recordCapacityCheck(pass);
     if (!(await this.isCandidateAdmissibleNow(candidate, repairWaitingSourceNodeIds,
-      occupancy, pass, budgetSnapshot)) ||
-        !this.checkpoint(pass, CHECKPOINT.AFTER_ADMISSIBILITY)) return null;
+      occupancy, pass, budgetSnapshot))) {
+      if (!COPY_MOVE_TYPES.has(candidate.move.type)) {
+        pass.decisionDiagnostics?.disposition(candidate.partitionId, 'remove_denied');
+      }
+      return null;
+    }
+    if (!this.checkpoint(pass, CHECKPOINT.AFTER_ADMISSIBILITY)) {
+      pass.decisionDiagnostics?.disposition(candidate.partitionId, 'tenure_ended');
+      return null;
+    }
     const isCopy = COPY_MOVE_TYPES.has(candidate.move.type);
     const kSrc = isCopy ? sourceLimitOf(candidate.move.copySourceNodeId, budgetSnapshot) :
       PLACEMENT_COPY_CAPACITY.K_SRC;
@@ -617,6 +652,10 @@ class ReplicaPlacementOwner {
         kSrc, kTgt,
       }), pass, progress);
     const result = answer?.[PLACEMENT_RESULT_FIELD];
+    pass.decisionDiagnostics?.disposition(candidate.partitionId,
+      isWriteOutcomeUnknown(answer) ? 'uncertain' : result?.outcome ??
+        (answer?.failureCode ? 'refused' : answer?.tenureFence ? 'tenure_ended' : 'unconfirmed'),
+      result?.reason ?? answer?.failureCode ?? null);
     if (!this.isPassCurrent(pass) || result?.outcome !== PLACEMENT_OUTCOME.ADMITTED) return null;
     const [operationId] = result.operationIds;
     return {candidate, operationId};
@@ -652,9 +691,15 @@ class ReplicaPlacementOwner {
     const {ordered, busyPartitions, occupancy, saturatedTargets, pass} = context;
     const state = {incompleteCount: context.incompleteCount, copyCount: context.copyCount,
       ledgerIncomplete: context.ledgerIncomplete};
+    const diagnostics = pass.decisionDiagnostics?.snapshot;
+    if (diagnostics) diagnostics.orderedCount = ordered.length;
     for (const rawCandidate of ordered) {
       if (!this.checkpoint(pass, CHECKPOINT.CANDIDATE) ||
-          shouldStopPlacementPass(rawCandidate, state)) break;
+          shouldStopPlacementPass(rawCandidate, state)) {
+        if (diagnostics) diagnostics.stopReason = pass.stale ? 'tenure_ended' : 'ledger_exclusion';
+        break;
+      }
+      if (diagnostics) diagnostics.admissionExamined++;
       const proposal = await this.proposeCandidateIsolated(rawCandidate, context);
       if (proposal === null || proposal === CANDIDATE_FAILED) continue;
       const {candidate, operationId} = proposal;
@@ -664,8 +709,14 @@ class ReplicaPlacementOwner {
       state.copyCount += recordAdmittedCopyOccupancy(
         candidate, occupancy, saturatedTargets, context.budgetSnapshot);
       if (candidate.placementClass === PLACEMENT_CLASS.LEDGER &&
-          !(await this.releaseAdmittedLedgerHold(operationId, state, pass))) break;
-      if (this.pendingTriggers.size > 0) break;
+          !(await this.releaseAdmittedLedgerHold(operationId, state, pass))) {
+        if (diagnostics) diagnostics.stopReason = 'ledger_hold_checkpoint';
+        break;
+      }
+      if (this.pendingTriggers.size > 0) {
+        if (diagnostics) diagnostics.stopReason = 'pending_trigger';
+        break;
+      }
     }
   }
 
@@ -699,25 +750,30 @@ class ReplicaPlacementOwner {
   async planAndAdmit(pass, census, nodeInput, nowMs) {
     const busyPartitions = new Set(census.filter((r) =>
       r.incomplete && r.entityType === UNIFIED_SERVICE_TYPE.PARTITION).map((r) => r.entityId));
-    const occupancy = summarizeCopyOccupancy(census);
+    pass.decisionDiagnostics = createPlacementDecisionDiagnostics(pass, nowMs);
+    const occupancy = summarizeCopyOccupancy(census, pass.decisionDiagnostics);
     recordCapacityCheck(pass);
     const storageExcludedTargets = this.readStorageExcludedTargets(nodeInput, nowMs);
     const promotedByPartition = promotedVoterReplicaIdsByPartition(census);
-    const preliminary = this.evaluateAllPartitions(nodeInput, busyPartitions, new Set(),
-      storageExcludedTargets, promotedByPartition);
-    const {waitingBySource, waitingByTarget} = computeCopyWaitingDemand(preliminary.evaluations,
+    const inputsByPartition = this.readPassPartitionInputs(busyPartitions, promotedByPartition,
+      pass.decisionDiagnostics);
+    const preliminary = this.evaluatePassPartitions(inputsByPartition, nodeInput, new Set(),
+      storageExcludedTargets);
+    const {waitingBySource, waitingByTarget} = computeCopyWaitingDemand(preliminary,
       nodeInput.formation, nodeInput.eligibility.eligibleNodeIds, storageExcludedTargets);
     const budgetSnapshot = this.adaptiveBudgetController ?
       this.adaptiveBudgetController.evaluatePassBudgets({
         nodeInput, occupancy, waitingBySource, waitingByTarget, storageExcludedTargets, nowMs,
+        recordWindow: pass.decisionDiagnostics.recordWindow,
       }) : null;
+    pass.decisionDiagnostics.recordAdmissionLimits(budgetSnapshot);
     const effectiveExcludedTargets = budgetSnapshot?.hardExcludedTargets || storageExcludedTargets;
     const saturatedTargets = saturatedTargetsOf(occupancy.byTarget, budgetSnapshot,
       nodeInput.eligibility.eligibleNodeIds);
     const targetCapacityRanker = buildTargetCapacityRanker(budgetSnapshot,
       nodeInput.eligibility.eligibleNodeIds);
-    const prepared = this.preparePassOrderedCandidates(nodeInput, busyPartitions,
-      saturatedTargets, effectiveExcludedTargets, promotedByPartition, targetCapacityRanker);
+    const prepared = this.preparePassOrderedCandidates(nodeInput, inputsByPartition,
+      saturatedTargets, effectiveExcludedTargets, targetCapacityRanker, pass.decisionDiagnostics);
     recordPassEvaluations(pass, prepared);
     return this.admitOrderedCandidates({
       ordered: prepared.ordered, inputsByPartition: prepared.inputsByPartition,
@@ -759,6 +815,9 @@ class ReplicaPlacementOwner {
       if (pass.stoppedAt === CHECKPOINT.RUNNING) pass.stoppedAt = CHECKPOINT.ABORTED;
       this.placementResyncAdmissions += resyncAdmissionsOf(pass, triggers);
       if (pass.custody === this.custody || this.custody === null) {
+        if (pass.decisionDiagnostics && pass.custody === this.custody) {
+          this.lastPlacementDecision = pass.decisionDiagnostics.snapshot;
+        }
         this.lastPassSnapshot = Object.freeze({...placementPassSnapshot(pass,
           PLACEMENT_CLEARING_TRIGGER), ...this.blockedAttempts.snapshot()});
       }

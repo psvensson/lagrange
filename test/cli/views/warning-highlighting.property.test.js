@@ -21,7 +21,7 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constantFrom('failed', 'error'),
-          cpu_usage_percent: fc.float({min: 0, max: 50, noNaN: true}),
+          host_cpu_utilization_percent: fc.float({min: 0, max: 50, noNaN: true}),
           memory_usage_percent: fc.float({min: 0, max: 50, noNaN: true}),
           disk_usage_percent: fc.float({min: 0, max: 50, noNaN: true}),
           services_count: fc.integer({min: 0, max: 100}),
@@ -44,7 +44,7 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constant('active'),
-          cpu_usage_percent: fc.float({
+          host_cpu_utilization_percent: fc.float({
             min: Math.fround(WARNING_THRESHOLDS.CPU_PERCENT + 1),
             max: Math.fround(100),
             noNaN: true,
@@ -71,7 +71,7 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constant('active'),
-          cpu_usage_percent: fc.float({min: Math.fround(0), max: Math.fround(50), noNaN: true}),
+          host_cpu_utilization_percent: fc.float({min: Math.fround(0), max: Math.fround(50), noNaN: true}),
           memory_usage_percent: fc.float({
             min: Math.fround(WARNING_THRESHOLDS.MEMORY_PERCENT + 1),
             max: Math.fround(100),
@@ -98,7 +98,7 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constant('active'),
-          cpu_usage_percent: fc.float({min: Math.fround(0), max: Math.fround(50), noNaN: true}),
+          host_cpu_utilization_percent: fc.float({min: Math.fround(0), max: Math.fround(50), noNaN: true}),
           memory_usage_percent: fc.float({min: Math.fround(0), max: Math.fround(50), noNaN: true}),
           disk_usage_percent: fc.float({
             min: Math.fround(WARNING_THRESHOLDS.DISK_PERCENT + 1),
@@ -125,7 +125,7 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constantFrom('active', 'starting', 'inactive'),
-          cpu_usage_percent: fc.float({
+          host_cpu_utilization_percent: fc.float({
             min: Math.fround(0),
             max: Math.fround(WARNING_THRESHOLDS.CPU_PERCENT - 1),
             noNaN: true,
@@ -160,7 +160,7 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constantFrom('failed', 'error'),
-          cpu_usage_percent: fc.float({min: 90, max: 100, noNaN: true}),
+          host_cpu_utilization_percent: fc.float({min: 90, max: 100, noNaN: true}),
           memory_usage_percent: fc.float({min: 90, max: 100, noNaN: true}),
           disk_usage_percent: fc.float({min: 90, max: 100, noNaN: true}),
           services_count: fc.integer({min: 0, max: 100}),
@@ -184,7 +184,7 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constant('active'),
-          cpu_usage_percent: fc.constant(null),
+          host_cpu_utilization_percent: fc.constant(null),
           memory_usage_percent: fc.constant(null),
           disk_usage_percent: fc.constant(null),
           services_count: fc.integer({min: 0, max: 100}),
@@ -207,7 +207,7 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constantFrom('active', 'failed'),
-          cpu_usage_percent: fc.float({min: 0, max: 100, noNaN: true}),
+          host_cpu_utilization_percent: fc.float({min: 0, max: 100, noNaN: true}),
           memory_usage_percent: fc.float({min: 0, max: 100, noNaN: true}),
           disk_usage_percent: fc.float({min: 0, max: 100, noNaN: true}),
           services_count: fc.integer({min: 0, max: 100}),

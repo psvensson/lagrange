@@ -1,3 +1,5 @@
+import {sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
+import {replicateSourceMirrorRetentionCustody} from '../../src/partition/partition-mirror-effect-retention.js';
 // Regression tests for the durable-replay-cursor quest: a durable
 // snapshot barrier index and replay watermark are persisted with the
 // transition, queued deltas replay from the source partition's Raft log
@@ -167,6 +169,7 @@ async () => {
     // The restarted source itself, with the snapshot/backfill/transport
     // collaborators replaced: the barrier is read from its own durable log.
     const context = Object.assign(Object.create(source.restarted), {
+      sqlQueryEngine: {managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()}},
       logger: buildLogger(),
       splitReplication: {
         metadata: {
@@ -205,6 +208,7 @@ async () => {
         .toString('base64'),
     }]);
     store.putCommitIndex(FIXTURE_PARTITION_ID, unapplied);
+    context.splitReplication.authorized = true;
     await proto.runSplitReplicationWorkflow.call(context);
     // The restarted incarnation may have committed and applied its own
     // leader entry, so the applied index is read when the barrier was taken,
@@ -397,7 +401,12 @@ test('accepted recovery refreshes writes committed while START waits and ' +
         snapshotBarrierIndex: watermark,
         replayWatermarkIndex: watermark,
       };
+      await replicateSourceMirrorRetentionCustody(source.restarted, handle.metadata, {
+        family: scenario.family, barrierIndex: watermark,
+      });
       Object.assign(source.restarted, {
+        sqlQueryEngine: {managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()},
+          managedMergeWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()}},
         splitReplication: isSplit ? handle : null,
         mergeReplication: isSplit ? null : handle,
         openSplitSnapshotDatabase() {
@@ -530,8 +539,15 @@ test('leader activation on a restarted source resumes the split ' +
         buildReplayCursorCheckpoint(
           SPLIT_ACK_CHECKPOINT_FIELD, first.index, first.index),
     });
+    rawMetadata.workflowAttempt = 1;
+    rawMetadata.workflowFenceToken = 1;
+    await turnChainValue(source.restarted.raft.campaign());
+    await replicateSourceMirrorRetentionCustody(source.restarted, rawMetadata, {
+      family: 'split', barrierIndex: first.index,
+    });
     const workerCalls = [];
     const context = Object.assign(Object.create(source.restarted), {
+      sqlQueryEngine: {managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()}},
       role: RAFT_ROLE.LEADER,
       splitReplication: null,
       mergeReplication: null,

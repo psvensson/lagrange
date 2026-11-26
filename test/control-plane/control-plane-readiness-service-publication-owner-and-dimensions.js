@@ -222,7 +222,7 @@ test('repairEligible=true and serveEligible=false when loadReady=false ' +
 async (t) => {
   const overloadedNode = {
     ...createActiveNode('node-warm'),
-    [COLUMN.CPU_USAGE_PERCENT]: 100,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 100,
   };
   const cache = createCache({
     nodes: [overloadedNode],
@@ -249,7 +249,7 @@ async (t) => {
     authoritativeControlPlaneView: committedServeEligibilityView({
       servingNodeIds: ['node-warm'],
       nowMs: 1500,
-      nodeRowOverrides: {'node-warm': {[COLUMN.CPU_USAGE_PERCENT]: 100}},
+      nodeRowOverrides: {'node-warm': {[COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 100}},
     }),
     now: () => 1500,
   });
@@ -359,7 +359,7 @@ test('sync snapshot includes repairEligible and serveEligible ' +
 async (t) => {
   const overloadedNode = {
     ...createActiveNode('node-sync'),
-    [COLUMN.CPU_USAGE_PERCENT]: 100,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 100,
   };
   const cache = createCache({
     nodes: [overloadedNode],

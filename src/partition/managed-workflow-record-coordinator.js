@@ -507,7 +507,7 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
   async clearWorkflowRecord(workflowId, states) {
     const live = this.requireWorkflow(workflowId);
     await applyGuardedChangeOrThrow(this.recordOwner, workflowId,
-      clearChange(this.recordOwner, live.fenceToken, states),
+      clearChange(this.recordOwner, live.fenceToken, workflowAttemptOf(live.metadata), states),
       {tableId: live.tableId});
   }
 

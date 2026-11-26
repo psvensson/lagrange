@@ -226,17 +226,7 @@ async function pgwirePlacementEvidence(db) {
   return evidence;
 }
 
-/**
- * Operator enablement of the built-in PG-wire listener in password mode.
- * Reads the published endpoint back through the application facade.
- *
- * @param {object} db - Application database facade.
- * @param {number} port - Listener port.
- * @param {{deadlineMs: number, pause: Function, restPort: number}} wait -
- *   Bounded wait plus the node's REST port for the readiness probe.
- * @return {Promise<{host: string, port: number}>} Published endpoint.
- */
-async function enablePasswordPgwire(db, port, wait) {
+async function scalePasswordPgwire(replicaCount, bindConfig, wait) {
   // The documented operator order: wait for traffic readiness first.
   await pollUntil(async () => isReady(wait.restPort), wait,
     HARNESS_ERROR.READY_TIMEOUT);
@@ -246,10 +236,10 @@ async function enablePasswordPgwire(db, port, wait) {
       method: HTTP_POST,
       headers: JSON_HEADERS,
       signal: globalThis.AbortSignal.timeout(Math.max(1, wait.deadlineMs - Date.now())),
-      body: JSON.stringify({replicaCount: PGWIRE_ENABLED_REPLICA_COUNT, runtimeConfig: {
+      body: JSON.stringify({replicaCount, runtimeConfig: {
         authMode: PGWIRE_PASSWORD_MODE,
         host: PGWIRE_HOST,
-        port,
+        ...bindConfig,
         tlsMode: PGWIRE_TLS_DISABLED,
       }}),
     });
@@ -261,6 +251,21 @@ async function enablePasswordPgwire(db, port, wait) {
       retryAfterMs: desiredStateResult.retryAfterMs,
     });
   }
+  return desiredStateResult;
+}
+
+/**
+ * Operator enablement of the built-in PG-wire listener in password mode.
+ * Reads the published endpoint back through the application facade.
+ *
+ * @param {object} db - Application database facade.
+ * @param {number} port - Listener port.
+ * @param {{deadlineMs: number, pause: Function, restPort: number}} wait -
+ *   Bounded wait plus the node's REST port for the readiness probe.
+ * @return {Promise<{host: string, port: number}>} Published endpoint.
+ */
+async function enablePasswordPgwire(db, port, wait) {
+  const desiredStateResult = await scalePasswordPgwire(PGWIRE_ENABLED_REPLICA_COUNT, {port}, wait);
   let row;
   try {
     row = await pollUntil(async () => {
@@ -581,6 +586,7 @@ export {
   acceptsConnections,
   buildCallArtifact,
   enablePasswordPgwire,
+  scalePasswordPgwire,
   MERGE_DISABLED_TABLE_POLICY,
   planShardPartitions,
   newReducedShardCounts,

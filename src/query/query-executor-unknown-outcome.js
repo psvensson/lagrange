@@ -136,6 +136,8 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
     reported: false,
     redeliveryDelays: 0,
     answeredEntryId: null,
+    submittedEntryId: null,
+    submittedAtMs: null,
   };
   const markUnresolved = (observed) => {
     if (state.firstUnresolvedAtMs === null) {
@@ -146,7 +148,9 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
   const isUnresolved = () => !forRead && !state.settled &&
     state.unknownAnswers + state.lostAnswers > 0;
   return Object.freeze({
-    recordDelivery() {
+    recordDelivery(submittedEntryId) {
+      state.submittedEntryId = submittedEntryId;
+      state.submittedAtMs = now();
       state.deliveries += 1;
     },
     /**
@@ -180,6 +184,7 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
       if (forRead) {
         return;
       }
+      state.firstUnresolvedAtMs ??= state.submittedAtMs;
       state.lostAnswers += 1;
       markUnresolved({
         state: UNKNOWN_OUTCOME_LOST_ANSWER_STATE,
@@ -228,7 +233,7 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
         return failureResult;
       }
       const spentWait = buildSpentWait(state, {
-        entryId: isNonEmptyString(entryId) ? entryId : state.answeredEntryId,
+        entryId: entryId || state.answeredEntryId || state.submittedEntryId || null,
         nowMs: now(),
       });
       reportSpentWaitOnce(state, logger, failureResult, spentWait);

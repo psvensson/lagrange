@@ -559,3 +559,18 @@ test('necessity: a member services-row change re-runs the retirement step ' +
   redrive.settle('wf-wake', partitionId);
   redrive.settle('wf-wake-unread', unavailablePartitionId);
 });
+
+test('overlapping retirement trigger preserves the successful clear receipt', async (t) => {
+  const {redrive} = observedRedrive();
+  let finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  const receipt = {workflowId: 'retired', attempt: 2, fence: 3};
+  let calls = 0;
+  const step = async () => ++calls === 1 ? pending : false;
+  const first = redrive.exclusive('retired', step, {terminal: Boolean});
+  const second = redrive.exclusive('retired', step, {terminal: Boolean});
+  finish(receipt);
+  t.equal(await first, receipt);
+  t.equal(await second, receipt);
+  t.equal(calls, 1);
+});

@@ -1,3 +1,4 @@
+import {observeReleaseReceiver} from './participant-release-hop-observation.js';
 /**
  * ReplicaHandler lifecycle + message dispatch methods.
  *
@@ -174,9 +175,10 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
       if (type === PARTICIPANT_RELEASE_TYPE) {
         const {request, refusal, observationValidated} = captured;
         const response = refusal ??
-          (request.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
-            await runParticipantCutover(this, request) :
-            await receiveParticipantRelease(this, request,
+          await observeReleaseReceiver(this, envelope, request, () =>
+            request.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
+            runParticipantCutover(this, request) :
+            receiveParticipantRelease(this, request,
               observationValidated));
         return {[PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
       }
