@@ -6,13 +6,15 @@ import {managedSleep} from '../../src/test-helpers/managed-timers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/tables.js';
 import {getGlobalIndexDatasetName} from '../../src/index-management/global-index-dataset-manager.js';
-import {createEmbeddedCluster, fulfilledRows, mustQuery, readUntil} from
+import {createEmbeddedCluster, EMBEDDED_WORKER_OP, fulfilledRows, mustQuery, readUntil} from
   './helpers/embedded-cluster-harness.js';
 
 const workerPath = fileURLToPath(new URL('./helpers/gsi-owner-loss-worker.js', import.meta.url));
 const indexName = 'email_warm_loss';
 const table = 'users_warm_loss';
 const replicaCount = 3;
+const testTimeoutMs = 480000;
+const traceTimeoutMs = 120000;
 const metadataTables = [TABLES.SCHEMA_OPERATIONS, TABLES.INDICES, TABLES.TABLES,
   TABLES.PARTITIONS, TABLES.SERVICES, TABLES.NODES, TABLES.NODE_ENDPOINTS,
   TABLES.CONTROL_PLANE_PUBLICATIONS, TABLES.REPLICA_OPERATIONS];
@@ -79,7 +81,7 @@ function assertSurvivingMajority(rows, partitionId, ownerNodeId, requiresRf3) {
 }
 
 async function waitForTrace(t, stage, members, accepts, signal) {
-  const deadline = Date.now() + scaleByMachineFactor(120000);
+  const deadline = Date.now() + scaleByMachineFactor(traceTimeoutMs);
   let traces;
   do {
     signal?.throwIfAborted();
@@ -94,8 +96,9 @@ async function waitForTrace(t, stage, members, accepts, signal) {
   assert.fail(`${stage}: last worker traces ${JSON.stringify(traces)}`);
 }
 
-test('warm survivors backfill an existing global index after the schema callback owner is killed',
-  {timeout: 480000}, async (t) => {
+test('warm survivors backfill an existing global index after the schema finalizer is killed',
+  {timeout: testTimeoutMs}, async (t) => {
+    const deadline = Date.now() + testTimeoutMs;
     const cluster = createEmbeddedCluster(t);
     const seed = await cluster.startEmbeddedNode({workerPath, hostId: 'gsi-a',
       configuration: {formation: {declaredHostCount: 4}, partition: {defaultReplicaCount: replicaCount}}});
@@ -116,11 +119,20 @@ test('warm survivors backfill an existing global index after the schema callback
     }
     await waitForTrace(t, 'setup: READY discovery', members, (traces) => traces.every((row) => row.warm));
     for (const node of members) {
-      assert.ok((await node.channel.request('armIndexLoss', {indexName})).ok);
+      const holdMs = deadline - Date.now();
+      assert.ok(holdMs > 0);
+      assert.ok((await node.channel.request('armIndexLoss', {tableName: table, indexName, generation: 1, holdMs})).ok);
     }
     const stopPolling = new AbortController();
-    const submission = query(issuer, `CREATE GLOBAL INDEX ${indexName} ON ${table} (email)`);
-    const atCut = waitForTrace(t, 'pre-kill: SUCCEEDED before callback enqueue', members,
+    // The CREATE may remain in flight on the actual finalizer. Give its IPC
+    // observation the same budget as the cut; SQL runs with its normal options.
+    const submission = issuer.channel.request(EMBEDDED_WORKER_OP.QUERY, {
+      sessionKey: sessions.get(issuer), sql: `CREATE GLOBAL INDEX ${indexName} ON ${table} (email)`, params: [],
+    }, traceTimeoutMs).then((reply) => {
+      assert.ok(reply.ok, JSON.stringify(reply.error));
+      fulfilledRows(reply.value);
+    });
+    const atCut = waitForTrace(t, 'pre-kill: accepted fenced SUCCEEDED write', members,
       (rows) => rows.some((row) => row.cut), stopPolling.signal);
     // A fulfilled CREATE can detach while the schema job is still running.
     // A rejected public outcome or IPC failure before the cut ends this wait.
@@ -130,12 +142,18 @@ test('warm survivors backfill an existing global index after the schema callback
     assert.equal(cuts.length, 1);
     assert.ok(traces.every((row) => !row.completed));
     const [{nodeId, cut}] = cuts;
-    assert.deepEqual([cut.status, cut.background, cut.registeredCallback], ['SUCCEEDED', true, true]);
-    t.comment(JSON.stringify({stage: 'pre-kill callback cut', nodeId, cut}));
+    assert.equal(cut.status, 'SUCCEEDED');
+    assert.ok(typeof cut.jobId === 'string' && cut.jobId.length > 0);
+    assert.equal(cut.workflowId, cut.jobId);
+    assert.ok(typeof cut.ownerId === 'string' && cut.ownerId.length > 0);
+    assert.ok(Number.isSafeInteger(cut.fenceToken) && cut.fenceToken > 0);
+    assert.ok(Number.isSafeInteger(cut.rowVersion) && cut.rowVersion > 1);
+    assert.equal(cut.generation, 1);
+    t.comment(JSON.stringify({stage: 'pre-kill durable finalizer cut', nodeId, cut}));
     const owner = members.find((node) => node.nodeId === nodeId);
     const survivors = members.filter((node) => node !== owner);
     const catalogSql = 'SELECT index_id, state, backfill_total_rows FROM indices WHERE index_name = ?';
-    const observer = survivors[0];
+    const observer = survivors.find((node) => node !== issuer);
     const read = async (sql, params) => fulfilledRows(await query(observer, sql, params));
     assert.equal(cut.dataset, getGlobalIndexDatasetName(table, indexName));
     assert.equal(cut.partitions.length, 1);
@@ -167,10 +185,12 @@ test('warm survivors backfill an existing global index after the schema callback
       }
       assertSurvivingMajority(membership, partition.partition_id, nodeId, partition.requiresRf3);
     }
+    assert.ok(process.hrtime.bigint() < BigInt(cut.expiresNs), 'finalizer hold still active before signal');
     const exited = once(owner.child, 'exit');
     assert.ok(owner.child.kill('SIGKILL'));
     assert.deepEqual(await exited, [null, 'SIGKILL']);
     const confirmedExitNs = process.hrtime.bigint();
+    assert.ok(confirmedExitNs < BigInt(cut.expiresNs), 'confirmed death precedes release of the finalizer');
     t.comment(JSON.stringify({stage: 'SIGKILL confirmed', nodeId, indexId: cut.indexId}));
     // All processes held terminal writes before the submission. The same
     // generation must still be incomplete after the OS confirms owner death.

@@ -122,7 +122,7 @@ export const SUBSYSTEM_RULES = Object.freeze([
   {id: 'integration-raft', pattern: /^test\/integration\/(?!pgwire-).*(raft|insert-or-ignore)/, subsystem: SUBSYSTEM_STORAGE_RAFT},
   {id: 'integration-placement', pattern: /^test\/integration\/(?!pgwire-)(?!.*cdc).*(rebalance|move-replica|replica-placement|replica-assignment|node-joining|replica-count)/, subsystem: SUBSYSTEM_PLACEMENT_REBALANCE},
   {id: 'integration-bootstrap', pattern: /^test\/integration\/(?!pgwire-)(?!.*(cdc|rebalance|node-joining)).*(bootstrap|seed-|node-join|membership|discovery)/, subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP},
-  {id: 'integration-control-plane', pattern: /^test\/integration\/(?!.*(cdc|bootstrap)).*(control-plane|convergence|control-snapshot|preflight)/, subsystem: SUBSYSTEM_CONTROL_PLANE},
+  {id: 'integration-control-plane', pattern: /^test\/integration\/(?!.*(cdc|bootstrap)).*(control-plane|convergence|control-snapshot|preflight|nodes-lease-leader-loss)/, subsystem: SUBSYSTEM_CONTROL_PLANE},
   {id: 'integration-partition', pattern: /^test\/integration\/(?!.*(rebalance|replica-count)).*(managed-split|create-table-partition|learner)/, subsystem: SUBSYSTEM_STORAGE_PARTITION},
   {id: 'integration-query', pattern: /^test\/integration\/.*(sql-workflow|table-read-path|system-writes|leader-metadata|application-database|public-consumer-contract|global-index)/, subsystem: SUBSYSTEM_QUERY_SQL},
   {id: 'integration-services', pattern: /^test\/integration\/(?!.*(cdc|bootstrap|rebalance|pgwire|websocket|multi-node|npm-package)).*(service|cell|call-composition|artifact-payload|http-to-call|developer-journey)/, subsystem: SUBSYSTEM_SERVICES_RUNTIME},
