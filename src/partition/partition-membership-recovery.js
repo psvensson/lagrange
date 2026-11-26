@@ -51,6 +51,7 @@ import {
   isLocalReplicaExcludedFenced,
   isPeerExcludedInGroup,
   markLocalReplicaExcludedFence,
+  noteMembershipRecoveryOrFenceRowWritten,
   readCommittedMembershipRecoveriesIn,
   readCommittedMembershipRecoveryByEntryIn,
   readCommittedMembershipRecoveryByIdIn,
@@ -375,6 +376,7 @@ function applyPartitionMembershipRecoveryCommand(service, committed) {
         index,
         term,
       );
+      noteMembershipRecoveryOrFenceRowWritten(service.db);
       recordPartitionMemberBinding(service.db, {
         replicaId: command.sourceReplicaId,
         peerId: command.sourcePeerId,

@@ -59,9 +59,31 @@ function resolveDatabaseHandle(target) {
 function ensureMembershipRecoveryTables(target) {
   const db = resolveDatabaseHandle(target);
   if (!db || db.open === false) return;
+  if (db._membershipRecoveryTablesEnsured === true) return;
   db.exec(SQL.CREATE_RECOVERY_TABLE);
   db.exec(SQL.CREATE_BINDINGS_TABLE);
   db.exec(SQL.CREATE_LOCAL_FENCE_TABLE);
+  db._membershipRecoveryTablesEnsured = true;
+}
+
+function hasAnyMembershipRecoveryOrFenceRows(target) {
+  const db = resolveDatabaseHandle(target);
+  if (!db || db.open === false) return false;
+  if (typeof db._hasMembershipRecoveryOrFenceRows === 'boolean') {
+    return db._hasMembershipRecoveryOrFenceRows;
+  }
+  ensureMembershipRecoveryTables(db);
+  const hasRows =
+    db.prepare(SQL.SELECT_ALL_RECOVERIES).get() !== undefined ||
+    db.prepare(SQL.SELECT_ANY_LOCAL_FENCE).get() !== undefined;
+  db._hasMembershipRecoveryOrFenceRows = hasRows;
+  return hasRows;
+}
+
+function noteMembershipRecoveryOrFenceRowWritten(target) {
+  const db = resolveDatabaseHandle(target);
+  if (!db || db.open === false) return;
+  db._hasMembershipRecoveryOrFenceRows = true;
 }
 
 function recordPartitionMemberBinding(target, binding) {
@@ -437,6 +459,7 @@ function markLocalReplicaExcludedFence(service, recovery) {
     configurationKey,
     Number(recovery.membershipGenerationIndex) || DEFAULT_GENERATION_INDEX,
   );
+  noteMembershipRecoveryOrFenceRowWritten(db);
   if (service && service.db) {
     service.excludedMemberGenerationFenced = true;
   }
@@ -450,7 +473,7 @@ function isLocalReplicaExcludedFenced(service) {
   if (!db || db.open === false || !isNonEmptyString(service.replicaId)) {
     return false;
   }
-  ensureMembershipRecoveryTables(db);
+  if (!hasAnyMembershipRecoveryOrFenceRows(db)) return false;
   const localFence = db.prepare(SQL.SELECT_LOCAL_FENCE).get(service.replicaId);
   if (localFence !== undefined) {
     service.excludedMemberGenerationFenced = true;
@@ -468,7 +491,7 @@ function isLocalReplicaExcludedFenced(service) {
 function isPeerExcludedInGroup(service, peerQuery = {}) {
   const db = service?.db;
   if (!db || db.open === false) return null;
-  ensureMembershipRecoveryTables(db);
+  if (!hasAnyMembershipRecoveryOrFenceRows(db)) return null;
   let row = null;
   if (isNonEmptyString(peerQuery.replicaId)) {
     row = db.prepare(SQL.SELECT_BY_SOURCE_REPLICA_ID).get(peerQuery.replicaId);
@@ -550,6 +573,7 @@ export {
   isLocalReplicaExcludedFenced,
   isPeerExcludedInGroup,
   markLocalReplicaExcludedFence,
+  noteMembershipRecoveryOrFenceRowWritten,
   readCommittedMembershipRecoveriesIn,
   readCommittedMembershipRecoveryByEntryIn,
   readCommittedMembershipRecoveryByIdIn,

@@ -56,7 +56,7 @@ documentClass: generated
 - [replica-handler-learner-retirement-authority.js](replica-handler-learner-retirement-authority.js) - No leading comment; first export: admitsLearnerRetirement. (importers: few)
 - [replica-handler-lifecycle-methods.js](replica-handler-lifecycle-methods.js) - ReplicaHandler lifecycle + message dispatch methods. (importers: one)
 - [replica-handler-membership-methods.js](replica-handler-membership-methods.js) - Owner contract: Owner: the replica handler's witness seam for the REPLACE owner (quest replace-source-removal-owner,... (importers: few)
-- [replica-handler-membership-recovery-decision.js](replica-handler-membership-recovery-decision.js) - Autonomous permanent member loss recovery planner and replacement target selector for hosted partition leaders. (importers: one)
+- [replica-handler-membership-recovery-decision.js](replica-handler-membership-recovery-decision.js) - Autonomous permanent member loss recovery planner and replacement target selector for hosted partition leaders. (importers: few)
 - [replica-handler-membership-recovery-target.js](replica-handler-membership-recovery-target.js) - Target-side learner materialization and observation handlers for permanent member loss recovery on ReplicaHandler. (importers: one)
 - [replica-handler-membership-recovery.js](replica-handler-membership-recovery.js) - Explicit-context functions for ReplicaHandler's permanent member loss recovery orchestration across surviving voters... (importers: one)
 - [replica-handler-membership-relay.js](replica-handler-membership-relay.js) - Owner contract: Owner: the replica handler's tracked-service registry as the node's single relay of partition... (importers: many)

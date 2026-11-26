@@ -84,6 +84,24 @@ function isNodeUnreachablePendingExpiry(handler, nodeId, nowMs) {
   return !leaseAuthority.isExpired(nodeRow, nowMs);
 }
 
+function isClusterNodeRowUnreachableOrDead(handler, nodeRow) {
+  const nodeId = nodeRow?.[COLUMN.NODE_ID];
+  if (!isNonEmptyString(nodeId) || nodeId === handler?.nodeId) return false;
+  if (observesCommittedNodeLossRow(nodeRow)) return true;
+  if (nodeRow?.[COLUMN.STATUS] !== NODE_STATE.READY &&
+      nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] === null) {
+    return false;
+  }
+  return !hasLiveTransportEvidence(nodeId, {messageRouter: handler?.messageRouter});
+}
+
+function hasAnyUnreachableOrDeadClusterNode(handler) {
+  const nodeRows = handler?.systemTableCache?.getAll?.(TABLES.NODES);
+  if (!Array.isArray(nodeRows) || nodeRows.length === 0) return false;
+  return nodeRows.some((nodeRow) =>
+    isClusterNodeRowUnreachableOrDead(handler, nodeRow));
+}
+
 function selectEligibleReplacementTargetNode(handler, partitionId, excludedNodeIds, nowMs) {
   const cache = handler?.systemTableCache;
   if (!cache || !cache.getAll) return null;
@@ -282,6 +300,7 @@ async function planAutonomousPermanentLossRecovery(
 }
 
 export {
+  hasAnyUnreachableOrDeadClusterNode,
   isNodeEligibleForPermanentLossRecovery,
   planAutonomousPermanentLossRecovery,
   selectEligibleReplacementTargetNode,

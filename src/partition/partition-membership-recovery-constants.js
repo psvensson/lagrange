@@ -174,6 +174,8 @@ const PARTITION_MEMBERSHIP_RECOVERY_SQL = Object.freeze({
   `,
   SELECT_LOCAL_FENCE:
     'SELECT * FROM _partition_membership_local_fence WHERE replica_id = ?',
+  SELECT_ANY_LOCAL_FENCE:
+    'SELECT replica_id FROM _partition_membership_local_fence LIMIT 1',
 });
 
 export {
