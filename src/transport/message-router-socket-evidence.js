@@ -1,3 +1,4 @@
+import {LATENCY_TOPOLOGY_MESSAGE_TYPE as TOPOLOGY} from '../topology/latency-topology-constants.js';
 import {ReplicaOperationMessageType} from '../rebalancer/replica-operation-constants.js';
 import {RAFT_RS_MESSAGE_TYPE as RAFT} from '../raft/raft-rs-ingress-constants.js';
 import {MESSAGE_TYPE} from '../constants/messages.js';
@@ -5,6 +6,24 @@ import {ROUTER_MESSAGE_TYPE as FRAME} from '../constants/transport.js';
 
 // Fixed slots per physical WebSocket. Node IDs and connection records can
 // survive a handoff; neither identifies the socket that supplied a frame.
+const pairWindowMs = 12;
+const intervalBounds = [1, 3, 6, 12];
+const slackBounds = [1, 6, 12, 50, 250];
+export function cdcStampObservationTime() {
+  try {
+    return performance.now();
+  } catch {
+    return undefined;
+  }
+}
+
+function histogram(bounds) {
+  return Object.fromEntries([...bounds.map(String), 'above'].map(key => [key, 0]));
+}
+function countBin(bins, bounds, value) {
+  bins[bounds.find(bound => value <= bound) ?? 'above']++;
+}
+
 const sockets = new WeakMap();
 const peerInbound = new WeakMap();
 let nextSocketId = 0;
@@ -113,6 +132,7 @@ function frameFact(router, frame) {
 export function observeParsedFrame(router, peer, ws, frame) {
   try {
     const state = socketState(ws);
+    if (frame.type === FRAME.ACK || frame.type === FRAME.SERVICE_RESPONSE) state.unmatched = null;
     const fact = frameFact(router, frame);
     if (tracked.has(frame.type)) state.received[frame.type] = fact;
     const connection = router.nodeConnections.get(peer);
@@ -134,6 +154,7 @@ function countReturned(slot, bytes) {
 export function observeConsensusSendReturned(ws, batchBytes, items) {
   try {
     const state = socketState(ws);
+    interruptPair(state, 0, false);
     countReturned(state.sendReturned.consensus, batchBytes);
     const counts = state.consensusBatches;
     if (items.length === 1) counts.singleItemFrames += 1;
@@ -149,12 +170,71 @@ export function observeConsensusSendReturned(ws, batchBytes, items) {
   }
 }
 
-export function observeServiceSendReturned(ws, encoded, hasCdcGrant, deliverySource) {
+// Successful write returns only. One unmatched range per socket; every other
+// observed outbound frame breaks adjacency. No payload, grant or timer is owned.
+function interruptPair(state, at, urgent) {
+  if (!state.unmatched) return;
+  if (urgent && at - state.unmatched.at <= pairWindowMs) state.pairs.nearbyControl++;
+  state.unmatched = null;
+}
+
+function observedSourcePartition(payload) {
+  const data = (object, key) => Object.getOwnPropertyDescriptor(object, key)?.value;
+  const type = data(payload, 'type');
+  const events = type === TOPOLOGY.CDC_PROPAGATION_BATCH ? data(payload, 'events') : null;
+  if (type !== TOPOLOGY.CDC_PROPAGATION && !Array.isArray(events)) return null;
+  // Bound diagnostic work even for an unusually large batch. Mixed ranges
+  // cannot establish partition independence from their first member alone.
+  if (events && (!events.length || events.length > 16)) return null;
+  const first = events ? data(events, '0') : payload;
+  const partition = first && data(first, 'sourcePartition');
+  if (typeof partition !== 'string' || !partition.length || partition.length > maxIdLength) return null;
+  for (let index = 1; events && index < events.length; index++) {
+    const event = data(events, index);
+    if (!event || data(event, 'sourcePartition') !== partition) return null;
+  }
+  return partition;
+}
+
+function observeRange(state, payload, context, address, start, remaining, signal) {
+  const at = performance.now();
+  const previous = state.unmatched;
+  state.unmatched = null;
+  if (!context || !Number.isFinite(start) || !Number.isFinite(remaining) ||
+      typeof address !== 'string' || address.length > 256 || !context.signal || !signal) return;
+  const partition = observedSourcePartition(payload);
+  if (!partition) return;
+  const counts = state.pairs ??= {identifiedRanges: 0, disjointPairs: 0, nearbyControl: 0,
+    intervalMsLe: histogram(intervalBounds), pairMinSlackMsLe: histogram(slackBounds)};
+  counts.identifiedRanges++;
+  const deadline = start + remaining;
+  if (deadline <= at || context.signal.aborted || signal.aborted) return;
+  if (previous && previous.partition !== partition && previous.address === address &&
+      previous.signal.deref()?.aborted === false && previous.source.deref()?.aborted === false &&
+      previous.source.deref() !== context.signal) {
+    const gap = at - previous.at;
+    const slack = Math.min(deadline, previous.deadline) - at;
+    if (gap <= pairWindowMs && slack > 0) {
+      counts.disjointPairs++;
+      countBin(counts.intervalMsLe, intervalBounds, gap);
+      countBin(counts.pairMinSlackMsLe, slackBounds, slack);
+      return;
+    }
+  }
+  state.unmatched = {partition, address, at: start, deadline, signal: new WeakRef(signal), source: new WeakRef(context.signal)};
+}
+
+export function observeServiceSendReturned(ws, encoded, hasCdcGrant, deliverySource, payload, context,
+  address, stampStart, remaining, signal) {
   try {
     const state = socketState(ws);
     const bytes = typeof encoded === 'string' ? Buffer.byteLength(encoded) : encoded.byteLength;
     countReturned(hasCdcGrant ? state.sendReturned.cdcGrantService : state.sendReturned.otherService, bytes);
-    if (!hasCdcGrant) countReturned(state.families.otherService[deliveryFamily(deliverySource)], bytes);
+    if (hasCdcGrant) observeRange(state, payload, context, address, stampStart, remaining, signal);
+    else {
+      interruptPair(state, 0, false);
+      countReturned(state.families.otherService[deliveryFamily(deliverySource)], bytes);
+    }
   } catch {
     // Preserve write callback and ACK custody.
   }
@@ -163,6 +243,7 @@ export function observeServiceSendReturned(ws, encoded, hasCdcGrant, deliverySou
 export function observeRawSend(router, ws, frame, encoded, family = 'other') {
   try {
     const state = socketState(ws);
+    if (state.unmatched) interruptPair(state, performance.now(), frame.type === FRAME.PING || frame.type === FRAME.PONG);
     const counts = state.sendReturned;
     const bytes = Buffer.byteLength(encoded);
     countReturned(frame.type === FRAME.SERVICE_RESPONSE ? counts.serviceResponse : counts.routerControl,
@@ -195,6 +276,8 @@ export function socketEvidence(router, targetNodeId, connection, attemptedSocket
       received: {...state?.received},
       rawSendReturned: {...state?.sent},
       applicationSendReturned: state ? copyCounts(state.sendReturned) : null,
+      partialCdcRangeSendReturned: state?.pairs ? {...state.pairs,
+        intervalMsLe: {...state.pairs.intervalMsLe}, pairMinSlackMsLe: {...state.pairs.pairMinSlackMsLe}} : null,
       consensusBatchSendReturned: state ? {...state.consensusBatches,
         families: copyCounts(state.consensusBatches.families)} : null,
       requestFamilySendReturned: state ? {otherService: copyCounts(state.families.otherService),

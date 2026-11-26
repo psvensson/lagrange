@@ -1,4 +1,4 @@
-import {observeServiceSendReturned, observeWriteBoundary, socketEvidence} from './message-router-socket-evidence.js';
+import {cdcStampObservationTime, observeServiceSendReturned, observeWriteBoundary, socketEvidence} from './message-router-socket-evidence.js';
 import {CDC_DELIVERY_REMAINING_MS} from '../cdc/cdc-delivery-budget.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {assertDeliveryOpen, deliveryAbortReason, remainingDeliveryMs, withDeliveryLifetime}
@@ -148,8 +148,10 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
     router.pendingMessages.set(messageId, pending);
     options.signal.addEventListener('abort', onAbort, {once: true});
     let bytes;
+    let stampStart;
     try {
       arm();
+      if (options.deliveryLifetime.durationField === CDC_DELIVERY_REMAINING_MS) stampStart = cdcStampObservationTime();
       bytes = encoded.stamp();
       assertDeliveryOpen(options);
     } catch (error) {
@@ -165,7 +167,8 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       });
       const lifetime = options.deliveryLifetime;
       observeServiceSendReturned(ws, bytes, lifetime.context !== undefined ||
-        lifetime.durationField === CDC_DELIVERY_REMAINING_MS, options.deliverySource);
+        lifetime.durationField === CDC_DELIVERY_REMAINING_MS, options.deliverySource, payload, lifetime.context, targetAddress,
+        stampStart, encoded.stampedRemainingMs, options.signal);
     } catch (_sendError) {
       // Once ws.send has been entered, a thrown error is not proof that its
       // compression/write child released the encoded copy. The existing close
