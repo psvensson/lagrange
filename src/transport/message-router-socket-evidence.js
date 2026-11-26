@@ -1,4 +1,5 @@
 import {ReplicaOperationMessageType} from '../rebalancer/replica-operation-constants.js';
+import {RAFT_RS_MESSAGE_TYPE as RAFT} from '../raft/raft-rs-ingress-constants.js';
 import {MESSAGE_TYPE} from '../constants/messages.js';
 import {ROUTER_MESSAGE_TYPE as FRAME} from '../constants/transport.js';
 
@@ -16,6 +17,32 @@ const replicaTypes = new Set([...Object.values(ReplicaOperationMessageType), MES
 const replicaSources = new Set([...replicaTypes].map((type) => 'message:' + type.toLowerCase()));
 replicaSources.add('replica_operation_dispatch');
 replicaSources.add('coordinator_created_remote_handoff');
+
+// Only vote and pre-vote requests/replies are counted as elections.
+const raftFamilies = new Map([
+  [RAFT.HEARTBEAT, 'heartbeat'], [RAFT.HEARTBEAT_RESPONSE, 'heartbeatResponse'],
+  [RAFT.APPEND, 'append'], [RAFT.APPEND_RESPONSE, 'appendResponse'],
+  [RAFT.REQUEST_VOTE, 'election'], [RAFT.REQUEST_VOTE_RESPONSE, 'election'],
+  [RAFT.REQUEST_PRE_VOTE, 'election'], [RAFT.REQUEST_PRE_VOTE_RESPONSE, 'election'],
+]);
+
+export function consensusItemFamily(payload) {
+  try {
+    // The native producer supplies plain data. Never invoke an accessor a
+    // second time just to classify the serialization it already produced.
+    const message = Object.getOwnPropertyDescriptor(payload, 'message')?.value;
+    const type = message && Object.getOwnPropertyDescriptor(message, 'msgType')?.value;
+    return raftFamilies.get(type) ?? 'other';
+  } catch {
+    return 'other';
+  }
+}
+
+function consensusBatchCounters() {
+  const families = {};
+  for (const name of [...raftFamilies.values(), 'other']) families[name] = {items: 0, entryBytes: 0};
+  return {singleItemFrames: 0, multiItemFrames: 0, items: 0, families};
+}
 
 function familyCounters() {
   return Object.fromEntries(familyNames.map((family) => [family, {frames: 0, bytes: 0}]));
@@ -61,7 +88,7 @@ function copyCounts(counts) {
 function socketState(ws) {
   let state = sockets.get(ws);
   if (!state) {
-    state = {socketId: ++nextSocketId, received: {}, sent: {},
+    state = {socketId: ++nextSocketId, received: {}, sent: {}, consensusBatches: consensusBatchCounters(),
       families: {otherService: familyCounters(), serviceResponse: familyCounters()}, sendReturned: {
       consensus: {frames: 0, bytes: 0},
       cdcGrantService: {frames: 0, bytes: 0},
@@ -104,9 +131,19 @@ function countReturned(slot, bytes) {
   slot.bytes += bytes;
 }
 
-export function observeConsensusSendReturned(ws, batchBytes) {
+export function observeConsensusSendReturned(ws, batchBytes, items) {
   try {
-    countReturned(socketState(ws).sendReturned.consensus, batchBytes);
+    const state = socketState(ws);
+    countReturned(state.sendReturned.consensus, batchBytes);
+    const counts = state.consensusBatches;
+    if (items.length === 1) counts.singleItemFrames += 1;
+    else counts.multiItemFrames += 1;
+    counts.items += items.length;
+    for (const item of items) {
+      const family = counts.families[item.family];
+      family.items += 1;
+      family.entryBytes += item.entryBytes;
+    }
   } catch {
     // Diagnostics have no delivery authority.
   }
@@ -158,6 +195,8 @@ export function socketEvidence(router, targetNodeId, connection, attemptedSocket
       received: {...state?.received},
       rawSendReturned: {...state?.sent},
       applicationSendReturned: state ? copyCounts(state.sendReturned) : null,
+      consensusBatchSendReturned: state ? {...state.consensusBatches,
+        families: copyCounts(state.consensusBatches.families)} : null,
       requestFamilySendReturned: state ? {otherService: copyCounts(state.families.otherService),
         serviceResponse: copyCounts(state.families.serviceResponse)} : null,
       bufferedBytes: bufferedBytes(ws),

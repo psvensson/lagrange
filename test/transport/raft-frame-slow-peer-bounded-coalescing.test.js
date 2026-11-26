@@ -29,6 +29,7 @@ import {
   ROUTER_MESSAGE_TYPE,
 } from '../../src/constants/transport.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {RAFT_RS_MESSAGE_TYPE as RAFT} from '../../src/raft/raft-rs-ingress-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {sendRaftEnvelope, stepRaftEnvelope} from '../../src/raft/raft-packet-utils.js';
 import {RAFT_RS_GROUP_TUNING} from '../../src/raft/raft-rs-group-constants.js';
@@ -266,6 +267,47 @@ test('each sender encodes one canonical wrapper across separate remote flushes',
     assert.deepEqual(wrapperEncodings, senderIds);
   } finally {
     await Promise.all(routers.map((router) => router.shutdown()));
+    resetRouterProcess();
+  }
+});
+
+test('successful socket flushes report admitted Raft item families and encoded entry bytes', async () => {
+  configureRouterProcess();
+  const router = new MessageRouter({nodeId: 'sender', bootIncarnation: TEST_BOOT_INCARNATION});
+  try {
+    const targetAddress = 'peer/partition/g-r2';
+    let refuseWrite = false;
+    const socket = createFakeSocket({onSend() {
+      if (refuseWrite) throw new Error('closed during send');
+    }});
+    const connection = attachConnectedPeer(router, 'peer', socket);
+    const evidence = () => socketEvidence(router, 'peer', connection, socket).consensusBatchSendReturned;
+    const cases = [[RAFT.HEARTBEAT, 'heartbeat'], [RAFT.HEARTBEAT_RESPONSE, 'heartbeatResponse'],
+      [RAFT.APPEND, 'append'], [RAFT.APPEND_RESPONSE, 'appendResponse'],
+      [RAFT.REQUEST_PRE_VOTE, 'election'], [RAFT.REQUEST_VOTE_RESPONSE, 'election'], [991, 'other']];
+    const expected = {};
+    const deliveries = [];
+    for (const [type, family] of cases) {
+      const payload = buildEnvelope('g', type, 'α');
+      payload.message.msgType = type;
+      const slot = expected[family] ??= {items: 0, entryBytes: 0};
+      slot.items += 1;
+      slot.entryBytes += Buffer.byteLength(JSON.stringify({targetAddress, payload}));
+      const delivery = router.deliver(targetAddress, payload);
+      payload.message.msgType = RAFT.READ_INDEX;
+      if (type === RAFT.HEARTBEAT) await delivery;
+      else deliveries.push(delivery);
+    }
+    await Promise.all(deliveries);
+    const counts = evidence();
+    assert.deepEqual(counts, {singleItemFrames: 1, multiItemFrames: 1, items: cases.length, families: expected});
+    assert.deepEqual(socket.sentFrames.map((frame) => frame.envelopes.length), [1, cases.length - 1]);
+    refuseWrite = true;
+    const failed = await router.deliver(targetAddress, buildEnvelope('g', 99));
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(failed)), false);
+    assert.deepEqual(evidence(), counts);
+  } finally {
+    await router.shutdown();
     resetRouterProcess();
   }
 });
