@@ -4,9 +4,7 @@ import {
   readOriginalCreateBootstrapMembership,
   readOriginalCreatePlacementAdmission,
 } from '../rebalancer/replica-status.js';
-import {
-  DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
-} from '../rebalancer/replica-operation-step-policy.js';
+import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {isServeEligibilityAnswerEligible} from '../control-plane/serve-eligibility-owner.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineStatementExecution} from './sql-query-engine-statement-execution.js';
@@ -113,7 +111,7 @@ function isDispatchableFoundingRelease(release, foundedProvisioned) {
   if (release?.released === true) return true;
   if (!foundedProvisioned || release?.reason) return false;
   const op = release?.operation;
-  return DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS.has(op?.workflowStep) &&
+  return op?.workflowStep === WORKFLOW_STEP.PENDING &&
     op.completedAt === null &&
     !isBootstrapTopologyDispatchDeferred(op);
 }
