@@ -22,13 +22,17 @@ const distributedTransactionRecordMethods = {
    */
 
   async persistParticipants(tx, partitionIds) {
+    const participants = [];
     for (const partitionId of partitionIds) {
       const participant = tx.participants.get(partitionId);
-      if (!participant) {
-        continue;
+      if (participant) {
+        participants.push(participant);
       }
-      await this.persistParticipantRecord(tx, participant);
     }
+    await Promise.all(
+      participants.map((participant) =>
+        this.persistParticipantRecord(tx, participant)),
+    );
   },
 
   /**

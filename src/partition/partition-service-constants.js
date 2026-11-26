@@ -724,8 +724,25 @@ const PARTITION_LEADER_ADDRESS_REFUSAL = Object.freeze({
   STATUS_UNAVAILABLE: 'leader_address_status_unavailable',
 });
 
+const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
+  NOT_LEADER: 'partition_write_not_leader',
+  CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
+  CONSENSUS_SESSION_OPEN: 'partition_write_consensus_session_open',
+  CONSENSUS_HOST_FAILURE: 'partition_write_consensus_host_failure',
+  OUTCOME_UNKNOWN: 'partition_write_outcome_unknown',
+  CONSENSUS_REFUSED: 'partition_write_consensus_refused',
+  BACKPRESSURE: 'partition_write_backpressure',
+  SERVICE_SHUTDOWN: 'partition_write_service_shutdown',
+  COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
+  RESERVED: 'partition_write_reserved',
+  CUTOVER_PAUSED: 'partition_write_cutover_paused',
+  CDC_CAPACITY: 'partition_write_cdc_capacity',
+  CDC_DEMAND_EXCEEDS_CAPACITY: 'partition_write_cdc_demand_exceeds_capacity',
+});
+
 export {
   PARTITION_LEADER_ADDRESS_REFUSAL,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,

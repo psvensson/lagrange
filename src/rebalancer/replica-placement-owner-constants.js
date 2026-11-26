@@ -14,7 +14,7 @@ import {PLACEMENT_ADMISSION_ERROR} from '../partition/partition-placement-admiss
 import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
-  '../partition/partition-write-kernel.js';
+  '../partition/partition-service-constants.js';
 
 // Owner decision D2 (2026-11-18, WP-A): copy-phase operations per copy source
 // and per target. They travel in every command, so every replica's applier

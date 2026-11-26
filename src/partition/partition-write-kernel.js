@@ -8,6 +8,7 @@ import {RAFT_RS_PERSISTENCE_ADMISSION} from
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from './partition-service-constants.js';
 import {
   decodeTypedParams,
@@ -53,21 +54,6 @@ const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
 // transaction cutover paused new mutation admission on this partition (TX1
 // design 0.0.15), so the write was not proposed and is retried once the
 // pause lifts.
-const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
-  NOT_LEADER: 'partition_write_not_leader',
-  CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
-  CONSENSUS_SESSION_OPEN: 'partition_write_consensus_session_open',
-  CONSENSUS_HOST_FAILURE: 'partition_write_consensus_host_failure',
-  OUTCOME_UNKNOWN: 'partition_write_outcome_unknown',
-  CONSENSUS_REFUSED: 'partition_write_consensus_refused',
-  BACKPRESSURE: 'partition_write_backpressure',
-  SERVICE_SHUTDOWN: 'partition_write_service_shutdown',
-  COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
-  RESERVED: 'partition_write_reserved',
-  CUTOVER_PAUSED: 'partition_write_cutover_paused',
-  CDC_CAPACITY: 'partition_write_cdc_capacity',
-  CDC_DEMAND_EXCEEDS_CAPACITY: 'partition_write_cdc_demand_exceeds_capacity',
-});
 const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
 // The answers of a write that did not fail for good: a caller may retry it -

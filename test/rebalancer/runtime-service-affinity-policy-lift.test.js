@@ -20,6 +20,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  META_SERVICE_ID,
   SERVICE_PARTITION_ACCESS_COL as SPA_COL,
   SERVICE_PARTITION_ACCESS_KIND,
   SERVICE_READ_LOCALITY,
@@ -27,6 +28,7 @@ import {
 } from '../../src/constants/index.js';
 import {
   buildServiceDataAffinityGroupWeights,
+  buildServiceDataAffinityWeights,
 } from '../../src/rebalancer/service-data-affinity-weights.js';
 import {
   applyUnifiedRebalancerPolicySchedulerMethods,
@@ -316,5 +318,45 @@ test('end-to-end: record -> publish -> aggregate -> policy -> ' +
   t.equal(decision.intent.targetNodeIds[0], NODE_B,
     'placement intent lands the service in its data-dominant group — ' +
       'the epic thesis, live end to end');
+  t.end();
+});
+
+test('sys-postgres-wire seeds initial write affinity from SQL transaction ' +
+  'coordinator partitions before runtime access rows are published', (t) => {
+  const cache = buildClusterCache({accessRows: []});
+  cache.rows[TABLES.PARTITIONS].push(
+    {partition_id: 'sql_transactions-p1', leader_node_id: NODE_A},
+    {partition_id: 'sql_transaction_participants-p1', leader_node_id: NODE_A},
+    {partition_id: 'sql_write_operations-p1', leader_node_id: NODE_A},
+  );
+  const initialWeights = buildServiceDataAffinityWeights({
+    systemTableCache: cache,
+    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
+    nowMs: NOW_MS,
+  });
+  t.same(
+    initialWeights,
+    {nodeWeights: {[NODE_A]: 1}, groupWeights: {G1: 1}},
+    'initial sys-postgres-wire placement co-locates with transaction leaders',
+  );
+
+  cache.rows[TABLES.SERVICE_PARTITION_ACCESS].push(
+    accessRow({
+      nodeId: NODE_B,
+      serviceId: META_SERVICE_ID.POSTGRES_WIRE,
+      counts: {'orders-p1': {r: 0, w: 5}},
+      publishedAt: NOW_MS - 1000,
+    }),
+  );
+  const measuredWeights = buildServiceDataAffinityWeights({
+    systemTableCache: cache,
+    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
+    nowMs: NOW_MS,
+  });
+  t.same(
+    measuredWeights,
+    {nodeWeights: {[NODE_B]: 1}, groupWeights: {G2: 1}},
+    'published service_partition_access rows supersede initial seed',
+  );
   t.end();
 });
