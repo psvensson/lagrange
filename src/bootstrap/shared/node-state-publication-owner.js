@@ -59,6 +59,31 @@ import {reportNodeStateUpdateDeliverySpent} from
 
 const NODE_STATE_PUBLICATION_OWNER_SUBJECT = 'NodeStatePublicationOwner';
 
+function isExplicitDeferredNodeStateCompletion(answer) {
+  return answer?.completionCompleted === false || answer?.deferRetry === true;
+}
+
+function resolveNodeStateUpdateDurableCompletion(answer, options) {
+  const durableCompletion =
+    answer?.completionKind ===
+      CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION &&
+    answer?.completionCompleted === true;
+  if (
+    isExplicitDeferredNodeStateCompletion(answer) ||
+    (options.requireDurableCompletion === true && !durableCompletion)
+  ) {
+    const completionError = new Error(
+      NODE_STATE_PUBLICATION_OWNER_LITERAL.DURABLE_COMPLETION_MISSING,
+    );
+    completionError.deferRetry = true;
+    if (Number.isFinite(answer?.retryAfterMs) && answer.retryAfterMs > 0) {
+      completionError.retryAfterMs = answer.retryAfterMs;
+    }
+    throw completionError;
+  }
+  return durableCompletion;
+}
+
 class NodeStatePublicationOwner {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
@@ -163,8 +188,11 @@ class NodeStatePublicationOwner {
     }
     const message = typeof error?.message === 'string' ? error.message : '';
     return message.includes(
-      NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_CONNECTION_TO_NODE,
+      NODE_STATE_PUBLICATION_OWNER_LITERAL.DURABLE_COMPLETION_MISSING,
     ) ||
+      message.includes(
+        NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_CONNECTION_TO_NODE,
+      ) ||
       message.includes(
         NODE_STATE_PUBLICATION_OWNER_LITERAL.CONNECTION_TO_NODE,
       ) &&
@@ -489,16 +517,7 @@ class NodeStatePublicationOwner {
           throw buildNodeStateUpdateDeliveryError(transport, targetAddress);
         }
         const durableCompletion =
-          answer?.completionKind ===
-            CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION &&
-          answer?.completionCompleted === true;
-        if (options.requireDurableCompletion === true && !durableCompletion) {
-          const completionError = new Error(
-            NODE_STATE_PUBLICATION_OWNER_LITERAL.DURABLE_COMPLETION_MISSING,
-          );
-          completionError.deferRetry = true;
-          throw completionError;
-        }
+          resolveNodeStateUpdateDurableCompletion(answer, options);
 
         this.clearDeferredNodeStateUpdatePublication();
         this.logger().info(JOINING_LOG_MSG.NODE_STATE_UPDATE_SENT, {

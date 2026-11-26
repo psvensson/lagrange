@@ -804,3 +804,37 @@ test('a held local leadership transfer never blocks subsequent recovery ' +
   t.equal(coordinator.leaderPlacementCureState.inFlight, false);
   t.end();
 });
+
+test('followers on a node with an expired ready lease or non-ready connection_state are excluded from handoff targets', async (t) => {
+  const state = {
+    ...greenStubState(),
+    nodeRows: [
+      {node_id: NODE_1, status: 'active', connection_state: 'ready', ready_lease_expires_at: NOW_MS + 10_000},
+      {node_id: NODE_2, status: 'active', connection_state: 'ready', ready_lease_expires_at: NOW_MS - 1},
+      {node_id: NODE_3, status: 'active', connection_state: 'connected', ready_lease_expires_at: null},
+    ],
+  };
+  const stub = buildStubRebalancer(state);
+  stub.systemTableCache.get = (tableName, key) => {
+    if (tableName === 'partitions') {
+      return state.partitionRows.find((row) => row.partition_id === key) || null;
+    }
+    if (tableName === 'nodes') {
+      return state.nodeRows.find((row) => row.node_id === key) || null;
+    }
+    return null;
+  };
+  await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS});
+  const second = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 1});
+  t.equal(second.state, S.NO_ELIGIBLE_TARGET,
+    'must not transfer leadership to followers whose NODES rows have expired ready leases or non-ready connection_state');
+  t.equal(stub.transfers.length, 0);
+
+  state.nodeRows[1].ready_lease_expires_at = NOW_MS + 10_000;
+  await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 2});
+  const fourth = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 3});
+  t.equal(fourth.state, S.DISPATCH_HANDOFF);
+  t.equal(fourth.target.nodeId, NODE_2);
+  t.equal(stub.transfers.length, 1);
+  t.end();
+});

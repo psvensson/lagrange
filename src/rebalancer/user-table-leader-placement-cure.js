@@ -4,7 +4,10 @@ import {
   resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
 import {resolveDesiredReplicationFactor} from '../bootstrap/replication-target-authority.js';
-import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
+import {
+  normalizeNodeRow,
+  normalizeServiceRow,
+} from '../control-plane/system-row-normalizers.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {SERVICE_STATUS} from '../constants/service-status.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
@@ -16,7 +19,9 @@ import {REBALANCE_PLANNING_GATE} from './rebalancer-planning-gate-constants.js';
 import {isTargetEligibleForHandoff} from './user-table-leader-placement-revalidation.js';
 
 const {
+  COLUMN,
   EntityType,
+  STATE,
   SYSTEM_TABLE_NAME,
   TERMINAL_STATUSES,
   isTerminalReplicaOperationRecord,
@@ -31,6 +36,7 @@ const CURE_LITERAL = Object.freeze({
   ONE: 1,
   EMPTY: '',
   FINGERPRINT_SEPARATOR: ',',
+  SOURCE_AUTHORITY_UNAVAILABLE: 'source-authority-unavailable',
 });
 const MIN_SETTLED_PARTITION_COUNT = 2;
 const MIN_SURPLUS_LEADER_COUNT = 2;
@@ -433,7 +439,47 @@ function resolveSettledSystemPartitionsFromCensus(rebalancer, passCensus) {
   return settled;
 }
 
-function collectOwnVoterFollowers(rebalancer) {
+function readCachedNodeRowForHandoff(systemTableCache, nodeId) {
+  if (!systemTableCache || !nodeId) return null;
+  return systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) || null;
+}
+
+function isCachedNodeLeaseExpired(nodeRow, nowMs) {
+  if (!Object.hasOwn(nodeRow, COLUMN.READY_LEASE_EXPIRES_AT)) return false;
+  const leaseExpiresAt = nodeRow[COLUMN.READY_LEASE_EXPIRES_AT];
+  return leaseExpiresAt === null ||
+    (Number.isFinite(leaseExpiresAt) &&
+      Number.isFinite(nowMs) &&
+      leaseExpiresAt <= nowMs);
+}
+
+function isCachedNodeRowIneligible(nodeRow, nowMs) {
+  if (!nodeRow) return false;
+  const normalized = normalizeNodeRow(nodeRow);
+  if (normalized.status && normalized.status !== SERVICE_STATUS.ACTIVE) {
+    return true;
+  }
+  if (
+    normalized.connectionState &&
+    normalized.connectionState !== STATE.READY
+  ) {
+    return true;
+  }
+  return isCachedNodeLeaseExpired(nodeRow, nowMs);
+}
+
+function isCachedNodeIneligibleForHandoff(rebalancer, nodeId, nowMs) {
+  if (!nodeId) return true;
+  const liveness =
+    rebalancer?.controlPlaneReadinessService?.projectNodeLiveness?.(nodeId);
+  if (liveness?.readyNow === false) return true;
+  return isCachedNodeRowIneligible(
+    readCachedNodeRowForHandoff(rebalancer?.systemTableCache, nodeId),
+    nowMs,
+  );
+}
+
+function collectOwnVoterFollowers(rebalancer, nowMs = Date.now()) {
   const followers = [];
   for (const row of rebalancer.getCurrentReplicas()) {
     const service = normalizeServiceRow(row);
@@ -441,7 +487,8 @@ function collectOwnVoterFollowers(rebalancer) {
       service.nodeId &&
       service.nodeId !== rebalancer.nodeId &&
       service.status === SERVICE_STATUS.ACTIVE &&
-      isVoterRaftRole(service.raftRole)
+      isVoterRaftRole(service.raftRole) &&
+      !isCachedNodeIneligibleForHandoff(rebalancer, service.nodeId, nowMs)
     ) {
       const replicaId = service.serviceId || service.replicaId;
       if (replicaId) followers.push({nodeId: service.nodeId, replicaId});
@@ -477,7 +524,10 @@ const HANDOFF_REVALIDATION_DEPS = Object.freeze({
 });
 
 async function dispatchLeaderHandoff(rebalancer, decision, nowMs, options = {}) {
-  const {isCancelled = HANDOFF_NOT_CANCELLED, nowFn = Date.now} = options;
+  const {
+    isCancelled = HANDOFF_NOT_CANCELLED,
+    nowFn = Number.isFinite(options.nowMs) ? () => options.nowMs : Date.now,
+  } = options;
   if (rebalancer.isShuttingDown || isCancelled()) return;
   resolveCureState(rebalancer).lastDispatchAtMs = nowMs;
   const {entityId, replicaId} = rebalancer;
@@ -494,7 +544,10 @@ async function dispatchLeaderHandoff(rebalancer, decision, nowMs, options = {}) 
     const status = port?.readStatus();
     if (!status || status.role !== RAFT_ROLE.LEADER || status.groupId !== entityId ||
         status.replicaIdentity !== replicaId || !replicaId || targetReplicaId === replicaId) {
-      rebalancer.logger.warn(CURE_LOG_MSG.DISPATCH_FAILED, {...detail, reason: 'source-authority-unavailable'});
+      rebalancer.logger.warn(CURE_LOG_MSG.DISPATCH_FAILED, {
+        ...detail,
+        reason: CURE_LITERAL.SOURCE_AUTHORITY_UNAVAILABLE,
+      });
       return;
     }
     const admitExecution = () => !isCancelled() && isRebalancerEligibleForCure(rebalancer) &&
@@ -552,7 +605,7 @@ function evaluateSystemCohortCureForRebalancer(
     lastDispatchAtMs: cureState.lastDispatchAtMs,
     nodeId: rebalancer.nodeId,
     nowMs,
-    ownVoterFollowers: collectOwnVoterFollowers(rebalancer),
+    ownVoterFollowers: collectOwnVoterFollowers(rebalancer, nowMs),
     partitionId: rebalancer.entityId,
     previousCensusFingerprint: cureState.censusFingerprint,
     settledPartitions:
@@ -568,7 +621,7 @@ function evaluateUserTableCureForRebalancer(rebalancer, tableId, cureState, nowM
     lastDispatchAtMs: cureState.lastDispatchAtMs,
     nodeId: rebalancer.nodeId,
     nowMs,
-    ownVoterFollowers: collectOwnVoterFollowers(rebalancer),
+    ownVoterFollowers: collectOwnVoterFollowers(rebalancer, nowMs),
     partitionId: rebalancer.entityId,
     previousCensusFingerprint: cureState.censusFingerprint,
     settledPartitions,

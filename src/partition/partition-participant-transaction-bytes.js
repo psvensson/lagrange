@@ -81,6 +81,11 @@ function participantIdOf(transactionId, partitionId) {
   return `${transactionId}${BYTES.IDENTITY_SEPARATOR}${partitionId}`;
 }
 
+function beginEntryIdOf(participantId) {
+  return `${participantId}${BYTES.IDENTITY_SEPARATOR}` +
+    BYTES.BEGIN_ENTRY_SUFFIX;
+}
+
 function prepareEntryIdOf(participantId) {
   return `${participantId}${BYTES.IDENTITY_SEPARATOR}` +
     BYTES.PREPARE_ENTRY_SUFFIX;
@@ -89,6 +94,16 @@ function prepareEntryIdOf(participantId) {
 function decisionEntryIdOf(participantId, decisionDigest) {
   return [participantId, BYTES.DECISION_ENTRY_SUFFIX, decisionDigest]
     .join(BYTES.IDENTITY_SEPARATOR);
+}
+
+function unboundRollbackEntryIdOf(participantId) {
+  return `${participantId}${BYTES.IDENTITY_SEPARATOR}` +
+    BYTES.UNBOUND_ROLLBACK_ENTRY_SUFFIX;
+}
+
+function outcomeEntryIdOf(participantId) {
+  return `${participantId}${BYTES.IDENTITY_SEPARATOR}` +
+    BYTES.OUTCOME_ENTRY_SUFFIX;
 }
 
 function operationOutcomeKeyOf(participantId, ordinal) {
@@ -422,6 +437,7 @@ function isPinnedParticipantCommand(command) {
 }
 
 export {
+  beginEntryIdOf,
   buildDecisionRecord,
   buildDecisionCommand,
   buildGenerationOriginCommand,
@@ -436,8 +452,10 @@ export {
   isPinnedParticipantCommand,
   operationOutcomeKeyOf,
   operationsOf,
+  outcomeEntryIdOf,
   participantIdOf,
   preparedDigestOf,
   prepareEntryIdOf,
+  unboundRollbackEntryIdOf,
   validationTextOf,
 };

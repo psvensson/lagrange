@@ -570,6 +570,17 @@ test('one placement pass distinguishes admissions sharing a copy source and clas
   });
   const calls = [];
   const comparisons = [];
+  let rowClassifications = 0;
+  const readInputs = owner.readPassPartitionInputs.bind(owner);
+  owner.readPassPartitionInputs = (...args) => {
+    const inputs = readInputs(...args);
+    for (const input of inputs.values()) {
+      input.replicaRows = input.replicaRows.map((row) => ({
+        ...row, get isLearner() { rowClassifications++; return row.isLearner; },
+      }));
+    }
+    return inputs;
+  };
   const evaluate = owner.evaluatePassPartition.bind(owner);
   owner.evaluatePassPartition = (id, ...rest) => {
     calls.push(id);
@@ -578,11 +589,24 @@ test('one placement pass distinguishes admissions sharing a copy source and clas
   const prepare = owner.preparePassOrderedCandidates.bind(owner);
   owner.preparePassOrderedCandidates = (nodes, inputs, saturated, excluded, rank, diagnostics, preliminary) => {
     const start = calls.length;
+    const startReads = rowClassifications;
     const actual = prepare(nodes, inputs, saturated, excluded, rank, diagnostics, preliminary);
     const after = calls.length;
+    assert.equal(rowClassifications, startReads);
     const reference = prepare(nodes, inputs, saturated, excluded, rank);
+    assert.ok(rowClassifications > startReads);
+    const referenceEvaluated = calls.slice(after);
+    // Compare complete ordered candidates and wait reasons as target policy changes.
+    for (const [busy, blocked, ranking] of [
+      [new Set(), new Map(), (id) => Number(id === 'n3')],
+      [new Set(['n3']), new Map(), (id) => Number(id === 'n3')],
+      [new Set(), new Map([['n2', 'storage-pressure'], ['n3', 'storage-pressure']]), rank],
+    ]) {
+      const fast = prepare(nodes, inputs, busy, blocked, ranking, undefined, preliminary);
+      assert.deepEqual(fast, prepare(nodes, inputs, busy, blocked, ranking));
+    }
     comparisons.push({actual, reference, evaluated: calls.slice(start, after),
-      referenceEvaluated: calls.slice(after)});
+      referenceEvaluated});
     return actual;
   };
   try {
@@ -644,6 +668,28 @@ test('one placement pass distinguishes admissions sharing a copy source and clas
     assert.ok(accepted.disposition === 'ADMITTED' || accepted.busy);
     assert.equal(accepted.sourceNodeId ?? decision.activeCopies.find(
       (copy) => copy.partitionId === admitted.partition_id)?.sourceNodeId, 'n1');
+    // Both target leases expire in the next committed node answer. The full
+    // reference above rebuilds classification from this pass's authority.
+    for (const row of nodeRows.slice(1)) row[COLUMN.READY_LEASE_EXPIRES_AT] = NOW_MS - 1;
+    owner.notify(PLACEMENT_TRIGGER.RESYNC);
+    await owner.awaitCurrentWorkIdle();
+    assert.equal(ledger.db.prepare('SELECT count(*) AS n FROM replica_operations').get().n, 1);
+    assert.equal(owner.lastPlacementDecision.partitions[blockedId].copyCheck, null);
+
+    // Restore one target and raise the budget supplied to this pass. The
+    // previously source-denied partition now submits with this turn's K.
+    nodeRows[2][COLUMN.READY_LEASE_EXPIRES_AT] = NOW_MS + LEASE_MS;
+    const higher = createAdaptivePlacementBudgetController({
+      sourceWindow: {initialLimit: 2, minLimit: 2, maxLimit: 2},
+    });
+    for (const row of nodeRows) higher.recordObservation(row[COLUMN.NODE_ID], healthyObs(),
+      {nowMs: NOW_MS, notifyOnRecovery: false});
+    owner.adaptiveBudgetController = higher;
+    owner.notify(PLACEMENT_TRIGGER.RESYNC);
+    await owner.awaitCurrentWorkIdle();
+    const next = ledger.submittedStatements.find(({body}) => body.partitionId === blockedId);
+    assert.equal(next?.body.kSrc, 2);
+    assert.equal(next.body.moves[0].targetNodeId, 'n3');
     // Complete an old-tenure pass after the new tenure has published its own decision.
     const oldCustody = owner.custody;
     const entered = Promise.withResolvers();
@@ -669,6 +715,57 @@ test('one placement pass distinguishes admissions sharing a copy source and clas
     }
     assert.equal(owner.lastPlacementDecision.serviceWakes.repeatOnlyPasses, 0);
     assert.equal(owner.lastPlacementDecision.serviceWakes.adjacentRepeatedUpdates, 0);
+  } finally {
+    owner.shutdown();
+    ledger.db.close();
+  }
+});
+
+// Kept identical in the predecessor and candidate CPU seals. All warm and
+// measured wakes enter the real owner; exclude harness comparisons from timing.
+test('46-partition source-limited owner pass CPU', async (t) => {
+  const nodes = ['n1', 'n2', 'n3'].map((id) => nodeRow(id, 'host-' + id));
+  const ids = Array.from({length: 46}, (_, i) => 'tbl-cost-' + i + '-p1');
+  const services = ids.flatMap((id, i) => seededServiceRows(id).map((row, index) =>
+    i < 25 ? row : {...row, [COLUMN.NODE_ID]: nodes[index][COLUMN.NODE_ID]}));
+  const cache = createSimpleSystemCache(ids.map((id) => seededPartitionRow(id)), services);
+  const ledger = createRealSqlLedgerHarness(cache);
+  const controller = createAdaptivePlacementBudgetController({
+    sourceWindow: {initialLimit: 1, minLimit: 1, maxLimit: 1},
+  });
+  for (const row of nodes) controller.recordObservation(row[COLUMN.NODE_ID], healthyObs(),
+    {nowMs: NOW_MS, notifyOnRecovery: false});
+  const owner = createReplicaPlacementOwner({
+    nodeId: 'n1', ledgerPartitionService: ledger.service, systemTableCache: cache,
+    nodeAuthority: {subscribe: () => () => {}, scheduleRefresh() {},
+      answerCommittedNodes: () => ({state: 'ready', nodeRows: nodes, epoch: {publicationEpoch: 1},
+        formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 1}})},
+    now: () => NOW_MS, logger: ledger.service.logger, adaptiveBudgetController: controller,
+    admitPlacement: ledger.admitPlacement, releasePlacementHold: ledger.releasePlacementHold,
+  });
+  try {
+    owner.setLeader(true);
+    await owner.awaitCurrentWorkIdle();
+    const sample = async () => {
+      const before = owner.lastPlacementDecision.passSequence;
+      const cpu = process.threadCpuUsage();
+      for (let i = 0; i < 32; i++) {
+        owner.notify(PLACEMENT_TRIGGER.RESYNC);
+        await owner.awaitCurrentWorkIdle();
+      }
+      const {user, system} = process.threadCpuUsage(cpu);
+      const decision = owner.lastPlacementDecision;
+      assert.equal(decision.passSequence - before, 32);
+      const dispositions = Object.values(decision.partitions).map((row) => row.disposition);
+      assert.equal(dispositions.filter((d) => d === 'capacity_denied').length, 24);
+      assert.equal(dispositions.filter((d) => d === 'partition_busy').length, 1);
+      assert.equal(dispositions.filter((d) => d === 'NONE').length, 21);
+      return (user + system) / 32;
+    };
+    await sample();
+    const usPerPass = [];
+    for (let batch = 0; batch < 7; batch++) usPerPass.push(await sample());
+    t.diagnostic(JSON.stringify({usPerPass, passesPerBatch: 32, partitions: ids.length}));
   } finally {
     owner.shutdown();
     ledger.db.close();

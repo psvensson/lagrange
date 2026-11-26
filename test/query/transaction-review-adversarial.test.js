@@ -11,9 +11,13 @@ import {participantSetTextOf} from
   '../../src/query/distributed/distributed-transaction-participant-manifest.js';
 import {
   participantDeliveryAnswerOf,
+  participantEntryIdOf,
   preparedEvidenceOf,
 } from '../../src/query/sql-query-engine-participant-wire.js';
-import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  buildDeliveryEnvelope,
+} from '../../src/transport/transport-semantic-outcome.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const logger = {debug() {}, warn() {}, error() {}};
 const evidence = {preparedDigest: 'b'.repeat(64), prepareIndex: 3, prepareTerm: 1};
@@ -272,6 +276,9 @@ test('C56-6: uncertain BEGIN accepts an exact lost INSERT answer',
       async readAuthoritativeRows() {
         return {success: true, rows: [{...submitted}]};
       },
+      async readRows() {
+        return this.readAuthoritativeRows();
+      },
     };
     const engine = new SQLQueryEngine({
       controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
@@ -299,6 +306,9 @@ test('C56-6: uncertain BEGIN refuses conflicting immutable creation content',
         return {success: true, rows: [{...submitted,
           timeout_deadline: submitted.timeout_deadline + 1,
           transaction_mode: 'AUTOCOMMIT_STATEMENT'}]};
+      },
+      async readRows() {
+        return this.readAuthoritativeRows();
       },
     };
     const engine = new SQLQueryEngine({
@@ -558,3 +568,87 @@ async () => {
     'closeSession during in-flight BEGIN C must roll back tx C durably',
   );
 });
+
+test('review payment-25P04: participant BEGIN, unbound ROLLBACK, and TRANSACTION_OUTCOME carry deterministic entryIds and redeliver after a 5s delivery timeout',
+  async (t) => {
+    const transactionId = 'a'.repeat(32);
+    const participantId = `${transactionId}:p1`;
+    assert.equal(
+      participantEntryIdOf('BEGIN', {participantId}),
+      `${participantId}:begin`,
+    );
+    assert.equal(
+      participantEntryIdOf('ROLLBACK', {participantId}),
+      `${participantId}:rollback`,
+    );
+    assert.equal(
+      participantEntryIdOf('TRANSACTION_OUTCOME', {participantId}),
+      `${participantId}:outcome`,
+    );
+
+    const systemCache = createMockSystemCache(
+      [{table_id: 'tbl-1', table_name: 'warehouse'}],
+      [{partition_id: 'p1', table_id: 'tbl-1', table_name: 'warehouse', leader_node_id: 'node-1'}],
+      [{
+        service_id: 'p1-r1',
+        replica_id: 'p1-r1',
+        partition_id: 'p1',
+        node_id: 'node-1',
+        service_type: 'partition',
+        status: 'active',
+        raft_role: 'leader',
+        address: 'node-1/partition/p1-r1',
+      }],
+      [{node_id: 'node-1', status: 'active', connection_state: 'ready'}],
+    );
+    let deliveries = 0;
+    const messageRouter = {
+      getConnectionState: () => 'connected',
+      async deliver(_address, message) {
+        deliveries += 1;
+        if (deliveries === 1) {
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            error: 'Message timeout',
+            errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+            reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT,
+          });
+        }
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          durable: false,
+          operation: message.operation,
+          partitionId: 'p1',
+          transactionId,
+          participantId,
+          state: 'ACTIVE',
+          outcome: 'UNKNOWN',
+        });
+      },
+    };
+    const gateway = createTransactionPersistenceGateway();
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      systemCache,
+      messageRouter,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    engine.queryExecutor.leaderRetryDelayMs = 1;
+    t.after(async () => {
+      await engine.shutdown();
+      gateway.db.close();
+    });
+
+    const answer = await engine.deliverTransactionOperation('session-pay', 'p1',
+      'BEGIN', {
+        transactionId,
+        participantId,
+        commitMode: 'TWO_PHASE_COMMIT',
+        transactionEpoch: 1,
+      });
+    assert.equal(answer.success, true);
+    assert.equal(answer.state, 'ACTIVE');
+    assert.equal(deliveries, 2,
+      'BEGIN must redeliver under its deterministic entryId after a 5s MESSAGE_TIMEOUT');
+  });

@@ -43,6 +43,21 @@ import {
   isTerminalNodeLifecycleSource, NODE_LIFECYCLE_PUBLICATION_OUTCOME,
 } from './node-lifecycle-publication.js';
 
+function assertReporterHeartbeatNotDeferred(reporterResult, reporterDiagnostics) {
+  if (
+    reporterResult?.contractState !== OWNER_CONTRACT_STATE.DEFERRED &&
+    reporterResult?.completionCompleted !== false
+  ) {
+    return;
+  }
+  const deferredError = new Error(
+    HEARTBEAT_SERVICE_LITERAL.REPORTER_DURABLE_VISIBILITY_REQUIRED,
+  );
+  deferredError.deferRetry = true;
+  deferredError.publicationDiagnostics = reporterDiagnostics;
+  throw deferredError;
+}
+
 class HeartbeatServicePublicationMethods {
   shouldTreatEndpointHeartbeatWriteAsDeferred(resultOrError, writeOptions) {
     if (writeOptions?.deferOnPressure !== true || !resultOrError) return false;
@@ -431,6 +446,7 @@ class HeartbeatServicePublicationMethods {
         this.recordReporterHeartbeatSuccess(updateRow, now, reporterDiagnostics);
         return;
       }
+      assertReporterHeartbeatNotDeferred(reporterResult, reporterDiagnostics);
       if (
         this.verifyReporterHeartbeatCompletion(reporterResult, now, {
           expectedStatus: updateRow.status,

@@ -687,8 +687,8 @@ function openParticipantSession(service, identity, base) {
   const schemaVersionBase = resolveTablePkMetadata(service).schemaVersion;
   const session = {
     identity: Object.freeze({...identity}), operations: [], encodedOperations: [],
-    compiledOperations: [], touchedRowKeys: new Set(), hasUnscopedWrite: false,
-    stagedLockClaims: {rowKeys: new Set(), hasUnscopedWrite: false},
+    compiledOperations: [], stagedResultsByEntryId: new Map(), touchedRowKeys: new Set(),
+    hasUnscopedWrite: false, stagedLockClaims: {rowKeys: new Set(), hasUnscopedWrite: false},
     bytes: 0, generationBase: base.generationBase, lastValidatedGeneration: base.generationBase,
     lastValidatedSchemaVersion: null, schemaVersionBase, originIndex: base.originIndex,
     startedAt: service.timeSource.now(), phase: PHASE.ACTIVE, sealed: null,

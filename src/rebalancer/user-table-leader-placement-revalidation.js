@@ -3,11 +3,16 @@ import {resolveDesiredReplicationFactor} from '../bootstrap/replication-target-a
 
 const MIN_SETTLED_PARTITION_COUNT = 2;
 
-function hasMatchingActiveVoterFollower(collectOwnVoterFollowers, rebalancer, target) {
+function hasMatchingActiveVoterFollower(
+  collectOwnVoterFollowers,
+  rebalancer,
+  target,
+  nowMs,
+) {
   if (!target?.nodeId || !target?.replicaId) {
     return false;
   }
-  return collectOwnVoterFollowers(rebalancer).some(
+  return collectOwnVoterFollowers(rebalancer, nowMs).some(
     (follower) =>
       follower.nodeId === target.nodeId &&
       follower.replicaId === target.replicaId,
@@ -19,13 +24,14 @@ function isSystemCohortStillEligibleForHandoff(
   partitionRow,
   decision,
   freshCensus,
+  nowMs,
   deps,
 ) {
   const {replicationFactor} = resolveDesiredReplicationFactor(partitionRow);
   const cohort = deps.buildSystemCohortCensus({
     eligibleVoterHosts: freshCensus.systemEligibleVoterHosts,
     nodeId: rebalancer.nodeId,
-    ownVoterFollowers: deps.collectOwnVoterFollowers(rebalancer),
+    ownVoterFollowers: deps.collectOwnVoterFollowers(rebalancer, nowMs),
     partitionId: rebalancer.entityId,
     settledPartitions:
       deps.resolveSettledSystemPartitionsFromCensus(rebalancer, freshCensus),
@@ -104,6 +110,7 @@ function isTargetEligibleForHandoff(rebalancer, decision, nowMs, deps) {
       deps.collectOwnVoterFollowers,
       rebalancer,
       decision?.target,
+      nowMs,
     )
   ) {
     return false;
@@ -118,6 +125,7 @@ function isTargetEligibleForHandoff(rebalancer, decision, nowMs, deps) {
       partitionRow,
       decision,
       freshCensus,
+      nowMs,
       deps,
     );
   }
