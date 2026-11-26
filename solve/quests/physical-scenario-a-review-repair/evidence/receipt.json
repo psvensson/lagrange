@@ -5,6 +5,17 @@
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": false,
+      "campaign": "bench-review-c0a-three-1538",
+      "sourceCommit": "c0a6dcc12b5debf5b7fb3be6dfb06c80ca762a38",
+      "observed": "9/9 semantic cases passed; 43/100 measured commits; final state unobserved; admission failed",
+      "evidenceFile": "bench-review-c0a-three-1538/result.json",
+      "evidenceSha256": "4d6b8fce21192a104b8e7699339b21bafe784475fa68cbde411bca713d55ae21"
+    }
+  ],
+  "priorObservations": [
+    {
+      "id": "scenario-a-three-physical-hosts",
+      "passed": false,
       "observed": "dataset-preparation-failed; no-committed-operations",
       "campaign": "bench-20261126T130159Z-501b4c",
       "endpoint": {

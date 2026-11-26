@@ -1354,12 +1354,12 @@ test('a stale executing CREATE takes over only after the durable winner lease ex
   t.equal(gateway.rows.get(key).row_version, completed.row_version);
 });
 
-test('index continuation refuses a detached gateway despite a retained intent', async (t) => {
+test('index continuation refuses malformed local leader evidence despite a retained intent', async (t) => {
   const service = createService(createGateway(), []);
   t.teardown(() => service.shutdown());
   const owner = service.schemaProvisioningJobOwner;
   await owner.insertOrAttach(canonicalizeSchemaProvisioningIntent(createAst()));
-  service.setControlPlaneSystemTableGateway(null);
+  owner.recoveryLeaders()[0].executeLocalQuery = async () => ({rows: []});
   const unavailable = {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE};
   await t.rejects(owner.findSucceededGlobalIndexIntent('users', 1), unavailable);
 });
@@ -1594,4 +1594,30 @@ test('one lease scan continues discovering independent work while a recovered jo
   t.same(attempts, ['users', 'orders']);
   await service.shutdown();
   t.equal(clock.timers.filter((timer) => !timer.cleared).length, 0);
+});
+
+test('idle READY nodes only read indexed pages on the leading shard and a new tenure', async (t) => {
+  const gateway = createGateway();
+  const clock = createServeRefreshClock();
+  const timing = {schemaProvisioningLeaseMs: 2000,
+    schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+    schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout};
+  const services = Array.from({length: 3}, () => createService(gateway, [], timing));
+  t.teardown(() => Promise.all(services.map((service) => service.shutdown())));
+  const owners = services.map((service) => service.schemaProvisioningJobOwner);
+  const leaders = owners.map((owner) => owner.recoveryLeaders()[0]);
+  let elected = 0;
+  const counts = [0, 0, 0];
+  for (const [i, owner] of owners.entries()) {
+    owner.recoveryLeaders = () => elected === i ? [leaders[i]] : [];
+    const read = leaders[i].executeLocalQuery.bind(leaders[i]);
+    leaders[i].executeLocalQuery = (...args) => { counts[i]++; return read(...args); };
+  }
+  await Promise.all(services.map((service) => service.resumeDurableProvisioningJobs()));
+  await clock.advance(2000);
+  await clock.advance(2000);
+  t.same(counts, [2, 0, 0], 'two empty status pages, then zero reads');
+  elected = 2;
+  await clock.advance(2000);
+  t.same(counts, [2, 0, 2], 'a leader change inventories despite equal counters');
 });

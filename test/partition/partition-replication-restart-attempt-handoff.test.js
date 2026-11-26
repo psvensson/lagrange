@@ -1,5 +1,6 @@
 import {admittedMirrorSource, sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
-import {replicateSourceMirrorRetentionCustody} from '../../src/partition/partition-mirror-effect-retention.js';
+import {redriveFailedMirrorRelease} from '../../src/partition/partition-mirror-custody-lifecycle.js';
+import {readDurableMirrorRetentionCustodyIn, replicateSourceMirrorRetentionCustody} from '../../src/partition/partition-mirror-effect-retention.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {PARTITION_SERVICE_SHARED} from
@@ -162,10 +163,11 @@ function buildOwner(store, source, startDelivery) {
   return workflow;
 }
 
-async function registerRealStartAuthorization(source, family, metadata) {
+async function registerRealStartAuthorization(source, family, metadata, children = []) {
   const store = openRecordStore({partitions: [
     {partition_id: SOURCE},
     {partition_id: 'users-p2'},
+    ...children,
   ]});
   let workflow;
   if (family === 'split') {
@@ -426,6 +428,90 @@ test('duplicate catch-up readiness re-enters the canonical split and merge ' +
     t.equal(reactions, 1,
       `${family}: canonical cutover owner reacts exactly once`);
   }
+});
+
+test('a stopped split replays the same durable checkpoint when the final child route returns', async (t) => {
+  const columns = [{name: 'id', type: 'TEXT', primaryKey: true}];
+  const source = await admittedMirrorSource(t, SOURCE, columns);
+  const plan = splitMetadata();
+  const [left, right] = plan.targetPartitionIds;
+  const target = await admittedMirrorSource(t, left, columns);
+  await resumeFixtureParticipantAdmission(source);
+  await resumeFixtureParticipantAdmission(target);
+  const {workflow, store, metadata} = await registerRealStartAuthorization(source,
+    'split', plan, plan.targetPartitionIds.map((partition_id) => ({partition_id, partition_version: 2})));
+  const project = () => source.systemTableCache.applySystemTableChange(
+    'tables', 'UPDATE', store.tablesRow());
+  project();
+  for (const id of plan.targetPartitionIds) {
+    source.systemTableCache.applySystemTableChange('partitions', 'INSERT', store.partitionRow(id));
+  }
+  let routeRestored = false;
+  let denied = 0;
+  workflow.resolveSplitChildLeaderRoutingEvidence = (id) => {
+    const finalCheck = store.tablesRow().partition_transition_state === PARTITION_TRANSITION_STATE.SPLIT_CATCHUP;
+    const routable = routeRestored || id !== right || !finalCheck;
+    if (!routable) denied++;
+    return {leaderNodeId: 'node-a', routableNodeIds: routable ? ['node-a'] : []};
+  };
+  let snapshots = 0;
+  const openSnapshot = source.openSplitSnapshotDatabase.bind(source);
+  source.openSplitSnapshotDatabase = () => { snapshots++; return openSnapshot(); };
+  let releasedAfterReplay = false;
+  const replayed = [];
+  source.sqlQueryEngine.queryExecutor = {executeOnPartition: async (id, sql, params, _r, _p, _g, options) => {
+    t.equal(id, left, 'post-checkpoint write is routed to its actual child');
+    t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken,
+      metadata.workflowFenceToken, 'pin still held at replay delivery');
+    const result = await target.executeQuery(sql, params, options);
+    replayed.push(result.success);
+    return result;
+  }};
+  store.observers.push(() => {
+    const raw = parsePartitionTransition(store.tablesRow())?.metadata;
+    if (raw?.mirrorCustodyGrants?.some((g) =>
+      g.partitionId === SOURCE && g.fence === metadata.workflowFenceToken && g.release)) {
+      releasedAfterReplay ||= replayed.length === 1 &&
+        readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken === metadata.workflowFenceToken;
+    }
+  });
+  const start = () => source.handleStartSplitReplication({tableId: source.tableId,
+    tableName: source.tableName, transitionMetadata: metadata});
+  t.equal((await start()).success, true);
+  await source.splitReplicationRun;
+  const stopped = source.splitReplication;
+  t.equal(stopped.quiesced, true);
+  t.ok(denied > 0, 'readiness refused inside the final cutover turn');
+  t.equal(recordSnapshot(store).sourceStatus, SPLIT_ACK_STATUS.CATCHUP_READY);
+  t.equal(recordSnapshot(store).state, PARTITION_TRANSITION_STATE.SPLIT_CATCHUP);
+  t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken, metadata.workflowFenceToken);
+  t.equal((await source.executeQuery('INSERT INTO users (id) VALUES (?)', ['a'],
+    {entryId: 'write-during-final-route-refusal'})).success, true);
+  t.same(target.db.prepare('SELECT id FROM users').all(), []);
+  const gate = deferred();
+  const read = workflow.readAuthoritativeWorkflowRecord.bind(workflow);
+  let heldReads = 0;
+  workflow.readAuthoritativeWorkflowRecord = async (...args) => {
+    heldReads++;
+    await gate.promise;
+    return read(...args);
+  };
+  routeRestored = true;
+  project();
+  redriveFailedMirrorRelease(source);
+  await turns(3);
+  const cadenceStarted = Boolean(stopped.resumePromise);
+  const duplicate = start();
+  gate.resolve();
+  t.equal(cadenceStarted, true, 'ordinary recovery already claimed the stopped worker');
+  t.equal((await duplicate).success, true);
+  await source.splitReplicationRun;
+  t.ok(heldReads > 0);
+  t.same(replayed, [true], 'one resumed worker delivered the retained write');
+  t.same(target.db.prepare('SELECT id FROM users').all(), [{id: 'a'}]);
+  t.equal(readDurableMirrorRetentionCustodyIn(source.db), null, 'terminal cleanup committed release');
+  t.equal(releasedAfterReplay, true, 'committed terminal grant authorized release after child delivery');
+  t.equal(snapshots, 1, 'same-fence continuation did not take another snapshot');
 });
 
 test('an accepted split START whose answer is lost stays on its durable ' +

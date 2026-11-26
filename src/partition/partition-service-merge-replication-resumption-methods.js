@@ -8,7 +8,6 @@
  * the split resumption in partition-service-split-mirror-queue-methods.js).
  */
 
-import {isStoppedMirrorWorker} from './partition-mirror-custody-lifecycle.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   PARTITION_TRANSITION_STATE,
@@ -40,12 +39,10 @@ class PartitionServiceMergeReplicationResumptionMethods {
    * @private
    */
   async startOrResumeMergeReplicationFromDurable() {
-    if (this.isShutdown || this.role !== RAFT_ROLE.LEADER || this.splitReplication) return false;
-    const previous = this.mergeReplication;
-    if (previous && !isStoppedMirrorWorker(previous)) {
-      if (previous.terminal || previous.quiescing || previous.phase === PARTITION_TRANSITION_STATE.FAILED) return false;
-      if (previous.startPromise) return (await previous.startPromise)?.success === true;
-      return true;
+    if (this.role !== RAFT_ROLE.LEADER ||
+        this.mergeReplication ||
+        this.splitReplication) {
+      return Boolean(this.mergeReplication);
     }
     const transition = findDurableMirrorTransitionForService(this, {
       activeStates: [
@@ -64,8 +61,7 @@ class PartitionServiceMergeReplicationResumptionMethods {
           retiringSourceStatus: source.participantStatus} : normalized;
       },
     });
-    if (!transition || (previous &&
-        !this.isSameMergeReplication(previous.metadata, transition.metadata))) {
+    if (!transition) {
       return false;
     }
     // A source that already finished mirroring is ending with its group
@@ -104,7 +100,6 @@ class PartitionServiceMergeReplicationResumptionMethods {
         workflowId: transition.metadata.workflowId,
       },
     );
-    if (previous) this.mergeReplication.predecessors = {merge: previous};
     const response = await startMergeReplicationHandleForService(
       this, this.mergeReplication);
     return response.success === true;

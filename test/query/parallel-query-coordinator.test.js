@@ -7,6 +7,8 @@ import {PartitionQueryMetrics, QueryExecutionMetrics} from '../../src/query/dist
 import {DistributedWriteCoordinator} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {shutdownAll, startLeader} from '../test-helpers/participant-transaction-fixture.js';
+import {PARTITION_COMMITTED_COMMAND_OUTCOME} from '../../src/partition/partition-service-constants.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
   '../../src/partition/partition-service-remote-query-methods.js';
@@ -617,6 +619,8 @@ function createDeniedPartitionExecutorFixture({
     deniedNodeId,
     denialReasons,
     readinessDimension,
+    readinessService,
+    systemCache,
   };
 }
 
@@ -675,6 +679,119 @@ for (const redirect of [false, true]) {
           ['node-live/partition/p1', 'node-next/partition/p1'] : ['node-live/partition/p1']);
       });
   }
+}
+
+for (const loseReply of [false, true]) {
+  test(`overlapping writes preserve success and ${loseReply ? 'unknown' : 'committed failure'} during route backoff`,
+    async (t) => {
+      const {executor, systemCache, readinessService, deniedNodeId} = createDeniedPartitionExecutorFixture();
+      const coordinator = executor.parallelQueryCoordinator;
+      coordinator.maxParallelPartitions = 3;
+      systemCache.partitions.push({partition_id: 'p3', leader_node_id: 'node-live'});
+      systemCache.services.push({...systemCache.services[0], partition_id: 'p3',
+        service_id: 'p3-r1'});
+      for (const service of systemCache.services) {
+        service.address = service.node_id + '/partition/' + service.service_id;
+      }
+      const endpoints = new Map();
+      const leaders = new Map();
+      const answers = new Map();
+      const deliveries = [];
+      const bothAnswered = Promise.withResolvers();
+      const backoff = Promise.withResolvers();
+      const releaseBackoff = Promise.withResolvers();
+      const releaseReplies = Promise.withResolvers();
+      const retryFinished = Promise.withResolvers();
+      const token = new CancellationToken();
+      let running;
+      try {
+        for (const id of ['p1', 'p3']) {
+          const {leader} = await startLeader({nodeId: 'node-live', replicaId: id + '-r1',
+            replicaIds: [id + '-r1']}, id);
+          leaders.set(id, leader);
+          endpoints.set(leader.nodeId + '/partition/' + leader.replicaId, leader);
+          leader.controllablePort.setProposeHandler(async (entry) => {
+            leader.controllablePort.commit(entry);
+          });
+        }
+        if (!loseReply) leaders.get('p3').db.prepare(
+          'INSERT INTO test_table (id, value) VALUES (?, ?)').run('key', 'original');
+
+        executor.delay = async () => {
+          backoff.resolve();
+          await releaseBackoff.promise;
+        };
+        const execute = coordinator.partitionQueryExecutor;
+        coordinator.partitionQueryExecutor = async (...args) => {
+          try {
+            return await execute(...args);
+          } finally {
+            if (args[1] === 'p2') retryFinished.resolve();
+          }
+        };
+        executor.messageRouter.deliver = async (address, request) => {
+          deliveries.push({address, cancelled: token.isCancelled()});
+          const leader = endpoints.get(address);
+          if (!leader) throw new Error('Unexpected delivery to ' + address);
+          const id = leader.partitionId;
+          const answer = await leader.handleRemoteQuery(request);
+          answers.set(id, {answer, entryId: request.entryId});
+          if (answers.size === 2) bothAnswered.resolve();
+          await releaseReplies.promise;
+          if (id === 'p3' && loseReply) throw new Error('connection closed before reply');
+          return buildDeliveryEnvelope({acknowledged: true}, answer);
+        };
+        running = coordinator.executeParallel('INSERT INTO test_table (id, value) VALUES (?, ?)',
+          ['p1', 'p2', 'p3'], ['key', 'written'], {forRead: false, cancellationToken: token,
+            routingReadinessDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE, timeoutMs: 5000});
+        await Promise.race([Promise.all([bothAnswered.promise, backoff.promise]),
+          running.then(() => { throw new Error('fanout settled before overlap'); })]);
+        t.equal(coordinator.activeConnections, 3);
+        for (const [id, leader] of leaders) {
+          const failed = id === 'p3' && !loseReply;
+          const {entryId, answer} = answers.get(id);
+          t.equal(answer.success, !failed);
+          const stored = leader.db.prepare('SELECT outcome FROM _partition_statement_outcomes ' +
+            'WHERE entry_key = ?').get('entry:' + entryId);
+          t.equal(stored?.outcome, failed ? PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED :
+            PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED);
+          t.equal(leader.db.prepare('SELECT value FROM test_table WHERE id = ?').get('key')?.value,
+            failed ? 'original' : 'written');
+        }
+        token.cancel('caller stopped');
+        readinessService.setAnswer(deniedNodeId, serveEligibilityAnswer(true));
+        releaseBackoff.resolve();
+        releaseReplies.resolve();
+        const {results} = await running;
+        const drainTimeout = setTimeout(() => retryFinished.reject(
+          new Error('cancelled partition executor did not exit')), 5000);
+        try {
+          await retryFinished.promise;
+        } finally {
+          clearTimeout(drainTimeout);
+        }
+        t.match(results[0], {partitionId: 'p1', success: true, changes: 1});
+        t.match(results[1], {partitionId: 'p2', success: false, error: 'caller stopped'});
+        t.notOk(results[1].failureCode);
+        const {entryId, answer} = answers.get('p3');
+        t.match(results[2], {partitionId: 'p3', success: false, entryId, ...(loseReply ?
+          {failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+            spentWait: {deliveries: 1, lostAnswers: 1}} :
+          {committed: true, failureCode: answer.failureCode, error: answer.error})});
+        t.same(deliveries.map(({address}) => address).sort(), ['node-live/partition/p1-r1', 'node-live/partition/p3-r1']);
+        t.notOk(deliveries.some(({cancelled}) => cancelled));
+        t.equal(coordinator.activeConnections, 0);
+      } finally {
+        token.cancel('cleanup');
+        releaseBackoff.resolve();
+        releaseReplies.resolve();
+        try {
+          await running;
+        } finally {
+          await shutdownAll(...leaders.values());
+        }
+      }
+    });
 }
 
 test('fan-out returns a committed reply after the partition deadline', async (t) => {

@@ -280,6 +280,17 @@ class SchemaProvisioningJobRepository {
     return {accepted: true, workflow: nextWorkflow};
   }
 
+  async findRecoveryRow(leader, tableIdentityKey) {
+    const tenure = leader.leadershipTenure;
+    const result = await leader.executeLocalQuery(SELECT_BY_IDENTITY, [tableIdentityKey]);
+    if (!tenure || tenure !== leader.leadershipTenure || result?.rowSetComplete !== true ||
+        result.partitionId !== leader.partitionId) throw createPersistenceUnavailableError();
+    const [row] = authoritativeRows(result);
+    if (row && row.table_identity_key !== tableIdentityKey) throw createPersistenceUnavailableError();
+    if (row) this.rowsByJobId.set(row.job_id, row);
+    return row || null;
+  }
+
   async listRecoveryPage(leader, status, cursor) {
     // The existing (status, updated_at) SQLite index ends in rowid. Seek
     // backwards so later appends cannot perpetually extend a pass.

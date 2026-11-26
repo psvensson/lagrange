@@ -1,10 +1,12 @@
-import {isStoppedMirrorWorker, reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
+import {authoritativeRecordOf} from './managed-workflow-record-store.js';
+import {parseTablePartitionTransition} from './partition-transition-row.js';
+import {isStoppedSplitWorker, reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   GROUP_RETIREMENT_KIND,
   retiringSourceStatus,
 } from './group-retirement-evidence.js';
-import {SPLIT_ACK_STATUS} from './split-ack-constants.js';
+import {SPLIT_ACK_STATUS, SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 import {
   findDurableMirrorTransitionForService,
   resolveSnapshotBarrierIndex,
@@ -29,6 +31,38 @@ const {
   RaftRole,
   PARTITION_SPLIT_MIRROR_ORIGIN,
 } = PARTITION_SERVICE_SHARED;
+
+async function resumeStoppedSplit(service, previous) {
+  const owner = service.sqlQueryEngine.managedSplitWorkflow;
+  const row = await authoritativeRecordOf(owner, service.tableId);
+  const transition = parseTablePartitionTransition(row);
+  if (service.isShutdown || service.role !== RaftRole.LEADER ||
+      service.splitReplication !== previous || service.mergeReplication ||
+      row?.table_id !== service.tableId || !transition) return false;
+  const raw = transition.metadata;
+  const metadata = service.normalizeSplitTransitionMetadata(raw);
+  if (!service.isSameSplitReplication(previous.metadata, metadata) ||
+      raw.mirrorExecutionEnded || !raw.mirrorCustodyGrants?.some((grant) =>
+        grant.partitionId === service.partitionId && grant.fence === metadata.workflowFenceToken &&
+        grant.acquired && !grant.release)) return false;
+  // The participant checkpoint can land before the phase advance. In either
+  // case replay starts at the committed cursor, including writes made while stopped.
+  const participant = raw.participants?.[SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION];
+  if (participant?.fenceToken !== metadata.workflowFenceToken ||
+      (participant.status !== SPLIT_ACK_STATUS.CATCHUP_READY &&
+       participant.status !== SPLIT_ACK_STATUS.CUTOVER_APPLIED) ||
+      !Number.isSafeInteger(metadata.snapshotBarrierIndex) ||
+      !Number.isSafeInteger(metadata.replayWatermarkIndex)) return false;
+  const phase = transition.state === PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING ?
+    PARTITION_TRANSITION_STATE.SPLIT_CATCHUP : transition.state;
+  if (phase !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP &&
+      phase !== PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) return false;
+  const handle = service.reconstructSplitExecutionState({phase, metadata});
+  if (!handle) return false;
+  handle.predecessors = {split: previous};
+  await startSplitReplicationHandleForService(service, handle);
+  return (await service.waitForSplitReplicationStart(handle, true)).success === true;
+}
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -148,10 +182,15 @@ class PartitionServiceSplitMirrorQueueMethods {
   async startOrResumeSplitReplicationFromDurable() {
     if (this.isShutdown || this.role !== RaftRole.LEADER || this.mergeReplication) return false;
     const previous = this.splitReplication;
-    if (previous && !isStoppedMirrorWorker(previous)) {
-      if (previous.terminal || previous.quiescing || previous.phase === PARTITION_TRANSITION_STATE.FAILED) return false;
-      if (previous.startPromise) return (await previous.startPromise)?.success === true;
-      return true;
+    if (previous) {
+      if (isStoppedSplitWorker(previous)) {
+        previous.resumePromise ??= resumeStoppedSplit(this, previous)
+          .finally(() => { previous.resumePromise = null; });
+        return previous.resumePromise;
+      }
+      if (previous.terminal || previous.quiescing ||
+          previous.phase === PARTITION_TRANSITION_STATE.FAILED) return false;
+      return (await this.waitForSplitReplicationStart(previous, true)).success === true;
     }
     const transition = findDurableMirrorTransitionForService(this, {
       activeStates: [
@@ -166,8 +205,7 @@ class PartitionServiceSplitMirrorQueueMethods {
         retiringSourceStatus(GROUP_RETIREMENT_KIND.SPLIT_SOURCE, rawMetadata,
           this.partitionId)),
     });
-    if (!transition || (previous &&
-        !this.isSameSplitReplication(previous.metadata, transition.metadata))) {
+    if (!transition) {
       return false;
     }
     // A source that already finished mirroring is ending with its group
@@ -191,7 +229,6 @@ class PartitionServiceSplitMirrorQueueMethods {
     if (!reconstructed) {
       return false;
     }
-    if (previous) this.splitReplication.predecessors = {split: previous};
     const response = await startSplitReplicationHandleForService(
       this, reconstructed);
     return response.success === true;

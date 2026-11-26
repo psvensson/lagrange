@@ -1493,3 +1493,41 @@ test('Production construction 10 (4B): crash immediately after schema job SUCCEE
     }
   });
 });
+
+test('warm index owner queues catalog CDC and catches a missed listener on the shared discovery wake',
+  async (t) => {
+    await withFoundingPlacementEnvironment(async ({engine, gateway}) => {
+      const indexService = engine.indexService;
+      const owner = engine.tableCreationService.schemaProvisioningJobOwner;
+      const timers = [];
+      owner.retrySetTimeoutFn = (callback) => { const timer = {callback}; timers.push(timer); return timer; };
+      owner.retryClearTimeoutFn = () => {};
+      await engine.activateDistributedTransactionRecovery();
+      await engine.tableCreationService.resumeDurableProvisioningJobs();
+      await owner.indexRecovery;
+      const reads = [];
+      const find = owner.findSucceededGlobalIndexIntent.bind(owner);
+      owner.findSucceededGlobalIndexIntent = (dataset, generation) => {
+        reads.push([dataset, generation]);
+        return find(dataset, generation);
+      };
+      const insert = (name) => gateway.insertSystemTableRow(TABLES.INDICES, {
+        table_id: 'users', table_name: 'users', index_id: name + '-gen2', index_name: name,
+        is_global: 1, index_type: 'BTREE', column_names: '["email"]', state: GLOBAL_INDEX_STATE.CREATING,
+        created_at: 1, updated_at: 1,
+      });
+      await insert('observed');
+      await new Promise((resolve) => setImmediate(resolve));
+      t.same(reads, [['__idx_users_observed', 2]], 'CDC alone enqueued the exact generation');
+      indexService._detachSystemTableCacheListener();
+      await insert('missed');
+      indexService._attachSystemTableCacheListener();
+      t.equal(reads.length, 1, 'no listener delivered the second key');
+      t.equal(timers.length, 1, 'both discoveries share the ordinary owner wake');
+      timers[0].callback();
+      await new Promise((resolve) => setImmediate(resolve));
+      await owner.indexRecovery;
+      t.ok(reads.some(([dataset, gen]) => dataset === '__idx_users_missed' && gen === 2),
+        'the same warm queue reconsidered the missed catalog change');
+    });
+  });

@@ -156,7 +156,8 @@ async function runSplitCutoverPhase(owner, handle, metadata) {
   handle.terminal = cleanupAck?.splitSourceRetired === true;
   const accepted = cleanupAck?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
     cleanupAck?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
-  if (accepted) await reconcileFailedMirrorCustody(owner);
+  if (!accepted) throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+  await reconcileFailedMirrorCustody(owner);
 }
 
 class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {

@@ -178,6 +178,8 @@ async function runRecoveredGsiProvisioningOnce(indexService, context) {
   const coordinator = indexService.getGlobalIndexCoordinator();
   let intent = context.intent;
   if (!intent) {
+    const observed = await coordinator.refreshCatalogRecord(context.name);
+    if (!observed.available) return null;
     const record = coordinator.catalog.get(context.name);
     if (!record || !INCOMPLETE_GSI_STATES.has(record.state) ||
         record.index_id !== context.indexId) return null;
@@ -430,6 +432,15 @@ const indexServiceGlobalMethods = {
     const jobOwner = this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
     if (!jobOwner || this.shuttingDown) return [];
     if (!this.initialized) await this.initialize({skipSchemaJobRecovery: true});
+    // A cache apply can outlive its listener. Reuse catalog hydration when
+    // the indices projection changed, including cache replacement.
+    const cache = this.systemTableCache;
+    const version = cache?.getTableMutationVersion?.(TABLES.INDICES);
+    if (cache !== this._recoveryCache || version !== this._recoveryIndicesVersion) {
+      this.syncGlobalIndexesFromCache();
+      this._recoveryCache = cache;
+      this._recoveryIndicesVersion = version;
+    }
     const pending = this._incompleteGlobalIndexes;
     if (!pending?.size) return [];
     const queue = ensureGsiRecoveryQueue(this);
@@ -454,7 +465,7 @@ const indexServiceGlobalMethods = {
       const changed = this._incompleteGlobalIndexes.get(metadata.indexName) !== metadata.indexId;
       this._incompleteGlobalIndexes.set(metadata.indexName, metadata.indexId);
       const owner = this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
-      if (changed && this.initialized && !this.shuttingDown && owner?.ownsRecoveryDiscovery()) {
+      if (changed && this.initialized && !this.shuttingDown && owner?.ownsRecoveryDiscovery?.()) {
         ensureGsiRecoveryQueue(this).enqueue(metadata.indexId, GSI_RECOVERY_REASON,
           {name: metadata.indexName, indexId: metadata.indexId});
       }

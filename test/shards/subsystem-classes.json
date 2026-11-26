@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 27,
     "placement-rebalance": 313,
-    "query-sql": 226,
+    "query-sql": 227,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2829,
-  "digest": "fnv1a32-75f312b0",
+  "censusSize": 2830,
+  "digest": "fnv1a32-06c05832",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a160763f",
+  "observationDigest": "fnv1a32-931efeee",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1170,6 +1170,7 @@
     "test/integration/developer-journey-j1-j2-j3.integration.test.js": "services-runtime",
     "test/integration/failure-scenarios.integration.test.js": "distributed-harness",
     "test/integration/fresh-formation-without-admin-polling.integration.test.js": "admin-diagnostics",
+    "test/integration/global-index-warm-owner-loss.integration.test.js": "query-sql",
     "test/integration/http-to-call-composition.integration.test.js": "services-runtime",
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": "storage-raft",
     "test/integration/lagrange-server-npm-package.integration.test.js": "release-packaging",
@@ -11770,6 +11771,16 @@
         "NODE_OPTIONS"
       ]
     },
+    "test/integration/global-index-warm-owner-loss.integration.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/integration/helpers/embedded-cluster-harness.js",
+        "test/integration/helpers/embedded-node-worker.js",
+        "test/integration/helpers/gsi-owner-loss-worker.js"
+      ]
+    },
     "test/integration/http-to-call-composition.integration.test.js": {
       "files": [
         "src/bootstrap/shared/call-cell-invocation-setup.js",
@@ -17912,12 +17923,27 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/admin-query-result-message-envelope.js",
         "src/admin/static/playback-viewer.html",
+        "src/bootstrap/shared/partition-service-construction.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-remote-query-methods.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/topology/node-host-identity.js",
         "src/transport/transport-semantic-outcome.js",
         "src/utils/canonical-json-data.js",
@@ -17927,7 +17953,9 @@
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
-        "test/distributed/harness/startup-readiness-evidence.js"
+        "test/distributed/harness/startup-readiness-evidence.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ],
       "directories": [
         "solve/epics/raft-rs-full-cutover"

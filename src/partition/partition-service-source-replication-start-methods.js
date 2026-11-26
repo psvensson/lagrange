@@ -1,6 +1,6 @@
 import {readDurableMirrorRetentionCustodyIn, replicateSourceMirrorRetentionCustody} from './partition-mirror-effect-retention.js';
 import {canAssumeMirrorCustody} from './partition-mirror-custody-codec.js';
-import {isStoppedMirrorWorker, reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
+import {isStoppedSplitWorker, reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {ERRORS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
@@ -105,6 +105,11 @@ function mergeStartIsDuplicate(service, metadata) {
   const current = service.mergeReplication;
   return Boolean(current) &&
     service.isSameMergeReplication(current.metadata, metadata);
+}
+
+function acceptsSourceWork(handle) {
+  return !handle.terminal && !handle.quiescing &&
+    handle.phase !== PARTITION_TRANSITION_STATE.FAILED;
 }
 
 function predecessorAllowsStart(previous, metadata) {
@@ -236,15 +241,11 @@ class PartitionServiceSourceReplicationStartMethods {
     if (followerResponse) return followerResponse;
     if (splitStartIsDuplicate(this, metadata)) {
       const current = this.splitReplication;
-      if (isStoppedMirrorWorker(current)) {
+      if (isStoppedSplitWorker(current)) {
         return await this.startOrResumeSplitReplicationFromDurable() ? {success: true} :
           rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
       }
-      if (current.terminal || current.quiescing || current.phase === PARTITION_TRANSITION_STATE.FAILED) {
-        return rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
-      }
-      return invokeStartMethod(this, START_METHOD.WAIT_SPLIT,
-        this.splitReplication);
+      return invokeStartMethod(this, START_METHOD.WAIT_SPLIT, current, true);
     }
     const predecessors = captureAdmissiblePredecessors(this, metadata);
     if (!predecessors) {
@@ -301,6 +302,7 @@ class PartitionServiceSourceReplicationStartMethods {
       .catch(async (error) => {
         handle.terminal = true;
         if (this.splitReplication === handle) {
+          handle.failedPhase = handle.phase;
           handle.lastError = error.message;
           handle.phase = PARTITION_TRANSITION_STATE.FAILED;
         }
@@ -314,10 +316,10 @@ class PartitionServiceSourceReplicationStartMethods {
     return {success: true};
   }
 
-  async waitForSplitReplicationStart(handle) {
+  async waitForSplitReplicationStart(handle, requireLive = false) {
     const response = handle.startPromise ? await handle.startPromise : null;
     return response?.success === true && handle.authorized === true &&
-      handle.runPromise && this.splitReplication === handle &&
+      handle.runPromise && this.splitReplication === handle && (!requireLive || acceptsSourceWork(handle)) &&
       this.isShutdown !== true && this.role === RaftRole.LEADER ? response :
       rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
   }
@@ -350,15 +352,7 @@ class PartitionServiceSourceReplicationStartMethods {
     }
     if (mergeStartIsDuplicate(this, metadata)) {
       const current = this.mergeReplication;
-      if (isStoppedMirrorWorker(current)) {
-        return await this.startOrResumeMergeReplicationFromDurable() ? {success: true} :
-          rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
-      }
-      if (current.terminal || current.quiescing || current.phase === PARTITION_TRANSITION_STATE.FAILED) {
-        return rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
-      }
-      return invokeStartMethod(this, START_METHOD.WAIT_MERGE,
-        this.mergeReplication);
+      return invokeStartMethod(this, START_METHOD.WAIT_MERGE, current, true);
     }
     const predecessors = captureAdmissiblePredecessors(this, metadata);
     if (!predecessors) {
@@ -423,10 +417,10 @@ class PartitionServiceSourceReplicationStartMethods {
     return {success: true};
   }
 
-  async waitForMergeReplicationStart(handle) {
+  async waitForMergeReplicationStart(handle, requireLive = false) {
     const response = handle.startPromise ? await handle.startPromise : null;
     return response?.success === true && handle.authorized === true &&
-      handle.runPromise && this.mergeReplication === handle &&
+      handle.runPromise && this.mergeReplication === handle && (!requireLive || acceptsSourceWork(handle)) &&
       this.isShutdown !== true && this.role === RAFT_ROLE.LEADER ? response :
       rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
   }

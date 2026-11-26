@@ -51,8 +51,10 @@ export async function reconcileFailedMirrorCustody(service) {
 }
 
 // A failed local run can finish draining while its durable grant remains live.
-export function isStoppedMirrorWorker(handle) {
+export function isStoppedSplitWorker(handle) {
   return handle?.phase === PARTITION_TRANSITION_STATE.FAILED &&
+    (handle.failedPhase === PARTITION_TRANSITION_STATE.SPLIT_CATCHUP ||
+      handle.failedPhase === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) &&
     handle.terminal === true && handle.quiesced === true;
 }
 
@@ -64,8 +66,8 @@ export function redriveFailedMirrorRelease(service) {
   if (!terminalGrantForSource(row, service.partitionId)) {
     const transition = parseTablePartitionTransition(row);
     const metadata = transition?.metadata;
-    if ((!service.splitReplication || isStoppedMirrorWorker(service.splitReplication)) &&
-        (!service.mergeReplication || isStoppedMirrorWorker(service.mergeReplication)) &&
+    if ((!service.splitReplication || isStoppedSplitWorker(service.splitReplication)) &&
+        !service.mergeReplication &&
         metadata?.mirrorCustodyGrants?.some((grant) => grant.partitionId === service.partitionId &&
           grant.fence === metadata.workflowFenceToken && !grant.release) && !metadata.mirrorExecutionEnded) {
       service.resumeDurableMirrorReplicationWorkers();

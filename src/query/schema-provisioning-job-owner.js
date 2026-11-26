@@ -392,6 +392,14 @@ class SchemaProvisioningJobOwner {
     }
   }
 
+  async readRetryRow(intent) {
+    if (!intent.recoveryPartitionId) return this.repository.findByTableIdentity(intent.tableIdentityKey);
+    const leader = this.recoveryLeaders().find((service) => service.partitionId === intent.recoveryPartitionId);
+    // Leadership activation always inventories both nonterminal statuses.
+    if (!leader) return null;
+    return this.repository.findRecoveryRow(leader, intent.tableIdentityKey);
+  }
+
   scheduleRetry(intent, executor, notBeforeMs = 0) {
     if (this.shuttingDown) return;
     const workflow = this.workflowCoordinator.getWorkflowById(
@@ -419,12 +427,18 @@ class SchemaProvisioningJobOwner {
         async () => {
           let row;
           try {
-            row = await this.repository.findByTableIdentity(intent.tableIdentityKey);
+            row = await this.readRetryRow(intent);
           } catch (error) {
             this.scheduleRetry(intent, executor);
             throw error;
           }
-          if (this.shuttingDown || !row || !matchesIntent(row, intent)) return;
+          if (this.shuttingDown) return;
+          if (!row) {
+            if (!intent.recoveryPartitionId || this.recoveryLeaders().some(
+              (leader) => leader.partitionId === intent.recoveryPartitionId)) this.scheduleRetry(intent, executor);
+            return;
+          }
+          if (!matchesIntent(row, intent)) throw createIntentConflictError(intent);
           this.refreshWorkflowFromRow(row);
           return this.runJob(intent, executor, {background: true});
         },
@@ -561,8 +575,8 @@ class SchemaProvisioningJobOwner {
   }
 
   async assertOwnership(workflow) {
-    const claim = await this.claimOwnership(workflow, workflow.fenceToken);
-    if (!claim.accepted) {
+    const claim = !this.shuttingDown && await this.claimOwnership(workflow, workflow.fenceToken);
+    if (this.shuttingDown || !claim.accepted) {
       const error = new Error('Schema provisioning owner fence is stale');
       error.code = SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER;
       throw error;
@@ -650,14 +664,21 @@ class SchemaProvisioningJobOwner {
   }
 
   async reconcileContendedJob(intent, executor) {
+    const current = this.workflowCoordinator.requireWorkflow(intent.workflowId);
+    if (this.shuttingDown) return this.buildOutcome(current);
     let row;
     try {
-      row = await this.repository.findByTableIdentity(intent.tableIdentityKey);
+      row = await this.readRetryRow(intent);
     } catch (error) {
       this.scheduleRetry(intent, executor);
       throw error;
     }
-    if (!row || !matchesIntent(row, intent)) throw createIntentConflictError(intent);
+    if (!row) {
+      if (!intent.recoveryPartitionId || this.recoveryLeaders().some(
+        (leader) => leader.partitionId === intent.recoveryPartitionId)) this.scheduleRetry(intent, executor);
+      return this.buildOutcome(current);
+    }
+    if (!matchesIntent(row, intent)) throw createIntentConflictError(intent);
     const workflow = this.refreshWorkflowFromRow(row);
     if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
       this.clearScheduledRetry(intent.workflowId);
@@ -806,9 +827,11 @@ class SchemaProvisioningJobOwner {
   async findSucceededGlobalIndexIntent(datasetName, generation) {
     const {tableIdentityKey} = resolveIntentTableIdentity(
       {tableName: datasetName}, {globalIndex: {generation}});
-    const row = await this.repository.findByTableIdentity(tableIdentityKey);
-    return row?.status === SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED ?
-      recoverIntentFromRow(row) : null;
+    for (const leader of this.recoveryLeaders()) {
+      const row = await this.repository.findRecoveryRow(leader, tableIdentityKey);
+      if (row?.status === SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED) return recoverIntentFromRow(row);
+    }
+    return null;
   }
 
   scheduleDiscovery(read, resume, delayMs) {
@@ -884,7 +907,8 @@ class SchemaProvisioningJobOwner {
         try {
           const rows = await this.repository.listRecoveryPage(leader, status, prior?.cursor);
           if (this.shuttingDown || leader.leadershipTenure !== tenure) break;
-          const batch = rows.map((row) => ({row, intent: recoverIntentFromRow(row)}));
+          const batch = rows.map((row) => ({row, intent: {...recoverIntentFromRow(row),
+            recoveryPartitionId: leader.partitionId}}));
           jobs.push(...batch);
           const last = rows.at(-1);
           const cursor = rows.length === RECOVERY_PAGE_SIZE ?
