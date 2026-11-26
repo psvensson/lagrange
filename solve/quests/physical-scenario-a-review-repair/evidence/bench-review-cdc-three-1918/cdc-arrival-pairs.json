@@ -1,0 +1,185 @@
+{
+  "campaignId": "bench-review-cdc-three-1918",
+  "sourceCommit": "ecaa827ac16459edb00f4221ad588870ea4bb02c",
+  "cutoff": "2026-11-26T19:25:05.846000+00:00",
+  "observations": 12,
+  "observedSockets": 6,
+  "scope": "Last existing beforeRecovery observation per identified socket on each node through the physical deadline, using host clocks. Counters end at each socket's observedAt. Each pair covers distinct source partitions with independent live grants to the same address and no intervening observed frame in at most 12 ms. Unobserved windows and sockets are excluded. Stream savings and added latency were not measured in this run.",
+  "totals": {
+    "applicationFrames": 102695,
+    "grantedFrames": 1839,
+    "identifiedRanges": 1839,
+    "disjointPairs": 263,
+    "nearbyControl": 2
+  },
+  "sockets": [
+    {
+      "sourceOrdinal": 1,
+      "sourceNode": "00000000-0000-4000-8000-000000000001",
+      "pid": 1,
+      "socket": 3,
+      "destination": "00000000-0000-4000-8000-000000000003",
+      "observedAt": "2026-11-26T19:24:01.122Z",
+      "applicationFrames": 19532,
+      "grantedFrames": 749,
+      "identifiedRanges": 749,
+      "disjointPairs": 140,
+      "nearbyControl": 0,
+      "intervalMsLe": {
+        "1": 0,
+        "3": 74,
+        "6": 53,
+        "12": 13,
+        "above": 0
+      },
+      "pairMinSlackMsLe": {
+        "1": 0,
+        "6": 0,
+        "12": 0,
+        "50": 0,
+        "250": 0,
+        "above": 140
+      }
+    },
+    {
+      "sourceOrdinal": 1,
+      "sourceNode": "00000000-0000-4000-8000-000000000001",
+      "pid": 1,
+      "socket": 4,
+      "destination": "00000000-0000-4000-8000-000000000002",
+      "observedAt": "2026-11-26T19:23:06.813Z",
+      "applicationFrames": 11930,
+      "grantedFrames": 625,
+      "identifiedRanges": 625,
+      "disjointPairs": 121,
+      "nearbyControl": 1,
+      "intervalMsLe": {
+        "1": 17,
+        "3": 92,
+        "6": 11,
+        "12": 1,
+        "above": 0
+      },
+      "pairMinSlackMsLe": {
+        "1": 0,
+        "6": 0,
+        "12": 0,
+        "50": 0,
+        "250": 0,
+        "above": 121
+      }
+    },
+    {
+      "sourceOrdinal": 2,
+      "sourceNode": "00000000-0000-4000-8000-000000000002",
+      "pid": 1,
+      "socket": 4,
+      "destination": "00000000-0000-4000-8000-000000000003",
+      "observedAt": "2026-11-26T19:25:05.686Z",
+      "applicationFrames": 16288,
+      "grantedFrames": 115,
+      "identifiedRanges": 115,
+      "disjointPairs": 2,
+      "nearbyControl": 0,
+      "intervalMsLe": {
+        "1": 0,
+        "3": 2,
+        "6": 0,
+        "12": 0,
+        "above": 0
+      },
+      "pairMinSlackMsLe": {
+        "1": 0,
+        "6": 0,
+        "12": 0,
+        "50": 0,
+        "250": 0,
+        "above": 2
+      }
+    },
+    {
+      "sourceOrdinal": 2,
+      "sourceNode": "00000000-0000-4000-8000-000000000002",
+      "pid": 1,
+      "socket": 3,
+      "destination": "00000000-0000-4000-8000-000000000001",
+      "observedAt": "2026-11-26T19:23:22.897Z",
+      "applicationFrames": 13481,
+      "grantedFrames": 32,
+      "identifiedRanges": 32,
+      "disjointPairs": 0,
+      "nearbyControl": 0,
+      "intervalMsLe": {
+        "1": 0,
+        "3": 0,
+        "6": 0,
+        "12": 0,
+        "above": 0
+      },
+      "pairMinSlackMsLe": {
+        "1": 0,
+        "6": 0,
+        "12": 0,
+        "50": 0,
+        "250": 0,
+        "above": 0
+      }
+    },
+    {
+      "sourceOrdinal": 3,
+      "sourceNode": "00000000-0000-4000-8000-000000000003",
+      "pid": 1,
+      "socket": 3,
+      "destination": "00000000-0000-4000-8000-000000000001",
+      "observedAt": "2026-11-26T19:25:01.631Z",
+      "applicationFrames": 28234,
+      "grantedFrames": 172,
+      "identifiedRanges": 172,
+      "disjointPairs": 0,
+      "nearbyControl": 0,
+      "intervalMsLe": {
+        "1": 0,
+        "3": 0,
+        "6": 0,
+        "12": 0,
+        "above": 0
+      },
+      "pairMinSlackMsLe": {
+        "1": 0,
+        "6": 0,
+        "12": 0,
+        "50": 0,
+        "250": 0,
+        "above": 0
+      }
+    },
+    {
+      "sourceOrdinal": 3,
+      "sourceNode": "00000000-0000-4000-8000-000000000003",
+      "pid": 1,
+      "socket": 4,
+      "destination": "00000000-0000-4000-8000-000000000002",
+      "observedAt": "2026-11-26T19:24:29.468Z",
+      "applicationFrames": 13230,
+      "grantedFrames": 146,
+      "identifiedRanges": 146,
+      "disjointPairs": 0,
+      "nearbyControl": 1,
+      "intervalMsLe": {
+        "1": 0,
+        "3": 0,
+        "6": 0,
+        "12": 0,
+        "above": 0
+      },
+      "pairMinSlackMsLe": {
+        "1": 0,
+        "6": 0,
+        "12": 0,
+        "50": 0,
+        "250": 0,
+        "above": 0
+      }
+    }
+  ]
+}

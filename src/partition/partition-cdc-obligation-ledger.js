@@ -150,6 +150,12 @@ function cdcObligationLedgerExists(db) {
   return db.prepare(SQL.TABLE_EXISTS).get() !== undefined;
 }
 
+// Admission needs only the live debt on this connection's current SQLite view.
+function countOwedCdcObligations(db) {
+  if (!cdcObligationLedgerExists(db)) return 0;
+  return Number(db.prepare(SQL.COUNT_OWED).get().count);
+}
+
 function validCdcCensusRow(row) {
   return isNonEmptyString(row.event_key) && isNonEmptyString(row.entry_id) &&
     isNonEmptyString(row.event_json) && isStoredInteger(row.log_index, 1n) &&
@@ -680,6 +686,7 @@ export {
   cdcObligationLedgerExists,
   commitOwedEntryByteTallies,
   countCdcObligations,
+  countOwedCdcObligations,
   countRetainedDeliveredCdcObligations,
   emptyAcknowledgedBytes,
   ensureCdcObligationLedger,

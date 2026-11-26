@@ -7,7 +7,7 @@ import {createUnknownOutcomeRedelivery} from '../../src/query/query-executor-unk
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {runRetryableControlPlaneWrite} from '../../src/bootstrap/shared/retryable-control-plane-write.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {countCdcObligations, readOwedCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {countCdcObligations, readCdcObligationProgress, readOwedCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {
   CDC_TABLE, REPLICAS, applyCommitted, awaitProposal, clearFixtureSingletons,
   generationOf, resetFixtureSingletons, settleTicks, shutdownAll, startLeader,
@@ -53,7 +53,9 @@ test('refusing subscriber bounds actual write ingress and admits retry after com
     assert.equal(leader.db.prepare(`SELECT * FROM ${CDC_TABLE} WHERE group_id = ?`).get('pressure-row'), undefined);
     readiness.ready = true;
     await pump(timeSource, leader, proposed, new Set(), 50);
-    assert.equal(countCdcObligations(leader.db).owed, 0, 'actual CDC_DELIVERED application drains debt');
+    assert.deepEqual(countCdcObligations(leader.db), {owed: 0, delivered: OWED_CAPACITY});
+    assert.ok(readCdcObligationProgress(leader.db)?.reclaimed > 0,
+      'retry observes freed capacity after committed prefix reclamation');
     const retried = write(leader, 'full-capacity-write');
     const command = await awaitProposal(proposed, (entry) => entry.entryId === 'full-capacity-write');
     assert.ok(command);
