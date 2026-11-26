@@ -165,7 +165,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       });
       const lifetime = options.deliveryLifetime;
       observeServiceSendReturned(ws, bytes, lifetime.context !== undefined ||
-        lifetime.durationField === CDC_DELIVERY_REMAINING_MS);
+        lifetime.durationField === CDC_DELIVERY_REMAINING_MS, options.deliverySource);
     } catch (_sendError) {
       // Once ws.send has been entered, a thrown error is not proof that its
       // compression/write child released the encoded copy. The existing close

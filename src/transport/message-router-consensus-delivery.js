@@ -88,10 +88,6 @@ function buildConsensusBatchFrame(sourceNodeId, envelopes) {
 // encoded wrapper and fill it with the same JSON fragments admitted below.
 const CONSENSUS_FRAME_END = ']}';
 
-function emptyEncodedFrame(router) {
-  return JSON.stringify(buildConsensusBatchFrame(router.nodeId, []));
-}
-
 function socketBufferedBytes(connection) {
   const amount = connection?.ws?.bufferedAmount;
   return Number.isFinite(amount) && amount > TRANSPORT_NUM.ZERO ?
@@ -286,9 +282,9 @@ function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry)
   const encodedEntry = JSON.stringify(entry);
   const entryBytes = Buffer.byteLength(encodedEntry);
   let batch = activeBatchForConnection(router, targetNodeId, connection);
-  const wrapper = batch === null ? emptyEncodedFrame(router) : null;
-  const addedBytes = entryBytes + (wrapper === null ?
-    TRANSPORT_NUM.ONE : Buffer.byteLength(wrapper));
+  const {frameEncoding} = router.consensusDelivery;
+  const addedBytes = entryBytes + (batch === null ?
+    frameEncoding.emptyBytes : TRANSPORT_NUM.ONE);
   const bufferRefusal = inspectBatchBufferBounds(
     router, targetNodeId, connection, batch, addedBytes);
   if (bufferRefusal !== null) {
@@ -309,7 +305,7 @@ function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry)
       connection,
       connectionId: connection.connectionId ?? null,
       ws: connection.ws,
-      framePrefix: wrapper.slice(0, -CONSENSUS_FRAME_END.length),
+      framePrefix: frameEncoding.prefix,
       byteLength: TRANSPORT_NUM.ZERO,
       settled: false,
       items: [],
@@ -501,8 +497,13 @@ function consensusDeliveryStats(router) {
   });
 }
 
-function createConsensusDeliveryRecord() {
+function createConsensusDeliveryRecord(sourceNodeId) {
+  const emptyFrame = JSON.stringify(buildConsensusBatchFrame(sourceNodeId, []));
   return {
+    frameEncoding: Object.freeze({
+      prefix: emptyFrame.slice(0, -CONSENSUS_FRAME_END.length),
+      emptyBytes: Buffer.byteLength(emptyFrame),
+    }),
     written: TRANSPORT_NUM.ZERO,
     notWritten: TRANSPORT_NUM.ZERO,
     framesWritten: TRANSPORT_NUM.ZERO,

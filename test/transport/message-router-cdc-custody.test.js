@@ -9,7 +9,7 @@ import {createInProcWebSocketPair as canonicalPair, InProcWebSocket as Canonical
 import {createInProcWebSocketPair as routerPair, InProcWebSocket as RouterSocket} from
   '../../src/transport/message-router-shared-vocabulary.js';
 import {ROUTER_MESSAGE_TYPE, TRANSPORT_EVENT} from '../../src/constants/transport.js';
-import {CDC_ROUTER_TEST, cdcRouterFixture, controlledCdcPeer, nextTurn, watchSettlement}
+import {CDC_ROUTER_TEST, cdcRouterFixture, controlledCdcPeer, nextTurn, realCdcPeer, watchSettlement}
   from '../test-helpers/message-router-cdc-fixture.js';
 
 const CASE_TIMEOUT_MS = 2000;
@@ -43,6 +43,74 @@ test('socket evidence separates the actual ACK and service response to an incomi
       ['serviceResponse', ROUTER_MESSAGE_TYPE.SERVICE_RESPONSE]]) {
       assert.equal(after[slot].frames - before[slot].frames, 1);
       assert.equal(after[slot].bytes - before[slot].bytes, bytesByType.get(type));
+    }
+  });
+
+test('reply family follows the received request through success, error and absent handler',
+  {timeout: CASE_TIMEOUT_MS}, async (t) => {
+    const f = await cdcRouterFixture(t);
+    const peer = await realCdcPeer(f);
+    const address = CDC_ROUTER_TEST.LOCAL + '/service/family-probe';
+    f.router.register(address, ({payload}) => {
+      if (payload.type === 'QUERY') throw new Error('refused');
+      payload.type = 'QUERY';
+      return {ok: true};
+    });
+    const evidence = () => socketEvidence(f.router, CDC_ROUTER_TEST.PEER,
+      f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER), f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER).ws);
+    for (const [type, family, target] of [
+      ['PARTICIPANT_RELEASE', 'participantRelease', address], ['QUERY', 'query', address],
+      ['LIVE_QUERY_CDC_EVENT', 'cdc', address], ['unknown-δ', 'other', address + '-absent'],
+    ]) {
+      const before = evidence();
+      const messageId = 'family-' + type;
+      const reply = Promise.withResolvers();
+      const onMessage = (raw) => {
+        const frame = JSON.parse(raw.toString());
+        if (frame.messageId === messageId && frame.type === ROUTER_MESSAGE_TYPE.SERVICE_RESPONSE) {
+          assert.equal(Object.hasOwn(frame, 'family'), false);
+          reply.resolve(Buffer.byteLength(raw));
+        }
+      };
+      peer.on(TRANSPORT_EVENT.MESSAGE, onMessage);
+      peer.send(JSON.stringify({type: ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE, messageId,
+        targetAddress: target, sourceNodeId: CDC_ROUTER_TEST.PEER, payload: {type}}));
+      const bytes = await reply.promise;
+      peer.off(TRANSPORT_EVENT.MESSAGE, onMessage);
+      const after = evidence();
+      const slots = after.requestFamilySendReturned.serviceResponse;
+      assert.equal(slots[family].bytes - before.requestFamilySendReturned.serviceResponse[family].bytes, bytes);
+      assert.equal(slots[family].frames - before.requestFamilySendReturned.serviceResponse[family].frames, 1);
+      for (const field of ['frames', 'bytes']) {
+        assert.equal(Object.values(slots).reduce((n, slot) => n + slot[field], 0),
+          after.applicationSendReturned.serviceResponse[field]);
+      }
+    }
+  });
+
+test('socket evidence groups coordinator handoff and ungranted live-query CDC at send return',
+  {timeout: CASE_TIMEOUT_MS}, async (t) => {
+    const f = await cdcRouterFixture(t);
+    const peer = await controlledCdcPeer(f);
+    for (const [index, type, family, options] of [
+      [0, 'REPLICA_OPERATION_DISPATCH', 'replicaOperation', {deliverySource: 'coordinator_created_remote_handoff'}],
+      [1, 'LIVE_QUERY_CDC_EVENT', 'cdc', {}],
+    ]) {
+      const messageId = 'producer-' + index;
+      const result = f.router.deliver(CDC_ROUTER_TEST.ADDRESS, {type, messageId}, options);
+      const write = await peer.nextWrite(index);
+      await write.handedOff;
+      const evidence = socketEvidence(f.router, CDC_ROUTER_TEST.PEER,
+        f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER), peer.accepted);
+      const slots = evidence.requestFamilySendReturned.otherService;
+      assert.deepEqual(slots[family], {frames: 1, bytes: Buffer.byteLength(write.bytes)});
+      for (const field of ['frames', 'bytes']) {
+        assert.equal(Object.values(slots).reduce((n, slot) => n + slot[field], 0),
+          evidence.applicationSendReturned.otherService[field]);
+      }
+      peer.ack(messageId);
+      write.release();
+      await result;
     }
   });
 
@@ -82,7 +150,7 @@ test('router timeout retains the actual write callback, outbound slot and brande
 
     // An independent caller may queue; it cannot reuse the old physical slot.
     const successor = f.router.deliver(CDC_ROUTER_TEST.ADDRESS,
-      {...PROBE, messageId: 'same-message'}, {timeoutMs: CDC_ROUTER_TEST.BUDGET_MS});
+      {...PROBE, messageId: 'same-message'}, {timeoutMs: CDC_ROUTER_TEST.BUDGET_MS, deliverySource: 'control-plane:read:services'});
     const successorState = watchSettlement(successor);
     await nextTurn();
     const pending = f.router.pendingResponses.get('same-message');
@@ -95,6 +163,10 @@ test('router timeout retains the actual write callback, outbound slot and brande
     await secondWrite.handedOff;
     const secondCounts = sendCounts(f, peer.accepted);
     assert.deepEqual(secondCounts.otherService, {frames: 1, bytes: Buffer.byteLength(secondWrite.bytes)});
+    const families = socketEvidence(f.router, CDC_ROUTER_TEST.PEER,
+      f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER), peer.accepted).requestFamilySendReturned.otherService;
+    assert.deepEqual(families.controlRead, secondCounts.otherService);
+    assert.equal(Object.values(families).reduce((n, slot) => n + slot.frames, 0), 1);
     assert.deepEqual(secondCounts.cdcGrantService, firstCounts.cdcGrantService);
     assert.equal(firstCounts.otherService.frames, 0, 'an earlier observation keeps its own values');
     assert.equal(closed, 1);

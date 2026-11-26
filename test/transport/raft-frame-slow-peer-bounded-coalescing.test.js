@@ -232,6 +232,44 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
   }
 });
 
+test('each sender encodes one canonical wrapper across separate remote flushes', async (t) => {
+  configureRouterProcess();
+  const stringify = JSON.stringify;
+  const wrapperEncodings = [];
+  t.mock.method(JSON, 'stringify', (...args) => {
+    const [value] = args;
+    if (value?.type === ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE && value.envelopes?.length === 0) {
+      wrapperEncodings.push(value.sourceNodeId);
+    }
+    return stringify(...args);
+  });
+  const routers = [];
+  const senderIds = ['node-"δ"', 'node-\\雪'];
+  try {
+    for (const nodeId of senderIds) {
+      const router = new MessageRouter({nodeId, bootIncarnation: TEST_BOOT_INCARNATION});
+      routers.push(router);
+      const rawFrames = [];
+      attachConnectedPeer(router, 'peer', createFakeSocket({onSend: (raw) => rawFrames.push(raw)}));
+      const targetAddress = 'peer/partition/g-r2';
+      for (let seq = 0; seq < 24; seq += 1) {
+        const payload = buildEnvelope('g', seq, 'π');
+        const expected = stringify({type: ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE,
+          sourceNodeId: nodeId, envelopes: [{targetAddress, payload}]});
+        const pending = router.deliver(targetAddress, payload);
+        assert.equal(router.getStats().consensusDelivery.pendingBatchBytes, Buffer.byteLength(expected));
+        assert.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await pending)));
+        assert.equal(rawFrames.length, seq + 1);
+        assert.equal(rawFrames[seq], expected);
+      }
+    }
+    assert.deepEqual(wrapperEncodings, senderIds);
+  } finally {
+    await Promise.all(routers.map((router) => router.shutdown()));
+    resetRouterProcess();
+  }
+});
+
 test('(c1-peer-bound) per-peer slow-socket (ws.bufferedAmount + pending ' +
   'batch) refuses excess envelopes with PEER_BUFFER_EXCEEDED, counts them, ' +
   'reports failure to Raft, and never stalls a healthy peer', async () => {

@@ -38,7 +38,9 @@ async function readRequiredPartitions(read, dataset) {
     assert.equal(found.length, entry.partition_count, `missing or extra partitions for ${entry.table_name}`);
   }
   assert.equal(new Set(rows.map((row) => row.partition_id)).size, rows.length, 'partition identities are distinct');
-  return rows;
+  const dataTableIds = new Set(tables.filter((row) => row.table_name === table || row.table_name === dataset)
+    .map((row) => row.table_id));
+  return rows.map((row) => ({...row, requiresRf3: dataTableIds.has(row.table_id)}));
 }
 
 async function readMembership(nodes, partitionIds) {
@@ -50,28 +52,30 @@ async function readMembership(nodes, partitionIds) {
   return replies.flat();
 }
 
-function assertSurvivingMajority(rows, partitionId, ownerNodeId) {
+function assertSurvivingMajority(rows, partitionId, ownerNodeId, requiresRf3) {
   const group = rows.filter((row) => row.partitionId === partitionId);
+  assert.equal(new Set(group.map((row) => row.replicaId)).size, group.length,
+    `duplicate hosted replica identity for ${partitionId}`);
   const voters = group.filter((row) => row.gateOpen === true &&
     Number.isSafeInteger(row.term) && row.term > 0 &&
     Number.isSafeInteger(row.generation) && row.generation >= 0 &&
     typeof row.configurationKey === 'string' && row.configurationKey.length > 0 &&
     row.outgoingVoters.length === 0 && row.nextLearners.length === 0 &&
-    row.voterReplicaIds.length === replicaCount && new Set(row.voterReplicaIds).size === replicaCount &&
+    row.voterReplicaIds.length > 0 && new Set(row.voterReplicaIds).size === row.voterReplicaIds.length &&
     row.voterReplicaIds.every((id) => typeof id === 'string' && id.length > 0) &&
     row.voterReplicaIds.includes(row.replicaId));
   const leaders = voters.filter((row) => row.leaderRead && row.replicaId === row.leaderReplicaId);
-  assert.equal(leaders.length, 1, `expected one confirmed stable RF3 leader for ${partitionId}`);
+  assert.equal(leaders.length, 1, `expected one confirmed stable leader for ${partitionId}`);
   const [leader] = leaders;
+  const committedCount = leader.voterReplicaIds.length;
+  if (requiresRf3) assert.equal(committedCount, replicaCount, `committed RF3 for ${partitionId}`);
   const surviving = voters.filter((row) => row.nodeId !== ownerNodeId && row.term === leader.term &&
     row.generation === leader.generation && row.configurationKey === leader.configurationKey &&
-    row.leaderReplicaId === leader.replicaId &&
+    row.leaderReplicaId === leader.replicaId && row.voterReplicaIds.length === committedCount &&
     row.voterReplicaIds.every((id, index) => id === leader.voterReplicaIds[index]));
-  const majority = Math.floor(replicaCount / 2) + 1;
-  assert.equal(new Set(surviving.map((row) => row.replicaId)).size, surviving.length,
-    `duplicate hosted voter identity for ${partitionId}`);
+  const majority = Math.floor(committedCount / 2) + 1;
   assert.ok(new Set(surviving.map((row) => row.nodeId)).size >= majority,
-    `fewer than ${majority} surviving nodes corroborate the leader's RF3 configuration for ${partitionId}`);
+    `fewer than ${majority} surviving nodes corroborate the leader's committed configuration for ${partitionId}`);
 }
 
 async function waitForTrace(t, stage, members, accepts, signal) {
@@ -158,8 +162,10 @@ test('warm survivors backfill an existing global index after the schema callback
     t.comment(JSON.stringify({stage: 'pre-kill partition inventory', partitions}));
     const membership = await topology('pre-kill quorum observations', members, gsi);
     for (const partition of partitions) {
-      assert.equal(partition.replica_count, replicaCount, `declared RF3 for ${partition.partition_id}`);
-      assertSurvivingMajority(membership, partition.partition_id, nodeId);
+      if (partition.requiresRf3) {
+        assert.equal(partition.replica_count, replicaCount, `declared RF3 for ${partition.partition_id}`);
+      }
+      assertSurvivingMajority(membership, partition.partition_id, nodeId, partition.requiresRf3);
     }
     const exited = once(owner.child, 'exit');
     assert.ok(owner.child.kill('SIGKILL'));

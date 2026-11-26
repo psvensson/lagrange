@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2808,
+    "ordinary": 2809,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2834,
-  "digest": "fnv1a32-33449a35",
+  "censusSize": 2835,
+  "digest": "fnv1a32-73c44efa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1183,6 +1183,7 @@
     "test/integration/node-join-convergence-slo.integration.test.js": "ordinary",
     "test/integration/node-join-replica-activation.integration.test.js": "ordinary",
     "test/integration/node-joining-rebalance.integration.test.js": "ordinary",
+    "test/integration/nodes-lease-leader-loss.integration.test.js": "ordinary",
     "test/integration/pgwire-bootstrap.integration.test.js": "ordinary",
     "test/integration/pgwire-command-tag-real-engine.integration.test.js": "ordinary",
     "test/integration/pgwire-rebalance.integration.test.js": "ordinary",

@@ -10,6 +10,7 @@ import {createEmbeddedCluster, readUntil} from './helpers/embedded-cluster-harne
 import {scalePasswordPgwire} from './helpers/public-binding-seam-harness.js';
 
 const tableName = 'wire_owner_loss_orders';
+const createSql = `CREATE TABLE ${tableName} (id TEXT PRIMARY KEY, payload TEXT)`;
 const ports = createPortAllocator(import.meta.url);
 const workerPath = fileURLToPath(new URL('./helpers/schema-owner-loss-worker.js', import.meta.url));
 const metadata = ['schema_operations-p1', 'replica_operations-p1', 'services-p1', 'tables-p1', 'partitions-p1', 'nodes-p1'];
@@ -100,8 +101,8 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
         await Promise.all(cluster.nodes.map(async (member) => {
           const requestedAt = Date.now();
           try {
-            const trace = await observe(member, 'trace');
-            t.comment(JSON.stringify({nodeId: member.nodeId, requestedAt, observedAt: Date.now(), trace}));
+            const [trace, listener] = await Promise.all([observe(member, 'trace'), observe(member, 'closeProvenance')]);
+            t.comment(JSON.stringify({nodeId: member.nodeId, requestedAt, observedAt: Date.now(), trace, listener}));
           } catch (observationError) {
             t.comment(JSON.stringify({nodeId: member.nodeId, requestedAt, observedAt: Date.now(),
               observedExit: member.channel.exitState(), error: observationError.message}));
@@ -143,7 +144,7 @@ async function proveOwnerLoss(t, cluster) {
   const probe = await cluster.createPgClient({host: second.address, port: Number(second.port)});
   await probe.end();
   t.comment(JSON.stringify({publishedBefore: endpoints}));
-  await Promise.all(members.map((member) => observe(member, 'arm', {tableName})));
+  await Promise.all(members.map((member) => observe(member, 'arm', {tableName, sql: createSql})));
   t.teardown(async () => {
     await Promise.allSettled(members.filter((member) => !member.channel.exitState())
       .map((member) => observe(member, 'release')));
@@ -151,17 +152,18 @@ async function proveOwnerLoss(t, cluster) {
   const client = await cluster.createPgClient({host: endpoint.address, port: Number(endpoint.port)});
   // The single submitting socket can disappear with its server.
   client.on('error', (error) => t.comment(`original socket: ${error.message}`));
-  const submitted = client.query(`CREATE TABLE ${tableName} (id TEXT PRIMARY KEY, payload TEXT)`)
+  const submitted = client.query(createSql)
     .then(() => ({success: true, at: Date.now()}), (error) => ({
       code: error.code, detail: error.detail, message: error.message, at: Date.now(),
     }));
+  const clientPort = client.connection.stream.localPort;
   const barrierPoll = new AbortController();
   const entered = await Promise.race([
     until(t, 'owner entered provisioning after catalog commit',
       () => traces(members), (rows) => rows.some((row) => row.barrier), undefined, barrierPoll.signal),
     submitted.then((reply) => {
       if (barrierPoll.signal.aborted) return;
-      const socketObservation = {reply, capturedAt: Date.now(), submittingEndpoint: endpoint,
+      const socketObservation = {reply, capturedAt: Date.now(), submittingEndpoint: endpoint, clientPort,
         children: members.map((member) => ({nodeId: member.nodeId, observedExit: member.channel.exitState()}))};
       barrierPoll.abort();
       throw Object.assign(new Error(`CREATE socket settled before observed barrier: ${JSON.stringify(reply)}`),

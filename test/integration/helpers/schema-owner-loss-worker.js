@@ -7,6 +7,8 @@ import {SCHEMA_PROVISIONING_ERROR_CODE} from '../../../src/query/schema-provisio
 import {SchemaProvisioningJobOwner} from '../../../src/query/schema-provisioning-job-owner.js';
 import {registerEmbeddedWorkerOperations} from './embedded-node-worker.js';
 
+import {armListenerObservation, listenerObservation} from './schema-owner-loss-listener-observer.js';
+
 const partitions = new Map();
 const grants = [];
 const claims = [];
@@ -128,8 +130,9 @@ SchemaProvisioningJobOwner.prototype.transitionTerminal = async function(intent,
 };
 
 registerEmbeddedWorkerOperations({
-  arm: ({tableName}) => { target = tableName; },
+  arm: ({tableName, sql}) => { target = tableName; armListenerObservation(sql); },
   trace: () => ({grants, claims, barrier, completed, attemptCount, attempts, pending, provisioning}),
+  closeProvenance: listenerObservation,
   release: () => release.resolve(),
   job: async ({key}) => {
     let row;

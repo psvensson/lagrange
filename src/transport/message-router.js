@@ -278,7 +278,7 @@ class MessageRouter extends EventEmitter {
       options.consensusMaxTotalBufferedBytes > TRANSPORT_NUM.ZERO ?
         Math.floor(options.consensusMaxTotalBufferedBytes) :
         TRANSPORT_DEFAULT.CONSENSUS_MAX_TOTAL_BUFFERED_BYTES;
-    this.consensusDelivery = createConsensusDeliveryRecord();
+    this.consensusDelivery = createConsensusDeliveryRecord(this.nodeId);
     this.initialized = false;
     this.server = null;
     this.messageCount = TRANSPORT_NUM.ZERO;

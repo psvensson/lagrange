@@ -522,11 +522,11 @@ export async function resolveRecoverableDeliveryError(
   return null;
 }
 
-export function sendRaw(router, ws, message) {
+export function sendRaw(router, ws, message, family) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     const encoded = JSON.stringify(message);
     ws.send(encoded);
-    observeRawSend(router, ws, message, encoded);
+    observeRawSend(router, ws, message, encoded, family);
   }
 }
 
