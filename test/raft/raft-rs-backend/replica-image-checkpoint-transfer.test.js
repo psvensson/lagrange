@@ -26,7 +26,7 @@ import {RAFT_SNAPSHOT_INSTALL_OUTCOME,
   '../../../src/raft/snapshot-install-constants.js';
 import {CREATE_ADMISSION_ERROR_CODE, ReplicaCreateAdmissionOwner} from
   '../../../src/node/replica-create-admission-owner.js';
-import {OperationType} from '../../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../../src/rebalancer/replica-status.js';
 
 const GROUP = 'mg-checkpoint-owner-red';
 const FOUNDERS = Object.freeze(['mg-red-a', 'mg-red-b', 'mg-red-c']);
@@ -288,7 +288,9 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       const evidence = await admission.owner.claim(admission.request);
       const physicalClaim = await admission.owner.claimPhysicalWorker(evidence);
       t.ok(physicalClaim, 'the real CREATE owner grants the sole physical worker');
-      admission.row.completed_at = 21;
+      Object.assign(admission.row, {
+        status: ReplicaStatus.REMOVED, workflow_step: 'REMOVED', completed_at: 21,
+      });
       const installed = await requestSnapshotInstall({
         replicaDbPath: targetDbPath,
         checkpointsRoot: path.join(root, 'checkpoints'),
@@ -329,7 +331,9 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         terminalAdmission.request);
       const terminalClaim = await terminalAdmission.owner
         .claimPhysicalWorker(terminalEvidence);
-      terminalAdmission.row.completed_at = 41;
+      Object.assign(terminalAdmission.row, {
+        status: ReplicaStatus.REMOVED, workflow_step: 'REMOVED', completed_at: 41,
+      });
       const terminalInstallDir = path.join(terminalRoot,
         RAFT_SNAPSHOT_INSTALL_DIRNAME);
       const terminalStaging = path.join(terminalInstallDir,

@@ -22,7 +22,9 @@ function timers() {
       pending.add(timer);
       return timer;
     },
-    clearTimeout(timer) { pending.delete(timer); },
+    clearTimeout(timer) {
+      pending.delete(timer);
+    },
     fireOnly() {
       assert.equal(pending.size, 1, 'one pending timer on this scheduler');
       const [timer] = pending;
@@ -49,10 +51,13 @@ function buildOwner(store, name, clock, retry, lease, start) {
   return workflow;
 }
 
-test('a delayed split retirement on P leaves the reused child, retry and lease of its successor with P', async (t) => {
+test('a delayed split retirement on P leaves the reused child, retry and ' +
+  'lease of its successor with P', async (t) => {
   const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
   const clock = {now: 1000};
-  const expireLease = () => { clock.now = store.metadata().workflowLeaseExpiresAt + 1; };
+  const expireLease = () => {
+    clock.now = store.metadata().workflowLeaseExpiresAt + 1;
+  };
   const until = async (predicate, message) => assert.ok(await store.waitFor(predicate),
     message + ' ' + JSON.stringify(store.metadata()));
   let refuseStart = false;
@@ -159,8 +164,9 @@ test('a delayed split retirement on P leaves the reused child, retry and lease o
   assert.equal(qFirst.workflowOwnerId, 'Q');
   assert.ok(qFirst.workflowFenceToken > pFirst.workflowFenceToken);
   assert.deepEqual(qFirst.splitDescriptorCleanup.pendingChildren, []);
-  assert.deepEqual(qFirst.splitDescriptorCleanup.receipts.map((r) => [r.partitionId, r.workflowAttempt, r.disposition]),
-    targetPartitionIds.map((id) => [id, first.workflowAttempt, 'deleted']));
+  assert.deepEqual(qFirst.splitDescriptorCleanup.receipts.map((r) =>
+    [r.partitionId, r.workflowAttempt, r.disposition]),
+  targetPartitionIds.map((id) => [id, first.workflowAttempt, 'deleted']));
   allowQ.resolve();
   await q.settleSplitOwnerLaneForWorkflow(workflowId);
 
@@ -180,8 +186,9 @@ test('a delayed split retirement on P leaves the reused child, retry and lease o
   // resume and child exclusive are both still waiting on the first receipt.
   expireLease();
   const resumed = p.resumeGroupRetirement(store.tablesRow(), RESUME_TRIGGER.RECORD_CHANGED);
-  await until(() => retry.pending.size === 1 && store.metadata().splitDescriptorCleanup.pendingChildren.length === 1,
-    'P never armed the successor fallback and retired its peer while the original resume was held');
+  await until(() => retry.pending.size === 1 &&
+    store.metadata().splitDescriptorCleanup.pendingChildren.length === 1,
+  'P never armed the successor fallback and retired its peer while the original resume was held');
   await resumed;
   const waiting = store.metadata();
   assert.equal(waiting.workflowOwnerId, 'P');
@@ -196,7 +203,8 @@ test('a delayed split retirement on P leaves the reused child, retry and lease o
   assert.equal(live.metadata.workflowAttempt, successor.workflowAttempt);
   const savedRow = store.tablesRow();
   const savedLineage = p.workflowRecordLineages.get(workflowId);
-  assert.equal(savedLineage.partition_transition_generation, savedRow.partition_transition_generation);
+  assert.equal(savedLineage.partition_transition_generation,
+    savedRow.partition_transition_generation);
 
   allowRenewal.resolve();
   await until(() => oldAnswer, 'the delayed renewal did not return');
@@ -204,18 +212,24 @@ test('a delayed split retirement on P leaves the reused child, retry and lease o
   assert.equal(oldRequest.options.attempt, first.workflowAttempt);
   assert.equal(oldAnswer.accepted, false);
   assert.equal(oldAnswer.result, RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH);
-  assert.deepEqual(store.tablesRow(), savedRow, 'the delayed renewal made no change to the successor');
+  assert.deepEqual(store.tablesRow(), savedRow,
+    'the delayed renewal made no change to the successor');
   assert.deepEqual([...lease.pending], [renewal], 'the refused renewal did not rearm N');
   assert.ok(p.groupRetirementRedrive.isDriving(workflowId, first.workflowAttempt),
     'the first child exclusive still awaits the committed answer');
   allowReceipt.resolve();
-  await until(() => peerPasses.length === 2 && !p.groupRetirementRedrive.isDriving(workflowId, first.workflowAttempt),
-    'P did not finish its original pass after the delayed TABLES answer');
+  await until(() => peerPasses.length === 2 &&
+    !p.groupRetirementRedrive.isDriving(workflowId, first.workflowAttempt),
+  'P did not finish its original pass after the delayed TABLES answer');
   assert.deepEqual(peerPasses, [[successor.workflowAttempt, waiting.workflowFenceToken],
-    [first.workflowAttempt, pFirst.workflowFenceToken]], 'the delayed pass kept its original subject and fence');
-  assert.deepEqual(store.tablesRow(), savedRow, 'late completion of N wrote no progress for its successor');
-  assert.equal(coordinator.getWorkflowById(workflowId), live, 'P retained its successor projection');
-  assert.deepEqual(p.workflowRecordLineages.get(workflowId), savedLineage, 'P retained its acknowledged record');
+    [first.workflowAttempt, pFirst.workflowFenceToken]],
+  'the delayed pass kept its original subject and fence');
+  assert.deepEqual(store.tablesRow(), savedRow,
+    'late completion of N wrote no progress for its successor');
+  assert.equal(coordinator.getWorkflowById(workflowId), live,
+    'P retained its successor projection');
+  assert.deepEqual(p.workflowRecordLineages.get(workflowId), savedLineage,
+    'P retained its acknowledged record');
   assert.ok(p.groupRetirementRedrive.isDriving(workflowId, successor.workflowAttempt));
   assert.ok(retry.pending.has(fallback));
   assert.ok(lease.pending.has(renewal));
@@ -229,15 +243,105 @@ test('a delayed split retirement on P leaves the reused child, retry and lease o
   allowSuccessor = true;
   retry.fireOnly();
   await until(() => !p.groupRetirementRedrive.isDriving(workflowId, successor.workflowAttempt) &&
-    store.metadata().splitDescriptorCleanup.pendingChildren.length === 0, 'quiet successor lost its retry');
+    store.metadata().splitDescriptorCleanup.pendingChildren.length === 0,
+  'quiet successor lost its retry');
   const completed = store.metadata();
   assert.equal(completed.workflowOwnerId, 'P');
   assert.deepEqual(completed.splitDescriptorCleanup.receipts.map((r) =>
     [r.partitionId, r.workflowAttempt, r.disposition]),
-    [peer, child].map((id) => [id, successor.workflowAttempt, 'deleted']));
+  [peer, child].map((id) => [id, successor.workflowAttempt, 'deleted']));
   assert.deepEqual(calls.slice(2), Array(3).fill(successor.workflowAttempt));
   assert.deepEqual(targetPartitionIds.map(store.partitionRow), [null, null]);
   assert.equal(retry.pending.size, 0);
   assert.equal(lease.pending.size, 0);
   t.pass('the successor consumed its own PARTITIONS receipt and released its timers');
+});
+
+test('an exhausted descriptor-only cleanup obligation wakes on PARTITIONS ' +
+  'events and healthy TABLES lease renewals', async (t) => {
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
+  const clock = {now: 1000};
+  const until = async (predicate, message) => assert.ok(await store.waitFor(predicate),
+    message + ' ' + JSON.stringify(store.metadata()));
+  const retry = timers();
+  const lease = timers();
+  const p = buildOwner(store, 'P', clock, retry, lease);
+  const {workflowId, targetPartitionIds} = await p.execute(SOURCE);
+  const [child, peer] = targetPartitionIds;
+  const first = store.metadata();
+
+  let destinationAvailable = false;
+  const finalizer = p.finalizeAbortedSplitChild.bind(p);
+  p.finalizeAbortedSplitChild = async (record, id) => {
+    if (id === child && !destinationAvailable) {
+      throw new Error('child destination unavailable at submission');
+    }
+    return finalizer(record, id);
+  };
+
+  const failure = await p.acknowledgeSourceParticipant(workflowId, {
+    participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+    status: SPLIT_ACK_STATUS.SNAPSHOT_FAILED,
+    attempt: first.workflowAttempt,
+    fenceToken: first.workflowFenceToken,
+    acknowledgedAt: clock.now,
+  });
+  assert.equal(failure.result, 'accepted');
+  await until(() => retry.pending.size === 1 &&
+    store.metadata().splitDescriptorCleanup?.pendingChildren?.length === 1,
+  'P did not retire peer and arm the first fallback timer for child');
+  await p.settleSplitOwnerLaneForWorkflow(workflowId);
+
+  assert.deepEqual(store.metadata().splitDescriptorCleanup.pendingChildren, [child]);
+  assert.deepEqual(p.groupRetirementRedrive.unacknowledged(), [{
+    workflowId,
+    partitionId: child,
+    unacknowledgedReplicaIds: [],
+    membershipUnavailable: false,
+    attempts: 2,
+  }]);
+
+  for (let run = 1; run <= 8; run += 1) {
+    retry.fireOnly();
+    await until(() => p.groupRetirementRedrive.unacknowledged()[0]?.attempts === 2 + run,
+      `fallback run ${run} did not complete`);
+  }
+  assert.equal(retry.pending.size, 0, 'all 8 scheduled fallback timers are spent');
+  assert.equal(lease.pending.size, 1,
+    'TABLES lease renewal remains armed while obligation is tracked');
+  assert.equal(p.groupRetirementRedrive.isDriving(workflowId, first.workflowAttempt), false,
+    'exhausted idle entry no longer blocks durable resume');
+
+  const refusedRegistration = await p.execute(SOURCE);
+  assert.equal(refusedRegistration.success, false);
+  assert.equal(refusedRegistration.reason, 'split-descriptor-cleanup-pending',
+    'competing workflow registration stays refused while descriptor cleanup is pending');
+  await until(() => p.groupRetirementRedrive.unacknowledged()[0]?.attempts === 11,
+    'refused start did not resume the exhausted descriptor-only entry');
+
+  p.groupRetirementRedrive.onSystemRow('partitions', 'UPDATE', {partition_id: SOURCE});
+  await until(() => p.groupRetirementRedrive.unacknowledged()[0]?.attempts === 12,
+    'PARTITIONS recovery event did not wake the exhausted descriptor-only entry');
+  assert.equal(retry.pending.size, 0);
+
+  destinationAvailable = true;
+  const [renewal] = lease.pending;
+  clock.now += renewal.delay;
+  lease.fireOnly();
+  await until(() => store.metadata().splitDescriptorCleanup.pendingChildren.length === 0 &&
+    p.groupRetirementRedrive.unacknowledged().length === 0,
+  'healthy TABLES lease renewal did not wake and settle the exhausted descriptor-only entry');
+
+  const settled = store.metadata();
+  assert.deepEqual(settled.splitDescriptorCleanup.receipts.map((r) =>
+    [r.partitionId, r.workflowAttempt, r.disposition]),
+  [peer, child].map((id) => [id, first.workflowAttempt, 'deleted']));
+  assert.deepEqual(targetPartitionIds.map(store.partitionRow), [null, null]);
+  assert.equal(retry.pending.size, 0);
+  assert.equal(lease.pending.size, 0);
+
+  const next = await p.execute(SOURCE);
+  assert.equal(next.success, true,
+    'next workflow on SOURCE succeeds once descriptor obligations settle');
+  assert.ok(next.workflowId);
 });

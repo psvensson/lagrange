@@ -149,6 +149,20 @@ const FAMILY = Object.freeze({
   },
 });
 
+const REQUIRED_TOPOLOGY_BINDINGS = Object.freeze({
+  resolveProvisionTargetNodeIds: () => [],
+  getRoutablePartitionServiceNodeIds: () => [],
+  calculateQuorumReplicaCount: () => 1,
+  waitForTablePartitionMetadata: async () => {},
+  provisionInitialTablePartition: async () => {},
+  startSplitReplicationOnSourcePartition: async () => {},
+  startMergeReplicationOnSourcePartition: async () => {},
+  listTablePartitionRows: () => [],
+  listPartitionServiceRows: () => [],
+  deliverReplicaRemoval: async () => null,
+  readCommittedGroupMembers: async () => [],
+});
+
 /**
  * One owner process of a family over the store: the real class, its step
  * entries counted (the step itself is witnessed in test/node).
@@ -160,6 +174,7 @@ function openOwner(store, family, nodeId, {clock, scheduler,
   const sink = (level) => (message, fields) =>
     log.push({level, message, fields});
   const owner = new spec.Klass({
+    ...REQUIRED_TOPOLOGY_BINDINGS,
     nodeId, now: () => clock.now, workflowLeaseMs: LEASE_MS,
     logger: {debug() {}, info: sink('info'), warn: sink('warn'),
       error: sink('error')},
@@ -187,7 +202,10 @@ function openOwner(store, family, nodeId, {clock, scheduler,
     if (owner.holdStep) {
       await owner.holdStep;
     }
+    const attempt =
+      owner.resolveWorkflowState(workflowId)?.metadata?.workflowAttempt;
     owner.groupRetirementRedrive.report({workflowId, partitionId: 'p',
+      attempt,
       unacknowledged: [{replicaId: 'r-x', nodeId: 'n-x'}],
       redrive: async () => {
         owner.redriveRuns += 1;
@@ -202,13 +220,38 @@ function openOwner(store, family, nodeId, {clock, scheduler,
 // The record a previous owner left (fence 3), written as that owner's own
 // persistence serializes it.
 function installRecord(store, family, {ownerId = 'dead-owner',
-  leaseExpiresAt = NOW - 5000, aborted = false} = {}) {
+  leaseExpiresAt = NOW - 5000, aborted = false,
+  pendingChildren = ['p1-l', 'p1-r']} = {}) {
   const spec = FAMILY[family];
-  const writer = new spec.Klass({nodeId: 'n0', now: () => NOW,
+  const writer = new spec.Klass({
+    ...REQUIRED_TOPOLOGY_BINDINGS,
+    nodeId: 'n0', now: () => NOW,
     logger: {debug() {}, info() {}, warn() {}, error() {}},
     listTableInfos: () => [], parsePartitionTransition});
+  const issuedChildren = spec.names.targetPartitionIds;
   const metadata = {workflowId: WORKFLOW_ID, targetPartitionVersion: 2,
-    ...spec.names};
+    ...spec.names,
+    ...(family === 'split' && aborted ? {
+      workflowAttempt: 1,
+      splitIssuedChildren: issuedChildren,
+      splitIssuedSiblings: [],
+      splitDescriptorCleanup: {
+        tableId: TABLE_ID,
+        workflowAttempt: 1,
+        decisionFence: 3,
+        pendingChildren,
+        pendingSiblings: [],
+        receipts: issuedChildren.filter((id) => !pendingChildren.includes(id))
+          .map((partitionId) => ({
+            action: 'finalizeChild',
+            tableId: TABLE_ID,
+            partitionId,
+            workflowId: WORKFLOW_ID,
+            workflowAttempt: 1,
+            disposition: 'deleted',
+          })),
+      },
+    } : {})};
   const state = aborted ? PARTITION_TRANSITION_STATE.FAILED : spec.state;
   const workflow = writer.workflowCoordinator.createWorkflowRecord({
     workflowId: WORKFLOW_ID, ownerKey: 'k', tableId: TABLE_ID,
@@ -398,18 +441,31 @@ test('Mi an aborted record whose targets have no partition rows left is not ' +
   const store = createStore();
   const clock = {now: NOW};
   const scheduler = createScheduler();
-  installRecord(store, 'split', {aborted: true});
-  const owner = openOwner(store, 'split', 'n1', {clock, scheduler,
+  installRecord(store, 'merge', {aborted: true});
+  const owner = openOwner(store, 'merge', 'n1', {clock, scheduler,
     partitionRows: new Set()});
   hydrate(store);
   await turns();
   t.equal(store.writes.length, 0, 'no claim');
   t.equal(owner.steps, 0, 'no teardown');
-  const withRow = openOwner(store, 'split', 'n2', {clock, scheduler,
-    partitionRows: new Set(['p1-l'])});
+  const withRow = openOwner(store, 'merge', 'n2', {clock, scheduler,
+    partitionRows: new Set(['pm'])});
   hydrate(store);
   await turns();
   t.equal(withRow.steps, 1, 'control: a target row left resumes it');
+
+  const splitStore = createStore();
+  installRecord(splitStore, 'split', {aborted: true, pendingChildren: []});
+  const settledSplit = openOwner(splitStore, 'split', 'n3', {clock, scheduler,
+    partitionRows: new Set()});
+  hydrate(splitStore);
+  await turns();
+  t.equal(splitStore.writes.length, 0, 'settled split cleanup manifest claims nothing');
+  t.equal(settledSplit.steps, 0, 'settled split cleanup manifest runs no teardown');
+  installRecord(splitStore, 'split', {aborted: true, pendingChildren: ['p1-l']});
+  hydrate(splitStore);
+  await turns();
+  t.equal(settledSplit.steps, 1, 'pending split cleanup manifest resumes teardown');
 });
 
 test('RC a refused claim with no live foreign lease: one WARN per record ' +

@@ -42,7 +42,18 @@ const SHAPE = Object.freeze({
   'split:true': (p) => ({
     names: {sourcePartitionId: `${p}-src`,
       targetPartitionIds: [p, `${p}-sib`],
-      targetProvisioning: {[p]: 'dispatched', [`${p}-sib`]: 'none'}},
+      targetProvisioning: {[p]: 'dispatched', [`${p}-sib`]: 'none'},
+      workflowAttempt: 1,
+      splitIssuedChildren: [p, `${p}-sib`],
+      splitIssuedSiblings: [],
+      splitDescriptorCleanup: {
+        tableId: TABLE_ID,
+        workflowAttempt: 1,
+        decisionFence: FENCE,
+        pendingChildren: [p, `${p}-sib`],
+        pendingSiblings: [],
+        receipts: [],
+      }},
     state: PARTITION_TRANSITION_STATE.FAILED, active: 1, participants: []}),
   'merge:false': (p) => ({
     names: {sourcePartitionIds: [p, `${p}-sib`],

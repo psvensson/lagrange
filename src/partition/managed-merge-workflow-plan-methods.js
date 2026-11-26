@@ -252,7 +252,8 @@ class ManagedMergeWorkflowPlanMethods {
    * @private
    */
   resolveMergedPartitionId(tableId, existingTransition) {
-    if (this.isRetryableAdmissionState(existingTransition)) {
+    if (this.isRetryableAdmissionState(existingTransition) &&
+        Array.isArray(existingTransition?.metadata?.sourcePartitionIds)) {
       const persistedTargetPartitionId = this.resolveMergeTargetPartitionId(
         existingTransition?.metadata || {},
       );

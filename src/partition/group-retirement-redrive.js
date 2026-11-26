@@ -140,6 +140,10 @@ function fieldsOf(entry) {
     membershipUnavailable: entry.membershipUnavailable};
 }
 
+function isDescriptorObligationOnly(entry) {
+  return entry.unacknowledged.length === 0 && !entry.membershipUnavailable;
+}
+
 /**
  * The workflow owner's re-drive of an incomplete group retirement.
  */
@@ -322,6 +326,13 @@ class GroupRetirementRedrive {
       Promise.resolve().then(() => this.renew(workflowId, attempt)).then((held) => {
         if (held === true) {
           this.armRenewal(workflowId, attempt);
+          for (const entry of [...this.entries.values()]) {
+            if (entry.workflowId === workflowId && entry.attempt === attempt &&
+                entry.exhausted && !entry.timer &&
+                isDescriptorObligationOnly(entry)) {
+              this.run(entry, REDRIVE_TRIGGER.FALLBACK);
+            }
+          }
           return;
         }
         this.logger.warn(REDRIVE_LOG_MSG.RENEWAL_REFUSED, {workflowId});
@@ -419,7 +430,9 @@ class GroupRetirementRedrive {
    * @return {boolean}
    */
   isDriving(workflowId, attempt) {
-    return [...this.entries.values()].some((entry) => entry.attempt === attempt && entry.workflowId === workflowId) ||
+    return [...this.entries.values()].some((entry) =>
+      entry.attempt === attempt && entry.workflowId === workflowId &&
+      !entry.exhausted) ||
       [...this.inFlight.values()].some((slot) => slot.attempt === attempt &&
         (slot.key === workflowId || slot.key.startsWith(`${workflowId}:`)));
   }
@@ -477,6 +490,10 @@ function announcesLeader(tableName, row) {
 // of one of its unacknowledged members, or - its membership unavailable - a
 // services or partitions row of its group.
 function entryMatchesRow(entry, tableName, row) {
+  if (isDescriptorObligationOnly(entry)) {
+    return tableName === NODES_TABLE || tableName === PARTITIONS_TABLE ||
+      tableName === SERVICES_TABLE;
+  }
   const groupRow = String(row?.partition_id ?? '') === entry.partitionId;
   if (tableName === NODES_TABLE) {
     return entry.unacknowledged.some((member) =>
