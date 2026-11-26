@@ -142,7 +142,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
       return false;
     }
 
-    this.sendDirectDispatchWakeupFromRow(row).catch(
+    this.sendDirectDispatchWakeup(this.buildOperationFromRow(row)).catch(
       () => {},
     );
     return true;
