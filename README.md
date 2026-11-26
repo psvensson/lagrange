@@ -90,10 +90,10 @@ NODE_HOST_ID=demo-host npx lagrange --dry-run --data-dir ./lagrange-data
 
 The dry run prints `Dry run completed`. The installed package supplies both the `lagrange` and `lagrange-admin` commands.
 
-To start one node in the foreground, use a fresh data directory and leave ports 8080 (REST), 8081 (admin WebSocket), and 8082 (transport WebSocket) available. Run the installed binary from the same directory:
+To start one node in the foreground, use a fresh data directory and leave ports 8080 (REST), 8081 (admin WebSocket), and 8082 (transport WebSocket) available. For this single-node evaluation, explicitly request one replica for newly created table partitions. The default is three replicas. A table with one replica has no redundant copy. Run the installed binary from the same directory:
 
 ```bash
-NODE_HOST_ID=demo-host ./node_modules/.bin/lagrange --data-dir ./single-node-data
+PARTITION_DEFAULT_REPLICA_COUNT=1 NODE_HOST_ID=demo-host ./node_modules/.bin/lagrange --data-dir ./single-node-data
 ```
 
 In a second terminal, check readiness:
