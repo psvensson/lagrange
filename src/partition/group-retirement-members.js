@@ -417,7 +417,7 @@ async function retireFrozenGroupMembers(owner, {workflowId, participantKey,
   // Only the record's current owner retires a group: proved at apply time
   // (a renewal compare-and-swap) before any record write or REMOVE of this
   // pass; anyone else stops here as superseded.
-  await assertWorkflowRecordHeld(owner, workflowId);
+  await assertWorkflowRecordHeld(owner, workflowId, null, evidence.attempt);
   // The projection after the renewal (the record's own participant).
   const group = {workflow, evidence, participantKey,
     participant: participantOf(workflow, participantKey)};

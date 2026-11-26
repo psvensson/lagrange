@@ -4,6 +4,8 @@ import {test} from 'node:test';
 import {TABLES} from '../../src/constants/index.js';
 import {SPLIT_DESCRIPTOR_DISPOSITION, SPLIT_DESCRIPTOR_ERROR, SPLIT_DESCRIPTOR_FINALIZE_SQL,
   splitDescriptorWriteKey} from '../../src/partition/partition-split-descriptor-command.js';
+import {SIBLING_DESCRIPTOR_ACTION, siblingDescriptorMutation} from
+  '../../src/partition/partition-sibling-descriptor-effect.js';
 import {deriveParticipantEntryId} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {buildDeliveryEnvelope, deliveryAnswerOf} from '../../src/transport/transport-semantic-outcome.js';
 import {selectRows, withSurface} from './unknown-outcome-surface-fixture.js';
@@ -19,9 +21,9 @@ function where(intent) {
     partition_id: intent.partitionId};
 }
 
-function insertChild(gateway, attempt) {
+function insertChild(gateway, attempt, version = 2) {
   return gateway.insertSystemTableRow(TABLE, {partition_id: CHILD, table_id: TABLE_ID,
-    table_name: 'invoices', partition_version: 2, replica_count: 3, size_bytes: 0,
+    table_name: 'invoices', partition_version: version, replica_count: 3, size_bytes: 0,
     state: 'NORMAL', created_at: 1002, updated_at: 1002, split_descriptor_attempt: attempt});
 }
 
@@ -107,3 +109,70 @@ test('gateway remote DELETE retains the committed split descriptor receipt acros
       assert.equal(recovered.partitionResult.term, originalAnswer.term);
     }, {cdc: true});
   });
+
+test('overlapping sibling finalizations with identical SQL and different plans reach destination collision',
+  {timeout: 120000}, async () => withSurface([TABLE], async ({
+    gateway, cdcIntegrationService, deliveries, messageRouter, of,
+  }) => {
+    assert.equal((await insertChild(gateway, 0, 1)).success, true);
+    const a = {...FIRST, action: SIBLING_DESCRIPTOR_ACTION.FINALIZE, workflowAttempt: 7,
+      priorAttempt: 0, priorVersion: 1, targetVersion: 2};
+    const b = {...a, priorAttempt: 1};
+    assert.equal(splitDescriptorWriteKey(a), splitDescriptorWriteKey(b));
+    assert.deepEqual(siblingDescriptorMutation(a), siblingDescriptorMutation(b));
+    const committed = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    let firstReplyHeld = false;
+    let collisionArrivedWhileHeld = false;
+    const deliver = messageRouter.deliver;
+    messageRouter.deliver = async function(address, request) {
+      if (request.splitDescriptorIntent?.priorAttempt === b.priorAttempt) {
+        collisionArrivedWhileHeld ||= firstReplyHeld;
+        release.resolve();
+      }
+      const envelope = await deliver.call(this, address, request);
+      if (request.splitDescriptorIntent?.priorAttempt === a.priorAttempt) {
+        firstReplyHeld = true;
+        committed.resolve(deliveryAnswerOf(envelope));
+        await release.promise;
+        firstReplyHeld = false;
+      }
+      return envelope;
+    };
+    // If a regression joins the old promise, release it on the observed join
+    // so the witness can report the wrong answer without a timer.
+    const singleFlight = gateway.runSingleFlight;
+    gateway.runSingleFlight = function(map, key, ...rest) {
+      if (map.has(key)) release.resolve();
+      return singleFlight.call(this, map, key, ...rest);
+    };
+    const coalesce = cdcIntegrationService.runCoalescedMutation;
+    cdcIntegrationService.runCoalescedMutation = function(key, ...rest) {
+      if (this.inFlightMutationsByKey.has(key)) release.resolve();
+      return coalesce.call(this, key, ...rest);
+    };
+    const submit = (intent) => gateway.submitMutation(siblingDescriptorMutation(intent),
+      {splitDescriptorIntent: intent});
+    const first = submit(a);
+    try {
+      // Propagate setup refusal immediately if the first command never gets
+      // to the receiver.
+      const observed = await Promise.race([committed.promise, first]);
+      assert.deepEqual(observed.splitDescriptorReceipt, {...a, disposition: 'cancelled'});
+      await assert.rejects(submit(b), (error) => error.errorCode === SPLIT_DESCRIPTOR_ERROR.COLLISION);
+    } finally {
+      release.resolve();
+      await first;
+      messageRouter.deliver = deliver;
+      gateway.runSingleFlight = singleFlight;
+      cdcIntegrationService.runCoalescedMutation = coalesce;
+    }
+    assert.deepEqual((await first).partitionResult.splitDescriptorReceipt, {...a, disposition: 'cancelled'});
+    assert.equal(collisionArrivedWhileHeld, true, 'second request reached the router during the held reply');
+    const packets = deliveries.filter(({entryId}) => entryId ===
+      deriveParticipantEntryId(splitDescriptorWriteKey(a), of(TABLE).partitionId));
+    assert.ok(packets.some(({answer}) => answer.failureCode === SPLIT_DESCRIPTOR_ERROR.COLLISION));
+    assert.deepEqual(selectRows(of(TABLE).dbPath,
+      'SELECT partition_version, split_descriptor_attempt FROM partitions WHERE partition_id = ?', [CHILD]),
+    [{partition_version: 1, split_descriptor_attempt: 0}]);
+  }, {cdc: true}));

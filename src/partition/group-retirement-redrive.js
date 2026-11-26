@@ -72,6 +72,7 @@
  */
 
 import {wasNodeRecordReadyWhenWritten} from '../node/node-readiness-policy.js';
+import {RECORD_CHANGE_REFUSAL} from './managed-workflow-record-changes.js';
 import {claimWorkflowOwnershipCore} from './managed-workflow-ownership-core.js';
 import {
   readWaitClock,
@@ -126,6 +127,12 @@ const PARTITIONS_TABLE = 'partitions';
 const TABLES_TABLE = 'tables';
 const DELETE_OPERATION = 'DELETE';
 
+// An asynchronous completion belongs to the decision that started it. Lease
+// reads and durable writes always receive the actual workflow ID separately.
+function retirementKey(key, attempt) {
+  return JSON.stringify([key, attempt ?? null]);
+}
+
 function fieldsOf(entry) {
   return {workflowId: entry.workflowId, partitionId: entry.partitionId,
     unacknowledgedReplicaIds: entry.unacknowledged.map((member) =>
@@ -174,13 +181,14 @@ class GroupRetirementRedrive {
    * @param {Function} step - async () => *.
    * @return {Promise<*>}
    */
-  exclusive(key, step, {terminal = () => false} = {}) {
-    const running = this.inFlight.get(key);
+  exclusive(key, step, {terminal = () => false, attempt} = {}) {
+    const scopedKey = retirementKey(key, attempt);
+    const running = this.inFlight.get(scopedKey);
     if (running) {
       running.again = true;
       return running.promise;
     }
-    const slot = {again: false, promise: null};
+    const slot = {key, attempt, again: false, promise: null};
     slot.promise = (async () => {
       try {
         let result = await step();
@@ -190,10 +198,10 @@ class GroupRetirementRedrive {
         }
         return result;
       } finally {
-        this.inFlight.delete(key);
+        this.inFlight.delete(scopedKey);
       }
     })();
-    this.inFlight.set(key, slot);
+    this.inFlight.set(scopedKey, slot);
     return slot.promise;
   }
 
@@ -210,26 +218,26 @@ class GroupRetirementRedrive {
    *   not readable): the step waits for its group's rows to change.
    * @param {Function} report.redrive - async () => re-runs the step.
    */
-  report({workflowId, partitionId, unacknowledged, superseded = false,
+  report({workflowId, partitionId, attempt, unacknowledged, superseded = false,
     membershipUnavailable = false, redrive}) {
-    const key = `${workflowId}\u0000${partitionId}`;
+    const key = retirementKey([workflowId, partitionId], attempt);
     const fields = {workflowId, partitionId,
       unacknowledgedReplicaIds: unacknowledged.map((member) =>
         member.replicaId), membershipUnavailable};
     if (superseded) {
-      this.settle(workflowId, partitionId);
+      this.settle(workflowId, partitionId, attempt);
       this.logger.warn(REDRIVE_LOG_MSG.SUPERSEDED, fields);
       return;
     }
     const entry = this.entries.get(key) ||
-      {key, workflowId, partitionId, attempts: 0, fallbackRuns: 0,
+      {key, workflowId, partitionId, attempt, attempts: 0, fallbackRuns: 0,
         timer: null, exhausted: false, startedAtMs: readWaitClock(null)};
     entry.unacknowledged = unacknowledged;
     entry.membershipUnavailable = membershipUnavailable;
     entry.redrive = redrive;
     entry.attempts += 1;
     this.entries.set(key, entry);
-    this.armRenewal(workflowId);
+    this.armRenewal(workflowId, attempt);
     this.logger.warn(REDRIVE_LOG_MSG.INCOMPLETE,
       {...fields, attempt: entry.attempts});
     this.subscribeNodeRows();
@@ -245,14 +253,14 @@ class GroupRetirementRedrive {
    * @param {string} workflowId
    * @param {string} partitionId
    */
-  settle(workflowId, partitionId) {
-    const key = `${workflowId}\u0000${partitionId}`;
+  settle(workflowId, partitionId, attempt) {
+    const key = retirementKey([workflowId, partitionId], attempt);
     const entry = this.entries.get(key);
     if (entry) {
       this.scheduler.clearTimeout(entry.timer);
       this.entries.delete(key);
     }
-    this.releaseIfIdle(workflowId);
+    this.releaseIfIdle(workflowId, attempt);
   }
 
   /**
@@ -261,20 +269,27 @@ class GroupRetirementRedrive {
    * @param {string} workflowId
    */
   abandon(workflowId) {
+    const attempts = new Set([...this.entries.values()].filter(
+      (entry) => entry.workflowId === workflowId).map((entry) => entry.attempt));
+    for (const attempt of attempts) this.abandonAttempt(workflowId, attempt);
+  }
+
+  abandonAttempt(workflowId, attempt) {
     for (const entry of [...this.entries.values()]) {
-      if (entry.workflowId === workflowId) {
+      if (entry.workflowId === workflowId && entry.attempt === attempt) {
         this.scheduler.clearTimeout(entry.timer);
         this.entries.delete(entry.key);
       }
     }
-    this.releaseIfIdle(workflowId);
+    this.releaseIfIdle(workflowId, attempt);
   }
 
   /** @private */
-  releaseIfIdle(workflowId) {
-    if (!this.tracks(workflowId)) {
-      this.leaseScheduler.clearTimeout(this.renewals.get(workflowId));
-      this.renewals.delete(workflowId);
+  releaseIfIdle(workflowId, attempt) {
+    const key = retirementKey(workflowId, attempt);
+    if (!this.tracks(workflowId, attempt)) {
+      this.leaseScheduler.clearTimeout(this.renewals.get(key));
+      this.renewals.delete(key);
     }
     if (this.entries.size === 0 && this.unsubscribe) {
       this.unsubscribe();
@@ -283,9 +298,9 @@ class GroupRetirementRedrive {
   }
 
   /** @private */
-  tracks(workflowId) {
+  tracks(workflowId, attempt) {
     return [...this.entries.values()].some((entry) =>
-      entry.workflowId === workflowId);
+      entry.workflowId === workflowId && entry.attempt === attempt);
   }
 
   /**
@@ -293,31 +308,32 @@ class GroupRetirementRedrive {
    * it is tracked (see the owner contract).
    * @private
    */
-  armRenewal(workflowId) {
+  armRenewal(workflowId, attempt) {
+    const key = retirementKey(workflowId, attempt);
     if (typeof this.renew !== 'function' || this.renewIntervalMs === null ||
-        this.renewals.has(workflowId)) {
+        this.renewals.has(key) || !this.tracks(workflowId, attempt)) {
       return;
     }
     const timer = this.leaseScheduler.setTimeout(() => {
-      this.renewals.delete(workflowId);
-      if (!this.tracks(workflowId)) {
+      this.renewals.delete(key);
+      if (!this.tracks(workflowId, attempt)) {
         return;
       }
-      Promise.resolve().then(() => this.renew(workflowId)).then((held) => {
+      Promise.resolve().then(() => this.renew(workflowId, attempt)).then((held) => {
         if (held === true) {
-          this.armRenewal(workflowId);
+          this.armRenewal(workflowId, attempt);
           return;
         }
         this.logger.warn(REDRIVE_LOG_MSG.RENEWAL_REFUSED, {workflowId});
-        this.abandon(workflowId);
+        this.abandonAttempt(workflowId, attempt);
       }, (error) => {
         this.logger.warn(REDRIVE_LOG_MSG.RENEWAL_FAILED, {workflowId,
           error: error?.message || String(error)});
-        this.armRenewal(workflowId);
+        this.armRenewal(workflowId, attempt);
       });
     }, this.renewIntervalMs);
     timer?.unref?.();
-    this.renewals.set(workflowId, timer);
+    this.renewals.set(key, timer);
   }
 
   /**
@@ -338,7 +354,9 @@ class GroupRetirementRedrive {
     entry.timer = null;
     entry.lastTrigger = trigger;
     const reported = entry.attempts;
-    Promise.resolve().then(() => entry.redrive(trigger)).catch((error) => {
+    Promise.resolve().then(() => {
+      if (this.entries.get(entry.key) === entry) return entry.redrive(trigger);
+    }).catch((error) => {
       this.logger.warn(REDRIVE_LOG_MSG.INCOMPLETE, {
         workflowId: entry.workflowId, partitionId: entry.partitionId,
         trigger, error: error?.message || String(error)});
@@ -400,10 +418,10 @@ class GroupRetirementRedrive {
    * @param {string} workflowId
    * @return {boolean}
    */
-  isDriving(workflowId) {
-    return [...this.inFlight.keys(), ...[...this.entries.values()].map(
-      (entry) => entry.workflowId)].some((key) => key === workflowId ||
-      key.startsWith(`${workflowId}:`));
+  isDriving(workflowId, attempt) {
+    return [...this.entries.values()].some((entry) => entry.attempt === attempt && entry.workflowId === workflowId) ||
+      [...this.inFlight.values()].some((slot) => slot.attempt === attempt &&
+        (slot.key === workflowId || slot.key.startsWith(`${workflowId}:`)));
   }
 
   /** @private */
@@ -511,7 +529,7 @@ function createGroupRetirementRedrive(workflow, options) {
     observeSystemRows: (listener) => workflow.observeSystemRows(listener),
     isNodeRowReady: (row) => wasNodeRecordReadyWhenWritten(row),
     scheduler: options.groupRetirementScheduler || globalThis,
-    renew: (workflowId) => renewHeldWorkflowLease(workflow, workflowId),
+    renew: (workflowId, attempt) => renewHeldWorkflowLease(workflow, workflowId, attempt),
     leaseMs: workflow.workflowLeaseMs,
     leaseScheduler: options.groupRetirementLeaseScheduler || null,
   });
@@ -524,16 +542,17 @@ function createGroupRetirementRedrive(workflow, options) {
  * @param {string} workflowId
  * @return {Promise<boolean>}
  */
-async function renewHeldWorkflowLease(owner, workflowId) {
+async function renewHeldWorkflowLease(owner, workflowId, attempt) {
   const live = owner.workflowCoordinator?.getWorkflowById?.(workflowId);
   if (!live || live.workflowOwnerId !== owner.workflowOwnerId) {
     return false;
   }
   const claim = await claimWorkflowOwnershipCore(owner, workflowId,
-    {renew: true});
+    {renew: true, attempt});
   if (claim?.accepted === true) {
     return true;
   }
+  if (claim?.result === RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH) return false;
   // A refusal that did not relinquish the workflow (an unconfirmed outcome:
   // nothing was decided) is retried, not a loss.
   if (owner.workflowCoordinator.getWorkflowById(workflowId)) {

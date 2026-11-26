@@ -41,6 +41,7 @@ import {
   createDefaultPartitionInfos,
 } from './managed-merge-workflow-test-helpers.js';
 import {
+  openDescriptorRecordStore,
   openRecordStore,
   openView,
   parsePartitionTransition,
@@ -224,7 +225,9 @@ for (const family of Object.keys(FAMILY)) {
     test(`S1-R3 ${family}: ${racer} race, the owner dies in the window, a ` +
       'successor recovers and aborts: the dispatched target is never ' +
       'deleted on an empty member set', async (t) => {
-      const store = FAMILY[family].store();
+      const store = family === 'split' ?
+        await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]}) :
+        FAMILY[family].store();
       const clock = {now: 1000};
       const provisioned = [];
       const a = FAMILY[family].owner(store, 'A', clock, {
@@ -261,6 +264,13 @@ for (const family of Object.keys(FAMILY)) {
         'the dispatched target\'s row is never deleted while its members ' +
         'have not answered');
       t.ok(store.partitionIds().includes(target), 'its row survives');
+      if (family === 'split') {
+        const {pendingChildren, receipts} = store.metadata().splitDescriptorCleanup;
+        t.same(pendingChildren, [target], 'only the dispatched child still awaits its members');
+        const [other] = store.metadata().targetPartitionIds.filter((id) => id !== target);
+        t.same(store.partitionDeletesBy('B'), [other], 'B deleted the never-provisioned descriptor');
+        t.same(receipts.map(({partitionId, disposition}) => [partitionId, disposition]), [[other, 'deleted']]);
+      }
     });
   }
 }

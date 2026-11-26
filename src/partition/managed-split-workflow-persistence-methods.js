@@ -1,3 +1,5 @@
+import {SIBLING_DESCRIPTOR_ACTION} from './partition-sibling-descriptor-effect.js';
+import {submitSplitSiblingDescriptor} from './managed-split-sibling-descriptor.js';
 import {TABLES} from '../constants/index.js';
 import {
   QUERY_ERROR_MSG,
@@ -248,29 +250,13 @@ class ManagedSplitWorkflowPersistenceMethods {
    * would blackhole the sibling's key range the moment the cutover
    * promotes the epoch (merge already enforces this carry-forward).
    * Fail-closed: a zero-row update throws.
-   * @param {string} partitionId - Sibling partition ID.
-   * @param {number} targetVersion - Split target epoch.
+   * @param {Object} workflow - Record that issued the promotion.
+   * @param {Object} subject - Captured immutable descriptor preimage.
    * @return {Promise<void>}
    * @private
    */
-  async promoteSiblingPartitionVersion(partitionId, targetVersion) {
-    const mutationResult = await this.getControlPlaneSystemTableGateway()
-      .submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: TABLES.PARTITIONS,
-        whereClause: {[LOCAL_STR_PARTITION_ID]: partitionId},
-        data: {
-          partition_version: targetVersion,
-          updated_at: this.now(),
-        },
-      }, this.buildManagedSplitMutationOptions());
-    this.assertSplitEpochMutationEffect(mutationResult, {
-      workflowId: `sibling:${partitionId}`,
-    });
-    this.logger.info(MANAGED_SPLIT_LOG_MSG.SIBLING_CARRIED_FORWARD, {
-      partitionId,
-      targetVersion,
-    });
+  async promoteSiblingPartitionVersion(workflow, subject) {
+    return submitSplitSiblingDescriptor(this, workflow, subject, SIBLING_DESCRIPTOR_ACTION.PROMOTE);
   }
 
   /**

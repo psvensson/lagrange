@@ -30,6 +30,7 @@ import {
   forgetWorkflowRecord,
   recordBytesOf,
   recordChangeRefusedError,
+  refuseRecordChange,
 } from './managed-workflow-record-store.js';
 import {
   RECORD_CHANGE_REFUSAL,
@@ -342,8 +343,10 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
       renewalChange(this.recordOwner, live.fenceToken,
         claim.requireStates ?? null) :
       freshClaimChange(this.recordOwner, this.isTerminalWorkflow);
-    const write = await this.applyLiveChange(workflowId, change,
-      RECORD_CHANGE_KIND.CLAIM);
+    const guarded = (current, stored) => current && claim.attempt !== undefined &&
+      workflowAttemptOf(current.metadata) !== claim.attempt ?
+      refuseRecordChange(RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH, {superseded: true}) : change(current, stored);
+    const write = await this.applyLiveChange(workflowId, guarded, RECORD_CHANGE_KIND.CLAIM);
     if (write.accepted) {
       return {accepted: true, result: WORKFLOW_CLAIM_RESULT.ACCEPTED,
         workflow: write.workflow ?? this.getWorkflowById(workflowId)};

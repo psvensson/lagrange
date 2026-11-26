@@ -21,6 +21,8 @@ import {
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {TABLES} from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {seedTableRow, seedPartitionRow} from '../../src/bootstrap/seed-foundation-rows.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CDCOperation,
@@ -60,7 +62,6 @@ const COUNTER_TABLE = 'uo_counters';
 const CASE_SENSITIVE_USER_TABLE = 'Logs';
 const SURFACE_INSERT = `INSERT INTO ${USER_TABLE} (node_id, value) ` +
   'VALUES (?, ?)';
-const ACTIVE_PARTITION_VERSION = 1;
 const GROUP_TIMING = Object.freeze({
   heartbeatIntervalMs: 20,
   electionTimeoutMinMs: 150,
@@ -117,22 +118,19 @@ function rowsOf(dbPath, table, keyColumn) {
 // The partition schema of a table: a witness table's own columns, or a
 // system table's real columns and key.
 function partitionSchemaOf(table) {
-  // Opening the catalog validates its complete DDL, including constraints.
-  if (table === TABLES.PARTITIONS) return getSchemaByTableName(table);
   if (table === USER_TABLE) {
-    return {columns: [
+    return {tableName: table, columns: [
       {name: 'node_id', type: 'TEXT', primaryKey: true},
       {name: 'value', type: 'TEXT'},
     ]};
   }
   if (table === COUNTER_TABLE || table === CASE_SENSITIVE_USER_TABLE) {
-    return {columns: [
+    return {tableName: table, columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'n', type: 'INTEGER'},
     ]};
   }
-  return {columns: getSchemaByTableName(table).columns.map(
-    ({name, type, primaryKey}) => ({name, type, primaryKey: primaryKey === true}))};
+  return getSchemaByTableName(table);
 }
 
 function keyOf(table) {
@@ -185,32 +183,24 @@ async function withMutedConsoleError(body) {
   }
 }
 
-// The engine over a routing view of `tableRows`/`partitionRows`/
-// `serviceRows`, delivering through `messageRouter`.
-function buildSurfaceEngine({tableRows, partitionRows, serviceRows,
-  messageRouter}) {
-  const byType = {tables: tableRows, partitions: partitionRows,
-    services: serviceRows};
+// Use the bootstrap row builders with this fixture's actual hosted group.
+function surfaceDescriptors(table, partitionId, leaderNodeId, replicaCount) {
+  const schema = partitionSchemaOf(table);
+  const now = Date.now();
+  const tableRow = seedTableRow(schema, now);
+  const partitionRow = {...seedPartitionRow(schema, leaderNodeId, now),
+    partition_id: partitionId, replica_count: replicaCount};
+  return {schema, tableRow, partitionRow};
+}
+
+function buildSurfaceEngine(systemCache, messageRouter) {
   const engine = new SQLQueryEngine({
     // Gateway writes route user tables on the recovery dimension and pass
     // mutation admission, which still read the projection until attempt 3
     // of quest serve-eligibility-committed-epoch-read: a healthy projection.
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: NODE_ID,
-    systemCache: {
-      get(type, key) {
-        if (type === TABLES.TABLES) {
-          return tableRows.find((row) => row.table_name === key);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return partitionRows.find((row) => row.partition_id === key) ||
-            null;
-        }
-        return null;
-      },
-      filter: (type, predicate) => (byType[type] || []).filter(predicate),
-      getAll: (type) => byType[type] || [],
-    },
+    systemCache,
     messageRouter,
     cdcIntegrationService: {
       async upsertSystemTableRow() {
@@ -247,22 +237,18 @@ function pinSurfaceParticipantAdmission(service) {
   };
 }
 
-async function startLoneLeader(directory, table) {
+async function startLoneLeader(directory, table, systemCache) {
   const partitionId = `${table}-p1`;
   const replicaId = `${partitionId}-r1`;
   const address = `${NODE_ID}/partition/${replicaId}`;
   const dbPath = path.join(directory, `${partitionId}.sqlite`);
-  const tableRow = {table_name: table, primaryKey: keyOf(table),
-    active_partition_version: ACTIVE_PARTITION_VERSION};
+  const {schema, tableRow, partitionRow} = surfaceDescriptors(table, partitionId, null, 1);
+  systemCache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT, tableRow);
+  systemCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, partitionRow);
   const partition = new PartitionService(withFoundingStamp({
     tableId: table, tableName: table, partitionId, replicaId,
     replicaIds: [replicaId], nodeId: NODE_ID, dbPath,
-    systemTableCache: {
-      get: (type, key) => (type === TABLES.TABLES &&
-        key === table ? tableRow : null),
-      getAll: (type) => (type === TABLES.TABLES ? [tableRow] : []),
-    },
-    schema: partitionSchemaOf(table),
+    systemTableCache: systemCache, schema,
   }));
   await partition.initialize();
   partition.startElection();
@@ -270,16 +256,14 @@ async function startLoneLeader(directory, table) {
   assert.equal(await waitFor(() => partition.raft.readStatus().role ===
     RAFT_ROLE.LEADER && partition.role === RAFT_ROLE.LEADER), true,
   `setup: ${partitionId} leads`);
+  systemCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.UPDATE,
+    {partition_id: partitionId, leader_node_id: NODE_ID});
+  systemCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    service_id: replicaId, service_type: 'partition', partition_id: partitionId,
+    node_id: NODE_ID, raft_role: 'leader', address, status: 'active'});
   await resumeFixtureParticipantAdmission(partition);
   pinSurfaceParticipantAdmission(partition);
-  return {address, tableRow,
-    surface: {partition, dbPath, partitionId, table},
-    partitionRow: {partition_id: partitionId, table_name: table,
-      leader_node_id: NODE_ID, partition_key_start: null,
-      partition_key_end: null},
-    serviceRow: {service_id: replicaId, service_type: 'partition',
-      partition_id: partitionId, node_id: NODE_ID, raft_role: 'leader',
-      address, status: 'active'}};
+  return {address, surface: {partition, dbPath, partitionId, table}};
 }
 
 // Lone rs-raft leaders, one per table, behind the production engine and a
@@ -290,18 +274,13 @@ async function withSurface(tables, body, {cdc = false} = {}) {
   quietEnvironment();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
   const surfaces = new Map();
-  const tableRows = [];
-  const partitionRows = [];
-  const serviceRows = [];
+  const systemCache = new SystemTableCache();
   const deliveries = [];
   let cdcIntegrationService = null;
   try {
     for (const table of tables) {
-      const leader = await startLoneLeader(directory, table);
+      const leader = await startLoneLeader(directory, table, systemCache);
       surfaces.set(leader.address, leader.surface);
-      tableRows.push(leader.tableRow);
-      partitionRows.push(leader.partitionRow);
-      serviceRows.push(leader.serviceRow);
     }
     const messageRouter = {
       async deliver(address, message) {
@@ -312,8 +291,7 @@ async function withSurface(tables, body, {cdc = false} = {}) {
         return buildDeliveryEnvelope({acknowledged: true}, answer);
       },
     };
-    const engine = buildSurfaceEngine({tableRows, partitionRows,
-      serviceRows, messageRouter});
+    const engine = buildSurfaceEngine(systemCache, messageRouter);
     if (cdc) {
       cdcIntegrationService = new CDCIntegrationService({nodeId: NODE_ID,
         sqlQueryEngine: engine});
@@ -524,14 +502,19 @@ async function withGroupSurface({partitionId, table, tempPrefix}, body) {
       deliver.call(network, address, envelope, ...rest);
   };
   try {
-    const tableRow = {table_id: table, table_name: table,
-      primaryKey: keyOf(table),
-      active_partition_version: ACTIVE_PARTITION_VERSION};
-    // Each replica validates the engine's epoch fence against its own
-    // tables row.
+    const {tableRow, partitionRow} = surfaceDescriptors(table, partitionId, members[0][1], members.length);
+    const systemCache = new SystemTableCache();
+    systemCache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT, tableRow);
+    systemCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, partitionRow);
+    // Keep the group's own membership views and publish the same active
+    // descriptor to each receiver that validates the engine's epoch.
     for (const service of services) {
-      service.systemTableCache.applySystemTableChange(TABLES.TABLES,
-        CDCOperation.INSERT, tableRow);
+      service.systemTableCache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT, tableRow);
+      service.systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.UPDATE, partitionRow);
+      systemCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+        service_id: service.replicaId, service_type: 'partition', partition_id: partitionId,
+        node_id: service.nodeId, address: addressOf([service.replicaId, service.nodeId]),
+        raft_role: service.role, status: 'active'});
     }
     await resumeFixtureParticipantGroupAdmission(services, group.waitFor);
     for (const service of services) {
@@ -557,15 +540,7 @@ async function withGroupSurface({partitionId, table, tempPrefix}, body) {
         return buildDeliveryEnvelope({acknowledged: true}, entry.answer);
       },
     };
-    const engine = buildSurfaceEngine({tableRows: [tableRow],
-      partitionRows: [{partition_id: partitionId, table_name: table,
-        leader_node_id: 'node-1', partition_key_start: null,
-        partition_key_end: null}],
-      serviceRows: members.map((member, index) => ({
-        service_id: member[0], service_type: 'partition', partition_id:
-          partitionId, node_id: member[1], address: addressOf(member),
-        raft_role: index === 0 ? 'leader' : 'follower', status: 'active'})),
-      messageRouter});
+    const engine = buildSurfaceEngine(systemCache, messageRouter);
     const peers = services.map((service) =>
       String(service.raft.readStatus().peerId));
     const rowsEverywhere = (sql) => members.map((member) =>

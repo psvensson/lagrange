@@ -1,3 +1,4 @@
+import {issueSplitSiblingPlan, sameIssuedSiblingPlan} from './managed-split-sibling-plan.js';
 import {PRE_CUTOVER_SPLIT_STATES} from './managed-split-descriptor-cleanup.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
@@ -56,6 +57,14 @@ async function resolveDuplicateSplitCutoverOutcome(owner, workflowId,
       {cutoverReadiness: cutoverOutcome.readiness} : {})}};
 }
 
+function dispatchAcceptedSplitFailure(owner, workflowId, failure) {
+  owner.abortSplitOnSourceFailure(workflowId, failure).catch((error) => {
+    owner.logger.error(MANAGED_SPLIT_LOG_MSG.ABORT_DISPATCH_FAILED, {
+      workflowId, ackStatus: failure.status, error: error?.message || error,
+    });
+  });
+}
+
 async function buildAcceptedSplitAckOutcome(owner, workflow, workflowId,
   ackResult, ackStatus) {
   let splitCutoverApplied =
@@ -63,11 +72,7 @@ async function buildAcceptedSplitAckOutcome(owner, workflow, workflowId,
   let terminalCustody = null;
   let cutoverReadiness = null;
   if (ackResult.splitSourceFailure) {
-    owner.abortSplitOnSourceFailure(workflowId, ackResult.splitSourceFailure).catch((error) => {
-      owner.logger.error(MANAGED_SPLIT_LOG_MSG.ABORT_DISPATCH_FAILED, {
-        workflowId, ackStatus, error: error?.message || error,
-      });
-    });
+    dispatchAcceptedSplitFailure(owner, workflowId, ackResult.splitSourceFailure);
     splitCutoverApplied = false;
   } else if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
     owner.logger.error(MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
@@ -379,7 +384,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
       const failure = this.resolveWorkflowState(workflowId)?.metadata?.splitSourceFailure;
       if (ackResult.result === PARTICIPANT_ACK_RESULT.DUPLICATE &&
           failure?.status === ackStatus && failure.participantKey === ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]) {
-        await this.abortSplitOnSourceFailure(workflowId, failure);
+        dispatchAcceptedSplitFailure(this, workflowId, failure);
       } else {
         await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult, ack);
       }
@@ -516,19 +521,14 @@ class ManagedSplitWorkflowExecutionGateMethods {
             this.logSplitCutoverRefused(workflowId, readiness);
             return {result: false};
           }
-          const siblingPartitionIds =
-            this.resolveCutoverSiblingPartitionIds(currentWorkflow);
-          const targetVersion = Number(
-            currentWorkflow.metadata?.[
-              PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION
-            ],
-          );
-          for (const siblingPartitionId of siblingPartitionIds) {
-            await this.promoteSiblingPartitionVersion(
-              siblingPartitionId,
-              targetVersion,
-            );
+          // The coordinator updates its live projection in place. All sends
+          // and the epoch CAS must keep this exact issued attempt and plan.
+          const issuedWorkflow = {...await issueSplitSiblingPlan(this, currentWorkflow)};
+          const subjects = issuedWorkflow.metadata.splitIssuedSiblings;
+          for (const subject of subjects) {
+            await this.promoteSiblingPartitionVersion(issuedWorkflow, subject);
           }
+          const siblingPartitionIds = subjects.map((subject) => subject.partitionId);
           return {
             nextStep: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
             reason: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
@@ -542,7 +542,9 @@ class ManagedSplitWorkflowExecutionGateMethods {
                   this.now(),
                 [PARTITION_TRANSITION_METADATA_FIELD.SIBLING_PARTITION_IDS]:
                   siblingPartitionIds,
-              }, (record) => this.isSplitCutoverAdmissible(record)),
+              }, (record) => this.isSplitCutoverAdmissible(record) &&
+                record.metadata.workflowAttempt === issuedWorkflow.metadata.workflowAttempt &&
+                sameIssuedSiblingPlan(record, subjects)),
             result: true,
           };
         },
