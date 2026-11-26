@@ -118,7 +118,7 @@ const splitPartitions = [{partition_id: SPLIT_SOURCE}, {partition_id: 'users-p3'
 
 const FAMILY = {
   split: {
-    store: () => openRecordStore({partitions: splitPartitions}),
+    store: (t) => openDescriptorRecordStore(t, {partitions: splitPartitions}),
     build: (store, options) => buildWorkflow({...common(store, options),
       parsePartitionTransition, topologyAdapter: null}).workflow,
     start: (workflow) => workflow.execute(SPLIT_SOURCE),
@@ -282,7 +282,7 @@ for (const family of Object.keys(FAMILY)) {
   }
 
   if (family === 'split') test('deferred aborted child DELETE cannot erase a same-ID successor', async (t) => {
-    const store = await openDescriptorRecordStore(t, {partitions: splitPartitions});
+    const store = await spec.store(t);
     const clock = {now: 1000};
     const original = owner(spec, store, {name: 'A', clock});
     const {workflowId} = await spec.start(original);
@@ -411,7 +411,7 @@ for (const family of Object.keys(FAMILY)) {
   });
 
   test(`${family}: FAILED retains each source grant until committed release ACK`, async (t) => {
-    const store = family === 'split' ? await openDescriptorRecordStore(t, {partitions: splitPartitions}) : spec.store();
+    const store = await spec.store(t);
     const diagnostics = recordingLogger();
     const workflow = owner(spec, store, {name: 'A', clock: {now: 1000}, logger: diagnostics.logger});
     const started = await spec.start(workflow);
@@ -492,7 +492,7 @@ for (const family of Object.keys(FAMILY)) {
   });
 
   test(`${family}: only the current source fence may authorize terminal release`, async (t) => {
-    const store = spec.store();
+    const store = await spec.store(t);
     const workflow = owner(spec, store, {name: 'A', clock: {now: 1000}});
     const {workflowId} = await spec.start(workflow);
     await authorizeSources(workflow, store, t, false);
@@ -545,7 +545,7 @@ for (const family of Object.keys(FAMILY)) {
   test(`V6-A1 ${family}: a registration derived from a read taken before a ` +
     'whole competing workflow ran to its clear is refused and does nothing',
   async (t) => {
-    const store = spec.store();
+    const store = await spec.store(t);
     const clock = {now: 1000};
     const sentByA = [];
     const a = owner(spec, store, {name: 'A', clock, sent: sentByA});
@@ -583,7 +583,7 @@ for (const family of Object.keys(FAMILY)) {
   test(`V6-A2 ${family}: a cleared record of one generation is not the ` +
     'cleared record of the next (register, abort and clear in between)',
   async (t) => {
-    const store = spec.store();
+    const store = await spec.store(t);
     const clock = {now: 1000};
     const sentByA = [];
     const a = owner(spec, store, {name: 'A', clock, sent: sentByA});
@@ -620,7 +620,7 @@ for (const family of Object.keys(FAMILY)) {
 
   test(`V6-A3 ${family}: a registration whose partitions-row inputs lag the ` +
     'record it is compared against is refused at its turn', async (t) => {
-    const store = spec.store();
+    const store = await spec.store(t);
     const clock = {now: 1000};
     const lagging = store.partitionIds().map((id) => store.partitionRow(id));
     const b = owner(spec, store, {name: 'B', clock});
@@ -647,7 +647,7 @@ for (const family of Object.keys(FAMILY)) {
     test('V6-A4 split: a registration from a partitions view missing a ' +
       'sibling is refused by the record\'s committed partition count',
     async (t) => {
-      const store = spec.store();
+      const store = await spec.store(t);
       const clock = {now: 1000};
       const sentByA = [];
       const missingSibling = store.partitionIds().filter((id) =>
@@ -675,7 +675,7 @@ for (const family of Object.keys(FAMILY)) {
       'failure after the cutover landed never moves the phase ' +
       'back; a typed incident; the workflow reaches its terminal',
     async (t) => {
-      const store = spec.store();
+      const store = await spec.store(t);
       const clock = {now: 1000};
       const states = [];
       store.observers.push((write) => {
@@ -716,7 +716,7 @@ for (const family of Object.keys(FAMILY)) {
   test(`B3 ${family}: after a retryable START failure past the cutover, a ` +
     'fresh owner re-driving the table starts nothing from the superseded ' +
     'source', async (t) => {
-    const store = spec.store();
+    const store = await spec.store(t);
     const clock = {now: 1000};
     await spec.failAfterCutover(store, {name: 'A', clock},
       Object.assign(new Error(TIMED_OUT), {retryable: true}));

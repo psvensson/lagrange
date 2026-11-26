@@ -20,6 +20,9 @@
  */
 import Database from 'better-sqlite3';
 import {deriveParticipantEntryId} from '../../src/query/distributed/participant-entry-id.js';
+import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {readCommittedStatementOutcome} from '../../src/partition/partition-committed-statement-outcome.js';
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {resumeFixtureParticipantGroupAdmission} from '../test-helpers/participant-transaction-fixture.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
@@ -76,6 +79,32 @@ function observeWrite(store, write) {
   return write;
 }
 
+// A redelivery returns the original changes count even if no SQL ran.
+// Observe the production commit event once on the destination, before any
+// waiting submitter can consume its answer or update TABLES.
+function descriptorSubmitter(store, leader) {
+  const writers = new Map();
+  leader.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, ({command}) => {
+    if (!writers.has(command.entryId)) return;
+    const writer = writers.get(command.entryId);
+    writers.delete(command.entryId);
+    const recorded = readCommittedStatementOutcome(leader, leader.getCommittedEntryKey(command));
+    observeWrite(store, {writer, sql: command.sql,
+      params: command.params, changes: recorded.changes, logIndex: recorded.logIndex});
+  });
+  return async (writer, sql, params, options) => {
+    const entryId = deriveParticipantEntryId(options.idempotencyKey, leader.partitionId);
+    const prior = readCommittedStatementOutcome(leader, leader.getCommittedEntryKey({entryId}));
+    const first = !writers.has(entryId) && prior.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED;
+    if (first) writers.set(entryId, writer);
+    try {
+      return await leader.executeQuery(sql, params, {...options, entryId});
+    } finally {
+      if (first) writers.delete(entryId);
+    }
+  };
+}
+
 // One submitted write: earlier delayed entries land first; a delayed one
 // fails its submission now and lands later; a lost acknowledgement applies
 // and answers a failure.
@@ -128,6 +157,7 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
   // and the partitions rows are then exactly what that write left).
   const store = {db, tableId, writes: [], lostAcks: [], delays: [],
     delayed: [], observers: []};
+  const submitDescriptor = descriptorLeader ? descriptorSubmitter(store, descriptorLeader) : null;
   insertPartitions(db, {tableId, tableName}, partitions);
   store.tablesRow = () => {
     const row = db.prepare(
@@ -166,11 +196,8 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
           throw new Error(SUBMIT_FAILED);
         }
         if (Object.hasOwn(options, 'splitDescriptorIntent')) {
-          if (!descriptorLeader) throw new Error('split descriptor witness requires an admitted PARTITIONS leader');
-          const entryId = deriveParticipantEntryId(options.idempotencyKey, descriptorLeader.partitionId);
-          const result = await descriptorLeader.executeQuery(sql, params, {...options, entryId});
-          observeWrite(store, {writer, sql, params, changes: result.changes, result});
-          return result;
+          if (!submitDescriptor) throw new Error('split descriptor witness requires an admitted PARTITIONS leader');
+          return submitDescriptor(writer, sql, params, options);
         }
         return submitWrite(store, writer, sql, params);
       },

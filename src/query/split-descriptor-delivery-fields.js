@@ -11,4 +11,15 @@ function splitDescriptorCommitFields(answer) {
   return {splitDescriptorReceipt, committed, logIndex, term};
 }
 
-export {splitDescriptorCommitFields, splitDescriptorIntentFields};
+// A one-target descriptor command can return the destination's typed refusal.
+// Keep the surrounding distributed participant diagnostics with that answer.
+function splitDescriptorFailureFields(answer) {
+  if (typeof answer?.failureCode !== 'string' || typeof answer.errorCode !== 'string') return {};
+  const fields = {};
+  for (const key of ['error', 'errorCode', 'failureCode', 'retryable', 'deferRetry']) {
+    if (Object.hasOwn(answer, key)) fields[key] = answer[key];
+  }
+  return fields;
+}
+
+export {splitDescriptorCommitFields, splitDescriptorFailureFields, splitDescriptorIntentFields};

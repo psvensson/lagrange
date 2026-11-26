@@ -645,9 +645,16 @@ function acknowledge(owner, workflowId, written, next) {
 // A refusal on the authoritative record: SUPERSEDED (relinquish) when the
 // record is not this workflow or the change refused it as another owner's.
 function settleRefusal(owner, workflowId, refusal, base) {
-  const holds = storedRecordOf(base).workflowId === workflowId;
+  const observed = storedRecordOf(base);
+  const holds = observed.workflowId === workflowId;
   if (refusal.superseded || !holds) {
-    relinquishWorkflow(owner, workflowId, base);
+    const live = owner.workflowCoordinator.getWorkflowById(workflowId);
+    // A stale caller can be superseded by this same process's later attempt.
+    // Preserve the authoritative newer projection and its independent retries.
+    const ownsObserved = holds && live?.workflowOwnerId === owner.workflowOwnerId &&
+      observed.claim.workflowOwnerId === owner.workflowOwnerId && live.fenceToken === observed.claim.fenceToken &&
+      live.metadata?.workflowAttempt === observed.metadata?.workflowAttempt;
+    if (!ownsObserved) relinquishWorkflow(owner, workflowId, base);
     return settled(RECORD_CHANGE_OUTCOME.SUPERSEDED, {refusal});
   }
   return settled(RECORD_CHANGE_OUTCOME.REFUSED, {refusal});

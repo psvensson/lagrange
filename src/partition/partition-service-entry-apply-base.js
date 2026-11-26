@@ -1,4 +1,5 @@
-import {decodeSplitDescriptorCommand, descriptorRefusal, finalizeChildReceipt,
+import {applySplitDescriptorStatement} from './partition-split-descriptor-apply.js';
+import {decodeSplitDescriptorCommand,
   SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from './partition-split-descriptor-command.js';
 import {requestPlacementRepairPreparation} from './partition-placement-repair-preparation.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
@@ -606,8 +607,19 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
           this, {lockConflict, command, entryKey, index, term, identity, afterCommit});
       }
       let info;
+      let receipt;
       try {
-        info = runCommittedPartitionStatement(this, command);
+        if (descriptor) {
+          const effect = applySplitDescriptorStatement(this, command, descriptor);
+          if (effect.refusal) {
+            afterCommit(() => this.resolveCommittedWrite(command.entryId, effect.refusal));
+            return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
+          }
+          info = effect.result;
+          receipt = effect.receipt;
+        } else {
+          info = runCommittedPartitionStatement(this, command);
+        }
       } catch (error) {
         if (descriptor) {
           scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () => this.rejectCommittedWrite(command.entryId, error));
@@ -618,12 +630,6 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
           afterRollback: (effect) =>
             scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect),
         });
-      }
-      const receipt = descriptor ? finalizeChildReceipt(this.db, descriptor.intent, info.changes) : null;
-      if (descriptor && receipt === null) {
-        afterCommit(() => this.resolveCommittedWrite(command.entryId,
-          descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.UNRESOLVED, true)));
-        return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
       }
       recordCommittedStatementOutcome(this, {
         ...(descriptor ? {ownerResultText: JSON.stringify(receipt), commandDigest: descriptor.digest} : {}),

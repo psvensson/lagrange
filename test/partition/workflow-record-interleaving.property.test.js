@@ -62,6 +62,7 @@ import {buildWorkflow} from './managed-split-workflow-test-helpers.js';
 import {buildMergeWorkflow} from './managed-merge-workflow-test-helpers.js';
 import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {
+  openDescriptorRecordStore,
   openRecordStore,
   openView,
   parsePartitionTransition,
@@ -572,6 +573,43 @@ function checkPostconditions(store, spec, landed, violations) {
     }
   }
 }
+
+// A positive control for I5. The randomized record registrations above
+// exercise record races; here the ordinary split issuer creates the rows
+// whose retirement the invariant observes.
+test('I5 split: the destination deletes only a fully retired child across overlapping cleanup passes', async (t) => {
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
+  const {workflow} = FAMILIES.split.owner(store, 'A', {now: 1000});
+  workflow.workflowOwnerId = 'owner-A';
+  readAuthoritativelyFrom(workflow, store);
+  const started = await workflow.execute(SOURCE);
+  t.equal(started.success, true);
+  const {workflowId} = started;
+  workflow.resolveWorkflowState(workflowId);
+  await workflow.persistExecutionFailure(workflowId, new Error('stop the source before cutover'));
+  const failed = recordOf(store);
+  t.same(failed.metadata.splitDescriptorCleanup.pendingChildren, [LEFT, RIGHT]);
+  const observations = [];
+  watchInvariants({generations: new Set([failed.generation]), attempts: new Set([attemptKeyOf(failed)]),
+    registrationReads: new Set()}, store, 'split', observations);
+  const members = ['r1', 'r2'];
+  workflow.readCommittedGroupMembers = async () => members;
+  workflow.listPartitionServiceRows = (partitionId) => members.map((replicaId) =>
+    ({partition_id: partitionId, replica_id: replicaId, node_id: 'node-' + replicaId}));
+  let refuseLeft = true;
+  workflow.deliverReplicaRemoval = async ({message}) =>
+    refuseLeft && message.partitionId === LEFT && message.replicaId === 'r2' ? null : {status: 'completed'};
+  const pass = () => workflow.teardownAbortedSplitChildren(workflowId, workflow.resolveWorkflowState(workflowId));
+  await Promise.all([pass(), pass()]);
+  t.ok(store.partitionRow(LEFT), 'one unanswered member keeps its child');
+  t.same(store.partitionDeletesBy('A'), [RIGHT], 'the other child completed retirement');
+  t.same(store.metadata().splitDescriptorCleanup.pendingChildren, [LEFT]);
+  refuseLeft = false;
+  await pass();
+  t.same(store.partitionDeletesBy('A'), [RIGHT, LEFT]);
+  t.same(store.metadata().splitDescriptorCleanup.pendingChildren, []);
+  t.same(observations, [], 'the invariant observed both successful destination deletions');
+});
 
 for (const family of Object.keys(FAMILIES)) {
   test(`S2 ${family}: randomized interleavings of the production writers ` +

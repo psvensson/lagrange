@@ -1,4 +1,4 @@
-import {SPLIT_DESCRIPTOR_ERROR, SPLIT_DESCRIPTOR_FINALIZE_SQL,
+import {SPLIT_DESCRIPTOR_ERROR, canonicalSplitDescriptorIntent, splitDescriptorCommandDigest, splitDescriptorStatement,
   descriptorRefusal, isSplitDescriptorReceiptFor, splitDescriptorWriteKey} from
   '../partition/partition-split-descriptor-command.js';
 import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
@@ -203,17 +203,19 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
     );
     const hasDescriptor = Object.hasOwn(options, 'splitDescriptorIntent');
     if (hasDescriptor) {
-      const intent = options.splitDescriptorIntent;
+      const intent = canonicalSplitDescriptorIntent(options.splitDescriptorIntent);
+      if (!intent) return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
       const key = splitDescriptorWriteKey(intent);
       const plan = this.buildSqlMutationPlan(normalizedMutation);
-      if (plan.sql !== SPLIT_DESCRIPTOR_FINALIZE_SQL || plan.params.length !== 3 ||
-          plan.params[0] !== intent.tableId || plan.params[1] !== intent.workflowAttempt ||
-          plan.params[2] !== intent.partitionId ||
+      const expected = splitDescriptorStatement(intent);
+      if (plan.sql !== expected.sql || plan.params.length !== expected.params.length ||
+          plan.params.some((value, i) => !Object.is(value, expected.params[i])) ||
+          options.ignoreExisting === true ||
           (options.idempotencyKey !== undefined && options.idempotencyKey !== key)) {
         return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
       }
-      options = {...options, splitDescriptorIntent: Object.freeze({...intent}),
-        idempotencyKey: key, coalescingKey: key};
+      options = {...options, splitDescriptorIntent: intent,
+        idempotencyKey: key, coalescingKey: splitDescriptorCommandDigest(intent)};
     }
     const mutationOptions = applyReplicaOperationMutationCoalescingFallback(
       tableName,

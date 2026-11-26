@@ -150,11 +150,10 @@ class ManagedSplitWorkflow {
     // retirement step nobody drives (owner start, record changes).
     this.resumeGroupRetirement = attachGroupRetirementResume(this, {
       family: WORKFLOW_FAMILY.SPLIT,
-      claim: (workflowId) => this.claimSplitWorkflowOwnership(workflowId),
+      claim: (workflowId, attempt) => this.claimSplitWorkflowOwnership(workflowId, {attempt}),
       finalize: (workflowId) =>
         this.finalizeSplitDissolutionIfReady(workflowId),
-      teardown: (workflowId, workflow) =>
-        this.teardownAbortedSplitChildren(workflowId, workflow),
+      teardown: (workflowId, workflow) => this.resumeAbortedSplitCleanup(workflowId, workflow),
       scheduler: options.groupRetirementScheduler,
     });
   }

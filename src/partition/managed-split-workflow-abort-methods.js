@@ -54,11 +54,7 @@ class ManagedSplitWorkflowAbortMethods {
         !sameSourceFailure(authorization, workflow.metadata?.splitSourceFailure)) {
       return false;
     }
-    if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
-      this.groupRetirementRedrive.settle(workflowId, workflow.metadata.sourcePartitionId);
-      return true;
-    }
-    if (!PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
+    if (workflow.status !== PARTITION_TRANSITION_STATE.FAILED && !PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
       this.logger.error(
         MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
         {workflowId, status: workflow.status, ackStatus},
@@ -71,13 +67,16 @@ class ManagedSplitWorkflowAbortMethods {
     // cutover step enqueued later re-validates against the FAILED
     // status.
     const partitionId = workflow.metadata.sourcePartitionId;
+    const attempt = authorization.workflowAttempt;
     try {
       const completed = await this.runSerializedOwnerStep(workflow.ownerKey, () =>
-        this.runSplitAbortStep(workflowId, workflow.ownerKey, authorization));
-      if (completed) this.groupRetirementRedrive.settle(workflowId, partitionId);
+        workflow.status === PARTITION_TRANSITION_STATE.FAILED ?
+          this.finishAcceptedSplitAbort(workflowId, authorization) :
+          this.runSplitAbortStep(workflowId, workflow.ownerKey, authorization));
+      if (completed) this.groupRetirementRedrive.settle(workflowId, partitionId, attempt);
       return completed;
     } catch (error) {
-      this.groupRetirementRedrive.report({workflowId, partitionId, unacknowledged: [],
+      this.groupRetirementRedrive.report({workflowId, partitionId, attempt, unacknowledged: [],
         superseded: error?.superseded === true,
         redrive: () => this.abortSplitOnSourceFailure(workflowId, authorization)});
       throw error;
@@ -107,23 +106,26 @@ class ManagedSplitWorkflowAbortMethods {
       stepName: PARTITION_TRANSITION_STATE.FAILED,
       execute: async ({workflow: currentWorkflow}) =>
         this.buildSplitAbortStepResult(workflowId, ackStatus, currentWorkflow, {
-          authorization, ownership: await this.renewSplitWorkflowOwnership(workflowId),
+          authorization, ownership: await this.renewSplitWorkflowOwnership(workflowId, authorization.workflowAttempt),
         }),
     }).catch(refusedStepAs(SPLIT_ABORT_OUTCOME.REFUSED_POST_CUTOVER));
 
-    if (abortOutcome !== SPLIT_ABORT_OUTCOME.ABORTED) {
-      return abortOutcome === SPLIT_ABORT_OUTCOME.ALREADY_ABORTED;
-    }
-    const abortedWorkflow = this.resolveWorkflowState(workflowId);
-    if (abortedWorkflow?.status === PARTITION_TRANSITION_STATE.FAILED &&
-        sameSourceFailure(authorization, abortedWorkflow.metadata.splitSourceFailure)) {
-      await this.teardownAbortedSplitChildren(workflowId, abortedWorkflow);
-      await this.restoreAbortedSplitSiblings(abortedWorkflow);
-    }
+    if (abortOutcome === SPLIT_ABORT_OUTCOME.REFUSED_POST_CUTOVER) return false;
+    if (!await this.finishAcceptedSplitAbort(workflowId, authorization)) return false;
     this.logger.error(
       MANAGED_SPLIT_LOG_MSG.SPLIT_ABORTED_ON_SOURCE_FAILURE,
       {workflowId, ackStatus},
     );
+    return true;
+  }
+
+  // A lost answer to the FAILED write can leave every descriptor pending.
+  // Observing the decision again re-enters the same terminal obligations.
+  async finishAcceptedSplitAbort(workflowId, authorization) {
+    const workflow = this.resolveWorkflowState(workflowId);
+    if (workflow?.status !== PARTITION_TRANSITION_STATE.FAILED ||
+        !sameSourceFailure(authorization, workflow.metadata.splitSourceFailure)) return false;
+    await this.resumeAbortedSplitCleanup(workflowId, workflow);
     return true;
   }
 

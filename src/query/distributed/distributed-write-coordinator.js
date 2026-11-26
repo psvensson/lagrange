@@ -1,4 +1,4 @@
-import {splitDescriptorCommitFields} from '../split-descriptor-delivery-fields.js';
+import {splitDescriptorCommitFields, splitDescriptorFailureFields} from '../split-descriptor-delivery-fields.js';
 import {randomUUID} from 'node:crypto';
 import {deriveParticipantEntryId} from './participant-entry-id.js';
 import {LoggingService} from '../../logging/logging-service.js';
@@ -394,6 +394,8 @@ class DistributedWriteCoordinator {
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
         ...lockOverlay,
+        ...(Object.hasOwn(executionOptions, 'splitDescriptorIntent') && participantResults.length === 1 ?
+          splitDescriptorFailureFields(failedParticipants[0]) : {}),
         idempotencyKey: plan.idempotencyKey,
         operationId: plan.operationId,
         retryCount,

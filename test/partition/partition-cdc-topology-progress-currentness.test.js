@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
 import {setImmediate as nextTurn} from 'node:timers/promises';
-import {CONFIG_SCHEMA, NODES_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {seedPartitionRow} from '../../src/bootstrap/seed-foundation-rows.js';
+import {CONFIG_SCHEMA, NODES_SCHEMA, PARTITIONS_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TRANSPORT_EVENT, ROUTER_MESSAGE_TYPE} from '../../src/constants/transport.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -271,7 +272,7 @@ test('full CDC continuation path across overlapping tables, held recipient, tenu
       timeSource: clock,
     });
     const partitions = await startLeader({
-      tableName: TABLES.PARTITIONS,
+      tableName: TABLES.PARTITIONS, schema: PARTITIONS_SCHEMA,
       partitionId: 'partitions-p1',
       replicaId: 'partitions-p1-r1',
       timeSource: clock,
@@ -376,7 +377,7 @@ test('full CDC continuation path across overlapping tables, held recipient, tenu
     };
 
     await installPartitionPipeline(services, TABLES.SERVICES, {service_id: 'svc-1', value: 'val-svc-1'});
-    await installPartitionPipeline(partitions, TABLES.PARTITIONS, {partition_id: 'part-1', value: 'val-part-1'});
+    await installPartitionPipeline(partitions, TABLES.PARTITIONS, seedPartitionRow(CONFIG_SCHEMA, SOURCE_NODE, 1000));
     await installPartitionPipeline(nodes, TABLES.NODES, {node_id: 'node-1', node_address: 'ws://127.0.0.1:8082',
       host_id: 'fixture-host', cpu_cores: 2, memory_mb: 4096, disk_gb: 32, boot_incarnation: 1,
       last_heartbeat: 1000, created_at: 1000});

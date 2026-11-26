@@ -351,6 +351,9 @@ test('an accepted split failure survives a lost ACK and a new owner fence', asyn
   t.same(authorization, {workflowId: WORKFLOW_ID, workflowAttempt: attempt,
     participantKey: ack.participantKey, status: ack.status, fenceToken});
   t.equal(store.tablesRow().partition_transition_state, PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING);
+  t.equal(await original.reserveSourceMirrorCustody('split', SOURCE_PARTITION_ID, store.metadata(), store.tableId, 'users'),
+    false, 'a pending accepted failure cannot admit new physical source custody');
+  t.same(store.metadata().mirrorCustodyGrants ?? [], []);
   const denied = await coordinator.registerWorkflowFromRead(buildAbortingRecord(), store.tablesRow());
   t.equal(denied.reason, 'split-source-failure-pending');
   now = store.metadata().workflowLeaseExpiresAt + 1;

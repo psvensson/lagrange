@@ -173,11 +173,11 @@ class ManagedSplitWorkflowOwnershipMethods {
    * @return {Promise<Object>} {fenceToken, ownerId}.
    * @private
    */
-  async renewSplitWorkflowOwnership(workflowId) {
+  async renewSplitWorkflowOwnership(workflowId, attempt) {
     return renewWorkflowOwnershipCore(
       this,
       workflowId,
-      MANAGED_SPLIT_LOG_MSG.OWNERSHIP_LOST,
+      MANAGED_SPLIT_LOG_MSG.OWNERSHIP_LOST, attempt,
     );
   }
 
