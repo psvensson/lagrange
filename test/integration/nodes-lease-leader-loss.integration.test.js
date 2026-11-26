@@ -188,7 +188,26 @@ test('fresh NODES leader restores committed READY leases and warehouse access af
       const queryNode = members.find((node) => node.nodeId === endpoint.node_id);
       const deniedAfter = Date.now();
       await assert.rejects(client.query(selectWarehouse, ['w1']),
-        (error) => error.code === 'XX000' && /Partition service not found/i.test(error.message));
+        (error) => {
+          assert.equal(error.code, 'XX000');
+          const detail = JSON.parse(error.detail);
+          const failure = detail.firstFailedParticipant;
+          assert.equal(detail.participantFailuresOmittedCount, 0);
+          assert.equal(failure.partitionId, warehousePartition);
+          assert.equal(failure.failedTable, 'lease_probe_warehouse');
+          assert.equal(failure.routingReasonCode, 'all_services_filtered_by_readiness');
+          assert.equal(failure.routingReadinessDimension, 'serveEligible');
+          assert.deepEqual(failure.routingDenialReasonCodes, ['ready_lease_expired']);
+          assert.deepEqual(Object.keys(failure.deniedByNodeId).sort(), members.map((m) => m.nodeId).sort());
+          for (const {nodeId} of members) {
+            const decision = failure.deniedByNodeId[nodeId].serveEligibility;
+            assert.equal(decision.decision, 'not_eligible');
+            assert.deepEqual(decision.reasons, ['ready_lease_expired']);
+            assert.ok(Number.isFinite(decision.leaseExpiresAtMs) && decision.leaseExpiresAtMs > 0 &&
+              decision.leaseExpiresAtMs <= Date.now());
+          }
+          return true;
+        });
 
       const denials = cluster.nodeLogLines(queryNode, 'Partition routing candidates filtered by readiness')
         .map((line) => JSON.parse(line)).filter((record) =>
