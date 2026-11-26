@@ -1134,6 +1134,14 @@ test('Production construction 8 (3C): interrupted GSI creation after metadata co
     t.equal(persistedIntent.tableId, '__idx_users_idx_users_email');
     t.equal(persistedIntent.partitions?.[0]?.partitionId, '__gsi_users_idx_users_email_p0');
 
+    await t.rejects(engine1.tableCreationService.reconcileExistingInitialPartition(
+      preRecoveryTable.table_name, preRecoveryTable, {
+        schemaJobId: initialJobId, globalIndex: persistedIntent.globalIndex,
+        partitions: [{...persistedIntent.partitions[0], replicaCount: 3}],
+      }),
+    {code: 'SCHEMA_INTENT_CONFLICT'}, 'a conflicting stored partition policy cannot change the grant');
+    t.equal(createdReplicas.length, 0);
+
     // Freeze dead process engine1 before creating restarted engine2 on durable state
     engine1Gateway.markDead();
     engine1Cdc.markDead();

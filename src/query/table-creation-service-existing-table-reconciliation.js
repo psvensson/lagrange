@@ -6,6 +6,7 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
+import {SCHEMA_PROVISIONING_ERROR_CODE} from './schema-provisioning-job-constants.js';
 import {TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
@@ -211,6 +212,12 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
         TABLE_CREATION_SERVICE_LITERAL.EXISTING_PARTITION_REPLICATION_POLICY_UNDECLARED +
           String(tableName || tableId),
       );
+    }
+    if (options.schemaJobId && options.globalIndex &&
+        desiredTarget.replicationFactor !== explicitPartition?.replicaCount) {
+      const error = new Error(`Partition replication policy conflicts with schema job ${options.schemaJobId}`);
+      error.code = SCHEMA_PROVISIONING_ERROR_CODE.INTENT_CONFLICT;
+      throw error;
     }
     await options.assertProvisioningOwnership?.();
     const provisioningSummary = await this.provisionInitialPartition({

@@ -145,13 +145,18 @@ test('warm survivors backfill an existing global index after the schema callback
     assert.deepEqual(gsi.map((row) => row.partition_id), [intentPartition.partitionId]);
     const partitionIds = partitions.map((row) => row.partition_id);
     const servicesSql = 'SELECT service_id, node_id, raft_role, status FROM services WHERE partition_id = ?';
-    const topology = async (stage, nodes) => {
+    const topology = async (stage, nodes, gsiRouting) => {
       const services = await read(servicesSql, [intentPartition.partitionId]);
       const membership = await readMembership(nodes, partitionIds);
-      t.comment(JSON.stringify({stage, ownerNodeId: nodeId, partitions, services, membership}));
+      t.comment(JSON.stringify({stage, ownerNodeId: nodeId, gsiRouting, services}));
+      for (const partitionId of partitionIds) {
+        t.comment(JSON.stringify({stage, partitionId,
+          membership: membership.filter((row) => row.partitionId === partitionId)}));
+      }
       return membership;
     };
-    const membership = await topology('pre-kill quorum observations', members);
+    t.comment(JSON.stringify({stage: 'pre-kill partition inventory', partitions}));
+    const membership = await topology('pre-kill quorum observations', members, gsi);
     for (const partition of partitions) {
       assert.equal(partition.replica_count, replicaCount, `declared RF3 for ${partition.partition_id}`);
       assertSurvivingMajority(membership, partition.partition_id, nodeId);
@@ -163,7 +168,10 @@ test('warm survivors backfill an existing global index after the schema callback
     t.comment(JSON.stringify({stage: 'SIGKILL confirmed', nodeId, indexId: cut.indexId}));
     // All processes held terminal writes before the submission. The same
     // generation must still be incomplete after the OS confirms owner death.
-    await topology('post-kill membership and GSI services', survivors);
+    const gsiAfterKill = await read(
+      'SELECT partition_id, table_id, replica_count, leader_node_id FROM partitions WHERE table_id = ?',
+      [cut.dataset]);
+    await topology('post-kill membership and GSI services', survivors, gsiAfterKill);
     await readUntil(t, observer, sessions.get(observer), catalogSql, [indexName],
       (rows) => rows.length === 1 && rows[0].index_id === cut.indexId &&
         ['CREATING', 'WRITE_ONLY', 'BACKFILLING'].includes(rows[0].state));

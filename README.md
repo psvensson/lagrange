@@ -54,7 +54,7 @@ Lagrange is **not** a good fit for:
 
 Lagrange is experimental alpha software under active development:
 
-- **Version Status:** Version `0.3.3` is the latest tagged GitHub release. Version `0.4.0` is the active development source on the `main` branch.
+- Run `npm view lagrange-server version` to see the published npm version. Release notes and tagged sources are available on the [GitHub releases page](https://github.com/psvensson/lagrange/releases).
 - **Comparison Integrity:** No comparative performance result is currently published. Every comparative result published before 2026-11-01 was withdrawn after an evidence audit (timeouts counted as successes, non-canonical workloads, constant phase/byte values, synthesised quantiles); the records are retained as forensic evidence behind an append-only invalidation ledger. The [comparative benchmark overview](docs/benchmarks/README.md) shows the admission status of every advertised claim.
 - **Integrated Storage:** Lagrange provides its own partitioned SQLite and Raft consensus storage layer; it is not a compute proxy installed on top of existing external databases.
 
@@ -89,6 +89,20 @@ NODE_HOST_ID=demo-host npx lagrange --dry-run --data-dir ./lagrange-data
 ```
 
 The dry run prints `Dry run completed`. The installed package supplies both the `lagrange` and `lagrange-admin` commands.
+
+To start one node in the foreground, use a fresh data directory and leave ports 8080 (REST), 8081 (admin WebSocket), and 8082 (transport WebSocket) available. Run the installed binary from the same directory:
+
+```bash
+NODE_HOST_ID=demo-host ./node_modules/.bin/lagrange --data-dir ./single-node-data
+```
+
+In a second terminal, check readiness:
+
+```bash
+curl -fsS http://127.0.0.1:8080/readyz
+```
+
+Wait for HTTP 200 with `"ready":true`. To shut down cleanly, press Ctrl-C once (SIGINT) in the foreground terminal and wait for the command to exit. The node keeps its data in `./single-node-data`.
 
 ### Run the account-summary demonstration from source
 
