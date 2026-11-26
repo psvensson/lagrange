@@ -11,6 +11,7 @@ events.delete(LIFECYCLE_EVENT.HEALTH_CHECK);
 events.delete(LIFECYCLE_EVENT.HEALTH_RESULT);
 const history = [];
 const listeners = new WeakMap();
+let listenerModule;
 let expectedSql;
 let observed;
 
@@ -30,7 +31,10 @@ const start = PostgresWireRuntimeModule.prototype.start;
 PostgresWireRuntimeModule.prototype.start = async function(context) {
   const result = await start.call(this, context);
   const entry = this._running.get(context?.serviceId);
-  if (entry) listeners.set(entry.server, {entry, replica: context.serviceId});
+  if (entry) {
+    listenerModule = this;
+    listeners.set(entry.server, {entry, replica: context.serviceId});
+  }
   return result;
 };
 
@@ -72,4 +76,9 @@ export function armListenerObservation(sql) { expectedSql = sql; }
 export function listenerObservation() {
   if (!observed) return null;
   return {...observed.record, lifecycle: history.filter((event) => event.replica === observed.record.replica)};
+}
+
+export function boundListenerReplicas() {
+  return [...(listenerModule?._running ?? [])].flatMap(([replica, entry]) =>
+    entry.server.listening ? [{replica, port: entry.endpointIntent.port}] : []);
 }

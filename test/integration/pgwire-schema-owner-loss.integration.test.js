@@ -20,25 +20,27 @@ const metadata = ['schema_operations-p1', 'replica_operations-p1', 'services-p1'
 
 // An endpoint is published by start(), before the placement operation can
 // settle. A REPLACE may temporarily expose both source and target listeners.
-function settledListenerEndpoints(rows, operations, members) {
+function settledListenerEndpoints(rows, operations, bound) {
   const live = operations.filter((row) => !isTerminalReplicaOperationRecord(row));
   const created = operations.map((row) => normalizeReplicaOperationRecord(row))
     .filter(isTerminalSuccessfulCreateOperation);
-  return rows.filter((row) => members.some((member) => member.nodeId === row.node_id) &&
-    created.some((op) => op.targetNodeId === row.node_id) &&
+  return rows.filter((row) => bound.some((listener) => listener.nodeId === row.node_id &&
+    listener.port === Number(row.port) && created.some((op) =>
+      op.targetNodeId === listener.nodeId && op.replicaId === listener.replica)) &&
     !live.some((op) => op.target_node_id === row.node_id || op.source_node_id === row.node_id));
 }
 
 test('a published listener being replaced cannot satisfy the two-listener setup', async () => {
   const nodes = ['a', 'b'];
-  const rows = nodes.map((node_id) => ({node_id}));
-  const members = nodes.map((nodeId) => ({nodeId}));
+  const rows = nodes.map((node_id, i) => ({node_id, port: 5000 + i}));
+  const bound = nodes.map((nodeId, i) => ({nodeId, port: rows[i].port, replica: 'listener-' + nodeId}));
   const adds = nodes.map((node) => ({operation_id: 'add-' + node, type: 'ADD',
     target_node_id: node, replica_id: 'listener-' + node, status: 'active', workflow_step: 'ACTIVE'}));
-  assert.deepEqual(settledListenerEndpoints(rows, adds, members), rows);
+  assert.deepEqual(settledListenerEndpoints(rows, adds, bound), rows);
+  assert.deepEqual(settledListenerEndpoints(rows, adds, [bound[0], {...bound[1], replica: 'new-b'}]), [rows[0]]);
   const replacing = {operation_id: 'move', type: 'REPLACE', source_node_id: 'a',
     target_node_id: 'b', status: 'active', workflow_step: 'ACTIVE'};
-  assert.deepEqual(settledListenerEndpoints(rows, [...adds, replacing], members), []);
+  assert.deepEqual(settledListenerEndpoints(rows, [...adds, replacing], bound), []);
 });
 
 async function observe(member, op, args) {
@@ -165,7 +167,9 @@ async function proveOwnerLoss(t, cluster) {
   const {endpoints} = await until(t, 'two published listeners with settled placement', async () => {
     const rows = await cluster.seedQueryRows(endpointSql, endpointParams);
     const operations = await readPlacement();
-    return {endpoints: settledListenerEndpoints(rows, operations, members), rows, operations};
+    const bound = (await Promise.all(members.map(async (member) =>
+      (await observe(member, 'boundListeners')).map((listener) => ({...listener, nodeId: member.nodeId}))))).flat();
+    return {endpoints: settledListenerEndpoints(rows, operations, bound), rows, operations, bound};
   }, (state) => new Set(state.endpoints.map((row) => row.node_id)).size >= 2);
   const [endpoint] = endpoints;
   const second = endpoints.find((row) => row.node_id !== endpoint.node_id);

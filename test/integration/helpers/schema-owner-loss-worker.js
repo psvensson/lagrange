@@ -7,7 +7,7 @@ import {SCHEMA_PROVISIONING_ERROR_CODE} from '../../../src/query/schema-provisio
 import {SchemaProvisioningJobOwner} from '../../../src/query/schema-provisioning-job-owner.js';
 import {registerEmbeddedWorkerOperations} from './embedded-node-worker.js';
 
-import {armListenerObservation, listenerObservation} from './schema-owner-loss-listener-observer.js';
+import {armListenerObservation, boundListenerReplicas, listenerObservation} from './schema-owner-loss-listener-observer.js';
 
 import {LoggingService} from '../../../src/logging/logging-service.js';
 import {PARTICIPANT_RELEASE_LOG} from '../../../src/partition/partition-participant-transaction-cutover-constants.js';
@@ -148,6 +148,7 @@ registerEmbeddedWorkerOperations({
   trace: () => ({grants, claims, barrier, completed, attemptCount, attempts, pending, provisioning}),
   armReleaseObservation: () => { observeRelease = true; },
   releaseObservation: () => releaseReports,
+  boundListeners: boundListenerReplicas,
   closeProvenance: listenerObservation,
   release: () => release.resolve(),
   job: async ({key}) => {

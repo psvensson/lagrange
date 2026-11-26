@@ -130,6 +130,7 @@ async function verifyForegroundCli() {
   const nodeId = randomUUID();
   const [rest, admin, transport] = await freshListenerPorts();
   const env = {...process.env, NODE_ID: nodeId, NODE_HOST_ID: HOST_ID,
+    PARTITION_DEFAULT_REPLICA_COUNT: '1',
     REST_API_PORT: String(rest), ADMIN_WS_PORT: String(admin), TRANSPORT_WS_PORT: String(transport)};
   delete env.SEED_NODE_ADDRESS;
   // Inherit the smoke owner's process group, output budget and deadline.
