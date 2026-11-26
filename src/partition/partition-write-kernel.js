@@ -577,6 +577,7 @@ const NO_WRITE_SIDE_EFFECT_PLAN = Object.freeze({
 function hasWriteSideEffects(entry, executionResult) {
   return (
     executionResult?.success === true &&
+    entry?.type !== PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY &&
     !PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(entry?.type) &&
     !PARTITION_CDC_COMMAND_TYPES.includes(entry?.type)
   );

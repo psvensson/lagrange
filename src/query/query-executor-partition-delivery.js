@@ -11,6 +11,7 @@ import {
 import {
   createPartitionCandidateDeliveryState,
   createPartitionCandidateEligibility,
+  createPartitionTargetRetryTracker,
   notifyHedgeDeliveryObserver,
 } from './query-executor-partition-candidate-state.js';
 import {
@@ -47,15 +48,9 @@ import {
 } from './query-executor-self-leader-term-floor.js';
 
 const {
-  CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
-  CONTROL_PLANE_READ_LEADER_MODE,
-  ERRORS,
-  LOG_MSG,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
-  QUERY_LOG_MSG,
-  QUERY_RESPONSE_TYPE,
+  CONTROL_PLANE_WRITE_RETRY_DECISION_STATE, CONTROL_PLANE_READ_LEADER_MODE,
+  ERRORS, LOG_MSG, QUERY_ERROR_CODE, QUERY_ERROR_MSG,
+  QUERY_EXECUTOR_ROUTING_OPTION_FIELD, QUERY_LOG_MSG, QUERY_RESPONSE_TYPE,
   normalizeParticipantFailureString,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -68,11 +63,8 @@ function isBooleanOrOmitted(value) {
 }
 
 function assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameLatencyGroup) {
-  if (
-    !isBooleanOrOmitted(forRead) ||
-    !isBooleanOrOmitted(preferLeader) ||
-    !isBooleanOrOmitted(preferSameLatencyGroup)
-  ) {
+  if (!isBooleanOrOmitted(forRead) || !isBooleanOrOmitted(preferLeader) ||
+      !isBooleanOrOmitted(preferSameLatencyGroup)) {
     throw new TypeError(EXECUTE_ON_PARTITION_BOOLEAN_ARGS_ERR);
   }
 }
@@ -80,81 +72,49 @@ function assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameL
 function shouldRequireCanonicalLeader(executionOptions) {
   return executionOptions?.requireLeader === true ||
     executionOptions?.strictRouteCurrency === true ||
-    executionOptions?.readAuthority?.leaderMode ===
-      CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+    executionOptions?.readAuthority?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
 }
 
 class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   async executeOnPartition(
-    partitionId,
-    sql,
-    params,
-    forRead,
-    preferLeader,
-    preferSameLatencyGroup,
-    deliveryOptions = {},
+    partitionId, sql, params, forRead, preferLeader, preferSameLatencyGroup, deliveryOptions = {},
   ) {
     assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameLatencyGroup);
-    // One entryId for every delivery of a write (the caller's, or minted
-    // once): a re-delivery is never a fresh entry.
     const executionOptions = withWriteEntryIdentity(deliveryOptions, forRead);
     const unknownOutcome = createUnknownOutcomeRedelivery({
-      entryId: executionOptions?.entryId ?? null,
-      forRead,
+      entryId: executionOptions?.entryId ?? null, forRead,
       now: () => (typeof this.nowFn === 'function' ? this.nowFn() : Date.now()),
     });
     const cancellationToken = executionOptions?.cancellationToken || null;
-    const failedTable = normalizeParticipantFailureString(
-      executionOptions?.tableName,
-    );
-    const routingReadinessDimension =
-      executionOptions.routingReadinessDimension ||
+    const failedTable = normalizeParticipantFailureString(executionOptions?.tableName);
+    const routingReadinessDimension = executionOptions.routingReadinessDimension ||
       this.defaultRoutingReadinessDimension;
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
     const requireCanonicalLeader = shouldRequireCanonicalLeader(executionOptions);
-    const isLeaderPinnedDelivery =
-      !forRead || Boolean(executionOptions?.transactionIdentity);
+    const isLeaderPinnedDelivery = !forRead || Boolean(executionOptions?.transactionIdentity);
     const attemptBudget = createPartitionAttemptBudget({
-      executor: this,
-      partitionId,
-      forRead,
-      executionOptions,
-      routingReadinessDimension,
-      cancellationToken,
+      executor: this, partitionId, forRead, executionOptions,
+      routingReadinessDimension, cancellationToken,
     });
     this.throwIfCancelled(cancellationToken);
     const readDelivery = attemptBudget.retainsRecoveryReadResponse ?
       createRecoveryReadDelivery(this, executionOptions) : null;
     try {
       const {
-        buildRouterDeliveryOptions,
-        getRemainingExecutionBudgetMs,
-        recoveryReadProbeMs,
-        waitForRetryBudget,
+        buildRouterDeliveryOptions, getRemainingExecutionBudgetMs,
+        recoveryReadProbeMs, waitForRetryBudget,
       } = attemptBudget;
-      // Every failure a delivery ends with: an unresolved write's is its typed
-      // unknown outcome (createUnknownOutcomeRedelivery).
       const buildFailureResult = (errorMessage, details = {}) =>
         unknownOutcome.finish(buildPartitionExecutionFailureResult({
-          partitionId,
-          failedTable,
-          errorMessage,
-          details,
+          partitionId, failedTable, errorMessage, details,
         }), this.logger);
       let candidateDeliveryAttempted = false;
-      const buildPreSubmissionRouteFailureResult = (
-        errorMessage,
-        details = {},
-      ) => {
+      const buildPreSubmissionRouteFailureResult = (errorMessage, details = {}) => {
         const failureResult = buildFailureResult(errorMessage, details);
-        if (candidateDeliveryAttempted) {
-          return failureResult;
-        }
-        return {
+        return candidateDeliveryAttempted ? failureResult : {
           ...failureResult,
-          deliveryDisposition:
-            QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+          deliveryDisposition: QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
         };
       };
 
@@ -222,11 +182,22 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           buildTimeoutFailureDetails(),
         ),
       });
+      const targetRetryTracker = createPartitionTargetRetryTracker({
+        now: () => this.nowFn(),
+        defaultRetryDelayMs: this.leaderRetryDelayMs,
+        waitForRetryBudget,
+      });
       // An unresolved write's re-deliveries back off (the redelivery owner).
-      const waitForLeaderRetryBudget = async () => waitForRetryBudget(
-        unknownOutcome.nextDeliveryDelayMs(resolvePartitionRetryDelayMs(
-          this.leaderRetryDelayMs, lastFailureDetails)),
-      );
+      const waitForLeaderRetryBudget = async () => {
+        const retryDelayMs = Math.max(
+          unknownOutcome.nextDeliveryDelayMs(resolvePartitionRetryDelayMs(
+            this.leaderRetryDelayMs, lastFailureDetails)),
+          targetRetryTracker.getMaxRemainingDelayMs(),
+        );
+        const ok = await waitForRetryBudget(retryDelayMs);
+        targetRetryTracker.creditElapsedWaitMs(retryDelayMs);
+        return ok;
+      };
       const returnReadAttemptsSpent = () => {
         attemptBudget.reportReadAttemptsSpent(currentMaxAttempts);
         return buildLastFailureResult();
@@ -367,9 +338,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         ) => {
           if (shouldRetainTermFloorFailure(lastFailureDetails, failure)) return;
           lastError = errorMessage;
-          lastFailureDetails = buildQueryPartitionCandidateFailureDetails({
+          const nextDetails = buildQueryPartitionCandidateFailureDetails({
             executor: this, failure, forRead, participantNodeId, participantAddress,
           });
+          targetRetryTracker.recordTargetFailure(participantAddress, nextDetails);
+          lastFailureDetails = targetRetryTracker.mergeFailureRetryDetails(
+            lastFailureDetails,
+            nextDetails,
+          );
         };
         let submittedRecoveryRead = false;
         let inspectedRecoveryRead = false;
@@ -394,13 +370,23 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           const followRetryDecision = (decision, candidateAddress = address) => {
             if (decision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY) {
-              candidateState.requestDeferredPartitionRetry();
               return true;
             }
             widenWriteCandidate(candidateAddress);
             return false;
           };
           if (candidateState.shouldSkipCandidateDelivery(serviceInfo, address)) continue;
+          if (!readDelivery && targetRetryTracker.getRemainingDelayMs(address) > 0) {
+            if (targetRetryTracker.hasImmediateCandidateAfter(
+              candidateQueue, candidateIndex, attemptedAddresses,
+            )) {
+              candidateQueue.push(serviceInfo);
+              continue;
+            }
+            if (!(await targetRetryTracker.awaitTargetReady(address))) {
+              return buildDeadlineSpentFailureResult();
+            }
+          }
           const mayRetry = attempt <= currentMaxAttempts;
           if (readDelivery && !readDelivery.canSelect(serviceInfo, mayRetry)) continue;
           const moreUnstarted = readDelivery?.hasUnstarted(
@@ -477,6 +463,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               continue;
             }
             if (completion.accepted) {
+              targetRetryTracker.clearTarget(address);
               applySuccessfulCandidateAffinity(
                 this,
                 executionOptions,
@@ -527,6 +514,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 response,
                 serviceInfo,
                 sql,
+                targetRetryTracker,
                 unknownOutcome,
                 widenWriteCandidate,
               });

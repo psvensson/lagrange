@@ -403,11 +403,24 @@ async function executePartitionLeaderRedirectAttempt(context) {
     buildRouterDeliveryOptions, candidateEligibility, candidateIndex, candidateQueue,
     candidateState, executionOptions, executor, forRead, invocation,
     markRecoverySubmission, onRedirectSubmissionState, params, partitionId,
-    readDelivery, recordCandidateFailure, response, serviceInfo, sql, unknownOutcome,
+    readDelivery, recordCandidateFailure, response, serviceInfo, sql,
+    targetRetryTracker, unknownOutcome,
   } = context;
   executor.logger.debug(QUERY_LOG_MSG.FOLLOWING_LEADER_REDIRECT, {
     fromAddress: address, leaderAddress: response.leaderAddress, partitionId,
   });
+  const redirectAddress = response.leaderAddress;
+  if (!readDelivery && targetRetryTracker &&
+      targetRetryTracker.getRemainingDelayMs(redirectAddress) > 0) {
+    if (targetRetryTracker.hasImmediateCandidateAfter(
+      candidateQueue, candidateIndex, attemptedAddresses,
+    )) {
+      return {action: REDIRECT_STEP_ACTION.CONTINUE};
+    }
+    if (!(await targetRetryTracker.awaitTargetReady(redirectAddress))) {
+      return {action: REDIRECT_STEP_ACTION.RETURN, result: buildDeadlineSpentFailureResult()};
+    }
+  }
   const redirectRouterOptions = buildRouterDeliveryOptions(
     candidateQueue, candidateIndex, attemptedAddresses);
   if (redirectRouterOptions === null) {
@@ -416,7 +429,6 @@ async function executePartitionLeaderRedirectAttempt(context) {
   onRedirectSubmissionState(true);
   unknownOutcome.recordDelivery();
   const redirectedFromAddress = address;
-  const redirectAddress = response.leaderAddress;
   const redirectParticipantNodeId = resolveRedirectParticipantNodeId(
     redirectAddress, serviceInfo?.nodeId);
   const redirectRequest = buildRequest({
@@ -466,6 +478,7 @@ async function executePartitionLeaderRedirectAttempt(context) {
     };
   }
   if (redirectCompletion.accepted) {
+    targetRetryTracker?.clearTarget(redirectAddress);
     applySuccessfulCandidateAffinity(
       executor, executionOptions, partitionId, redirectAddress, forRead);
     return {

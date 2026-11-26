@@ -1225,87 +1225,151 @@ async () => {
 });
 
 test('unknown-outcome-real-delivery-loop-progression: unresolved write after lost answer ' +
-  'and NO_HANDLER/not-leader refusal on published route A progresses to recovery candidate B ' +
-  'under the same entryId', async () => {
+  'engages post-unknown NO_HANDLER quarantine and not-leader refusal on candidate B before ' +
+  'settling on candidate C under the same entryId, and enforces per-target backpressure ' +
+  'retry-not-before across follower redirects and revisits', async () => {
   const partitionId = 'history-p1';
   const addrA = 'node-1/partition/history-p1-r1';
   const addrB = 'node-2/partition/history-p1-r2';
+  const addrC = 'node-3/partition/history-p1-r3';
 
-  for (const secondRefusal of ['no-handler', 'not-leader-without-redirect']) {
+  const seedHistoryCache = (addrs) => {
     const cache = new SystemTableCache();
-    for (const nodeId of ['node-1', 'node-2']) {
+    addrs.forEach((address, idx) => {
+      const nodeId = `node-${idx + 1}`;
       cache.applySystemTableChange('nodes', 'INSERT', {
         node_id: nodeId, status: 'active', connection_state: 'ready',
         ready_lease_expires_at: Date.now() + 60_000, last_heartbeat: Date.now(),
       });
-    }
+      cache.applySystemTableChange('services', 'INSERT', {
+        service_id: `history-p1-r${idx + 1}`, partition_id: partitionId, service_type: 'partition',
+        node_id: nodeId, address, status: 'active', raft_role: idx === 0 ? 'leader' : 'follower',
+      });
+    });
     cache.applySystemTableChange('partitions', 'INSERT', {
       partition_id: partitionId, table_name: 'history',
-      leader_node_id: 'node-1', replica_count: 2,
+      leader_node_id: 'node-1', replica_count: addrs.length,
     });
-    cache.applySystemTableChange('services', 'INSERT', {
-      service_id: 'history-p1-r1', partition_id: partitionId, service_type: 'partition',
-      node_id: 'node-1', address: addrA, status: 'active', raft_role: 'leader',
-    });
-    cache.applySystemTableChange('services', 'INSERT', {
-      service_id: 'history-p1-r2', partition_id: partitionId, service_type: 'partition',
-      node_id: 'node-2', address: addrB, status: 'active', raft_role: 'follower',
-    });
+    return cache;
+  };
+  const eligibility = createCommittedServeEligibilityOwner({
+    projectedDimensions: {controlPlaneRecoveryEligible: true},
+  });
 
+  for (const secondRefusal of ['no-handler', 'not-leader-without-redirect']) {
+    const cache = seedHistoryCache([addrA, addrB, addrC]);
     const deliveredCalls = [];
     const router = {
       nodeId: 'node-1',
       async deliver(address, request) {
         const entryId = request?.operation?.entryId ?? request?.entryId ?? null;
         deliveredCalls.push({address, entryId});
-        if (address === addrA && deliveredCalls.length === 1) {
+        if (address === addrA) {
           return buildDeliveryEnvelope({
             acknowledged: false,
             reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT,
             error: 'Message delivery timed out after 5000ms',
           });
         }
-        if (address === addrA) {
-          if (secondRefusal === 'no-handler') {
-            return buildDeliveryEnvelope({
+        if (address === addrB) {
+          return secondRefusal === 'no-handler' ?
+            buildDeliveryEnvelope({
               acknowledged: false, noHandler: true,
-              error: `No handler registered for address: ${addrA}`,
-            });
-          }
-          return buildDeliveryEnvelope(
-            {acknowledged: true},
-            {
+              error: `No handler registered for address: ${addrB}`,
+            }) :
+            buildDeliveryEnvelope({acknowledged: true}, {
               success: false, failureCode: 'partition_write_not_leader',
               error: 'Not the partition leader',
-            },
-          );
+            });
         }
-        if (address === addrB) {
-          return buildDeliveryEnvelope(
-            {acknowledged: true},
-            {success: true, committed: true, settledReplay: 'retained', changes: 0, entryId},
-          );
-        }
-        throw new Error(`Unexpected delivery address ${address}`);
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true, committed: true, settledReplay: 'retained', changes: 0, entryId,
+        });
       },
     };
-
     const executor = new QueryExecutor({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
-        projectedDimensions: {controlPlaneRecoveryEligible: true},
-      }),
-      messageRouter: router, nodeId: 'node-1', systemCache: cache,
-      leaderRetryDelayMs: 1, queryTimeoutMs: 5_000,
+      controlPlaneReadinessService: eligibility, messageRouter: router,
+      nodeId: 'node-1', systemCache: cache, leaderRetryDelayMs: 1, queryTimeoutMs: 5_000,
     });
-
     const outcome = await executor.executeOnPartition(
       partitionId, 'TRUNCATE TABLE history', [], false, true, false, {tableName: 'history'},
     );
-    assert.equal(outcome.success, true, `expected recovery to B for ${secondRefusal}`);
-    const bDeliveries = arrayFilter(deliveredCalls, (c) => c.address === addrB);
-    assert.equal(bDeliveries.length, 1, `B must be tried on ${secondRefusal}`);
-    assert.ok(typeof deliveredCalls[0].entryId === 'string' && deliveredCalls[0].entryId.length > 0);
-    assert.equal(bDeliveries[0].entryId, deliveredCalls[0].entryId);
+    assert.equal(outcome.success, true, `expected recovery to C after B refusal (${secondRefusal})`);
+    assert.deepEqual(arrayMap(deliveredCalls, (c) => c.address), [addrA, addrB, addrC]);
+    const firstEntryId = deliveredCalls[0].entryId;
+    assert.ok(typeof firstEntryId === 'string' && firstEntryId.length > 0);
+    assert.equal(deliveredCalls[1].entryId, firstEntryId);
+    assert.equal(deliveredCalls[2].entryId, firstEntryId);
+    if (secondRefusal === 'no-handler') {
+      assert.equal(executor.isTemporarilyUnroutableAddress(partitionId, addrB), true);
+    }
+  }
+
+  for (const followerBehavior of ['redirect-to-a', 'not-leader-revisit-a']) {
+    const cache = seedHistoryCache([addrA, addrB]);
+    let simulatedNowMs = 10_000;
+    const waitedDelays = [];
+    const deliveryTimeline = [];
+    let aDeliveries = 0;
+    const router = {
+      nodeId: 'node-1',
+      async deliver(address, request) {
+        const entryId = request?.operation?.entryId ?? request?.entryId ?? null;
+        deliveryTimeline.push({address, entryId, atMs: simulatedNowMs});
+        if (address === addrA) {
+          aDeliveries += 1;
+          if (aDeliveries === 1) {
+            return buildDeliveryEnvelope({
+              acknowledged: false,
+              reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT,
+              error: 'Message delivery timed out after 5000ms',
+            });
+          }
+          if (aDeliveries === 2) {
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              success: false, failureCode: 'partition_write_backpressure',
+              errorCode: 'PARTITION_WRITE_BACKPRESSURE',
+              error: 'Partition proposal queue backpressured',
+              retryAfterMs: 1000, deferRetry: true, backpressured: true,
+            });
+          }
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            success: true, committed: true, settledReplay: 'retained', changes: 0, entryId,
+          });
+        }
+        if (aDeliveries === 1 || followerBehavior !== 'redirect-to-a') {
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            success: false, failureCode: 'partition_write_not_leader',
+            error: 'Not the partition leader',
+          });
+        }
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: false, redirect: 'leader_redirect',
+          leaderAddress: addrA, error: 'Not leader, redirect to leader',
+        });
+      },
+    };
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: eligibility, messageRouter: router,
+      nodeId: 'node-1', systemCache: cache, leaderRetryDelayMs: 10, queryTimeoutMs: 15_000,
+      nowFn: () => simulatedNowMs,
+    });
+    executor.delay = async (ms) => {
+      waitedDelays.push(ms);
+      simulatedNowMs += ms;
+    };
+    const outcome = await executor.executeOnPartition(
+      partitionId, 'UPDATE history SET amount_cents = 1', [], false, true, false,
+      {tableName: 'history'},
+    );
+    assert.equal(outcome.success, true, `expected settlement for ${followerBehavior}`);
+    const aEvents = arrayFilter(deliveryTimeline, (e) => e.address === addrA);
+    const bEvents = arrayFilter(deliveryTimeline, (e) => e.address === addrB);
+    assert.equal(aEvents.length, 3);
+    assert.equal(bEvents.length, 2);
+    assert.equal(bEvents[1].atMs, aEvents[1].atMs);
+    assert.ok(aEvents[2].atMs - aEvents[1].atMs >= 1000);
+    assert.equal(new Set(arrayMap(deliveryTimeline, (e) => e.entryId)).size, 1);
   }
 });
 

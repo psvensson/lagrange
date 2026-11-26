@@ -232,9 +232,27 @@ function committedStatementResult(info, {retainsInsertRowid}) {
   };
 }
 
+// Mirror-effect retention constants owned by the committed-statement outcome
+// vocabulary (partition-mirror-effect-retention.js).
+const MIRROR_RETENTION_BARRIER_ENTRY_KEY = '__mirror_retention_barrier__';
+const MIRROR_RETENTION_BARRIER_KIND = 'PINNED';
+const STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW = 256;
+const MIRROR_RETENTION_CUSTODY_ACTION = Object.freeze({
+  PIN: 'PIN',
+  RELEASE: 'RELEASE',
+});
+const MIRROR_RETENTION_CUSTODY_COMMAND_ERROR = Object.freeze({
+  ORIGIN: 'mirror_retention_custody_origin_refused',
+  BYTES: 'mirror_retention_custody_bytes_invalid',
+});
+
 export {
   committedCommandDigest,
   committedStatementResult,
+  MIRROR_RETENTION_BARRIER_ENTRY_KEY,
+  MIRROR_RETENTION_BARRIER_KIND,
+  MIRROR_RETENTION_CUSTODY_ACTION,
+  MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
   PARTITION_COMMITTED_STATEMENT_COLUMNS,
   PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
   PARTITION_COMMITTED_STATEMENT_FORMAT,
@@ -247,4 +265,5 @@ export {
   PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
   PARTITION_SETTLED_REPLAY,
   PARTITION_SQLITE_RESULT_CODE,
+  STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
 };

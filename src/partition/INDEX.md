@@ -88,7 +88,7 @@ documentClass: generated
 - [partition-locking-read-service.js](partition-locking-read-service.js) - Authoritative partition leader and Raft apply handler for LOCKING_READ_RESERVATION commands and RPC requests. (importers: few)
 - [partition-locking-read-store.js](partition-locking-read-store.js) - Durable SQLite store for participant locking-read reservations (_lagrange_locking_read_reservations). (importers: many)
 - [partition-locking-read-write-check.js](partition-locking-read-write-check.js) - Authoritative partition-side write conflict & read-generation validation for SELECT ... (importers: many)
-- [partition-mirror-effect-retention.js](partition-mirror-effect-retention.js) - Authoritative retention, leader barrier stamping, and retirement of committed statement mirror effects... (importers: one)
+- [partition-mirror-effect-retention.js](partition-mirror-effect-retention.js) - Authoritative retention custody, leader barrier stamping, and retirement of committed statement mirror effects... (importers: few)
 - [partition-mirror-replay-cursor.js](partition-mirror-replay-cursor.js) - Durable split/merge mirror replay cursor: the snapshot barrier index (every Raft log entry up to and including it is... (importers: many)
 - [partition-participant-read-dependencies.js](partition-participant-read-dependencies.js) - Canonical participant read dependency accumulator, durable validationText codec, and serializability footprint... (importers: many)
 - [partition-participant-release-contract.js](partition-participant-release-contract.js) - Canonical release identity and census validation. (importers: many)

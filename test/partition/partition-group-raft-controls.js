@@ -8,7 +8,7 @@
 // predecessor committed.
 import assert from 'node:assert/strict';
 
-import {releaseIdentityOf} from
+import {isReleaseDrained, releaseIdentityOf} from
   '../../src/partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
@@ -117,12 +117,17 @@ async function openGroupWriteAdmission(group, leader) {
   assert.equal(enabled?.success, true,
     `setup: the leader committed the participant origin (${JSON.stringify(enabled)})`);
   let census = [];
+  const leaderIndex = group.services.indexOf(leader);
   assert.equal(await group.waitFor(async () => {
     census = await Promise.all(group.services.map((service) =>
       readParticipantReleaseFacts(releaseHandlerOf(service), service)));
-    return census.every((facts) =>
-      facts.outcome === PARTICIPANT_CUTOVER_OUTCOME.OBSERVED &&
-      facts.origin !== null && facts.leaderReplicaId === leader.replicaId);
+    const leaderAppliedIndex = census[leaderIndex]?.work?.appliedIndex;
+    return Number.isSafeInteger(leaderAppliedIndex) &&
+      census.every((facts) =>
+        facts.outcome === PARTICIPANT_CUTOVER_OUTCOME.OBSERVED &&
+        facts.origin !== null && facts.leaderReplicaId === leader.replicaId &&
+        isReleaseDrained(facts.work) &&
+        facts.work.appliedIndex === leaderAppliedIndex);
   }), true, 'setup: every member observes the origin and the leader');
   const local = census[group.services.indexOf(leader)];
   const release = releaseIdentityOf({partitionId: leader.partitionId,

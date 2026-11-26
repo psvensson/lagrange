@@ -33,6 +33,7 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const SPLIT_CUSTODY_FAMILY = 'split';
 
 /**
  * Split mirror queue/flush methods for PartitionService.
@@ -86,7 +87,12 @@ class PartitionServiceSplitMirrorQueueMethods {
       splitReplication.snapshotBarrierIndex;
     pruneSettledMirrorOutcomeEffects(
       this,
-      splitReplication.snapshotBarrierIndex,
+      splitReplication.snapshotBarrierIndex ?? 0,
+      {
+        establishObligation: true,
+        metadata: splitReplication.metadata,
+        family: SPLIT_CUSTODY_FAMILY,
+      },
     );
   }
 

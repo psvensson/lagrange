@@ -58,6 +58,10 @@ import {
   LOCKING_READ_RESERVATION_COMMAND_ERROR,
   LOCKING_READ_RESERVATION_TYPE,
 } from './partition-locking-read-command-constants.js';
+import {
+  MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
+  isPinnedMirrorRetentionCustodyCommand,
+} from './partition-mirror-effect-retention.js';
 
 const FORMATION_ORIGIN_REFUSED_CODE = 'formation_transition_origin_refused';
 const FORMATION_INVALID_COMMAND_CODE = 'formation_transition_command_invalid';
@@ -78,6 +82,7 @@ const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   PLACEMENT_OWNER: 'placement-owner',
   FORMATION_OWNER: 'formation-owner',
   LOCKING_READ_OWNER: 'locking-read-owner',
+  MIRROR_RETENTION_OWNER: 'mirror-retention-owner',
 });
 
 // What a refused write is answered with.
@@ -182,7 +187,25 @@ function lockingReadCommandRefusal(command, origin) {
     );
 }
 
+function mirrorRetentionCustodyCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.MIRROR_RETENTION_OWNER) {
+    return refused(
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.ORIGIN,
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.ORIGIN,
+    );
+  }
+  return isPinnedMirrorRetentionCustodyCommand(command) ?
+    ADMITTED :
+    refused(
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES,
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES,
+    );
+}
+
 function commandRefusalByKind(command, origin) {
+  if (command.type === PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY) {
+    return mirrorRetentionCustodyCommandRefusal(command, origin);
+  }
   if (command.type === LOCKING_READ_RESERVATION_TYPE) {
     return lockingReadCommandRefusal(command, origin);
   }

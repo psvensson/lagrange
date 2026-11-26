@@ -14,7 +14,9 @@ import {isCommittedCommandType, isCommittedSqlCommandType} from
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
 import {
+  applyMirrorRetentionCustodyCommand,
   isCommittedStatementKeyed, readCommittedStatementOutcome, recordCommittedStatementOutcome,
+  registerMirrorRetentionRaftHooks,
   settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
   settleRecordedCommittedStatement,
 } from './partition-committed-statement-outcome.js';
@@ -68,6 +70,10 @@ registerFormationPartitionApplyHooks({
   partitionWriteLeadershipRefusalOf, pausedWriteAnswerOf, recordCommittedOperationCdc,
   settleReservedCommittedStatement, startPartitionRaftWriteCommit,
 });
+registerMirrorRetentionRaftHooks({
+  partitionWriteLeadershipRefusalOf,
+  startPartitionRaftWriteCommit,
+});
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
@@ -89,6 +95,11 @@ const NON_SQL_COMMITTED_APPLIERS = Object.freeze([
   [(type) => PLACEMENT_COMMAND_TYPES.includes(type), applyPlacementCommand],
   [(type) => type === FORMATION_TRANSITION_TYPE, applyFormationTransitionCommand],
   [(type) => type === LOCKING_READ_RESERVATION_TYPE, applyLockingReadReservationCommand],
+  [
+    (type) => type ===
+      PARTITION_SERVICE_SHARED.PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY,
+    applyMirrorRetentionCustodyCommand,
+  ],
   [isCdcCommandType, applyCdcAcknowledgementCommand],
   [(type) => !isCommittedSqlCommandType(type), applyCommittedTransactionCommand],
 ]);

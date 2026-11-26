@@ -36,7 +36,7 @@ import {
 } from '../../src/cache/system-cache-key-descriptor.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
-import {releaseIdentityOf, releaseMemberIds} from
+import {isReleaseDrained, releaseIdentityOf, releaseMemberIds} from
   '../../src/partition/partition-participant-release-contract.js';
 import {invalidateParticipantReleaseAdmission, raiseParticipantCutoverPause,
   readParticipantReleaseFacts, resumeParticipantCutoverAdmission} from
@@ -813,14 +813,20 @@ async function resumeFixtureParticipantGroupAdmission(services, waitFor) {
     const observed = await Promise.all(services.map((service, index) =>
       readParticipantReleaseFacts(handlers[index], service)));
     const originFact = observed[0]?.origin;
+    const leaderObserved = observed.find(({generation}) =>
+      generation?.replicaId === leaders[0].replicaId);
+    const leaderAppliedIndex = leaderObserved?.work?.appliedIndex;
     const ready = originFact !== null && originFact !== undefined &&
+      Number.isSafeInteger(leaderAppliedIndex) &&
       observed.every((facts) => {
         const memberIds = releaseMemberIds(facts?.membership);
         return facts?.outcome === PARTICIPANT_CUTOVER_OUTCOME.OBSERVED &&
           sameExactMemberIds(memberIds, expectedMemberIds) &&
           facts.origin?.originIndex === originFact.originIndex &&
           facts.origin?.originTerm === originFact.originTerm &&
-          facts.membership.appliedIndex >= originFact.originIndex;
+          facts.membership.appliedIndex >= originFact.originIndex &&
+          isReleaseDrained(facts.work) &&
+          facts.work.appliedIndex === leaderAppliedIndex;
       });
     if (ready) census = observed;
     return ready;

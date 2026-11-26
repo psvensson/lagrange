@@ -1,4 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {resolvePartitionRetryDelayMs} from './query-execution-budget.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   deliveryTransportOf,
@@ -72,7 +73,6 @@ function createPartitionCandidateDeliveryState({
 }) {
   const attemptedAddresses = new Set();
   let leaderRecoveryQueued = false;
-  let deferPartitionRetryOnNextAttempt = false;
 
   const getRecoveryCandidateSelectionOptions = () => ({
     [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
@@ -161,12 +161,6 @@ function createPartitionCandidateDeliveryState({
         ...recoveryCandidates,
         ...retainedTailCandidates,
       );
-    },
-    requestDeferredPartitionRetry() {
-      deferPartitionRetryOnNextAttempt = true;
-    },
-    shouldDeferPartitionRetry() {
-      return deferPartitionRetryOnNextAttempt;
     },
     async handleNoHandlerCandidate(serviceInfo, address) {
       const witnessedService = executor.findRoutingSnapshotService(
@@ -270,8 +264,131 @@ function notifyHedgeDeliveryObserver(
   });
 }
 
+function isTargetDeferralRequested(details) {
+  return Boolean(
+    details &&
+    (details.backpressured === true ||
+      details.deferRetry === true ||
+      (Number.isFinite(details.retryAfterMs) && details.retryAfterMs > 0)),
+  );
+}
+
+function createPartitionTargetRetryTracker({
+  now,
+  defaultRetryDelayMs,
+  waitForRetryBudget,
+}) {
+  const deferrals = new Map();
+
+  function getRemainingDelayMs(address) {
+    if (typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+        !deferrals.has(address)) {
+      return 0;
+    }
+    const entry = deferrals.get(address);
+    const elapsedWallMs = Math.max(0, now() - entry.recordedAtMs);
+    const remainingMs = entry.remainingMs - elapsedWallMs;
+    if (remainingMs <= 0) {
+      deferrals.delete(address);
+      return 0;
+    }
+    return remainingMs;
+  }
+
+  function creditElapsedWaitMs(waitedMs) {
+    const nowMs = now();
+    const numericWaited = Number.isFinite(waitedMs) && waitedMs > 0 ?
+      Math.floor(waitedMs) : 0;
+    for (const [address, entry] of deferrals) {
+      const elapsedWallMs = Math.max(0, nowMs - entry.recordedAtMs);
+      const creditedMs = Math.max(elapsedWallMs, numericWaited);
+      const nextRemainingMs = entry.remainingMs - creditedMs;
+      if (nextRemainingMs <= 0) {
+        deferrals.delete(address);
+      } else {
+        deferrals.set(address, {
+          remainingMs: nextRemainingMs,
+          recordedAtMs: nowMs,
+        });
+      }
+    }
+  }
+
+  function recordTargetFailure(address, details) {
+    if (typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+        address.length === 0 ||
+        !isTargetDeferralRequested(details)) {
+      return;
+    }
+    const delayMs = resolvePartitionRetryDelayMs(defaultRetryDelayMs, details);
+    if (!Number.isFinite(delayMs) || delayMs <= 0) return;
+    const currentRemaining = getRemainingDelayMs(address);
+    deferrals.set(address, {
+      remainingMs: Math.max(currentRemaining, Math.floor(delayMs)),
+      recordedAtMs: now(),
+    });
+  }
+
+  function getMaxRemainingDelayMs() {
+    let maxDelayMs = 0;
+    for (const address of [...deferrals.keys()]) {
+      maxDelayMs = Math.max(maxDelayMs, getRemainingDelayMs(address));
+    }
+    return maxDelayMs;
+  }
+
+  async function awaitTargetReady(address) {
+    const remainingMs = getRemainingDelayMs(address);
+    if (remainingMs <= 0) return true;
+    const ok = await waitForRetryBudget(remainingMs);
+    creditElapsedWaitMs(remainingMs);
+    if (ok) deferrals.delete(address);
+    return ok;
+  }
+
+  function hasImmediateCandidateAfter(candidateQueue, candidateIndex, attemptedAddresses) {
+    if (!Array.isArray(candidateQueue)) return false;
+    for (let index = candidateIndex + 1; index < candidateQueue.length; index += 1) {
+      const address = candidateQueue[index]?.address;
+      if (typeof address === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+          address.length > 0 &&
+          !attemptedAddresses.has(address) &&
+          getRemainingDelayMs(address) <= 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function mergeFailureRetryDetails(previousDetails, nextDetails) {
+    if (!nextDetails || isTargetDeferralRequested(nextDetails)) {
+      return nextDetails;
+    }
+    const activeMaxDelayMs = getMaxRemainingDelayMs();
+    if (activeMaxDelayMs <= 0) return nextDetails;
+    return {
+      ...nextDetails,
+      retryAfterMs: activeMaxDelayMs,
+      ...(previousDetails?.deferRetry === true ? {deferRetry: true} : {}),
+      ...(previousDetails?.backpressured === true ? {backpressured: true} : {}),
+    };
+  }
+
+  return Object.freeze({
+    awaitTargetReady,
+    clearTarget: (address) => deferrals.delete(address),
+    creditElapsedWaitMs,
+    getMaxRemainingDelayMs,
+    getRemainingDelayMs,
+    hasImmediateCandidateAfter,
+    mergeFailureRetryDetails,
+    recordTargetFailure,
+  });
+}
+
 export {
   createPartitionCandidateDeliveryState,
   createPartitionCandidateEligibility,
+  createPartitionTargetRetryTracker,
   notifyHedgeDeliveryObserver,
 };

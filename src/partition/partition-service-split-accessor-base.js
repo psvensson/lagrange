@@ -6,7 +6,12 @@ import {
   isPartitionLocalServiceStatusRecord,
 } from './partition-local-service-status-contract.js';
 import {partitionSizeRetryOptions} from './partition-service-write-path-helpers.js';
-import {pruneSettledMirrorOutcomeEffects} from './partition-committed-statement-outcome.js';
+import {
+  MIRROR_RETENTION_CUSTODY_ACTION,
+  pruneSettledMirrorOutcomeEffects,
+  releaseSourceMirrorRetentionCustody,
+  replicateSourceMirrorRetentionCustody,
+} from './partition-committed-statement-outcome.js';
 import {buildReplayCursorCheckpoint} from './partition-mirror-replay-cursor.js';
 import {
   assertSplitRoutingDescriptorEpochForService,
@@ -38,6 +43,7 @@ const CONSENSUS_CORE_REFUSED = 'core-refused';
 const CONSENSUS_PORT_UNAVAILABLE = 'consensus-port-unavailable';
 const CONSENSUS_STATUS_READ_THREW = 'consensus-status-read-threw';
 const CONSENSUS_STATUS_UNAVAILABLE = 'consensus-status-unavailable';
+const SPLIT_CUSTODY_FAMILY = 'split';
 
 function makeUnavailableConsensusAuthority(outcome, reason, nowMs, role = null, term = 0) {
   return {
@@ -126,6 +132,11 @@ async function authorizeSplitSnapshotStart(owner, metadata, options) {
 async function runSplitBackfillPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING) return;
   owner.seedSplitReplayCursorFromDurableLog(handle);
+  await replicateSourceMirrorRetentionCustody(owner, handle, {
+    action: MIRROR_RETENTION_CUSTODY_ACTION.PIN,
+    barrierIndex: handle.snapshotBarrierIndex ?? 0,
+    family: SPLIT_CUSTODY_FAMILY,
+  });
   const snapshot = owner.openSplitSnapshotDatabase();
   try {
     await owner.backfillSplitSnapshot(snapshot, metadata);
@@ -139,14 +150,27 @@ async function runSplitCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP) return;
   await owner.flushSplitReplicationQueue();
   const settledWatermark = handle.replayWatermarkIndex;
+  await replicateSourceMirrorRetentionCustody(owner, handle, {
+    action: MIRROR_RETENTION_CUSTODY_ACTION.PIN,
+    barrierIndex: settledWatermark ?? handle.snapshotBarrierIndex ?? 0,
+    family: SPLIT_CUSTODY_FAMILY,
+  });
   const cp = buildReplayCursorCheckpoint(
     SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, settledWatermark,
   );
   const ack = await owner.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.CATCHUP_READY, cp);
+  const ackAccepted = ack?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
+    ack?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (ackAccepted) {
+    handle.catchupCheckpointAccepted = true;
+  }
   if (ack?.splitCutoverApplied !== true) {
     throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
   }
-  pruneSettledMirrorOutcomeEffects(owner, settledWatermark);
+  pruneSettledMirrorOutcomeEffects(owner, settledWatermark, {
+    metadata,
+    family: SPLIT_CUSTODY_FAMILY,
+  });
   handle.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
 }
 
@@ -163,8 +187,9 @@ async function runSplitCutoverPhase(owner, handle, metadata) {
   );
   handle.terminal = cleanupAck?.splitSourceRetired === true;
   if (handle.terminal) {
-    pruneSettledMirrorOutcomeEffects(owner, settledWatermark, {
-      releaseObligation: true,
+    await releaseSourceMirrorRetentionCustody(owner, handle, {
+      barrierIndex: settledWatermark ?? 0,
+      family: SPLIT_CUSTODY_FAMILY,
     });
   }
 }
@@ -175,14 +200,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
   }
   /**
    * Persist leader-owned size_bytes updates into the partitions system table.
-   * size_bytes is an own column (only this partition's leader writes it):
-   * the leader dedupes against the size its last committed write answered,
-   * never against the projection (census site 7, three-class rule, own row;
-   * quest replica-admission-from-committed-operation attempt 2). Only an
-   * applied write is kept, for its leader term (another leader may have
-   * written since): a failed write, or one that found no row, keeps nothing,
-   * so the next measurement writes again. Absent-row repeats (mainly a
-   * retired partition still measuring) are an R17 to the partition owner.
+   * Deduplicates against the size the last committed write answered for the
+   * current leader term, never against the projection.
    * @param {number} sizeBytes - Latest measured size.
    * @return {Promise<void>}
    * @private
@@ -210,10 +229,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       );
     }
   }
-
   /**
-   * Submit the retryable size_bytes mutation through the control-plane
-   * gateway, throwing when the gateway reports failure.
+   * Submit the retryable size_bytes mutation through the control-plane gateway.
    * @param {number} sizeBytes - Latest measured size.
    * @return {Promise<void>}
    * @private
@@ -277,22 +294,9 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     return assertSplitRoutingDescriptorEpochForService(this, metadata);
   }
   /**
-   * Reconstruct the transient split execution handle from durable
-   * workflow state after a process restart.
-   *
-   * The canonical split phase and participant state are owned by
-   * ManagedSplitWorkflow via DurableWorkflowCoordinator. This method
-   * rebuilds the local execution context so that
-   * handleSplitReplicationAfterWrite can route writes correctly while
-   * the workflow resumes.
-   *
-   * @param {Object} durableState - Durable workflow state.
-   * @param {string} durableState.phase - Canonical workflow phase from
-   *   PARTITION_TRANSITION_STATE.
-   * @param {Object} durableState.metadata - Normalized split
-   *   transition metadata (recoverable from the tables row).
-   * @return {Object|null} Reconstructed transient execution handle,
-   *   or null if the durable state is not an active split.
+   * Reconstruct the transient split execution handle from durable workflow state.
+   * @param {Object} durableState - Durable workflow state ({phase, metadata}).
+   * @return {Object|null} Reconstructed transient execution handle or null.
    */
   reconstructSplitExecutionState(durableState) {
     return reconstructSplitExecutionStateForService(this, durableState);

@@ -34,7 +34,10 @@ import {
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
 import {
+  MIRROR_RETENTION_CUSTODY_ACTION,
   pruneSettledMirrorOutcomeEffects,
+  releaseSourceMirrorRetentionCustody,
+  replicateSourceMirrorRetentionCustody,
 } from './partition-committed-statement-outcome.js';
 import {
   buildReplayCursorCheckpoint,
@@ -47,6 +50,7 @@ import {
 } from './partition-service-source-replication-start-methods.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const MERGE_CUSTODY_FAMILY = 'merge';
 /**
  * Failure acknowledgement per local phase at the moment a merge
  * replication run fails. The owner aborts the merge fail-safe on any of
@@ -92,7 +96,11 @@ async function runMergeBackfillPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_BACKFILLING) return;
   handle.snapshotBarrierIndex = resolveSnapshotBarrierIndex(owner);
   handle.replayWatermarkIndex = handle.snapshotBarrierIndex;
-  pruneSettledMirrorOutcomeEffects(owner, handle.snapshotBarrierIndex);
+  await replicateSourceMirrorRetentionCustody(owner, handle, {
+    action: MIRROR_RETENTION_CUSTODY_ACTION.PIN,
+    barrierIndex: handle.snapshotBarrierIndex ?? 0,
+    family: MERGE_CUSTODY_FAMILY,
+  });
   const snapshot = owner.openSplitSnapshotDatabase();
   try {
     await owner.backfillMergeSnapshot(snapshot, metadata);
@@ -106,6 +114,11 @@ async function runMergeCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_CATCHUP) return;
   await owner.flushMergeReplicationQueue();
   const settledWatermark = handle.replayWatermarkIndex;
+  await replicateSourceMirrorRetentionCustody(owner, handle, {
+    action: MIRROR_RETENTION_CUSTODY_ACTION.PIN,
+    barrierIndex: settledWatermark ?? handle.snapshotBarrierIndex ?? 0,
+    family: MERGE_CUSTODY_FAMILY,
+  });
   const catchupAck = await owner.emitMergeSourceAck(
     metadata,
     MERGE_ACK_STATUS.CATCHUP_READY,
@@ -115,10 +128,18 @@ async function runMergeCatchupPhase(owner, handle, metadata) {
       settledWatermark,
     ),
   );
+  const ackAccepted = catchupAck?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
+    catchupAck?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (ackAccepted) {
+    handle.catchupCheckpointAccepted = true;
+  }
   if (catchupAck?.mergeCutoverApplied !== true) {
     await owner.waitForMergeCutoverActivation(metadata);
   }
-  pruneSettledMirrorOutcomeEffects(owner, settledWatermark);
+  pruneSettledMirrorOutcomeEffects(owner, settledWatermark, {
+    metadata,
+    family: MERGE_CUSTODY_FAMILY,
+  });
   handle.phase = PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
 }
 
@@ -144,8 +165,9 @@ async function runMergeCutoverPhase(owner, handle, metadata) {
     mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
     mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
   if (handle.terminal) {
-    pruneSettledMirrorOutcomeEffects(owner, settledWatermark, {
-      releaseObligation: true,
+    await releaseSourceMirrorRetentionCustody(owner, handle, {
+      barrierIndex: settledWatermark ?? 0,
+      family: MERGE_CUSTODY_FAMILY,
     });
   }
 }
@@ -172,6 +194,8 @@ class PartitionServiceMergeReplicationMethods {
    */
   async handleMergeReplicationRunFailure(metadata, error,
     mergeReplication = this.mergeReplication) {
+    const preCutoverFailure = mergeReplication?.phase !==
+      PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
     const failureAckStatus = this.resolveMergeFailureAckStatus();
     if (this.mergeReplication === mergeReplication) {
       mergeReplication.lastError = error.message;
@@ -196,6 +220,11 @@ class PartitionServiceMergeReplicationMethods {
           error: ackError?.message || ackError,
         },
       );
+    }
+    if (preCutoverFailure) {
+      await releaseSourceMirrorRetentionCustody(this, mergeReplication || metadata, {
+        family: MERGE_CUSTODY_FAMILY,
+      });
     }
   }
 

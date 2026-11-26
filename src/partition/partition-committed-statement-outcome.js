@@ -32,12 +32,20 @@ import {
 import {LOCKING_READ_ERROR_CODE, LOCKING_READ_SQL_STATE} from
   '../query/sql-locking-read-constants.js';
 import {
+  MIRROR_RETENTION_CUSTODY_ACTION,
   STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
+  applyMirrorRetentionCustodyCommand,
   partitionOwesDurableMirrorEffects,
   pruneSettledMirrorOutcomeEffects,
   readCapturedRowEffectsIn,
+  readDurableMirrorRetentionBarrierIn,
+  readDurableMirrorRetentionCustodyIn,
   reconcileCommittedStatementMirrorEffects,
+  registerMirrorRetentionRaftHooks,
+  releaseSourceMirrorRetentionCustody,
+  replicateSourceMirrorRetentionCustody,
   resolveActiveMirrorRetentionBarrierIndex,
+  resolveActiveMirrorRetentionCustody,
   resolveLeaderMirrorRetentionStamp,
 } from './partition-mirror-effect-retention.js';
 
@@ -616,15 +624,21 @@ function settleLockingReadRefusedCommittedStatement(service, {
 }
 
 export {
+  MIRROR_RETENTION_CUSTODY_ACTION,
   STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
+  applyMirrorRetentionCustodyCommand,
   committedStatementEntryKey, committedStatementOutcomeFormatError,
   detectCommittedStatementOutcomeFormat, isCommittedStatementKeyed,
   ownerCommandPrelude, partitionOwesDurableMirrorEffects,
   pruneSettledMirrorOutcomeEffects, readCommittedStatementCensusIn,
+  readDurableMirrorRetentionBarrierIn, readDurableMirrorRetentionCustodyIn,
   readSettledOwnerCommandIn, answerSettledStatement,
   createCommittedStatementOutcomeTable, isDeterministicStatementFailure,
-  readCommittedStatementOutcome, recordCommittedStatementOutcome,
-  resolveActiveMirrorRetentionBarrierIndex, resolveLeaderMirrorRetentionStamp,
+  readCommittedStatementOutcome, reconcileCommittedStatementMirrorEffects,
+  recordCommittedStatementOutcome, registerMirrorRetentionRaftHooks,
+  releaseSourceMirrorRetentionCustody, replicateSourceMirrorRetentionCustody,
+  resolveActiveMirrorRetentionBarrierIndex, resolveActiveMirrorRetentionCustody,
+  resolveLeaderMirrorRetentionStamp,
   settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
   settleRecordedCommittedStatement, statementEnvironmentFailure,
   trackPendingOwnerCommand,

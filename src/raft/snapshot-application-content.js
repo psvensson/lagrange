@@ -14,6 +14,8 @@ const RAFT_RS_PEER_TABLE = 'raft_rs_peer_identity';
 const RAFT_INTERNAL_TABLE_PREFIX = '_raft_';
 const PARTICIPANT_TRANSACTIONS_TABLE = '_participant_transactions';
 const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
+const MIRROR_RETENTION_BARRIER_ENTRY_KEY = '__mirror_retention_barrier__';
+const MIRROR_RETENTION_BARRIER_KIND = 'PINNED';
 const PREPARED_PARTICIPANT_STATE = 'PREPARED';
 const IDENTIFIER_QUOTE = '"';
 const IDENTIFIER_ESCAPED_QUOTE = '""';
@@ -28,6 +30,11 @@ const SELECT_RAFT_LOCAL_TABLES_SQL =
   'SELECT name FROM sqlite_master WHERE type = \'table\' AND name LIKE \'_raft_%\'';
 const SELECT_USER_TABLES_SQL =
   'SELECT name FROM sqlite_master WHERE type = \'table\'';
+const DELETE_SETTLED_OUTCOME_EFFECTS_SQL =
+  `DELETE FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} WHERE log_index > 0`;
+const SELECT_OUTCOME_EFFECTS_ROWS_SQL =
+  'SELECT entry_key, log_index, mutation_kind, typed_effects_json ' +
+  `FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE}`;
 
 function quotedIdentifier(identifier) {
   return `${IDENTIFIER_QUOTE}${identifier.replaceAll(
@@ -96,6 +103,37 @@ function computeRaftRsMaxCommittedHlc(copyDb, groupId) {
  * @param {Object} copyDb - Open better-sqlite3 checkpoint copy.
  * @param {string} [entityKind] - Descriptor entity kind.
  */
+function isValidRetainedCustodyRow(row) {
+  return Boolean(
+    row &&
+    row.entry_key === MIRROR_RETENTION_BARRIER_ENTRY_KEY &&
+    Number(row.log_index) === 0 &&
+    row.mutation_kind === MIRROR_RETENTION_BARRIER_KIND &&
+    typeof row.typed_effects_json === 'string' &&
+    row.typed_effects_json.length > 0,
+  );
+}
+
+function scrubStatementOutcomeEffectsTable(copyDb, entityKind) {
+  const present = copyDb.prepare(SELECT_TABLE_PRESENT_SQL)
+    .get(STATEMENT_OUTCOME_EFFECTS_TABLE);
+  if (!present) return;
+  if (entityKind === ENTITY_TYPE.PARTITION) {
+    copyDb.exec(DELETE_SETTLED_OUTCOME_EFFECTS_SQL);
+    const remainingRows = copyDb.prepare(SELECT_OUTCOME_EFFECTS_ROWS_SQL).all();
+    if (remainingRows.length === 1 && isValidRetainedCustodyRow(remainingRows[0])) {
+      return;
+    }
+  }
+  copyDb.exec(`DROP TABLE IF EXISTS ${quotedIdentifier(STATEMENT_OUTCOME_EFFECTS_TABLE)}`);
+}
+
+function hasValidPayloadStatementOutcomeEffectsTable(payloadDb, tables) {
+  if (!tables.includes(STATEMENT_OUTCOME_EFFECTS_TABLE)) return true;
+  const rows = payloadDb.prepare(SELECT_OUTCOME_EFFECTS_ROWS_SQL).all();
+  return rows.length === 1 && isValidRetainedCustodyRow(rows[0]);
+}
+
 function scrubRaftRsCheckpointPayload(copyDb, entityKind) {
   const raftTables = copyDb.prepare(SELECT_RAFT_LOCAL_TABLES_SQL)
     .all()
@@ -103,7 +141,7 @@ function scrubRaftRsCheckpointPayload(copyDb, entityKind) {
   for (const table of raftTables) {
     copyDb.exec(`DROP TABLE IF EXISTS ${quotedIdentifier(table)}`);
   }
-  copyDb.exec(`DROP TABLE IF EXISTS ${quotedIdentifier(STATEMENT_OUTCOME_EFFECTS_TABLE)}`);
+  scrubStatementOutcomeEffectsTable(copyDb, entityKind);
   if (entityKind !== ENTITY_TYPE.PARTITION) {
     const tables = copyDb.prepare(SELECT_USER_TABLES_SQL)
       .all()
@@ -136,7 +174,7 @@ function validateRaftRsPayloadTables(payloadDb, descriptor) {
       return false;
     }
     if (tables.some((name) => name.startsWith(RAFT_INTERNAL_TABLE_PREFIX)) ||
-        tables.includes(STATEMENT_OUTCOME_EFFECTS_TABLE)) {
+        !hasValidPayloadStatementOutcomeEffectsTable(payloadDb, tables)) {
       return false;
     }
     if (hasPendingPreparedParticipantTransactions(payloadDb)) {

@@ -279,8 +279,9 @@ function sweepAndCompactCheckpoint(service, checkpointsRoot, creation) {
   const compacted =
     compaction.outcome === RAFT_COMPACTION_OUTCOME.COMPACTED;
   const targetIndex = creation.descriptor.lastIncludedIndex;
-  const compactedIndex = compacted ?
-    targetIndex :
+  const compactedIndex = compacted &&
+    Number.isSafeInteger(compaction.boundary?.lastIncludedIndex) ?
+    compaction.boundary.lastIncludedIndex :
     Number(RaftRsDurableStore.readSnapshotIndexIn(
       service.db, service.partitionId));
   return tickResult(
@@ -293,7 +294,7 @@ function sweepAndCompactCheckpoint(service, checkpointsRoot, creation) {
       compaction,
       checkpointedIndex: targetIndex,
       compactedIndex,
-      ...(compacted ? {compactedUpToIndex: targetIndex} : {}),
+      ...(compacted ? {compactedUpToIndex: compactedIndex} : {}),
     },
   );
 }

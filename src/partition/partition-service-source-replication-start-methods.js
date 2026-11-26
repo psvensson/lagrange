@@ -10,6 +10,9 @@ import {
 } from './partition-service-constants.js';
 import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
 import {MERGE_ACK_STATUS} from './merge-ack-constants.js';
+import {
+  releaseSourceMirrorRetentionCustody,
+} from './partition-committed-statement-outcome.js';
 import {loadDurableDeltasBehindWatermark} from
   './partition-mirror-replay-cursor.js';
 
@@ -255,7 +258,8 @@ class PartitionServiceSourceReplicationStartMethods {
     handle.authorized = true;
     consumeAuthorizedPredecessors(this, handle, REPLICATION_FAMILY.SPLIT);
     const run = this.runSplitReplicationWorkflow({startAuthorized: true})
-      .catch((error) => {
+      .catch(async (error) => {
+        const failedPhase = handle.phase;
         handle.terminal = true;
         if (this.splitReplication === handle) {
           handle.lastError = error.message;
@@ -263,6 +267,12 @@ class PartitionServiceSourceReplicationStartMethods {
         }
         this.logger.error(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_FAILED,
           {partitionId: this.partitionId, error: error.message});
+        if (failedPhase !== PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE &&
+            handle.catchupCheckpointAccepted !== true) {
+          await releaseSourceMirrorRetentionCustody(this, handle, {
+            family: REPLICATION_FAMILY.SPLIT,
+          });
+        }
       }).finally(() => handle.terminal === true ? invokeStartMethod(this,
         START_METHOD.QUIESCE_HANDLE, handle) : undefined);
     handle.runPromise = run;
