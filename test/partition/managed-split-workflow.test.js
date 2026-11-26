@@ -1398,7 +1398,7 @@ test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
       },
       async insertSystemTableRow(tableName, row) {
         insertCalls.push({tableName, row});
-        return {success: true};
+        return {success: true, affectedRows: 1};
       },
     },
   });

@@ -1,3 +1,5 @@
+import {issueSplitSiblingPlan, sameIssuedSiblingPlan} from './managed-split-sibling-plan.js';
+import {PRE_CUTOVER_SPLIT_STATES} from './managed-split-descriptor-cleanup.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
   phaseChange,
@@ -55,19 +57,26 @@ async function resolveDuplicateSplitCutoverOutcome(owner, workflowId,
       {cutoverReadiness: cutoverOutcome.readiness} : {})}};
 }
 
+function dispatchAcceptedSplitFailure(owner, workflowId, failure) {
+  owner.abortSplitOnSourceFailure(workflowId, failure).catch((error) => {
+    owner.logger.error(MANAGED_SPLIT_LOG_MSG.ABORT_DISPATCH_FAILED, {
+      workflowId, ackStatus: failure.status, error: error?.message || error,
+    });
+  });
+}
+
 async function buildAcceptedSplitAckOutcome(owner, workflow, workflowId,
   ackResult, ackStatus) {
   let splitCutoverApplied =
     workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
   let terminalCustody = null;
   let cutoverReadiness = null;
-  if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
-    owner.abortSplitOnSourceFailure(workflowId, ackStatus).catch((error) => {
-      owner.logger.error(MANAGED_SPLIT_LOG_MSG.ABORT_DISPATCH_FAILED, {
-        workflowId, ackStatus, error: error?.message || error,
-      });
-    });
+  if (ackResult.splitSourceFailure) {
+    dispatchAcceptedSplitFailure(owner, workflowId, ackResult.splitSourceFailure);
     splitCutoverApplied = false;
+  } else if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
+    owner.logger.error(MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
+      {workflowId, status: workflow.status, ackStatus});
   }
   if (ackStatus === SPLIT_ACK_STATUS.CATCHUP_READY) {
     const outcome = await owner.resolveSplitCutoverOutcome(workflowId);
@@ -87,19 +96,6 @@ const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const MANAGED_SPLIT_MUTATION_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.CRITICAL,
 });
-
-/**
- * Workflow states from which the durable cutover may still be applied —
- * and, conversely, in which a source failure ack aborts the split
- * fail-safe (post-cutover failures cannot un-promote the epoch).
- * @type {ReadonlySet<string>}
- */
-const PRE_CUTOVER_SPLIT_STATES = Object.freeze(new Set([
-  PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
-  PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-  PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
-  PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
-]));
 
 /**
  * Lane-key suffix for runStep calls made INSIDE a FIFO owner-lane slot
@@ -385,8 +381,13 @@ class ManagedSplitWorkflowExecutionGateMethods {
       this, workflowId, ackResult, ackStatus);
     if (duplicateOutcome.handled) return duplicateOutcome.outcome;
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
-      await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult,
-        ack);
+      const failure = this.resolveWorkflowState(workflowId)?.metadata?.splitSourceFailure;
+      if (ackResult.result === PARTICIPANT_ACK_RESULT.DUPLICATE &&
+          failure?.status === ackStatus && failure.participantKey === ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]) {
+        dispatchAcceptedSplitFailure(this, workflowId, failure);
+      } else {
+        await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult, ack);
+      }
       return this.buildRejectedSplitAckOutcome(workflowId, ackResult);
     }
 
@@ -520,19 +521,14 @@ class ManagedSplitWorkflowExecutionGateMethods {
             this.logSplitCutoverRefused(workflowId, readiness);
             return {result: false};
           }
-          const siblingPartitionIds =
-            this.resolveCutoverSiblingPartitionIds(currentWorkflow);
-          const targetVersion = Number(
-            currentWorkflow.metadata?.[
-              PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION
-            ],
-          );
-          for (const siblingPartitionId of siblingPartitionIds) {
-            await this.promoteSiblingPartitionVersion(
-              siblingPartitionId,
-              targetVersion,
-            );
+          // The coordinator updates its live projection in place. All sends
+          // and the epoch CAS must keep this exact issued attempt and plan.
+          const issuedWorkflow = {...await issueSplitSiblingPlan(this, currentWorkflow)};
+          const subjects = issuedWorkflow.metadata.splitIssuedSiblings;
+          for (const subject of subjects) {
+            await this.promoteSiblingPartitionVersion(issuedWorkflow, subject);
           }
+          const siblingPartitionIds = subjects.map((subject) => subject.partitionId);
           return {
             nextStep: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
             reason: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
@@ -546,7 +542,9 @@ class ManagedSplitWorkflowExecutionGateMethods {
                   this.now(),
                 [PARTITION_TRANSITION_METADATA_FIELD.SIBLING_PARTITION_IDS]:
                   siblingPartitionIds,
-              }, (record) => this.isSplitCutoverAdmissible(record)),
+              }, (record) => this.isSplitCutoverAdmissible(record) &&
+                record.metadata.workflowAttempt === issuedWorkflow.metadata.workflowAttempt &&
+                sameIssuedSiblingPlan(record, subjects)),
             result: true,
           };
         },

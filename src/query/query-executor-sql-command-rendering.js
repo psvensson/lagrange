@@ -1,3 +1,7 @@
+import {splitDescriptorCommitFields, splitDescriptorFailureFields} from './split-descriptor-delivery-fields.js';
+import {SQLParser} from './sql-parser.js';
+import {SPLIT_DESCRIPTOR_ERROR, splitDescriptorStatement}
+  from '../partition/partition-split-descriptor-command.js';
 import {EXPR_TYPE, SQL_STORAGE_CLASS} from './parser-constants.js';
 import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
@@ -66,6 +70,7 @@ function buildDistributedMutationResult(
   partitionIds,
   operation,
   fanoutMetrics,
+  options,
 ) {
   const failedResults = results.filter((result) => !result.success);
   const successfulResults = results.filter((result) => result.success);
@@ -83,6 +88,7 @@ function buildDistributedMutationResult(
     originHlc.length > 0 &&
     results.every((result) => result.originHlc === originHlc);
   const commonResult = {
+    ...(results.length === 1 ? splitDescriptorCommitFields(results[0]) : {}),
     operation,
     ...mutationResult,
     partitions: partitionIds,
@@ -104,6 +110,8 @@ function buildDistributedMutationResult(
     ...buildDistributedFailureSummary(failedResults),
     errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
     error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+    ...(Object.hasOwn(options, 'splitDescriptorIntent') && results.length === 1 ?
+      splitDescriptorFailureFields(failedResults[0]) : {}),
   };
 }
 
@@ -213,6 +221,22 @@ function renderWriteExpression(executor, expr, inputParams, outParams) {
   return inlinedRendered.sql;
 }
 
+// Compare the complete planner output, including bound values. The parser
+// annotates the AST with the original statement; the normal renderer adds
+// parentheses. All legs must propose the command owner's original bytes.
+function renderRoutedMutation(executor, renderer, ast, params, options) {
+  const rendered = renderer.call(executor, ast, params);
+  if (!Object.hasOwn(options, 'splitDescriptorIntent')) return rendered;
+  const expected = splitDescriptorStatement(options.splitDescriptorIntent);
+  const canonicalAst = new SQLParser(expected.sql).parse();
+  if (ast.rawSql !== expected.sql || params.length !== expected.params.length ||
+      params.some((value, i) => !Object.is(value, expected.params[i])) ||
+      rendered !== renderer.call(executor, canonicalAst, [...expected.params])) {
+    throw Object.assign(new Error(SPLIT_DESCRIPTOR_ERROR.BYTES), {code: SPLIT_DESCRIPTOR_ERROR.BYTES});
+  }
+  return expected.sql;
+}
+
 const queryExecutorSqlCommandMethods = {
   /**
    * Build SQL string from SELECT AST (the one renderer,
@@ -253,7 +277,7 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeInsert(ast, partitionId, params = [], executionOptions = {}) {
     const targetParams = [...params];
-    const sql = this.buildInsertSQL(ast, targetParams);
+    const sql = renderRoutedMutation(this, this.buildInsertSQL, ast, targetParams, executionOptions);
     this.logger.debug(QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_INSERT, {
       table: ast.table,
       partitionId,
@@ -346,6 +370,7 @@ const queryExecutorSqlCommandMethods = {
     }
     return {
       success: true,
+      ...splitDescriptorCommitFields(result),
       operation: QUERY_EXECUTOR_LITERAL.STRING_INSERT,
       ...(isAppliedWithUnknownCount(result) ?
         {settledReplay: result.settledReplay} :
@@ -417,7 +442,7 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeUpdate(ast, partitionIds, params = [], executionOptions = {}) {
     const targetParams = [...params];
-    const sql = this.buildUpdateSQL(ast, targetParams);
+    const sql = renderRoutedMutation(this, this.buildUpdateSQL, ast, targetParams, executionOptions);
     return this.executeDistributedMutation(
       ast,
       partitionIds,
@@ -472,6 +497,7 @@ const queryExecutorSqlCommandMethods = {
       partitionIds,
       operation,
       this.getLastCoordinatorMetrics(),
+      executionOptions,
     );
   },
 
@@ -514,7 +540,7 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeDelete(ast, partitionIds, params = [], executionOptions = {}) {
     const targetParams = [...params];
-    const sql = this.buildDeleteSQL(ast, targetParams);
+    const sql = renderRoutedMutation(this, this.buildDeleteSQL, ast, targetParams, executionOptions);
     return this.executeDistributedMutation(
       ast,
       partitionIds,

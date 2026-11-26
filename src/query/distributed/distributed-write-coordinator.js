@@ -1,4 +1,6 @@
-import {createHash, randomUUID} from 'node:crypto';
+import {splitDescriptorCommitFields, splitDescriptorFailureFields} from '../split-descriptor-delivery-fields.js';
+import {randomUUID} from 'node:crypto';
+import {deriveParticipantEntryId} from './participant-entry-id.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {
   affectedRowsField,
@@ -34,11 +36,7 @@ import {
 const LOCAL_STR_STRING = 'string';
 
 const ERR_NO_PARTITION_FOR_KEY = 'No partition found for key: ';
-const HASH_ALGORITHM = 'sha1';
-const DIGEST_ENCODING = 'hex';
-const DIGEST_PREFIX_LENGTH = 16;
 const OPERATION_ID_PREFIX = 'dwrite-';
-const PARTICIPANT_ENTRY_ID_PREFIX = 'dwrite-participant-';
 const PROMISE_STATUS_FULFILLED = 'fulfilled';
 const PARTICIPANT_ROLE_PRIMARY = 'primary';
 const PARTICIPANT_ROLE_MIRROR = 'mirror';
@@ -66,24 +64,6 @@ function buildParticipantFailureLogContext(plan, participantFailures) {
       failedTable: entry.failedTable,
     })),
   };
-}
-
-/**
- * The entryId one logical write is proposed under on one partition: derived
- * from the write's idempotency key and the partition, so every attempt of
- * the write - an engine retry, a caller's re-drive under the same key, a
- * local-leader leg - is the same committed entry (the one derivation of a
- * write's entry identity).
- * @param {string} idempotencyKey - The logical write's key.
- * @param {string} partitionId - The participant partition.
- * @return {string} The participant entryId.
- */
-function deriveParticipantEntryId(idempotencyKey, partitionId) {
-  const entryIdentityDigest = createHash(HASH_ALGORITHM)
-    .update(JSON.stringify({idempotencyKey, partitionId}))
-    .digest(DIGEST_ENCODING)
-    .slice(0, DIGEST_PREFIX_LENGTH);
-  return `${PARTICIPANT_ENTRY_ID_PREFIX}${entryIdentityDigest}`;
 }
 
 function buildRejectedParticipantResult(partitionId, participant, reason) {
@@ -414,6 +394,8 @@ class DistributedWriteCoordinator {
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
         ...lockOverlay,
+        ...(Object.hasOwn(executionOptions, 'splitDescriptorIntent') && participantResults.length === 1 ?
+          splitDescriptorFailureFields(failedParticipants[0]) : {}),
         idempotencyKey: plan.idempotencyKey,
         operationId: plan.operationId,
         retryCount,
@@ -430,6 +412,7 @@ class DistributedWriteCoordinator {
     return {
       success: true,
       operation: plan.statementType,
+      ...(participantResults.length === 1 ? splitDescriptorCommitFields(participantResults[0]) : {}),
       ...(unknownCount === undefined ? affectedRowsField(affectedRows) :
         {settledReplay: unknownCount.settledReplay}),
       rows,

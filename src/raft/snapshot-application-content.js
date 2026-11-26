@@ -11,6 +11,8 @@ import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, PARTITION_COMMITTED_STATEMENT_FORMAT
 // (which carry only `raft_rs_peer_identity`), and enforces the
 // `PREPARED_TRANSACTIONS_PENDING` gate and HLC non-regression across compaction.
 
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schema-shared-constants.js';
+import {PARTITIONS_SCHEMA_UNSUPPORTED, partitionDescriptorsAreCurrentIn} from '../partition/partition-service-table-bootstrap.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
@@ -153,7 +155,12 @@ function hasValidPayloadStatementOutcomeEffectsTable(payloadDb, tables) {
   }
 }
 
-function scrubRaftRsCheckpointPayload(copyDb, entityKind) {
+function scrubRaftRsCheckpointPayload(copyDb, entityKind, entityId) {
+  if (entityKind === ENTITY_TYPE.PARTITION && entityId === SYSTEM_TABLE_NAME.PARTITIONS &&
+      (!partitionDescriptorsAreCurrentIn(copyDb) || detectCommittedStatementOutcomeFormat(copyDb).outcome !==
+        PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT)) {
+    throw Object.assign(new Error(PARTITIONS_SCHEMA_UNSUPPORTED), {code: PARTITIONS_SCHEMA_UNSUPPORTED});
+  }
   const raftTables = copyDb.prepare(SELECT_RAFT_LOCAL_TABLES_SQL)
     .all()
     .map(({name}) => name);
@@ -189,9 +196,13 @@ function validateRaftRsPayloadTables(payloadDb, descriptor) {
     .map(({name}) => name)
     .filter((name) => !name.startsWith('sqlite_'));
   if (descriptor.entity?.kind === ENTITY_TYPE.PARTITION) {
+    const outcomeFormat = detectCommittedStatementOutcomeFormat(payloadDb).outcome;
+    if (descriptor.entity.id === SYSTEM_TABLE_NAME.PARTITIONS &&
+        (!partitionDescriptorsAreCurrentIn(payloadDb) || outcomeFormat !== PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT)) {
+      return false;
+    }
     if (!tables.includes(RAFT_RS_PEER_TABLE) ||
-        detectCommittedStatementOutcomeFormat(payloadDb).outcome ===
-          PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
+        outcomeFormat === PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
       return false;
     }
     if (tables.some((name) => name.startsWith(RAFT_INTERNAL_TABLE_PREFIX)) ||

@@ -1,3 +1,4 @@
+import {trackPendingOwnerCommand} from './partition-committed-statement-outcome.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 import {
@@ -543,6 +544,9 @@ function startPartitionRaftWriteCommit(service, options) {
     resolve: resolveOutcome,
     reject: rejectOutcome,
   } = Promise.withResolvers();
+  if (options.commandDigest !== undefined) {
+    trackPendingOwnerCommand(service, options, outcomePromise);
+  }
   service.setPendingCommittedWriteOutcome(
     options.entry.entryId,
     outcomePromise,

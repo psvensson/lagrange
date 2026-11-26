@@ -1,3 +1,6 @@
+import {SPLIT_DESCRIPTOR_ERROR, descriptorRefusal, usesSplitDescriptorIdentity}
+  from './partition-split-descriptor-command.js';
+import {splitDescriptorCommitFields, splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 // Remote QUERY routing preserves the partition's ordinary read/write gates and
 // delegates current transaction identity and staging to the participant owner.
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
@@ -263,6 +266,7 @@ async function executeRemoteQuery(service, payload, appliedPositionRead) {
   }
   const nowFn = () => service.timeSource.now();
   return service.executeQuery(sql, params, {
+    ...splitDescriptorIntentFields(payload),
     entryId: payload[QUERY_PAYLOAD_FIELD_ENTRY_ID] || null,
     operationId: payload[QUERY_PAYLOAD_FIELD_OPERATION_ID] || null,
     idempotencyKey: payload[QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY] || null,
@@ -288,6 +292,7 @@ function remoteQueryAnswer(service, result, readAuthorityWitness) {
     result?.partial !== true &&
     result?.rowSetComplete === true;
   const answer = {
+    ...splitDescriptorCommitFields(result),
     success,
     ...(hasRowSet ? {rowSet: result.rowSet} : {rows: result.rows}),
     ...(result?.executionEnvelope ? {executionEnvelope: result.executionEnvelope} : {}),
@@ -620,6 +625,11 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       };
     }
     const isWriteOperation = this.isWriteQuery(sql);
+    if (usesSplitDescriptorIdentity(payload) &&
+        (!Object.hasOwn(payload, 'splitDescriptorIntent') || !isWriteOperation ||
+         payload.transactionId != null || payload[QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION] != null)) {
+      return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+    }
     const requiresLeaderRouting =
       isWriteOperation || Boolean(payload?.transactionId);
     const routingRefusal = writeRoutingRefusal(

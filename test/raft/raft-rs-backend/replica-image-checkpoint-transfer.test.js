@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import Database from 'better-sqlite3';
+import {SERVICE_TYPE} from '../../../src/constants/service.js';
 import {sha256Digest, writeAtomicDurable} from
   '../../../src/runtime/oci-host-agent-durable-files.js';
 
@@ -25,7 +26,7 @@ import {RAFT_SNAPSHOT_INSTALL_OUTCOME,
   '../../../src/raft/snapshot-install-constants.js';
 import {CREATE_ADMISSION_ERROR_CODE, ReplicaCreateAdmissionOwner} from
   '../../../src/node/replica-create-admission-owner.js';
-import {OperationType} from '../../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../../src/rebalancer/replica-status.js';
 
 const GROUP = 'mg-checkpoint-owner-red';
 const FOUNDERS = Object.freeze(['mg-red-a', 'mg-red-b', 'mg-red-c']);
@@ -40,7 +41,7 @@ function identity() {
   return {
     clusterId: 'cluster-fresh-mg',
     raftGroupId: GROUP,
-    entity: {kind: 'message-group', id: GROUP},
+    entity: {kind: SERVICE_TYPE.MESSAGE_GROUP, id: GROUP},
     membershipEpoch: Number(MEMBERSHIP_GENERATION),
   };
 }
@@ -97,7 +98,7 @@ function admissionFixture({terminal = false, operationId = 'fresh-mg-install',
   attemptToken = 'attempt-fresh-mg', now = 20,
   repository = admissionRepository(), owner = null} = {}) {
   const row = {operation_id: operationId, type: OperationType.REPLACE,
-    entity_type: 'message-group', entity_id: GROUP, partition_id: GROUP,
+    entity_type: SERVICE_TYPE.MESSAGE_GROUP, entity_id: GROUP, partition_id: GROUP,
     replica_id: TARGET, target_node_id: 'node-d', workflow_step: 'SENDING',
     updated_at: 11, completed_at: terminal ? 12 : null,
     create_admission_state: null, create_admission_token: null,
@@ -287,7 +288,9 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       const evidence = await admission.owner.claim(admission.request);
       const physicalClaim = await admission.owner.claimPhysicalWorker(evidence);
       t.ok(physicalClaim, 'the real CREATE owner grants the sole physical worker');
-      admission.row.completed_at = 21;
+      Object.assign(admission.row, {
+        status: ReplicaStatus.REMOVED, workflow_step: 'REMOVED', completed_at: 21,
+      });
       const installed = await requestSnapshotInstall({
         replicaDbPath: targetDbPath,
         checkpointsRoot: path.join(root, 'checkpoints'),
@@ -328,7 +331,9 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         terminalAdmission.request);
       const terminalClaim = await terminalAdmission.owner
         .claimPhysicalWorker(terminalEvidence);
-      terminalAdmission.row.completed_at = 41;
+      Object.assign(terminalAdmission.row, {
+        status: ReplicaStatus.REMOVED, workflow_step: 'REMOVED', completed_at: 41,
+      });
       const terminalInstallDir = path.join(terminalRoot,
         RAFT_SNAPSHOT_INSTALL_DIRNAME);
       const terminalStaging = path.join(terminalInstallDir,

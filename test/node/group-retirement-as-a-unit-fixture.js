@@ -392,7 +392,8 @@ async function attachOwnerResume(owner, family, scheduler) {
   }
   module.attachGroupRetirementResume(owner, {
     family,
-    claim: (workflowId) => claimWorkflowOwnershipCore(owner, workflowId),
+    claim: (workflowId, attempt) =>
+      claimWorkflowOwnershipCore(owner, workflowId, {attempt}),
     finalize: (workflowId) => family === 'split' ?
       owner.finalizeSplitDissolutionIfReady(workflowId) :
       owner.finalizeMergeDissolutionIfReady(workflowId),
@@ -555,6 +556,24 @@ async function createWorkflowOwner(world, {family, workflow,
       world.partitionRowDeletes.push(partitionId);
       world.partitionRows.delete(partitionId);
       return {success: true, affectedRows: 1};
+    },
+    finalizeAbortedSplitChild: async (state, partitionId) => {
+      const hadRow = world.partitionRows.delete(partitionId);
+      world.partitionRowDeletes.push(partitionId);
+      return {
+        success: true,
+        committed: true,
+        logIndex: 1,
+        term: 1,
+        splitDescriptorReceipt: {
+          action: 'finalizeChild',
+          tableId: state.tableId,
+          partitionId,
+          workflowId: state.workflowId,
+          workflowAttempt: state.metadata.workflowAttempt,
+          disposition: hadRow ? 'deleted' : 'absent',
+        },
+      };
     },
     deleteSourcePartitionMetadata: async (partitionId) => {
       world.partitionRowDeletes.push(partitionId);

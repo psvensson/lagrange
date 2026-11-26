@@ -272,6 +272,10 @@ function isSplitSourceAckTransitionAllowed(fromStatus, toStatus) {
   // state (mirrors the merge graph): a source can fail at any point
   // before it dissolves, and the owner must record that failure
   // (driving the fail-safe abort) regardless of the progress edge.
+  // An unanswered CATCHUP_READY may already have committed. No earlier
+  // snapshot/backfill failure can withdraw that accepted checkpoint.
+  if ((toStatus === SPLIT_ACK_STATUS.BACKFILL_FAILED || toStatus === SPLIT_ACK_STATUS.SNAPSHOT_FAILED) &&
+      SPLIT_ACK_CATCHUP_SATISFIED_STATUSES.has(fromStatus)) return false;
   if (SPLIT_ACK_FAILURE_STATUSES.has(toStatus)) {
     return allowed instanceof Set &&
       !SPLIT_ACK_TERMINAL_FOR_FAILURE_SET.has(fromKey);

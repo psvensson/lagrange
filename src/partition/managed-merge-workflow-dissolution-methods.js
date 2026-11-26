@@ -467,7 +467,7 @@ class ManagedMergeWorkflowDissolutionMethods {
   dispatchSourceReplicaRemovals(workflowId, sourcePartitionId,
     participantKey, groupRetirement) {
     return retireFrozenGroupMembers(this, {
-      workflowId,
+      workflowId, evidence: groupRetirement,
       participantKey,
       partitionId: sourcePartitionId,
       deliver: ({replicaId, nodeId}) => this.deliverReplicaRemoval({

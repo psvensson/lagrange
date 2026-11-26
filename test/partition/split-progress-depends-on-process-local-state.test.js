@@ -105,7 +105,7 @@ function buildRecoverableWorkflow(options = {}) {
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow() {
-        return {success: true};
+        return {success: true, affectedRows: 1};
       },
     },
     getPartitionInfo: () => ({

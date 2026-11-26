@@ -1,3 +1,7 @@
+import {cleanupRecord, matchesTerminalReceipt, terminalSubjects} from './managed-split-descriptor-cleanup.js';
+import {SIBLING_DESCRIPTOR_ACTION} from './partition-sibling-descriptor-effect.js';
+import {submitSplitSiblingDescriptor} from './managed-split-sibling-descriptor.js';
+import {RECORD_UNCHANGED, refuseRecordChange} from './managed-workflow-record-store.js';
 import {hasPendingSourceGrants} from './managed-workflow-record-store.js';
 import {terminalMirrorIdentity} from './partition-mirror-custody-codec.js';
 import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
@@ -449,20 +453,58 @@ class ManagedSplitWorkflowDissolutionMethods {
    * @return {Promise<void>}
    * @private
    */
+  async resumeAbortedSplitCleanup(workflowId, live) {
+    // projectWorkflow updates a live projection in place. This pair of
+    // asynchronous effects must retain the original terminal decision even
+    // if the next attempt reuses its workflow ID and descriptors mid-await.
+    const workflow = {...live};
+    await this.teardownAbortedSplitChildren(workflowId, workflow);
+    await this.restoreAbortedSplitSiblings(workflow);
+  }
+
   async teardownAbortedSplitChildren(workflowId, workflow) {
-    const targetPartitionIds = Array.isArray(
-      workflow?.metadata?.[
-        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
-      ],
-    ) ?
-      workflow.metadata[
-        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
-      ] :
-      [];
-    for (const childPartitionId of targetPartitionIds) {
+    if (workflow?.workflowId !== workflowId || workflow.status !== PARTITION_TRANSITION_STATE.FAILED) {
+      return false;
+    }
+    for (const childPartitionId of cleanupRecord(workflow.metadata, workflow.tableId).pendingChildren) {
       await this.teardownAbortedSplitChild(workflowId, workflow,
         childPartitionId);
     }
+  }
+
+  // Only the exact committed destination outcome can discharge this subject.
+  // updateWorkflow compares the live lease; an owner takeover may checkpoint
+  // the same immutable decision, while a successor attempt cannot.
+  async acknowledgeAbortedSplitDescriptor(workflow, partitionId, result) {
+    const decision = cleanupRecord(workflow.metadata, workflow.tableId);
+    const intent = terminalSubjects(workflow.metadata, workflow.tableId).get(partitionId);
+    if (result?.success !== true || result.committed !== true ||
+        !Number.isSafeInteger(result.logIndex) || result.logIndex < 1 ||
+        !Number.isSafeInteger(result.term) || result.term < 1 ||
+        !matchesTerminalReceipt(result.splitDescriptorReceipt, intent)) {
+      throw Object.assign(new Error('Committed split descriptor cleanup receipt required'), {
+        code: 'split-descriptor-cleanup-unconfirmed', intent});
+    }
+    return this.workflowCoordinator.updateWorkflow(workflow.workflowId, (record) => {
+      if (record.status !== PARTITION_TRANSITION_STATE.FAILED || record.tableId !== intent.tableId ||
+          record.metadata.workflowAttempt !== intent.workflowAttempt) {
+        return refuseRecordChange('split-descriptor-cleanup-decision-moved', {superseded: true});
+      }
+      const manifest = cleanupRecord(record.metadata, record.tableId);
+      const current = terminalSubjects(record.metadata, record.tableId).get(partitionId);
+      if (manifest.decisionFence !== decision.decisionFence || !matchesTerminalReceipt(result.splitDescriptorReceipt, current)) {
+        return refuseRecordChange('split-descriptor-cleanup-decision-moved', {superseded: true});
+      }
+      const pending = intent.action === SIBLING_DESCRIPTOR_ACTION.FINALIZE ? 'pendingSiblings' : 'pendingChildren';
+      if (!manifest[pending].includes(partitionId)) {
+        const prior = manifest.receipts.find((receipt) => receipt.partitionId === partitionId);
+        return prior.disposition === result.splitDescriptorReceipt.disposition ? RECORD_UNCHANGED :
+          refuseRecordChange('split-descriptor-cleanup-receipt-conflict');
+      }
+      return {...record, metadata: {...record.metadata, splitDescriptorCleanup: {...manifest,
+        [pending]: manifest[pending].filter((id) => id !== partitionId),
+        receipts: [...manifest.receipts, result.splitDescriptorReceipt]}}};
+    });
   }
 
   /**
@@ -474,7 +516,9 @@ class ManagedSplitWorkflowDissolutionMethods {
    * @return {Promise<void>}
    * @private
    */
-  teardownAbortedSplitChild(workflowId, workflow, childPartitionId) {
+  teardownAbortedSplitChild(workflowId, live, childPartitionId) {
+    const workflow = {...live};
+    const attempt = workflow.metadata.workflowAttempt;
     return this.groupRetirementRedrive.exclusive(
       `${workflowId}:${childPartitionId}`, async () => {
         try {
@@ -489,20 +533,24 @@ class ManagedSplitWorkflowDissolutionMethods {
             }),
           );
           await assertWorkflowRecordHeld(this, workflowId,
-            ABORTED_RECORD_STATES);
-          await this.deletePartitionMetadata(childPartitionId);
-          this.groupRetirementRedrive.settle(workflowId, childPartitionId);
+            ABORTED_RECORD_STATES, attempt);
+          const result = await this.finalizeAbortedSplitChild(workflow, childPartitionId);
+          await this.acknowledgeAbortedSplitDescriptor(workflow, childPartitionId, result);
+          this.groupRetirementRedrive.settle(workflowId, childPartitionId, attempt);
         } catch (error) {
           this.logger.warn(MANAGED_SPLIT_LOG_MSG.CHILD_TEARDOWN_FAILED, {
             workflowId,
             childPartitionId,
             error: error?.message || error,
           });
-          this.reportIncompleteGroupRetirement(workflowId, childPartitionId,
-            error, () => this.teardownAbortedSplitChild(workflowId, workflow,
-              childPartitionId));
+          this.groupRetirementRedrive.report({workflowId, attempt, partitionId: childPartitionId,
+            unacknowledged: error?.unacknowledged ?? [],
+            superseded: error?.superseded === true,
+            membershipUnavailable: error?.membershipUnavailable === true,
+            redrive: () => this.teardownAbortedSplitChild(workflowId, workflow, childPartitionId)});
+
         }
-      });
+      }, {attempt});
   }
 
   /**
@@ -516,28 +564,33 @@ class ManagedSplitWorkflowDissolutionMethods {
    * @private
    */
   async restoreAbortedSplitSiblings(workflow) {
-    const siblingPartitionIds =
-      this.resolveCutoverSiblingPartitionIds(workflow);
-    if (siblingPartitionIds.length === 0) {
-      return;
+    if (workflow?.status !== PARTITION_TRANSITION_STATE.FAILED) return false;
+    const manifest = cleanupRecord(workflow.metadata, workflow.tableId);
+    for (const id of manifest.pendingSiblings) {
+      const subject = workflow.metadata.splitIssuedSiblings.find((item) => item.partitionId === id);
+      await this.finalizeAbortedSplitSibling(workflow, subject);
     }
-    const activeVersion = this.resolveActivePartitionVersion(
-      this.getTableInfo(workflow.tableName || workflow.tableId),
-    );
-    for (const siblingPartitionId of siblingPartitionIds) {
-      await this.promoteSiblingPartitionVersion(
-        siblingPartitionId,
-        activeVersion,
-      );
-    }
-    this.logger.info(
-      MANAGED_SPLIT_LOG_MSG.SIBLINGS_RESTORED_AFTER_ABORT,
-      {
-        workflowId: workflow.workflowId,
-        siblingPartitionIds,
-        activeVersion,
-      },
-    );
+  }
+
+  async finalizeAbortedSplitSibling(live, subject) {
+    const workflow = {...live};
+    const {workflowId} = workflow;
+    const attempt = workflow.metadata.workflowAttempt;
+    const {partitionId} = subject;
+    return this.groupRetirementRedrive.exclusive(`${workflowId}:${partitionId}`, async () => {
+      try {
+        await assertWorkflowRecordHeld(this, workflowId, ABORTED_RECORD_STATES, attempt);
+        const result = await submitSplitSiblingDescriptor(this, workflow, subject, SIBLING_DESCRIPTOR_ACTION.FINALIZE);
+        await this.acknowledgeAbortedSplitDescriptor(workflow, partitionId, result);
+        this.groupRetirementRedrive.settle(workflowId, partitionId, attempt);
+      } catch (error) {
+        this.logger.warn(MANAGED_SPLIT_LOG_MSG.CHILD_TEARDOWN_FAILED, {workflowId, partitionId,
+          error: error?.message || error});
+        this.groupRetirementRedrive.report({workflowId, partitionId, attempt, unacknowledged: [],
+          superseded: error?.superseded === true,
+          redrive: () => this.finalizeAbortedSplitSibling(workflow, subject)});
+      }
+    }, {attempt});
   }
 
   /**
@@ -560,7 +613,7 @@ class ManagedSplitWorkflowDissolutionMethods {
   dispatchSplitReplicaRemovals(workflowId, partitionId, participantKey,
     reason, groupRetirement) {
     return retireFrozenGroupMembers(this, {
-      workflowId,
+      workflowId, evidence: groupRetirement,
       participantKey,
       partitionId,
       deliver: ({replicaId, nodeId}) => this.deliverReplicaRemoval({

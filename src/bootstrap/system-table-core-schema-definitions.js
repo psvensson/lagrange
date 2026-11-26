@@ -69,6 +69,11 @@ const PARTITIONS_SCHEMA = {
       notNull: true,
       defaultValue: 1,
     },
+    {
+      name: 'split_descriptor_attempt', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0,
+      checkSql: "typeof(split_descriptor_attempt) = 'integer' AND " +
+        `split_descriptor_attempt BETWEEN 0 AND ${Number.MAX_SAFE_INTEGER}`,
+    },
     {name: 'replica_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 3},
     {name: 'size_bytes', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'leader_node_id', type: COLUMN_TYPE.TEXT},
