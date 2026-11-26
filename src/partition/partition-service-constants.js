@@ -202,6 +202,7 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   STATEMENT_ENVIRONMENT_FAILED: 'statement_environment_failed',
   UNRECOGNISED: 'unrecognised',
   ENTRY_ID_MISSING_REFUSED: 'entry_id_missing_refused',
+  CUSTODY_BYTES_REFUSED: 'custody_bytes_refused',
   RESERVED_REFUSED: 'reserved_refused',
 });
 

@@ -85,6 +85,21 @@ function rejectStoppedCompletionWaiter(waiter, queueName) {
   );
 }
 
+function createExhaustedCompletionError(state, cause) {
+  const error = new Error(state.errorMessage, {cause});
+  error.code = state.type;
+  error.ownerKey = state.ownerKey;
+  error.failureCount = state.failureCount;
+  error.failureReason = state.failureReason;
+  return error;
+}
+
+function rejectExhaustedCompletionWaiter(waiter, state) {
+  if (waiter) settleCompletionWaiter(
+    waiter, COMPLETION_WAITER_METHOD.REJECT, createExhaustedCompletionError(state),
+  );
+}
+
 function rejectStaleFenceCompletionWaiter(waiter) {
   settleCompletionWaiter(
     waiter,
@@ -94,6 +109,8 @@ function rejectStaleFenceCompletionWaiter(waiter) {
 }
 
 export {
+  createExhaustedCompletionError,
+  rejectExhaustedCompletionWaiter,
   appendCompletionWaiter,
   enqueueAndWaitForOwner,
   mergeWorkItemCompletionWaiters,

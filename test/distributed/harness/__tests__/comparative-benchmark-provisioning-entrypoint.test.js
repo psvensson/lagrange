@@ -11,11 +11,15 @@
 // Evidence ceiling: nothing runs on GCP; no docker, registry or npm runs.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {gitProcessEnvironment} from '../../../../scripts/checks/git-process-environment.js';
+import {measureCheckoutSourceFingerprint} from '../../../../src/diagnostics/runtime-content-fingerprint.js';
 import {execGit} from '../../../../scripts/checks/git-invocation.js';
 
 import {
@@ -312,8 +316,7 @@ test('with --lagrange-image-content the data hosts are re-checked by content: co
   'not hold is image_unavailable before anything is placed on the load generator', () => {
   const content = `sha256:${'0'.repeat(64)}`;
   const {stderr, state} = provisionFailing(() => {}, ['--lagrange-image-content', content]);
-  assert.match(stderr, new RegExp(`^image_unavailable: pinned image content ${content} is not ` +
-    'on 10\\.20\\.0\\.1$', 'mu'));
+  assert.match(stderr, /^image_unavailable: pinned image on 10\.20\.0\.1: reference_content_mismatch$/mu);
   assert.deepEqual(state.pushes, []);
   assert.equal(ranOn(state, CLIENT, /^docker pull|git (init|checkout)|npm /u), false);
 });
@@ -331,3 +334,66 @@ test('the load generator\'s git and Node are checked before anything is placed: 
   assert.match(oldNode.stderr, /^provisioning_node_below_floor: Node v20\.11\.0 at \/opt\/node\/bin\/node on the load generator 10\.20\.0\.9 is below the engines floor \d+\.\d+\.\d+$/mu);
   assert.equal(arraySome(oldNode.state.log, (entry) => /^docker pull/u.test(entry.command)), false);
 });
+
+test('campaign CLI binds the expected boot source to the requested product revision before host work',
+  async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'campaign-revision-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const runner = path.join(root, path.relative(ROOT, RUNNER));
+    fs.mkdirSync(path.dirname(runner), {recursive: true});
+    fs.copyFileSync(RUNNER, runner);
+    for (const dir of ['test', 'scripts']) fs.symlinkSync(path.join(ROOT, dir), path.join(root, dir));
+    fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(root, 'package.json'));
+    fs.mkdirSync(path.join(root, 'src/diagnostics'), {recursive: true});
+    for (const name of ['source-fingerprint.js', 'runtime-content-fingerprint.js']) {
+      const file = path.join('src/diagnostics', name);
+      fs.copyFileSync(path.join(ROOT, file), path.join(root, file));
+    }
+    const git = (...args) => execGit(args, {cwd: root, encoding: 'utf8',
+      env: gitProcessEnvironment()}).trim();
+    const commit = () => {
+      git('add', '.');
+      git('-c', 'user.name=Witness', '-c', 'user.email=witness@example.org',
+        '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture');
+      return git('rev-parse', 'HEAD');
+    };
+    git('init', '-q');
+    const old = commit();
+    const oldFingerprint = await measureCheckoutSourceFingerprint(root);
+    fs.writeFileSync(path.join(root, 'src/build.js'), 'export default 1;\n');
+    const product = commit();
+    fs.writeFileSync(path.join(root, 'harness.txt'), 'harness-only change\n');
+    assert.notEqual(commit(), product);
+
+    const touches = path.join(root, 'ssh-called');
+    fs.writeFileSync(path.join(root, 'ssh'), '#!/bin/sh\ntouch "$SSH_WITNESS"\nexit 1\n',
+      {mode: 0o755});
+    const invoke = (args) => spawnSync(process.execPath, [runner, ...args], {
+      cwd: root, encoding: 'utf8', timeout: 30000,
+      env: {...gitProcessEnvironment(), EXECUTION_TARGET: 'lab', SSH_WITNESS: touches,
+        PATH: root + path.delimiter + process.env.PATH},
+    });
+    const negative = (args, reason) => {
+      const result = invoke(args);
+      assert.ok(result.status > 0, result.stderr);
+      assert.match(result.stderr, reason);
+      assert.equal(fs.existsSync(touches), false);
+    };
+    const stale = ['--lagrange-revision', old];
+    const mismatch = /identity_unverified: requested image revision contradicts/u;
+    negative(['--dry-run', '--from-recorded-facts', ...stale], mismatch);
+    negative([...COMMON, '--provision', ...stale], mismatch);
+    negative([...COMMON, '--dry-run', '--lagrange-revision', product,
+      '--lagrange-src-fingerprint', oldFingerprint], mismatch);
+    const external = ['--lagrange-revision', 'f'.repeat(40)];
+    negative([...COMMON, '--dry-run', ...external], /external image revision requires/u);
+    for (const args of [
+      ['--lagrange-revision', product],
+      [...stale, '--lagrange-src-fingerprint', oldFingerprint],
+      [...external, '--lagrange-src-fingerprint', oldFingerprint],
+    ]) {
+      const result = invoke([...COMMON, '--dry-run', ...args]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(JSON.parse(result.stdout).executionTarget, 'gcp');
+    }
+  });

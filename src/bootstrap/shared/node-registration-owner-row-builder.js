@@ -1,4 +1,7 @@
 import os from 'os';
+import {EMPTY_BOOT_RESOURCE_SAMPLE} from
+  '../../control-plane/owners/node-registration-incarnation-write.js';
+import {normalizeKnownNodeBootIncarnation} from '../../control-plane/control-plane-error-classification.js';
 import {
   COLUMN,
   ENDPOINT_STATUS,
@@ -55,6 +58,8 @@ function buildReentryNormalizedNodeRow(nodeRow, now, bootIncarnation, hostId) {
       persistedStatus;
   return {
     ...nodeRow,
+    ...(normalizeKnownNodeBootIncarnation(readObservedBootIncarnation(nodeRow)) === bootIncarnation ?
+      {} : EMPTY_BOOT_RESOURCE_SAMPLE),
     [COLUMN.STATUS]: reusableStatus || NODE_STATE.JOINING,
     [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
     [COLUMN.LAST_HEARTBEAT]: now,
@@ -111,7 +116,6 @@ function buildNodeRegistrationRow({
     [COLUMN.CPU_CORES]: cpus.length,
     [COLUMN.MEMORY_MB]: totalMemoryMb,
     [COLUMN.DISK_GB]: NUM.HUNDRED,
-    [COLUMN.CPU_USAGE_PERCENT]: 0,
     [COLUMN.MEMORY_USAGE_PERCENT]: 0,
     [COLUMN.DISK_USAGE_PERCENT]: 0,
     [COLUMN.STATUS]: NODE_STATE.JOINING,

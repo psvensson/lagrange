@@ -5,6 +5,7 @@
  * compact and ensures every HTTP/SQL/docker-inspect call carries bounded
  * per-call timeouts, column projections, and structured error metadata.
  */
+import {CLUSTER_FACTS_CONSTANTS} from '../../../src/bootstrap/owners/management-v1-constants.js';
 import {
   arrayEvery,
   arrayFilter,
@@ -459,23 +460,34 @@ function nodeReady(ctx, host) {
 
 const FORMATION_STATE_FORMED = 'FORMED';
 
-function isFormationFactReady(facts) {
+function isFormationFactReady(facts, expectedHostCount) {
   const formation = facts?.cluster?.formation;
-  return !formation || formation.state === FORMATION_STATE_FORMED;
+  return formation?.state === FORMATION_STATE_FORMED &&
+    formation.declaredHostCount === expectedHostCount;
+}
+
+function topologyObservationFailure(answer) {
+  const topology = answer.json?.facts?.topology;
+  if (answer.status === HTTP_OK && topology?.state === CLUSTER_FACTS_CONSTANTS.TOPOLOGY_OBSERVED &&
+      numberIsInteger(topology.underReplicatedPartitionCount) &&
+      topology.underReplicatedPartitionCount >= 0) return null;
+  return {
+    ready: false,
+    probeFailed: true,
+    diagnostic: {...answer, reason: 'replication_topology_unavailable'},
+  };
 }
 
 function membershipReady(ctx, seedHost, nodeCount) {
   return readinessOf(ctx, 'lagrange-membership', async (pollContext) => {
     const answer = await getFacts(ctx, seedHost, pollContext);
-    const facts = answer.json?.facts;
-    if (ctx && typeof ctx === 'object' &&
-        numberIsInteger(facts?.topology?.underReplicatedPartitionCount)) {
-      ctx.supportsFactsUnderReplicatedCount = true;
-    }
+    const failure = topologyObservationFailure(answer);
+    if (failure) return failure;
+    const facts = answer.json.facts;
     return {
       ready:
         facts?.topology?.readyNodeCount === nodeCount &&
-        isFormationFactReady(facts),
+        isFormationFactReady(facts, nodeCount),
       diagnostic: answer,
     };
   });
@@ -778,17 +790,7 @@ function recordTableRoutability(tableReadyAt, tables, context) {
 }
 
 const SYSTEM_TABLE_FACTS_PRECHECK_REFRESH_INTERVAL = 15;
-
-async function hasUnderReplicatedPartitionsInFacts(ctx, seedHost, pollContext) {
-  if (!ctx?.supportsFactsUnderReplicatedCount || !seedHost) return false;
-  try {
-    const answer = await getFacts(ctx, seedHost, pollContext);
-    const count = answer?.json?.facts?.topology?.underReplicatedPartitionCount;
-    return answer?.status === HTTP_OK && numberIsInteger(count) && count > 0;
-  } catch {
-    return false;
-  }
-}
+const UNDER_REPLICATION_FACTS_STRIDE = 4;
 
 async function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
   const expectedNodeIds = arrayMap(nodeRoles, (role) => role.nodeId);
@@ -796,29 +798,49 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
   const startedAt = clock();
   const tableReadyAt = {};
   const seedHost = nodeRoles[0]?.host ?? null;
-  let lastTables = null;
-  let lastTablesObservedAt = startedAt;
+  let lastTablesObservedAt = null;
   let lastVerdictReady = false;
+  let nextFactsAttempt = 0;
+  const sampling = {factsStride: UNDER_REPLICATION_FACTS_STRIDE, factsDeferred: 0,
+    factsChecks: 0, factsElapsedMs: 0, sqlBatches: 0, sqlElapsedMs: 0};
   const readiness = await readinessOf(ctx, component, async (pollContext) => {
     const attempt = pollContext?.attempt ?? 1;
-    const canReuseTablesWhileUnderReplicated =
-      requiredTables === null &&
-      lastTables !== null &&
-      !lastVerdictReady &&
-      attempt > 1 &&
-      attempt % SYSTEM_TABLE_FACTS_PRECHECK_REFRESH_INTERVAL !== 0 &&
-      (await hasUnderReplicatedPartitionsInFacts(ctx, seedHost, pollContext));
-    const tables = canReuseTablesWhileUnderReplicated ?
-      lastTables :
-      await readSystemTables(query, ctx, pollContext);
-    const now = clock();
-    if (!canReuseTablesWhileUnderReplicated) {
-      lastTables = tables;
-      lastTablesObservedAt = now;
+    if (requiredTables === null && lastTablesObservedAt !== null && !lastVerdictReady) {
+      const refreshDue = attempt % SYSTEM_TABLE_FACTS_PRECHECK_REFRESH_INTERVAL === 0;
+      if (!refreshDue && attempt < nextFactsAttempt) {
+        sampling.factsDeferred++;
+        return {ready: false, deferredObservation: true, diagnostic: null};
+      }
+      nextFactsAttempt = 0;
+      const factsStartedAt = clock();
+      sampling.factsChecks++;
+      const answer = await getFacts(ctx, seedHost, pollContext);
+      sampling.factsElapsedMs += clock() - factsStartedAt;
+      const failure = topologyObservationFailure(answer);
+      if (failure) {
+        return {...failure, diagnostic: {...failure.diagnostic, sampling: {...sampling}}};
+      }
+      const {underReplicatedPartitionCount} = answer.json.facts.topology;
+      if (underReplicatedPartitionCount > 0 && !refreshDue) {
+        nextFactsAttempt = attempt + UNDER_REPLICATION_FACTS_STRIDE;
+        return {ready: false, diagnostic: {
+          denials: ['under_replicated_partitions'],
+          underReplicatedPartitionCount,
+          lastTablesObservedAt,
+          sampling: {...sampling},
+        }};
+      }
     }
-    const evaluationNow = canReuseTablesWhileUnderReplicated ?
-      lastTablesObservedAt :
-      now;
+    const sqlStartedAt = clock();
+    sampling.sqlBatches++;
+    let tables;
+    try {
+      tables = await readSystemTables(query, ctx, pollContext);
+    } finally {
+      sampling.sqlElapsedMs += clock() - sqlStartedAt;
+    }
+    lastTablesObservedAt = clock();
+    const evaluationNow = lastTablesObservedAt;
     recordTableRoutability(tableReadyAt, tables, {
       requiredTables,
       expectedNodeIds,
@@ -832,7 +854,7 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
       requiredTables,
       now: evaluationNow,
     });
-    lastVerdictReady = verdict.ready && !canReuseTablesWhileUnderReplicated;
+    lastVerdictReady = verdict.ready;
     const shouldInspectServeLane = lastVerdictReady || attempt <= 1;
     const lane = shouldInspectServeLane ?
       evaluateLagrangeServeLane({
@@ -851,7 +873,7 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
       Boolean,
     ))];
     return {
-      ready: denials.length === 0,
+      ready: lastVerdictReady && denials.length === 0,
       diagnostic: {
         denials,
         nodes: tables.nodes.length,
@@ -859,6 +881,7 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
         partitions: tables.partitions.length,
         partitionIds,
         tableNames,
+        sampling: {...sampling},
         spreadSummary: summarizePartitionSpread({
           partitions: tables.partitions,
           services: tables.services,
@@ -867,7 +890,10 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
         tableTimeToRoutableMs: {...tableReadyAt},
       },
     };
-  }, ctx.budget.stablePolls);
+  }, ctx.budget.stablePolls).catch((error) => {
+    if (error.diagnostic) error.diagnostic.sampling = {...sampling};
+    throw error;
+  });
   const enriched = requiredTables ?
     {...readiness, tableTimeToRoutableMs: {...tableReadyAt}} :
     readiness;

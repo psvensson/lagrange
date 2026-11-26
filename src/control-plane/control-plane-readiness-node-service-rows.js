@@ -298,19 +298,6 @@ function hasActiveAddressedNonMessageGroupService(service, serviceRows) {
   });
 }
 
-function isLoadReady(service, nodeRow) {
-  const loadValues = [
-    Number(nodeRow?.[COLUMN.CPU_USAGE_PERCENT]),
-    Number(nodeRow?.[COLUMN.MEMORY_USAGE_PERCENT]),
-    Number(nodeRow?.[COLUMN.DISK_USAGE_PERCENT]),
-  ];
-
-  return loadValues.every((value) => {
-    return !Number.isFinite(value) ||
-      value < CONTROL_PLANE_READINESS_DEFAULT.LOAD_READY_MAX_PERCENT;
-  });
-}
-
 function isCapacityPlacementEligible(service, capacity) {
   if (!capacity) {
     return false;
@@ -505,7 +492,6 @@ export {
   hasAddressedService,
   hasAddressedMessageGroupServiceWithStatuses,
   hasActiveAddressedNonMessageGroupService,
-  isLoadReady,
   isCapacityPlacementEligible,
   getCapacityReasonCode,
   buildClusterMemberHealthDetails,

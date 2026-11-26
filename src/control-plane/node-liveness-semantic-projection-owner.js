@@ -4,6 +4,7 @@ import {
   normalizeThresholds,
   projectNodeLivenessSemantics,
   readNodeLivenessRowFacts,
+  snapshotNodeLivenessRow,
 } from './node-liveness-semantic-projection.js';
 import {
   copyDenseOwnDataArray,
@@ -50,8 +51,7 @@ function nextGeneration(previousGeneration) {
 // it cannot execute an accessor or become the shared evidence identity.
 function copyNodeEvidence(evidence) {
   const source = copyStrictOwnDataRecord(evidence) || objectCreate(null);
-  const nodeRow = copyStrictOwnDataRecord(source.nodeRow);
-  return objectFreeze({...source, nodeRow: nodeRow && objectFreeze(nodeRow)});
+  return objectFreeze({...source, nodeRow: snapshotNodeLivenessRow(source.nodeRow)});
 }
 
 function readProjectionEvidence(owner, nodeId) {

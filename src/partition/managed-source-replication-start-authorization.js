@@ -1,9 +1,10 @@
+import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   workflowAttemptOf,
 } from './partition-constants.js';
-import {MERGE_ACK_STATUS} from './merge-ack-constants.js';
+import {MERGE_ACK_STATUS, buildMergeSourceParticipantKey} from './merge-ack-constants.js';
 import {SPLIT_ACK_STATUS} from './split-ack-constants.js';
 
 const FIELD = PARTITION_TRANSITION_METADATA_FIELD;
@@ -71,10 +72,12 @@ function matchesIdentity(workflow, start) {
 
 function splitStartAuthorization(start, options = {}) {
   return Object.freeze({
+    sourcePartitionId: start.sourcePartitionId,
     initialStates: SPLIT_INITIAL_STATES,
     executableStates: SPLIT_EXECUTABLE_STATES,
     startedStatuses: SPLIT_STARTED_STATUSES,
     confirmationOnly: options.confirmationOnly === true,
+    requireExecutable: options.requireExecutable === true,
     matches: (workflow) => matchesIdentity(workflow, start) &&
       workflow.metadata[FIELD.PRIMARY_KEY_COLUMN] === start.primaryKeyColumn &&
       workflow.metadata[FIELD.SOURCE_PARTITION_ID] === start.sourcePartitionId &&
@@ -88,10 +91,13 @@ function splitStartAuthorization(start, options = {}) {
 
 function mergeStartAuthorization(start, options = {}) {
   return Object.freeze({
+    sourcePartitionId: start.sourcePartitionIds?.find((id) =>
+      buildMergeSourceParticipantKey(id) === start.participantKey),
     initialStates: MERGE_INITIAL_STATES,
     executableStates: MERGE_EXECUTABLE_STATES,
     startedStatuses: MERGE_STARTED_STATUSES,
     confirmationOnly: options.confirmationOnly === true,
+    requireExecutable: options.requireExecutable === true,
     matches: (workflow) => matchesIdentity(workflow, start) &&
       workflow.metadata[FIELD.PRIMARY_KEY_COLUMN] === start.primaryKeyColumn &&
       workflow.metadata[FIELD.TARGET_PARTITION_VERSION] ===
@@ -109,9 +115,10 @@ async function acknowledgeSourceStartAtRecordTurn(coordinator, workflowId, ack,
     return coordinator.acknowledgeParticipant(workflowId, ack);
   }
   return coordinator.authorizeParticipantStart(
-    workflowId, ack, buildAuthorization({...startContext.metadata,
+    workflowId, ack, buildAuthorization({...startContext.metadata, participantKey: ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY],
       tableId: startContext.tableId, tableName: startContext.tableName},
-    {confirmationOnly: startContext.confirmationOnly === true}));
+    {confirmationOnly: startContext.confirmationOnly === true,
+      requireExecutable: startContext.requireExecutable === true}));
 }
 
 export {

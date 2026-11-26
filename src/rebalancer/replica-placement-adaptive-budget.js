@@ -61,7 +61,7 @@ const PLACEMENT_ADAPTIVE_WINDOW_DEFAULTS = Object.freeze({
   THRESHOLDS: Object.freeze({
     healthyEventLoopDelayMs: 25, congestionEventLoopDelayMs: 80,
     healthyEluPercent: 75, congestionEluPercent: 92,
-    healthySingleCoreCpuPercent: 80, congestionSingleCoreCpuPercent: 95,
+    healthyMainThreadCpuPercent: 80, congestionMainThreadCpuPercent: 95,
     healthyInitQueueDelayMs: 50, congestionInitQueueDelayMs: 200,
     healthyWriteLatencyMs: 25, congestionWriteLatencyMs: 100,
     healthyTransferQueueDelayMs: 50, congestionTransferQueueDelayMs: 200,
@@ -101,15 +101,11 @@ function isFiniteMetric(val) {
 function hasPrimaryLoadSensor(observation) {
   if (!observation || typeof observation !== 'object') return false;
   const directSensors = [
-    observation.singleCoreCpuPercent, observation.eventLoopDelayMs,
+    observation.mainThreadCpuPercent, observation.eventLoopDelayMs,
     observation.eventLoopUtilizationPercent, observation.writeLatencyMs,
     observation.initQueueDelayMs, observation.transferQueueDelayMs,
   ];
   if (directSensors.some(isFiniteMetric)) return true;
-  if (isFiniteMetric(observation.cpuUsagePercent) &&
-      isFiniteMetric(observation.availableMemoryBytes)) {
-    return true;
-  }
   return isFiniteMetric(observation.stageDurationMs) &&
     Number(observation.stageDurationMs) > 0 && isFiniteMetric(observation.operationBytes);
 }
@@ -204,38 +200,15 @@ function isMetricStrictlyAbove(rawValue, threshold) {
   return Number.isFinite(num) && num > threshold;
 }
 
-function effectiveSingleThreadCpuPercent(observation) {
-  if (!isFiniteMetric(observation?.singleCoreCpuPercent)) {
-    return Number(observation?.cpuUsagePercent);
-  }
-  const singleCore = Number(observation.singleCoreCpuPercent);
-  if (!isFiniteMetric(observation.eventLoopUtilizationPercent)) {
-    return singleCore;
-  }
-  return Math.min(singleCore, Number(observation.eventLoopUtilizationPercent));
-}
-
-function isUncongestedEventLoopTurn(observation, thresholds) {
-  if (!isFiniteMetric(observation?.cpuUsagePercent) ||
-      !isFiniteMetric(observation?.eventLoopUtilizationPercent)) {
-    return false;
-  }
-  const cpuUsage = Number(observation.cpuUsagePercent);
-  const elu = Number(observation.eventLoopUtilizationPercent);
-  return cpuUsage > 0 &&
-    cpuUsage < thresholds.healthySingleCoreCpuPercent / 2 &&
-    elu < thresholds.healthyEluPercent;
-}
-
-function isSingleCoreCpuQueueCongested(observation, thresholds) {
-  const cpuPercent = effectiveSingleThreadCpuPercent(observation);
-  if (!isMetricAtOrAbove(cpuPercent, thresholds.congestionSingleCoreCpuPercent)) {
+function isMainThreadCpuQueueCongested(observation, thresholds) {
+  const cpuPercent = observation.mainThreadCpuPercent;
+  if (!isMetricAtOrAbove(cpuPercent, thresholds.congestionMainThreadCpuPercent)) {
     return false;
   }
   const hasQueueSensor =
-    Number.isFinite(Number(observation.eventLoopDelayMs)) ||
-    Number.isFinite(Number(observation.initQueueDelayMs)) ||
-    Number.isFinite(Number(observation.transferQueueDelayMs));
+    isFiniteMetric(observation.eventLoopDelayMs) ||
+    isFiniteMetric(observation.initQueueDelayMs) ||
+    isFiniteMetric(observation.transferQueueDelayMs);
   if (!hasQueueSensor) return true;
   return isMetricStrictlyAbove(
     observation.eventLoopDelayMs,
@@ -257,7 +230,6 @@ function hasDirectQueueOrStageSensor(observation) {
 }
 
 function isEventLoopCongested(observation, thresholds) {
-  if (isUncongestedEventLoopTurn(observation, thresholds)) return false;
   if (isMetricAtOrAbove(observation.eventLoopDelayMs, thresholds.congestionEventLoopDelayMs)) {
     return true;
   }
@@ -293,7 +265,7 @@ function classifyAttributedCongestion(obs, thresholds) {
   }
   const direct = classifyDirectSensorCongestion(obs, thresholds);
   if (direct !== null) return direct;
-  if (isSingleCoreCpuQueueCongested(obs, thresholds)) {
+  if (isMainThreadCpuQueueCongested(obs, thresholds)) {
     return REASON.SINGLE_THREAD_CPU_QUEUE_CONGESTION;
   }
   return isSizeNormalizedStageCongested(obs, thresholds) ?
@@ -307,7 +279,6 @@ function isHighUtilizationQueueDelayed(rawUtilPercent, maxHealthyPercent, observ
 }
 
 function isEventLoopWithinHealthyBand(observation, thresholds) {
-  if (isUncongestedEventLoopTurn(observation, thresholds)) return true;
   if (isFiniteMetric(observation.eventLoopDelayMs) &&
       Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs) {
     return false;
@@ -333,16 +304,11 @@ function isObservationWithinHealthyGrowthBand(observation, thresholds) {
       if (Number(rawVal) > maxHealthy) return false;
     }
   }
-  if (isFiniteMetric(observation.singleCoreCpuPercent)) {
+  if (isFiniteMetric(observation.mainThreadCpuPercent)) {
     hasMeasuredLoadSignal = true;
-    const cpu = effectiveSingleThreadCpuPercent(observation);
-    const maxCpu = thresholds.healthySingleCoreCpuPercent;
+    const cpu = observation.mainThreadCpuPercent;
+    const maxCpu = thresholds.healthyMainThreadCpuPercent;
     if (isHighUtilizationQueueDelayed(cpu, maxCpu, observation, thresholds)) {
-      return false;
-    }
-  } else if (isFiniteMetric(observation.cpuUsagePercent)) {
-    hasMeasuredLoadSignal = true;
-    if (Number(observation.cpuUsagePercent) > thresholds.healthySingleCoreCpuPercent) {
       return false;
     }
   }
@@ -352,9 +318,22 @@ function isObservationWithinHealthyGrowthBand(observation, thresholds) {
   return observation.backpressured !== true;
 }
 
+// Pressure alone determines the band. Demand, cooldown and window bounds
+// still belong to the controller, independent of heartbeat publication.
+function classifyPlacementPressure(observation, thresholds = DEFAULTS.THRESHOLDS) {
+  const congestionReason = classifyAttributedCongestion(observation, thresholds);
+  if (congestionReason !== null) return {action: ACTION.DECREASE, reason: congestionReason};
+  if (!isObservationCompleteForGrowth(observation)) {
+    return {action: ACTION.HOLD, reason: REASON.OBSERVATION_INCOMPLETE};
+  }
+  return isObservationWithinHealthyGrowthBand(observation, thresholds) ?
+    {action: ACTION.INCREASE, reason: null} :
+    {action: ACTION.HOLD, reason: REASON.HYSTERESIS_BAND_HOLD};
+}
+
 function evaluateObservationFreshness(observation, nowMs, expectedBootIncarnation, config) {
   const hasObservation = Boolean(observation && typeof observation === 'object');
-  const sampledAtMs = hasObservation ? Number(observation.sampledAtMs) : Number.NaN;
+  const sampledAtMs = observation?.sampledAtMs;
   const bootMismatch =
     hasObservation &&
     Number.isSafeInteger(expectedBootIncarnation) &&
@@ -569,16 +548,16 @@ function decideAdaptiveResourceWindow(previousState, observation, demand = {}, r
       observationState: freshness.state, nextState: baseState,
     });
   }
-  const congestionReason = classifyAttributedCongestion(observation, config.thresholds);
-  if (congestionReason !== null) {
-    return applyCongestionDecrease(baseState, observation, nowMs, congestionReason, config);
+  const pressure = classifyPlacementPressure(observation, config.thresholds);
+  if (pressure.action === ACTION.DECREASE) {
+    return applyCongestionDecrease(baseState, observation, nowMs, pressure.reason, config);
   }
   const sampleStampedState = {
     ...baseState,
     lastSampleIdentity: resolveObservationSampleIdentity(observation),
     lastSampledAtMs: observation.sampledAtMs,
   };
-  if (!isObservationCompleteForGrowth(observation)) {
+  if (pressure.reason === REASON.OBSERVATION_INCOMPLETE) {
     return buildWindowDecision({
       limit: baseState.limit, previousLimit: baseState.limit,
       action: bootReset ? ACTION.RESET : ACTION.HOLD,
@@ -586,7 +565,7 @@ function decideAdaptiveResourceWindow(previousState, observation, demand = {}, r
       observationState: OBS_STATE.INCOMPLETE, nextState: sampleStampedState,
     });
   }
-  if (!isObservationWithinHealthyGrowthBand(observation, config.thresholds)) {
+  if (pressure.reason === REASON.HYSTERESIS_BAND_HOLD) {
     return buildWindowDecision({
       limit: baseState.limit, previousLimit: baseState.limit,
       action: ACTION.HOLD, reason: REASON.HYSTERESIS_BAND_HOLD, nextState: sampleStampedState,
@@ -747,7 +726,7 @@ function createAdaptivePlacementBudgetController(options = {}) {
         resolveRecordedObservationArgs(observation, optionsOrNowMs);
       const existing = observationsByNode.get(nodeId) || {};
       const stamped = observation && typeof observation === 'object' ?
-        {...observation, sampledAtMs: observation.sampledAtMs ?? nowMs} : null;
+        {...observation} : null;
       if (resourceRole === ROLE_SOURCE) {
         observationsByNode.set(nodeId, {source: stamped, target: existing.target ?? null});
       } else if (resourceRole === ROLE_TARGET) {
@@ -785,4 +764,5 @@ export {
   createAdaptivePlacementBudgetController,
   decideAdaptiveResourceWindow,
   normalizeWindowConfig,
+  classifyPlacementPressure,
 };

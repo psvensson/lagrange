@@ -178,7 +178,7 @@ async () => {
 
 // One format decider: the store-open decision is the owner's full table
 // definition (the cold census's rule), not its column names. A table with the
-// ten columns but without the identity CHECK is another format.
+// current columns but without the identity CHECK is another format.
 test('a table with the owner columns but not the owner definition (no identity CHECK) ' +
   'is refused typed at open', async () => {
   const {directory, dbPath} = temporaryDbPath();
@@ -193,7 +193,8 @@ test('a table with the owner columns but not the owner definition (no identity C
     const unchecked = new Database(dbPath);
     try {
       unchecked.exec(`ALTER TABLE ${OUTCOMES} RENAME TO unchecked_outcomes_source`);
-      unchecked.exec(`${PRIOR_FORMAT_TABLE.slice(0, -1)}, command_digest TEXT)`);
+      unchecked.exec(`${PRIOR_FORMAT_TABLE.slice(0, -1)}, command_digest TEXT, ` +
+        'mirror_effect_required INTEGER NOT NULL CHECK (mirror_effect_required IN (0, 1)))');
       unchecked.exec(`INSERT INTO ${OUTCOMES} SELECT * FROM unchecked_outcomes_source`);
       unchecked.exec('DROP TABLE unchecked_outcomes_source');
       assert.deepEqual(columnsOf(unchecked), [...PARTITION_COMMITTED_STATEMENT_COLUMNS],
@@ -235,7 +236,7 @@ test('an owner result is recorded only with its command identity, by the recorde
         {entryKey, ...base, ...fields}), {code: OUTCOME_ERROR.OWNER_IDENTITY_INVALID});
     }
     assert.throws(() => db.prepare(`INSERT INTO ${OUTCOMES} (entry_key, outcome, log_index, ` +
-      'term, owner_result_text) VALUES (?, ?, 1, 1, ?)').run('entry:raw', APPLY.APPLIED, '{}'),
+      'term, owner_result_text, mirror_effect_required) VALUES (?, ?, 1, 1, ?, 0)').run('entry:raw', APPLY.APPLIED, '{}'),
     {code: 'SQLITE_CONSTRAINT_CHECK'});
     recordCommittedStatementOutcome(service, {entryKey: 'entry:owner', ...base,
       ownerResultText: '{}', commandDigest: 'b'.repeat(64)});

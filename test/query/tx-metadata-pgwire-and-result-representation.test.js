@@ -1117,14 +1117,13 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
     ],
   );
   const hedgedCoordinator = new ParallelQueryCoordinator({
-    systemCache: hedgedCache,
-    replicaRegistry: new Map([
-      ['p2', [{
-        replicaId: 'p2-hedge-replica',
-        status: 'active',
-        executeQuery: async () => decodeAndInstrument('p2', p2Encoded),
-      }]],
-    ]),
+    partitionQueryExecutor: async (sql, id, params, options) => {
+      if (options.excludeDeliveryAddresses?.includes(id)) return decodeAndInstrument('p2', p2Encoded);
+      options.hedgeDeliveryObserver?.({
+        partitionId: id, nodeId: id, address: id, candidateCount: 2,
+      });
+      return hedgedCache.get(TABLES.PARTITIONS, id).executeQuery(sql, params);
+    },
     nodeId: 'lazy-e2e-hedged-coord',
   });
   hedgedCoordinator.speculativeExecutionEnabled = true;
@@ -1401,14 +1400,13 @@ test('Unit 4 Public Path Witness: PostgresWireAdapter -> SQLCore / ' +
     },
   ];
   const hedgedCoordinator = new ParallelQueryCoordinator({
-    systemCache: createMockSystemCache([tableSchema], hedgedPartitions),
-    replicaRegistry: new Map([
-      ['p2', [{
-        replicaId: 'p2-public-hedge-replica',
-        status: 'active',
-        executeQuery: async () => decodeHedgedPartition('p2', multiP2Encoded),
-      }]],
-    ]),
+    partitionQueryExecutor: async (sql, id, params, options) => {
+      if (options.excludeDeliveryAddresses?.includes(id)) return decodeHedgedPartition('p2', multiP2Encoded);
+      options.hedgeDeliveryObserver?.({
+        partitionId: id, nodeId: id, address: id, candidateCount: 2,
+      });
+      return hedgedPartitions.find((p) => p.partition_id === id).executeQuery(sql, params);
+    },
     nodeId: 'pub-hedged-coord',
   });
   hedgedCoordinator.speculativeExecutionEnabled = true;

@@ -22,6 +22,7 @@
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {parse as parseJavaScript} from 'espree';
 import {KEYS as VISITOR_KEYS} from 'eslint-visitor-keys';
 
@@ -647,6 +648,22 @@ function executableModuleSpecifiers(text, file) {
   return specifiers;
 }
 
+// Packaging consumes actual archive bytes. An unparsed module or an opaque
+// import must remain visible to the distribution proof.
+export function unresolvedPackageImports(text, file) {
+  const ast = parseModuleAst(text, file);
+  if (!ast) throw new Error(`cannot inspect packaged module: ${file}`);
+  const bindings = collectConstStringBindings(ast);
+  const unresolved = [];
+  visitAst(ast, (node) => {
+    if (node.type === AST_TYPE.IMPORT_EXPRESSION &&
+        resolveSpecifierArg(node.source, bindings) === null) {
+      unresolved.push(`${file}: ${text.slice(node.start, node.end)}`);
+    }
+  });
+  return unresolved;
+}
+
 function resolveProductionModulePath(basePath, tracked) {
   for (const suffix of MODULE_EXTENSION_CANDIDATES) {
     const candidate = `${basePath}${suffix}`;
@@ -690,7 +707,7 @@ function importedProductionModules(
  * @param {Object} [options] optional file reader and specifier extractor
  * @returns {string[]} unreachable src module paths, sorted
  */
-function unreachableSrcModules(tracked, {
+export function unreachableSrcModules(tracked = trackedPaths(), {
   readFile = readText,
   getSpecifiers = executableModuleSpecifiers,
 } = {}) {
@@ -738,4 +755,6 @@ function main(argv) {
   return unusedFilesGate(argv);
 }
 
-process.exit(main(process.argv.slice(2)));
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  process.exit(main(process.argv.slice(2)));
+}

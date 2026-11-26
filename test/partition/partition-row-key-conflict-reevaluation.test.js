@@ -380,8 +380,9 @@ test('Finding 7: per-row-key readRowKeys allow disjoint concurrency while blocki
     assert.equal((await send(leader, beginMessage(skewWriter))).success, true);
     assert.equal((await leader.handleRemoteQuery(queryMessage(skewReader, SELECT_SQL, ['k-1']))).success, true);
     assert.equal((await leader.handleRemoteQuery(queryMessage(skewWriter, UPDATE_SQL, ['11-skew', 'k-1']))).success, true);
-    await commitParticipantTx(leader, proposed, skewWriter);
+    // Invalidate the read after staging so PREPARE itself must catch the conflict.
     assert.equal((await leader.handleRemoteQuery(queryMessage(skewReader, UPDATE_SQL, ['22-skew', 'k-2']))).success, true);
+    await commitParticipantTx(leader, proposed, skewWriter);
     const skewPrep = await send(leader, prepareMessage(skewReader));
     assert.equal(skewPrep.success, false, 'PREPARE must refuse when readRowKeys overlap committed row');
     assert.equal(skewPrep.failureCode, CODE.PREPARE_REFUSED);
@@ -395,8 +396,9 @@ test('Finding 7: per-row-key readRowKeys allow disjoint concurrency while blocki
     const subqSelect = `SELECT (SELECT MAX(value) FROM ${TABLE}) AS m FROM ${TABLE} WHERE id = ?`;
     assert.equal((await leader.handleRemoteQuery(queryMessage(unscopedReader, subqSelect, ['k-1']))).success, true);
     assert.equal((await leader.handleRemoteQuery(queryMessage(disjointCommitter, UPDATE_SQL, ['33-u', 'k-3']))).success, true);
-    await commitParticipantTx(leader, proposed, disjointCommitter);
+    // Invalidate the read after staging so PREPARE itself must catch the conflict.
     assert.equal((await leader.handleRemoteQuery(queryMessage(unscopedReader, UPDATE_SQL, ['22-u', 'k-2']))).success, true);
+    await commitParticipantTx(leader, proposed, disjointCommitter);
     const unscopedPrep = await send(leader, prepareMessage(unscopedReader));
     assert.equal(unscopedPrep.success, false, 'PREPARE must refuse when hasUnscopedRead is true');
     assert.equal(unscopedPrep.failureCode, CODE.PREPARE_REFUSED);

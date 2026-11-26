@@ -4,6 +4,7 @@
  */
 
 import {TABLES} from '../constants/index.js';
+import {buildProvisioningCompletionSummary} from '../query/provisioning-completion-summary.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway-constants.js';
@@ -343,14 +344,11 @@ async function submitProvisioningMetadataMutations(gateway, job, built) {
 }
 
 function normalizeProvisioningContractOutcome(provResult, built) {
-  const base = provResult && typeof provResult === 'object' ? provResult : {};
   return {
-    ...base,
+    ...provResult,
+    ...buildProvisioningCompletionSummary(provResult, {replicaCount: built.replicaCount}),
     tableId: built.datasetName,
     partitionId: built.partitionId,
-    contractState: provResult?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED ?
-      OWNER_CONTRACT_STATE.UNDER_REPLICATED :
-      OWNER_CONTRACT_STATE.READY,
   };
 }
 

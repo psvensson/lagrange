@@ -1,3 +1,4 @@
+import {splitStartAuthorization, mergeStartAuthorization} from './managed-source-replication-start-authorization.js';
 import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
@@ -32,23 +33,37 @@ function startAck(participantKey, status, metadata, now) {
 }
 
 class ManagedSourceReplicationStartConfirmationMethods {
-  async confirmSplitReplicationStart(metadata, tableId, tableName) {
+  async reserveSourceMirrorCustody(family, sourceId, metadata, tableId, tableName) {
+    const split = family === 'split';
+    const workflow = this.resolveWorkflowState(metadata.workflowId);
+    if (split ? this.isSplitWorkflowStateUnavailable(workflow) :
+      this.isMergeWorkflowStateUnavailable(workflow)) return false;
+    const key = split ? SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION : buildMergeSourceParticipantKey(sourceId);
+    const build = split ? splitStartAuthorization : mergeStartAuthorization;
+    const authorization = build({...metadata, tableId, tableName, participantKey: key});
+    const result = await this.workflowCoordinator.authorizeParticipantStart(metadata.workflowId,
+      startAck(key, split ? SPLIT_ACK_STATUS.SNAPSHOT_STARTED : MERGE_ACK_STATUS.SNAPSHOT_STARTED,
+        metadata, this.now()), {...authorization, reservationOnly: true});
+    return accepted(result);
+  }
+
+  async confirmSplitReplicationStart(metadata, tableId, tableName, {requireExecutable = false} = {}) {
     const result = await this.acknowledgeSourceParticipant(
       metadata[FIELD.WORKFLOW_ID],
       startAck(SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
         SPLIT_ACK_STATUS.SNAPSHOT_STARTED, metadata, this.now()),
-      {metadata, tableId, tableName, confirmationOnly: true},
+      {metadata, tableId, tableName, confirmationOnly: true, requireExecutable},
     );
     return accepted(result);
   }
 
   async confirmMergeReplicationStart(sourcePartitionId, metadata, tableId,
-    tableName) {
+    tableName, {requireExecutable = false} = {}) {
     const result = await this.acknowledgeMergeSourceParticipant(
       metadata[FIELD.WORKFLOW_ID],
       startAck(buildMergeSourceParticipantKey(sourcePartitionId),
         MERGE_ACK_STATUS.SNAPSHOT_STARTED, metadata, this.now()),
-      {metadata, tableId, tableName, confirmationOnly: true},
+      {metadata, tableId, tableName, confirmationOnly: true, requireExecutable},
     );
     return accepted(result);
   }

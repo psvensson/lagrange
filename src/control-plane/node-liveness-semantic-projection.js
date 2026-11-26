@@ -10,6 +10,10 @@ const numberIsFinite = Number.isFinite;
 const numberIsSafeInteger = Number.isSafeInteger;
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
+const objectIsFrozen = Object.isFrozen;
+const weakMapGet = Function.call.bind(WeakMap.prototype.get);
+const weakMapSet = Function.call.bind(WeakMap.prototype.set);
+const admittedNodeRows = new WeakMap();
 const objectIs = Object.is;
 const stringPrototypeToLowerCase =
   Function.call.bind(String.prototype.toLowerCase);
@@ -422,10 +426,25 @@ function buildSemanticSignature(projection) {
   ]);
 }
 
+// Cache only the shallow descriptor snapshot. A frozen input cannot change
+// its own keys, descriptors or value references. Live evidence and decisions
+// are evaluated separately on every projection.
+function snapshotNodeLivenessRow(row) {
+  const admitted = weakMapGet(admittedNodeRows, row);
+  if (admitted) return admitted;
+  const copy = copyStrictOwnDataRecord(row);
+  if (!copy) return null;
+  const snapshot = objectFreeze(copy);
+  weakMapSet(admittedNodeRows, snapshot, snapshot);
+  // Strict admission rejects proxies before any integrity-level inspection.
+  if (objectIsFrozen(row)) weakMapSet(admittedNodeRows, row, snapshot);
+  return snapshot;
+}
+
 function normalizeProjectionContext(context) {
   const source = copyStrictOwnDataRecord(context) || {};
   const nowMs = normalizeSemanticNowMs(source.nowMs);
-  const nodeRow = copyStrictOwnDataRecord(source.nodeRow);
+  const nodeRow = snapshotNodeLivenessRow(source.nodeRow);
   const candidateNodeId = typeof source.nodeId === 'string' ?
     source.nodeId : readFirstOwnValue(nodeRow, NODE_ID_FIELD_NAMES);
   const nodeId = typeof candidateNodeId === 'string' ? candidateNodeId : '';
@@ -631,4 +650,5 @@ export {
   normalizeSemanticNowMs,
   projectNodeLivenessSemantics,
   readNodeLivenessRowFacts,
+  snapshotNodeLivenessRow,
 };

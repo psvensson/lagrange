@@ -89,10 +89,13 @@ function createGateway() {
         .filter(([key]) => key.startsWith(`${tableName}:`))
         .map(([, row]) => row);
       if (tableName === 'schema_operations') {
-        if (params.length === 0) {
-          return {rows: candidates.filter(
-            (row) => row.status !== 'SUCCEEDED' && row.status !== 'FAILED',
-          )};
+        if (_sql.includes('AS recovery_rowid')) {
+          const [status, updatedAt, rowId] = params;
+          const filtered = candidates.map((row, index) => ({...row, recovery_rowid: index + 1}))
+            .filter((row) => row.status === status && (params.length === 1 ||
+              row.updated_at < updatedAt || (row.updated_at === updatedAt && row.recovery_rowid < rowId)))
+            .sort((a, b) => b.updated_at - a.updated_at || b.recovery_rowid - a.recovery_rowid);
+          return {rows: filtered.slice(0, 32)};
         }
         return {rows: candidates.filter(
           (row) => row.table_identity_key === params[0],
@@ -117,10 +120,19 @@ function createService(gateway, provisionCalls, overrides = {}) {
     updateSystemTableRow() {},
     upsertSystemTableRow() {},
   };
+  const leader = {
+    partitionId: 'schema_operations-p1', leadershipTenure: {},
+    writeTraffic: {getSnapshot: () => ({committedWrites: gateway.writes.length})},
+    async executeLocalQuery(sql, params) {
+      const result = await gateway.readRows(TABLES.SCHEMA_OPERATIONS, sql, params);
+      return {...result, rowSetComplete: true, partitionId: this.partitionId};
+    },
+  };
   return new TableCreationService({
     systemCache: {find: () => null, getAll: () => []},
     cdcIntegrationService,
     controlPlaneSystemTableGateway: gateway,
+    schemaRecoveryLeaders: () => [leader],
     schemaProvisioningOwnerId: 'schema-worker-a',
     ...overrides,
     partitionProvisioner: overrides.partitionProvisioner || (async (context) => {
@@ -252,5 +264,5 @@ function createServeRefreshFixture(t, gateway) {
 
 export {
   createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
-  serveRefreshPublication,
+  createServeRefreshClock, serveRefreshPublication,
 };

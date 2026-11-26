@@ -195,6 +195,68 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     );
   });
 
+  test('services write keeps close evidence target-scoped and preserves unresolved writes', async (t) => {
+    const partitionId = 'services-p1';
+    const old = 'old/partition/old-replica';
+    const live = 'live/partition/live-replica';
+    const close = {error: 'Connection to node old closed', errorCode: 'ROUTER_CONNECTION_CLOSED',
+      deferRetry: true, retryAfterMs: 60000};
+    const row = (node, role, address) => ({partition_id: partitionId, service_id: node + '-replica',
+      service_type: SERVICE_TYPE.PARTITION, node_id: node, raft_role: role, address,
+      status: SERVICE_STATUS.ACTIVE});
+    const systemCache = {
+      partitions: [{partition_id: partitionId, table_name: TABLES.SERVICES, leader_node_id: 'old'}],
+      services: [row('old', 'leader', old), row('live', 'follower', live)],
+      ...PARTITION_CACHE_ACCESSORS,
+    };
+    const cases = ['handler_refusal', 'thrown_close', 'no_replay_identity', 'no_alternative',
+      'closed_before_send', 'thrown_timeout_without_identity'];
+    for (const mode of cases) {
+      const deliveries = [];
+      const onlyOld = mode === 'no_alternative' || mode === 'closed_before_send';
+      const noIdentity = mode === 'no_replay_identity' || mode === 'thrown_timeout_without_identity';
+      const executor = new QueryExecutor({
+        systemCache: {...systemCache, services: onlyOld ? systemCache.services.slice(0, 1) : systemCache.services},
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+        messageRouter: {async deliver(address, request) {
+          deliveries.push({address, entryId: request.entryId});
+          if (address === live) return buildDeliveryEnvelope({acknowledged: true},
+            {success: true, changes: 1, rows: []});
+          if (mode === 'handler_refusal') return buildDeliveryEnvelope({acknowledged: true},
+            {success: false, ...close});
+          if (mode === 'thrown_timeout_without_identity') {
+            throw Object.assign(new Error('Message timeout'), {retryAfterMs: 1, deferRetry: true});
+          }
+          if (['thrown_close', 'no_replay_identity', 'closed_before_send'].includes(mode)) {
+            throw Object.assign(new Error(close.error), {code: close.errorCode,
+              retryAfterMs: close.retryAfterMs, deferRetry: true,
+              recoverableBeforeSend: mode === 'closed_before_send'});
+          }
+          return buildDeliveryEnvelope(close);
+        }},
+      });
+      executor.leaderRetryDelayMs = 1;
+      const result = await executor.executeOnPartition(partitionId,
+        'UPDATE services SET status = ? WHERE service_id = ?', ['pending', 'new-replica'],
+        false, false, false, noIdentity ?
+          {timeoutMs: 1500, buildRequest: () => ({sql: 'UPDATE services SET status = ?'})} :
+          {timeoutMs: 1500, entryId: 'services-entry'});
+      t.equal(result.success, mode === 'thrown_close', mode);
+      t.same(deliveries.map((item) => item.address), mode === 'thrown_close' ? [old, live] : [old], mode);
+      if (noIdentity) {
+        t.equal(result.failureCode, 'partition_write_outcome_unknown');
+        t.notOk(result.entryId);
+      } else {
+        t.ok(deliveries.every((item) => item.entryId === 'services-entry'), mode);
+      }
+      if (mode === 'closed_before_send') t.not(result.failureCode, 'partition_write_outcome_unknown');
+      if (mode === 'no_alternative') {
+        t.equal(result.failureCode, 'partition_write_outcome_unknown');
+        t.equal(result.entryId, 'services-entry');
+      }
+    }
+  });
+
   test('QueryExecutor - inactive participant routing falls through to live ' +
     'participant for authoritative nodes read', async (t) => {
     const inactiveNodeId = '7493b0ab-a054-5fad-a91b-5e331db29304';

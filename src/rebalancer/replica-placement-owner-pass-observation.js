@@ -49,7 +49,8 @@ const increment = (counts, key, by = 1) => {
 };
 
 function createPlacementObservation() {
-  return {passSequence: 0, totals: {passes: 0, completed: 0, waits: {}, staleStops: {},
+  const counts = Object.fromEntries(Object.values(PLACEMENT_TRIGGER).map((trigger) => [trigger, 0]));
+  return {passSequence: 0, triggerNotifications: {...counts}, passesByTrigger: counts, totals: {passes: 0, completed: 0, waits: {}, staleStops: {},
     leadershipStartDrivesJoined: 0, constructions: 0, evaluated: 0, candidates: 0,
     capacityChecks: 0, proposals: 0, fenced: 0, admitted: 0, released: 0, refused: {},
     outcomeUnknown: 0, failedPasses: 0, failedCandidates: 0, leadershipStartDriveFailures: 0,
@@ -99,6 +100,9 @@ function recordUncertainCandidate(pass, partitionId, error) {
  * @return {Object} The pass record (the pass itself carries its custody).
  */
 function beginPlacementPass(observation, custody, triggers) {
+  for (const trigger of triggers) {
+    if (Object.hasOwn(PLACEMENT_TRIGGER, trigger)) observation.passesByTrigger[trigger]++;
+  }
   observation.passSequence += 1;
   observation.totals.passes += 1;
   return newPassRecord(observation, custody, observation.passSequence, triggers);
