@@ -25,6 +25,7 @@ import {
   clearPinnedCandidateAddress,
   hasPlanningRefreshPendingDenial,
   resolveNoCandidateErrorMessage,
+  settleUnresolvedCaughtWriteError,
 } from './query-executor-partition-failure.js';
 import {resolvePartitionExecutionBuilders} from './query-executor-partition-request-builders.js';
 import {publishedLeaderGapOf} from '../control-plane/control-plane-owner-fact-read-contract.js';
@@ -554,6 +555,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               if (unknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
                 return buildLastFailureResult();
               }
+              widenWriteCandidate(address);
               candidateState.requestRetryCurrentAddress();
               break;
             }
@@ -746,17 +748,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               error: errorMessage,
             });
             if (unknownOutcome.isUnresolved()) {
-              // A write whose outcome is unknown ends typed, never thrown.
-              return buildFailureResult(
-                errorMessage,
-                buildQueryPartitionCandidateFailureDetails({
-                  executor: this,
-                  failure: error,
-                  forRead,
-                  participantNodeId: serviceInfo?.nodeId,
-                  participantAddress: address,
-                }),
-              );
+              const unresolvedResult = settleUnresolvedCaughtWriteError({
+                executor: this, forRead, executionOptions, errorMessage, error,
+                serviceInfo, address, recordCandidateFailure,
+                widenWriteCandidate, candidateState, buildFailureResult,
+              });
+              if (unresolvedResult === null) break;
+              return unresolvedResult;
             }
             throw error;
           }

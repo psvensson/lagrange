@@ -45,6 +45,19 @@ import {SQLParser} from '../../../../src/query/sql-parser.js';
 import {withExecutedStatementType} from '../../../../src/query/application-database-result.js';
 import {deriveCommandTag} from '../../../../src/runtime/pgwire-result-mapper.js';
 import {
+  resolveFailedStatementOutcome,
+} from '../../../../src/runtime/pgwire-transaction-outcome.js';
+import {
+  PG_TRANSACTION_STATE,
+} from '../../../../src/runtime/pgwire-protocol-constants.js';
+import {
+  createUnknownOutcomeRedelivery,
+  UNKNOWN_OUTCOME_DECISION,
+} from '../../../../src/query/query-executor-unknown-outcome.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+} from '../../../../src/transport/transport-semantic-outcome.js';
+import {
   CANONICAL_REQUIRED_INDEXES,
   CANONICAL_SCHEMA_SHA256,
   CANONICAL_TABLE_COLUMNS,
@@ -794,4 +807,264 @@ test('interrupted-schema-setup-missing-index: reopening a cohort where all 9 tab
     0,
     'TRUNCATE TABLE must never execute when idx_orders_customer_latest has wrong columns',
   );
+});
+
+test('truncate-unknown-outcome-and-08007-boundary: lost transport answer and leader-loss ' +
+  'redeliver under same entryId, deadline expiry preserves 08007 detail instead of ' +
+  'reset-unsupported, and post-truncate residual rows fail closed', async () => {
+  // 1. Unknown-outcome redelivery owner: lost transport reply (MESSAGE_TIMEOUT /
+  // CONNECTION_CLOSED after send) followed by a non-unknown transport failure or
+  // not-leader redirect returns REDELIVER under the same entryId until a committed
+  // answer settles it.
+  let clockMs = 1000;
+  const lostReplyOwner = createUnknownOutcomeRedelivery({
+    forRead: false,
+    entryId: 'entry-truncate-history-p1',
+    now: () => clockMs,
+  });
+  lostReplyOwner.recordDelivery();
+  lostReplyOwner.observeTransport({
+    delivered: false,
+    reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT,
+    error: 'Message delivery timed out after 5000ms',
+  });
+  assert.equal(lostReplyOwner.isUnresolved(), true);
+  assert.equal(
+    lostReplyOwner.observeAnswer({
+      success: false,
+      errorCode: 'MESSAGE_TIMEOUT',
+      error: 'Message delivery timed out after 5000ms',
+    }),
+    UNKNOWN_OUTCOME_DECISION.REDELIVER,
+    'lost transport answer must return REDELIVER under the same entryId, not NONE',
+  );
+  // Second attempt hits former leader returning not-leader before new leader is reached:
+  lostReplyOwner.recordDelivery();
+  clockMs += 150;
+  assert.equal(
+    lostReplyOwner.observeAnswer({
+      success: false,
+      failureCode: 'partition_write_not_leader',
+      leaderId: 'node-2',
+    }),
+    UNKNOWN_OUTCOME_DECISION.REDELIVER,
+    'not-leader answer while write is unresolved must continue redelivering under entryId',
+  );
+  // Third attempt reaches the new leader which answers a committed statement outcome:
+  lostReplyOwner.recordDelivery();
+  clockMs += 100;
+  assert.equal(
+    lostReplyOwner.observeAnswer({
+      success: false,
+      committed: true,
+      settledReplay: 'retained',
+      entryId: 'entry-truncate-history-p1',
+      changes: 0,
+    }),
+    UNKNOWN_OUTCOME_DECISION.NONE,
+    'committed answer under the same entryId settles the unknown outcome',
+  );
+  assert.equal(lostReplyOwner.isUnresolved(), false);
+
+  // 2. When a fault outlasts the execution deadline, PG-wire 08007 preserves
+  // entry_id, operation_id, idempotency_key, partition_id, participant_node_id,
+  // failure_code, consensus, and spent_wait in outcome.detail.
+  const deadlineOwner = createUnknownOutcomeRedelivery({
+    forRead: false,
+    entryId: 'entry-truncate-history-p2',
+    now: () => clockMs,
+  });
+  deadlineOwner.recordDelivery();
+  clockMs += 5000;
+  assert.equal(
+    deadlineOwner.observeAnswer({
+      success: false,
+      failureCode: 'partition_write_outcome_unknown',
+      disposition: 'proposed',
+      entryId: 'entry-truncate-history-p2',
+      consensus: {reason: 'role-changed', logIndex: 42, term: 7},
+    }),
+    UNKNOWN_OUTCOME_DECISION.REDELIVER,
+  );
+  const exhaustedParticipant = deadlineOwner.finish({
+    partitionId: 'history-p1',
+    participantNodeId: 'node-1',
+    participantAddress: 'node-1/partition/history-p1-r1',
+    errorCode: 'TIMEOUT',
+    error: 'Partition execution deadline exceeded',
+  });
+  const pgOutcome = resolveFailedStatementOutcome({
+    stateBefore: PG_TRANSACTION_STATE.IDLE,
+    statementType: 'TRUNCATE',
+    failure: {
+      success: false,
+      errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+      error: 'Distributed write failed on one or more partitions',
+      distributedWritePlan: {
+        operationId: 'op-truncate-history-1',
+        idempotencyKey: 'idem-truncate-history-1',
+      },
+      participantFailures: [exhaustedParticipant],
+      firstFailedParticipant: exhaustedParticipant,
+    },
+    engineHoldsTransaction: () => false,
+  });
+  assert.equal(pgOutcome.sqlState, '08007');
+  assert.equal(pgOutcome.detail.entry_id, 'entry-truncate-history-p2');
+  assert.equal(pgOutcome.detail.operation_id, 'op-truncate-history-1');
+  assert.equal(pgOutcome.detail.idempotency_key, 'idem-truncate-history-1');
+  assert.equal(pgOutcome.detail.partition_id, 'history-p1');
+  assert.equal(pgOutcome.detail.participant_node_id, 'node-1');
+  assert.equal(pgOutcome.detail.failure_code, 'partition_write_outcome_unknown');
+  assert.deepEqual(pgOutcome.detail.consensus, {
+    reason: 'role-changed',
+    logIndex: 42,
+    term: 7,
+  });
+  assert.equal(pgOutcome.detail.spent_wait.deliveries, 1);
+
+  // 3. When 08007 reaches resetCanonicalDataset in lagrange-oltp-adapter, it
+  // is NOT wrapped into reset-unsupported (harness_fault); its 08007 code and
+  // structured detail are preserved.
+  const store = new Map();
+  const tableSchemas = new Map();
+  const createdIndexes = new Map();
+  const catalogState = {
+    store,
+    tableSchemas,
+    createdIndexes,
+    returnSchemaProbeRow: true,
+    requireTableOnTruncate: true,
+  };
+  const baseClient = {
+    connect: async () => {},
+    query: (sql, params = []) => runCohortResetTestQuery(catalogState, sql, params),
+    end: async () => {},
+  };
+  const initialAdapter = await createLagrangeOltpAdapter({
+    endpoint: {host: '127.0.0.1', port: 5433},
+    connection: {user: 'bench', database: 'bench'},
+    createClient: () => baseClient,
+    workload: {scale: 1, workers: 1},
+  });
+  const initialSeedCounts = {
+    warehouse: store.get('warehouse')?.length,
+    district: store.get('district')?.length,
+    customer: store.get('customer')?.length,
+    item: store.get('item')?.length,
+    stock: store.get('stock')?.length,
+  };
+  assert.ok(initialSeedCounts.warehouse > 0);
+  assert.ok(initialSeedCounts.customer > 0);
+
+  let failHistoryWith08007 = true;
+  const outcomeUnknownClient = {
+    connect: async () => {},
+    query: async (sql, params = []) => {
+      if (failHistoryWith08007 && stringTrim(sql) === 'TRUNCATE TABLE history') {
+        const err = new Error(pgOutcome.message);
+        err.code = pgOutcome.sqlState;
+        err.sqlState = pgOutcome.sqlState;
+        err.detail = JSON.stringify(pgOutcome.detail);
+        throw err;
+      }
+      return baseClient.query(sql, params);
+    },
+    end: async () => {},
+  };
+
+  await assert.rejects(
+    createLagrangeOltpAdapter({
+      endpoint: {host: '127.0.0.1', port: 5433},
+      connection: {user: 'bench', database: 'bench'},
+      createClient: () => outcomeUnknownClient,
+      workload: {scale: 1, workers: 1},
+    }),
+    (error) => {
+      assert.notEqual(
+        error.code,
+        OLTP_DATASET_RESET_OUTCOME.RESET_UNSUPPORTED,
+        '08007 must not be misclassified as reset-unsupported',
+      );
+      assert.equal(error.code, '08007');
+      assert.equal(error.sqlState, '08007');
+      assert.equal(error.failureTable, 'history');
+      const parsedDetail = JSON.parse(error.detail);
+      assert.equal(parsedDetail.entry_id, 'entry-truncate-history-p2');
+      assert.equal(parsedDetail.partition_id, 'history-p1');
+      assert.equal(parsedDetail.spent_wait.deliveries, 1);
+      return true;
+    },
+  );
+
+  // 4. When the fault clears within the deadline (resolved inside the product's
+  // redelivery owner before returning to the PG client), resetDataset succeeds,
+  // verifies 0 rows after TRUNCATE on every table, and leaves intact seed data.
+  failHistoryWith08007 = false;
+  store.set('history', [{history_id: 999}]);
+  const recoveredReset = await initialAdapter.resetDataset();
+  assert.equal(recoveredReset.outcome, OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE);
+  assert.ok(Number.isFinite(recoveredReset.resetDurationMs));
+  assert.ok(Number.isFinite(recoveredReset.seedLoadDurationMs));
+  for (const tableEntry of recoveredReset.tables) {
+    assert.equal(tableEntry.postTruncateRowCount, 0);
+    assert.ok(Number.isFinite(tableEntry.truncateDurationMs));
+  }
+  const stateAfterReset = (await initialAdapter.getEvidence()).stateCounts;
+  assert.equal(stateAfterReset.orders, 0);
+  assert.equal(stateAfterReset.newOrders, 0);
+  assert.equal(stateAfterReset.orderLines, 0);
+  assert.equal(stateAfterReset.history, 0);
+  assert.equal(
+    store.get('warehouse')?.length,
+    initialSeedCounts.warehouse,
+    'seed warehouse rows reloaded',
+  );
+  assert.equal(
+    store.get('district')?.length,
+    initialSeedCounts.district,
+    'seed district rows reloaded',
+  );
+  assert.equal(
+    store.get('customer')?.length,
+    initialSeedCounts.customer,
+    'seed customer rows reloaded',
+  );
+  assert.equal(
+    store.get('item')?.length,
+    initialSeedCounts.item,
+    'seed item rows reloaded',
+  );
+  assert.equal(
+    store.get('stock')?.length,
+    initialSeedCounts.stock,
+    'seed stock rows reloaded',
+  );
+
+  // 5. If TRUNCATE returns without throwing but leaves residual rows in a table,
+  // resetCanonicalDataset fails closed with truncate-residual-rows before reseeding.
+  const residualClient = {
+    connect: async () => {},
+    query: async (sql, params = []) => {
+      if (stringTrim(sql) === 'TRUNCATE TABLE history') {
+        store.set('history', [{history_id: 777}]);
+        return {rows: [], rowCount: 0};
+      }
+      return baseClient.query(sql, params);
+    },
+    end: async () => {},
+  };
+  await assert.rejects(
+    createLagrangeOltpAdapter({
+      endpoint: {host: '127.0.0.1', port: 5433},
+      connection: {user: 'bench', database: 'bench'},
+      createClient: () => residualClient,
+      workload: {scale: 1, workers: 1},
+    }),
+    (error) =>
+      error.code === 'truncate-residual-rows' &&
+      error.failureTable === 'history' &&
+      error.residualRowCount === 1,
+  );
+  await initialAdapter.close();
 });

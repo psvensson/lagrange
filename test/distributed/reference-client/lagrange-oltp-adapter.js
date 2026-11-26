@@ -748,36 +748,93 @@ async function createSchema(client, provisioning) {
   }
 }
 
+function isTruncateCapabilityUnsupportedError(error) {
+  const code = error?.sqlState || error?.code || '';
+  if (code === '0A000' || code === '42601') {
+    return true;
+  }
+  const message = String(error?.message || '');
+  return /unsupported|not supported|unknown statement|syntax error/iu.test(message);
+}
+
+function enrichTruncateExecutionFailure(table, error) {
+  const rawMessage = error?.message || String(error);
+  const enriched = new Error(
+    `TRUNCATE TABLE ${table} failed during cohort-preserving reset: ${rawMessage}`,
+    {cause: error},
+  );
+  const sqlState = error?.sqlState || error?.code || null;
+  if (sqlState) {
+    enriched.code = sqlState;
+    enriched.sqlState = sqlState;
+  }
+  if (error?.detail !== undefined) {
+    enriched.detail = error.detail;
+  }
+  enriched.failureTable = table;
+  return enriched;
+}
+
 async function resetCanonicalDataset(
   client,
   dataset,
   tables,
   lockingReadMode = LOCKING_READ_MODE,
 ) {
+  const resetStartedAtMs = Date.now();
   await validateAllCanonicalTableSchemas(client, lockingReadMode);
   for (const table of DROP_TABLES) {
     const startedMs = Date.now();
     try {
       await client.query(`TRUNCATE TABLE ${table}`);
     } catch (error) {
-      throw resetUnsupportedError(
-        `TRUNCATE TABLE ${table} failed during cohort-preserving reset: ` +
-          `${error?.message || error}`,
-        error,
-      );
+      if (isTruncateCapabilityUnsupportedError(error)) {
+        throw resetUnsupportedError(
+          `TRUNCATE TABLE ${table} failed during cohort-preserving reset: ` +
+            `${error?.message || error}`,
+          error,
+        );
+      }
+      throw enrichTruncateExecutionFailure(table, error);
     }
+    const truncateEndedMs = Date.now();
     const observed = await observeTableState(client, table);
     if (observed !== TABLE_PRESENT) {
       throw observed.error;
+    }
+    const postTruncateRowCount = await countRows(client, table);
+    if (postTruncateRowCount !== ZERO) {
+      const residualError = new Error(
+        `TRUNCATE TABLE ${table} left ${postTruncateRowCount} residual rows ` +
+          'during cohort-preserving reset',
+      );
+      residualError.code = 'truncate-residual-rows';
+      residualError.failureTable = table;
+      residualError.residualRowCount = postTruncateRowCount;
+      throw residualError;
     }
     tables.push(Object.freeze({
       table,
       outcome: OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE,
       schemaSha256: CANONICAL_SCHEMA_SHA256,
+      truncateStartedAt: new Date(startedMs).toISOString(),
+      truncateEndedAt: new Date(truncateEndedMs).toISOString(),
+      truncateDurationMs: truncateEndedMs - startedMs,
+      postTruncateRowCount,
       states: Object.freeze([stateEntry(startedMs, TABLE_PRESENT, null)]),
     }));
   }
+  const seedLoadStartedAtMs = Date.now();
   await loadDataset(client, dataset);
+  const seedLoadEndedAtMs = Date.now();
+  return Object.freeze({
+    resetStartedAt: new Date(resetStartedAtMs).toISOString(),
+    resetEndedAt: new Date(seedLoadEndedAtMs).toISOString(),
+    resetDurationMs: seedLoadEndedAtMs - resetStartedAtMs,
+    seedLoadStartedAt: new Date(seedLoadStartedAtMs).toISOString(),
+    seedLoadEndedAt: new Date(seedLoadEndedAtMs).toISOString(),
+    seedLoadDurationMs: seedLoadEndedAtMs - seedLoadStartedAtMs,
+  });
 }
 
 async function loadDataset(client, dataset) {
@@ -882,8 +939,13 @@ async function prepareDataset(
       return evidence();
     }
     if (existingTables.length === DROP_TABLES.length) {
-      await resetCanonicalDataset(client, dataset, tables, lockingReadMode);
-      return evidence();
+      const resetTimings = await resetCanonicalDataset(
+        client, dataset, tables, lockingReadMode,
+      );
+      return Object.freeze({
+        ...evidence(),
+        ...resetTimings,
+      });
     }
     throw schemaMismatchError(
       `Lagrange OLTP cohort has partial schema (${existingTables.length} of ` +
@@ -1046,11 +1108,14 @@ async function createLagrangeOltpAdapter(options = {}) {
       const tables = [];
       const client = await openClient(createClient, resolvedClientOptions);
       try {
-        await resetCanonicalDataset(client, dataset, tables, resolvedLockingReadMode);
+        const resetTimings = await resetCanonicalDataset(
+          client, dataset, tables, resolvedLockingReadMode,
+        );
         return Object.freeze({
           outcome: OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE,
           schemaSha256: CANONICAL_SCHEMA_SHA256,
           tables: Object.freeze([...tables]),
+          ...resetTimings,
         });
       } finally {
         await client.end();

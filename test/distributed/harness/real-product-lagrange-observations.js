@@ -800,12 +800,23 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
     const routing = verdict.ready && lane.ready ?
       await tableRoutingDenials(query, requiredTables, ctx, pollContext) : [];
     const denials = [...verdict.denials, ...lane.denials, ...routing];
+    const partitionIds = arrayMap(
+      tables.partitions,
+      (row) => row?.partition_id || row?.id || null,
+    );
+    const tableNames = arrayMap(
+      tables.tables,
+      (row) => row?.table_name || row?.name || null,
+    );
     return {
       ready: denials.length === 0,
       diagnostic: {
         denials,
         nodes: tables.nodes.length,
+        tables: tables.tables.length,
         partitions: tables.partitions.length,
+        partitionIds,
+        tableNames,
         spreadSummary: summarizePartitionSpread({
           partitions: tables.partitions,
           services: tables.services,

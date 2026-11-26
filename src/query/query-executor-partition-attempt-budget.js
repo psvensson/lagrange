@@ -10,6 +10,7 @@ const {
 } = QUERY_EXECUTOR_SHARED;
 
 const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1; // ends-on: n/a clamp
+const WRITE_CANDIDATE_MAX_DELIVERY_TIMEOUT_MS = 5000; // ends-on: n/a clamp
 const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: timer (1 ms by design: a not-connected read candidate's delivery is cut so the next candidate is tried)
   READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
 const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: timer (1 ms by design: a not-connected recovery candidate's delivery is cut so the next candidate is tried)
@@ -309,6 +310,12 @@ function createPartitionAttemptBudget({
         ),
       );
     };
+    if (!forRead) {
+      return capRecoveryCandidateBudget(Math.min(
+        remainingBudgetMs,
+        WRITE_CANDIDATE_MAX_DELIVERY_TIMEOUT_MS,
+      ));
+    }
     if (remainingReadCandidates <= 1) {
       return capRecoveryCandidateBudget(remainingBudgetMs);
     }

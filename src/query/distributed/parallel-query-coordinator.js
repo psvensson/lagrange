@@ -38,11 +38,22 @@ import {settleHedgedPartition} from './parallel-query-hedging.js';
 import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
 const QUERY_ID_PREFIX = 'q-';
+const WRITE_FANOUT_OUTER_SAFETY_MARGIN_MS = 250; // ends-on: n/a clamp
 const CHUNK_TIMEOUT_WAIT = Object.freeze({
   wait: 'QUERY_DEFAULTS.COORDINATOR_QUERY_TIMEOUT_MS',
   awaited: 'every partition result of one fan-out chunk',
 });
 const CHUNK_TIMEOUT_PENDING_SAMPLE = 8;
+
+function resolveChunkExecutionTimeouts(effectiveTimeoutMs, options) {
+  const outerTimeoutMs = options?.forRead === true ?
+    effectiveTimeoutMs :
+    effectiveTimeoutMs + WRITE_FANOUT_OUTER_SAFETY_MARGIN_MS;
+  const partitionOptions = options?.timeoutMs !== undefined ?
+    options :
+    {...options, timeoutMs: effectiveTimeoutMs};
+  return {outerTimeoutMs, partitionOptions};
+}
 
 /**
  * Report a spent fan-out chunk timeout with the chunk's settle state.
@@ -383,8 +394,13 @@ class ParallelQueryCoordinator {
     );
 
     try {
-      // Create timeout promise with clearable timer
+      // Create timeout promise with clearable timer. For write fan-out,
+      // pass effectiveTimeoutMs to each partition execution so attemptBudget
+      // owns unknown-outcome redelivery and returns a typed OUTCOME_UNKNOWN
+      // participant failure before the outer safety timer rejects.
       const chunkStartedAtMs = Date.now();
+      const {outerTimeoutMs, partitionOptions} =
+        resolveChunkExecutionTimeouts(effectiveTimeoutMs, options);
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
           reportChunkTimeoutSpent(this, {
@@ -399,7 +415,7 @@ class ParallelQueryCoordinator {
           );
           timeoutError.errorCode = QUERY_ERROR_CODE.TIMEOUT;
           reject(timeoutError);
-        }, effectiveTimeoutMs);
+        }, outerTimeoutMs);
       });
 
       // Execute with straggler hedging if enabled. Hedging is read-only and
@@ -417,13 +433,15 @@ class ParallelQueryCoordinator {
           metrics,
           timeoutPromise,
           cancellationPromise,
-          options,
+          partitionOptions,
         );
       }
 
       // Simple parallel execution with timeout
       const executionPromises = partitionIds.map((partitionId) =>
-        this.executeOnPartitionWithMetrics(sql, partitionId, params, metrics, options),
+        this.executeOnPartitionWithMetrics(
+          sql, partitionId, params, metrics, partitionOptions,
+        ),
       );
       const racePromises = [
         Promise.all(executionPromises),

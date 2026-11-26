@@ -25,6 +25,10 @@ import {
   acknowledgementChange,
 } from '../../src/partition/managed-workflow-record-changes.js';
 import {
+  SPLIT_ACK_STATUS,
+  isSplitSourceAckTransitionAllowed,
+} from '../../src/partition/split-ack-constants.js';
+import {
   buildLockingReadCommand,
   isPinnedLockingReadCommand,
 } from '../../src/partition/partition-locking-read-command.js';
@@ -1009,10 +1013,17 @@ test('committed row-lock check with BLOB/BigInt typedParams, remote live-query C
   });
 
 test(
-  'L9-RETENTION-1, V9-1, V9-2: duplicate CATCHUP_READY advances checkpoint, ' +
-  'and BigInt live-query + locking-read serialize cleanly',
+  'L9-RETENTION-1, V9-1, V9-2: duplicate CATCHUP_READY advances checkpoint ' +
+  'through production split transition graph, and BigInt live-query + ' +
+  'locking-read serialize cleanly',
   async (t) => {
     const owner = {now: () => 5000, workflowOwnerId: 'owner-1', workflowLeaseMs: 30000};
+    const isAllowed = (_key, from, to) => isSplitSourceAckTransitionAllowed(from, to);
+    t.equal(
+      isAllowed('source:p1', SPLIT_ACK_STATUS.CATCHUP_READY, SPLIT_ACK_STATUS.CATCHUP_READY),
+      false,
+      'production split transition graph has no self-edge on catchup_ready',
+    );
     const initialRecord = {
       workflowId: 'wf-split-1',
       status: 'SPLIT_CATCHUP',
@@ -1021,7 +1032,7 @@ test(
       participants: new Map([
         ['source:p1', {
           participantKey: 'source:p1',
-          status: 'CATCHUP_READY',
+          status: SPLIT_ACK_STATUS.CATCHUP_READY,
           fenceToken: 1,
           acknowledgedAt: 4000,
           updatedAt: 4000,
@@ -1033,17 +1044,17 @@ test(
       owner,
       {
         participantKey: 'source:p1',
-        status: 'CATCHUP_READY',
+        status: SPLIT_ACK_STATUS.CATCHUP_READY,
         fenceToken: 1,
         checkpoint: {sourceLogIndex: 125, replayWatermarkIndex: 125},
       },
-      null,
+      isAllowed,
     );
     const advancedOutcome = advanceChange(initialRecord);
     t.equal(
       advancedOutcome.reason,
       undefined,
-      'advancing checkpoint on CATCHUP_READY is not rejected as DUPLICATE',
+      'advancing checkpoint on catchup_ready is accepted through production isAllowed predicate',
     );
     t.same(
       advancedOutcome.participants.get('source:p1').checkpoint,
@@ -1054,7 +1065,7 @@ test(
     t.equal(
       sameCheckpointOutcome.reason,
       'duplicate',
-      'identical checkpoint on already-acknowledged CATCHUP_READY remains DUPLICATE',
+      'identical checkpoint on already-acknowledged catchup_ready remains DUPLICATE',
     );
 
     const sentPayloads = [];

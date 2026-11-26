@@ -3,38 +3,10 @@ import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
   WORKFLOW_ERROR_MSG,
+  hasAdvancedParticipantCheckpoint,
+  mergeParticipantCheckpoint,
   readParticipantCurrentStatus,
 } from './workflow-constants.js';
-
-function hasAdvancedCheckpointField(currVal, nextVal) {
-  if (Number.isSafeInteger(nextVal)) {
-    return !Number.isSafeInteger(currVal) || nextVal > currVal;
-  }
-  return nextVal !== undefined && nextVal !== null && nextVal !== currVal;
-}
-
-function hasAdvancedParticipantCheckpoint(current, next) {
-  if (!next || typeof next !== 'object') return false;
-  if (!current || typeof current !== 'object') return true;
-  return Object.entries(next).some(([field, nextVal]) =>
-    hasAdvancedCheckpointField(current[field], nextVal));
-}
-
-function mergeParticipantCheckpoint(current, next) {
-  if (!current || typeof current !== 'object' || typeof next !== 'object') {
-    return next;
-  }
-  const merged = {...current};
-  for (const [field, nextVal] of Object.entries(next)) {
-    const currVal = merged[field];
-    if (Number.isSafeInteger(currVal) && Number.isSafeInteger(nextVal)) {
-      merged[field] = Math.max(currVal, nextVal);
-    } else if (nextVal !== undefined) {
-      merged[field] = nextVal;
-    }
-  }
-  return merged;
-}
 
 /**
  * Participant acknowledgement methods for DurableWorkflowCoordinator:

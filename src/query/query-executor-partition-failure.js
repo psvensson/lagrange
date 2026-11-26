@@ -243,6 +243,42 @@ function resolveRedirectParticipantNodeId(leaderAddress, fallbackNodeId) {
     fallbackNodeId;
 }
 
+function hasNonEmptyWriteEntryId(executionOptions) {
+  return typeof executionOptions?.entryId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+    executionOptions.entryId.length > 0;
+}
+
+function settleUnresolvedCaughtWriteError({
+  executor,
+  forRead,
+  executionOptions,
+  errorMessage,
+  error,
+  serviceInfo,
+  address,
+  recordCandidateFailure,
+  widenWriteCandidate,
+  candidateState,
+  buildFailureResult,
+}) {
+  if (hasNonEmptyWriteEntryId(executionOptions)) {
+    recordCandidateFailure(errorMessage, error, serviceInfo?.nodeId, address);
+    widenWriteCandidate(address);
+    candidateState.requestRetryCurrentAddress();
+    return null;
+  }
+  return buildFailureResult(
+    errorMessage,
+    buildQueryPartitionCandidateFailureDetails({
+      executor,
+      failure: error,
+      forRead,
+      participantNodeId: serviceInfo?.nodeId,
+      participantAddress: address,
+    }),
+  );
+}
+
 export {
   applySuccessfulCandidateAffinity,
   buildQueryPartitionCandidateFailureDetails,
@@ -251,4 +287,5 @@ export {
   hasPlanningRefreshPendingDenial,
   resolveNoCandidateErrorMessage,
   resolveRedirectParticipantNodeId,
+  settleUnresolvedCaughtWriteError,
 };

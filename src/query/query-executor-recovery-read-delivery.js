@@ -379,6 +379,7 @@ function handleFailedRedirectResponse(context, redirectAddress,
     if (redirectUnknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
       return {action: REDIRECT_STEP_ACTION.RETURN, useLastFailure: true};
     }
+    widenWriteCandidate(redirectAddress);
     candidateState.requestRetryCurrentAddress();
     return {action: REDIRECT_STEP_ACTION.BREAK};
   }

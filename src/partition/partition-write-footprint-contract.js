@@ -9,6 +9,9 @@
 
 import {SQLParser} from '../query/sql-parser.js';
 import {decodeTypedParams} from '../query/sql-value-codec.js';
+import {
+  normalizePkScalar,
+} from './partition-locking-read-command-constants.js';
 
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
@@ -110,13 +113,6 @@ function isCanonicalPkScalar(value) {
   const bigVal = BigInt(value);
   return BigInt.asIntN(SQLITE_INT64_BITS, bigVal) === bigVal &&
     (bigVal < MIN_SAFE_PK_BIGINT || bigVal > MAX_SAFE_PK_BIGINT);
-}
-
-function normalizePkScalar(value) {
-  if (typeof value === TYPE_NUMBER) return Object.is(value, -0) ? NUM_ZERO : value;
-  if (typeof value !== TYPE_BIGINT) return value;
-  return value >= MIN_SAFE_PK_BIGINT && value <= MAX_SAFE_PK_BIGINT ?
-    Number(value) : value.toString();
 }
 
 function encodeCanonicalPkTupleKey(tuple) {
@@ -795,4 +791,5 @@ export {
   encodeCanonicalPkTupleKey,
   extractStatementWriteFootprint,
   isStatementWriteFootprintRecord,
+  normalizePkScalar,
 };

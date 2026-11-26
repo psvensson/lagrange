@@ -1,6 +1,7 @@
 import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
+  QUERY_LOG_MSG,
   QUERY_OPERATION,
 } from '../query-constants.js';
 import {
@@ -507,7 +508,13 @@ class DistributedTransactionCoordinator {
     this.noteMetadataMutation?.(tx);
     const persistPromise = Promise.resolve(
       this.persistWriteOperationRecord(tx, operation),
-    ).catch(() => {});
+    ).catch((persistErr) => {
+      this.logger?.warn?.(QUERY_LOG_MSG.DISTRIBUTED_TX_METADATA_PERSIST_WARN, {
+        transactionId: tx.transactionId,
+        operationId,
+        error: persistErr?.message || String(persistErr),
+      });
+    });
     if (options.deferPersistenceAwait === true) {
       this.enqueueDeferredWriteOperationPersist(tx, persistPromise);
       return;

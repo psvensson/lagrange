@@ -1170,7 +1170,7 @@ test('durable split effects: committed writes retain canonical affectedRows and 
   });
 });
 
-test('L9-RETENTION-2: follower with stale inactive system-table cache still persists durable mirror effects',
+test('L9-RETENTION-2: follower with stale inactive system-table cache retains durable mirror effects across >1,000 writes and replays broad UPDATE/DELETE after promotion',
   {timeout: TEST_TIMEOUT_MS}, async () => {
     const partitionId = 'outcome-follower-stale-cache';
     const userTableName = 'user_orders';
@@ -1197,28 +1197,86 @@ test('L9-RETENTION-2: follower with stale inactive system-table cache still pers
       const seedWrite = await follower.applyWrite({
         type: PARTITION_SERVICE_OPERATION.INSERT,
         sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
-        params: ['follower-seed', 'node-0'],
+        params: ['A-seed', 'node-0'],
         entryId: 'entry-follower-stale-seed',
       });
       assert.equal(seedWrite.success, true);
       const firstWrite = await follower.applyWrite({
         type: PARTITION_SERVICE_OPERATION.INSERT,
-        sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
-        params: ['follower-a', 'node-1'],
+        sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?), (?, ?)`,
+        params: ['B-early', 'node-1', 'Z-early', 'node-1'],
         entryId: 'entry-follower-stale-1',
       });
       assert.equal(firstWrite.success, true);
-      const secondWrite = await follower.applyWrite({
+      // Broad UPDATE (WHERE on non-PK column) and trim(?) DELETE before >1,000 subsequent writes:
+      const earlyBroadUpdate = await follower.applyWrite({
         type: PARTITION_SERVICE_OPERATION.UPDATE,
-        sql: `UPDATE ${userTableName} SET representative_node_id = ? WHERE group_id = ?`,
-        params: ['node-2', 'follower-a'],
-        entryId: 'entry-follower-stale-2',
+        sql: `UPDATE ${userTableName} SET representative_node_id = ? WHERE representative_node_id = ?`,
+        params: ['node-2', 'node-1'],
+        entryId: 'entry-follower-stale-broad-update',
       });
-      assert.equal(secondWrite.success, true);
+      assert.equal(earlyBroadUpdate.success, true);
+      const earlyTrimDelete = await follower.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.DELETE,
+        sql: `DELETE FROM ${userTableName} WHERE group_id = trim(?)`,
+        params: [' Z-early '],
+        entryId: 'entry-follower-stale-trim-delete',
+      });
+      assert.equal(earlyTrimDelete.success, true);
+
+      // Apply 1,005 additional writes while follower's systemTableCache still says 'active'
+      // and no volatile mirror handle exists:
+      for (let i = 1; i <= 1005; i += 1) {
+        const bulkWrite = await follower.applyWrite({
+          type: PARTITION_SERVICE_OPERATION.INSERT,
+          sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
+          params: [`N-bulk-${String(i).padStart(4, '0')}`, 'node-bulk'],
+          entryId: `entry-follower-bulk-${i}`,
+        });
+        assert.equal(bulkWrite.success, true);
+      }
+
       const deltas = loadDurableDeltasBehindWatermark(follower, seedWrite.logIndex);
-      assert.equal(deltas.length, 2, 'follower persists durable mirror effects despite inactive table cache');
+      assert.equal(
+        deltas.length,
+        1008,
+        'follower retains all 1,008 post-barrier durable mirror effects across >1,000 writes',
+      );
       assert.equal(deltas[0].entryId, 'entry-follower-stale-1');
-      assert.equal(deltas[1].entryId, 'entry-follower-stale-2');
-      assert.equal(deltas[1].affectedRows?.[0]?.representative_node_id, 'node-2');
+      assert.equal(deltas[1].entryId, 'entry-follower-stale-broad-update');
+      assert.equal(deltas[1].affectedRows?.length, 2);
+      assert.equal(deltas[2].entryId, 'entry-follower-stale-trim-delete');
+      assert.equal(deltas[2].affectedRows?.length, 1);
+
+      // Replay the early deltas through real replaySplitEntry after promotion:
+      const routed = [];
+      const metadata = {
+        primaryKeyColumn: 'group_id',
+        splitKey: 'M',
+        targetPartitionIds: ['orders-left', 'orders-right'],
+      };
+      const queryExecutor = {
+        async executeOnPartition(targetPartitionId, sql, params, _r, _w, _tx, options) {
+          routed.push({targetPartitionId, sql, params, entryId: options?.entryId});
+          return {success: true};
+        },
+      };
+      for (const delta of deltas.slice(0, 3)) {
+        await replaySplitEntry(delta, metadata, {
+          tableName: userTableName,
+          queryExecutor,
+        });
+      }
+      assert.deepEqual(
+        routed.map((r) => ({target: r.targetPartitionId, entryId: r.entryId})),
+        [
+          {target: 'orders-left', entryId: 'entry-follower-stale-1'},
+          {target: 'orders-right', entryId: 'entry-follower-stale-1'},
+          {target: 'orders-left', entryId: 'entry-follower-stale-broad-update'},
+          {target: 'orders-right', entryId: 'entry-follower-stale-broad-update'},
+          {target: 'orders-right', entryId: 'entry-follower-stale-trim-delete'},
+        ],
+        'promoted follower replays early broad UPDATE and trim(?) DELETE across >1,000-write window without losing row effects',
+      );
     });
   });

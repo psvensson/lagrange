@@ -33,14 +33,8 @@ import {LOCKING_READ_ERROR_CODE, LOCKING_READ_SQL_STATE} from
   '../query/sql-locking-read-constants.js';
 import {TABLES} from '../constants/tables.js';
 import {materializeTypedRowSetObjects} from '../query/sql-value-codec.js';
-import {PARTITION_TRANSITION_METADATA_FIELD} from './partition-constants.js';
-import {parseTablePartitionTransition} from './partition-transition-row.js';
 
 const SYSTEM_TABLE_NAMES_SET = Object.freeze(new Set(Object.values(TABLES)));
-const ACTIVE_MIRROR_TRANSITION_STATES = Object.freeze(new Set([
-  'split_backfilling', 'split_catchup', 'split_cutover_active',
-  'merge_backfilling', 'merge_catchup', 'merge_cutover_active',
-]));
 const NO_COMMITTED_STATEMENT_KEY = null;
 const COLUMN_LIST_SEPARATOR = ', ';
 const FORMAT_UNSUPPORTED_REMEDY =
@@ -67,29 +61,6 @@ const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
   DELETE_ALL: 'DELETE FROM _partition_statement_outcome_effects',
 });
 
-function resolveTableRowForMirrorEffects(service, tableName) {
-  const cache = service?.systemTableCache;
-  if (!cache) return null;
-  const byId = service.tableId ? cache.get(TABLES.TABLES, service.tableId) : null;
-  if (byId) return byId;
-  return (tableName ? cache.get(TABLES.TABLES, tableName) : null) ?? null;
-}
-
-function extractTransitionSourceIds(metadata) {
-  if (!metadata) return null;
-  const single = metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID];
-  if (typeof single === 'string' && single.length > 0) return [single];
-  const list = metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_IDS];
-  return Array.isArray(list) && list.length > 0 ? list : null;
-}
-
-function isPartitionNamedAsTransitionTargetOnly(partitionId, tableRow) {
-  if (typeof partitionId !== 'string' || partitionId.length === 0) return false;
-  const parsed = parseTablePartitionTransition(tableRow);
-  const sourceIds = extractTransitionSourceIds(parsed?.metadata);
-  return sourceIds !== null && !sourceIds.includes(partitionId);
-}
-
 function hasActiveVolatileMirrorHandle(service) {
   return Boolean(
     service.splitReplication || service.mergeReplication || service.captureDurableMirrorEffects,
@@ -99,13 +70,6 @@ function hasActiveVolatileMirrorHandle(service) {
 function isUserTableNameEligibleForMirror(tableName) {
   return typeof tableName === 'string' && tableName.length > 0 &&
     !SYSTEM_TABLE_NAMES_SET.has(tableName);
-}
-
-function isTableRowInActiveSourceTransition(service, tableRow) {
-  if (!tableRow) return false;
-  const state = String(tableRow.partition_transition_state ?? '').toLowerCase();
-  if (!ACTIVE_MIRROR_TRANSITION_STATES.has(state)) return false;
-  return !isPartitionNamedAsTransitionTargetOnly(service.partitionId, tableRow);
 }
 
 // Every user-table partition replica (leader and followers alike) persists
@@ -481,25 +445,11 @@ function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
   throw error;
 }
 
-const IDLE_MIRROR_EFFECT_RETENTION_WINDOW = 1_000;
-
 function reconcileCommittedStatementMirrorEffects(service, state, entryKey, index, result) {
   if (!result?.typedEffects || !partitionOwesDurableMirrorEffects(service)) return;
   persistCapturedRowEffectsIn(
     service, state, entryKey, index, result.mutationKind, result.typedEffects,
   );
-  if (!hasActiveVolatileMirrorHandle(service) &&
-      !isTableRowInActiveSourceTransition(
-        service, resolveTableRowForMirrorEffects(service, service?.tableName),
-      )) {
-    const retentionFloor = Number(index) - IDLE_MIRROR_EFFECT_RETENTION_WINDOW;
-    if (Number.isSafeInteger(retentionFloor) && retentionFloor > 0) {
-      state.runNonApplication(
-        STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_THROUGH_LOG_INDEX,
-        retentionFloor,
-      );
-    }
-  }
 }
 
 /**

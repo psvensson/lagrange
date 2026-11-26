@@ -48,6 +48,30 @@ function isNonEmptyString(value) {
   return typeof value === STRING_TYPE && value.length > 0;
 }
 
+function resolveNonUnknownAnswerDecision(entryId, unresolved) {
+  if (!unresolved) {
+    return UNKNOWN_OUTCOME_DECISION.NONE;
+  }
+  return isNonEmptyString(entryId) ?
+    UNKNOWN_OUTCOME_DECISION.REDELIVER :
+    UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE;
+}
+
+function recordUnknownAnswerInState(state, answer, markUnresolved) {
+  state.unknownAnswers += 1;
+  if (isNonEmptyString(answer.entryId)) {
+    state.answeredEntryId = answer.entryId;
+  }
+  if (answer.consensus) {
+    state.lastConsensus = answer.consensus;
+  }
+  markUnresolved({
+    state: answer.failureCode,
+    reason: answer.consensus?.reason ?? null,
+    logIndex: answer.logIndex ?? null,
+  });
+}
+
 /**
  * The execution options a write is delivered under: the caller's entryId,
  * or one minted once for the whole delivery when the caller supplied none
@@ -141,15 +165,9 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
         return UNKNOWN_OUTCOME_DECISION.NONE;
       }
       if (!isWriteOutcomeUnknown(answer)) {
-        return UNKNOWN_OUTCOME_DECISION.NONE;
+        return resolveNonUnknownAnswerDecision(entryId, isUnresolved());
       }
-      state.unknownAnswers += 1;
-      state.answeredEntryId = answer.entryId ?? state.answeredEntryId;
-      markUnresolved({
-        state: answer.failureCode,
-        reason: answer.consensus?.reason ?? null,
-        logIndex: answer.logIndex ?? null,
-      });
+      recordUnknownAnswerInState(state, answer, markUnresolved);
       return isNonEmptyString(entryId) && answer.entryId === entryId ?
         UNKNOWN_OUTCOME_DECISION.REDELIVER :
         UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE;
@@ -216,6 +234,8 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
       reportSpentWaitOnce(state, logger, failureResult, spentWait);
       return {
         ...failureResult,
+        ...(state.lastConsensus && !failureResult?.consensus ?
+          {consensus: state.lastConsensus} : {}),
         error: state.unknownAnswers > 0 ?
           ERRORS.WRITE_OUTCOME_UNKNOWN : failureResult?.error,
         errorCode: null,
