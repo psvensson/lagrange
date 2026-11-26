@@ -1,0 +1,16 @@
+{
+  "sourceCommit": "18234f5664abfe458e45daf40ad1df80a2c70836",
+  "host": "adam-laptop",
+  "testFile": "test/partition/workflow-record-incarnation.test.js",
+  "test": "deferred aborted child DELETE cannot erase a same-ID successor",
+  "caseResult": "failed",
+  "failedAssertion": "old SQL must preserve the newer attempt descriptor",
+  "evidence": "Reconstructed writer deleted the original child, source custody and workflow grant were released. A successor recreated the same child ID before execution of the retained original SQL.",
+  "originalAttempt": 1,
+  "successorAttempt": 30,
+  "child": "users-p-left",
+  "oldStatement": "DELETE FROM partitions WHERE partition_id = ?",
+  "affectedRows": 1,
+  "observedSuccessorRowAfterDelete": null,
+  "rawReportSha256": "ba93f718dd365bd8b6ce59e2f014a37dcfbc5cdd6e46937a7b6e4fe81108280f"
+}

@@ -1,0 +1,186 @@
+{
+  "sourceCommit": "8449897c6e7798d60463fe7c513624a9df8e6086",
+  "host": "tv-dator",
+  "scope": "Four logical embedded processes on one host. Real owner killed; no survivor took the same job in the allowed interval.",
+  "observations": [
+    {
+      "retainedAfterExit": {
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "status": "RUNNING",
+        "ownerId": "schema-worker-8727f5e4-95a8-4129-8b77-6ea78b6f9135",
+        "fence": 1,
+        "lease": 1795719637795,
+        "version": 6
+      },
+      "observedAt": 1795719608214
+    },
+    {
+      "lostNode": "1242766d-74e8-4edc-8587-d9283d34de3d",
+      "schemaMembershipBefore": [
+        {
+          "state": "voter",
+          "replicaId": "schema_operations-p1-r1",
+          "partitionId": "schema_operations-p1",
+          "term": 1,
+          "commitIndex": 12,
+          "appliedIndex": 12,
+          "gateOpen": true,
+          "leaderReplicaId": "schema_operations-p1-r1",
+          "voterReplicaIds": [
+            "replace-replica-aa1224079722281d4762dce4b0fd443a",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": true,
+          "nodeId": "1242766d-74e8-4edc-8587-d9283d34de3d"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-d656d6d395838a2ebfee1b2c15521127",
+          "partitionId": "schema_operations-p1",
+          "term": 1,
+          "commitIndex": 12,
+          "appliedIndex": 12,
+          "gateOpen": true,
+          "leaderReplicaId": "schema_operations-p1-r1",
+          "voterReplicaIds": [
+            "replace-replica-aa1224079722281d4762dce4b0fd443a",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 3500,
+          "isLeader": false,
+          "nodeId": "256883c6-8114-4a07-a55e-d284af795a68"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-aa1224079722281d4762dce4b0fd443a",
+          "partitionId": "schema_operations-p1",
+          "term": 1,
+          "commitIndex": 12,
+          "appliedIndex": 12,
+          "gateOpen": true,
+          "leaderReplicaId": "schema_operations-p1-r1",
+          "voterReplicaIds": [
+            "replace-replica-aa1224079722281d4762dce4b0fd443a",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": false,
+          "nodeId": "36c02eca-5195-4ca3-83af-bf0e21765fca"
+        }
+      ],
+      "schemaMembershipAfter": [
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-d656d6d395838a2ebfee1b2c15521127",
+          "partitionId": "schema_operations-p1",
+          "term": 2,
+          "commitIndex": 13,
+          "appliedIndex": 13,
+          "gateOpen": true,
+          "leaderReplicaId": "replace-replica-d656d6d395838a2ebfee1b2c15521127",
+          "voterReplicaIds": [
+            "replace-replica-aa1224079722281d4762dce4b0fd443a",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 3500,
+          "isLeader": true,
+          "nodeId": "256883c6-8114-4a07-a55e-d284af795a68"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-aa1224079722281d4762dce4b0fd443a",
+          "partitionId": "schema_operations-p1",
+          "term": 2,
+          "commitIndex": 13,
+          "appliedIndex": 13,
+          "gateOpen": true,
+          "leaderReplicaId": "replace-replica-d656d6d395838a2ebfee1b2c15521127",
+          "voterReplicaIds": [
+            "replace-replica-aa1224079722281d4762dce4b0fd443a",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": false,
+          "nodeId": "36c02eca-5195-4ca3-83af-bf0e21765fca"
+        }
+      ]
+    },
+    {
+      "nodeId": "256883c6-8114-4a07-a55e-d284af795a68",
+      "observedAt": 1795719759181,
+      "releaseReports": [
+        {
+          "at": 1795719612228,
+          "subsystem": "replica-handler",
+          "partitionId": "schema_operations-p1",
+          "outcome": "release_fact_unavailable",
+          "missingFact": "current_control_owner_fact",
+          "reason": null,
+          "blockedGroupId": null,
+          "blockedReplicaId": null,
+          "recoveryPhase": null,
+          "statusOutcome": null,
+          "failure": null,
+          "controlPartitionId": "sql_transactions-p1",
+          "controlNodeId": "256883c6-8114-4a07-a55e-d284af795a68",
+          "controlOutcome": "release_fact_unavailable",
+          "inspectNodeId": "1242766d-74e8-4edc-8587-d9283d34de3d",
+          "inspectReplicaId": "sql_transactions-p1-r1",
+          "controlMissingFact": "replica_release_reply",
+          "controlPhase": "inspect",
+          "controlReason": null
+        },
+        {
+          "at": 1795719733542,
+          "subsystem": "replica-handler",
+          "partitionId": "schema_operations-p1",
+          "outcome": "release_fact_unavailable",
+          "missingFact": "current_control_owner_fact",
+          "reason": null,
+          "blockedGroupId": null,
+          "blockedReplicaId": null,
+          "recoveryPhase": null,
+          "statusOutcome": null,
+          "failure": null,
+          "controlPartitionId": "sql_transactions-p1",
+          "controlNodeId": "256883c6-8114-4a07-a55e-d284af795a68",
+          "controlOutcome": "release_fact_unavailable",
+          "inspectNodeId": "1242766d-74e8-4edc-8587-d9283d34de3d",
+          "inspectReplicaId": "sql_transactions-p1-r1",
+          "controlMissingFact": "replica_release_reply",
+          "controlPhase": "inspect",
+          "controlReason": null
+        }
+      ]
+    }
+  ],
+  "reportSha256": {
+    "lagrange-1858-frozen-ddl-tv-dator.log": "8bb73d2f3473b368d68918ac760e8c270291cd8fdcb382af27681c757143c4eb",
+    "lagrange-embedded-cluster-FQMZZ8-1242766d-74e8-4edc-8587-d9283d34de3d-owner-loss.log": "7061e9f04e1ef71100e655a7fe99eb22b967afd67fd7a0ba78fb59f78e59d925",
+    "lagrange-embedded-cluster-FQMZZ8-256883c6-8114-4a07-a55e-d284af795a68-owner-loss.log": "428012fa07e23f0ce6826e92faf61c820d7126310513f5906810587bd831a23f",
+    "lagrange-embedded-cluster-FQMZZ8-36c02eca-5195-4ca3-83af-bf0e21765fca-owner-loss.log": "7ee628456c989e6f508f4321cef9a5331f1274c41dc626c50581d60090932eae",
+    "lagrange-embedded-cluster-FQMZZ8-973ada66-7dda-4be8-94f2-1547d13cff66-owner-loss.log": "802addc54014e24c8952877ab622e26372881f73d21b3de98a44bbf625137d6e"
+  }
+}
