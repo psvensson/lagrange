@@ -80,16 +80,20 @@ function assertSurvivingMajority(rows, partitionId, ownerNodeId, requiresRf3) {
     `fewer than ${majority} surviving nodes corroborate the leader's committed configuration for ${partitionId}`);
 }
 
+async function currentTraces(members) {
+  return Promise.all(members.map(async (member) => {
+    const reply = await member.channel.request('indexLossTrace');
+    assert.ok(reply.ok, JSON.stringify(reply.error));
+    return {nodeId: member.nodeId, ...reply.value};
+  }));
+}
+
 async function waitForTrace(t, stage, members, accepts, signal) {
   const deadline = Date.now() + scaleByMachineFactor(traceTimeoutMs);
   let traces;
   do {
     signal?.throwIfAborted();
-    traces = await Promise.all(members.map(async (member) => {
-      const reply = await member.channel.request('indexLossTrace');
-      assert.ok(reply.ok, JSON.stringify(reply.error));
-      return {nodeId: member.nodeId, ...reply.value};
-    }));
+    traces = await currentTraces(members);
     if (accepts(traces)) return traces;
     await managedSleep(t, 100);
   } while (Date.now() < deadline);
@@ -133,7 +137,11 @@ test('warm survivors backfill an existing global index after the schema finalize
       fulfilledRows(reply.value);
     });
     const atCut = waitForTrace(t, 'pre-kill: accepted fenced SUCCEEDED write', members,
-      (rows) => rows.some((row) => row.cut), stopPolling.signal);
+      (rows) => {
+        const rejected = rows.find((row) => row.progress?.terminal?.state === 'cut rejected');
+        if (rejected) assert.fail(`terminal write on ${rejected.nodeId}: ${rejected.progress.terminal.error}`);
+        return rows.some((row) => row.cut);
+      }, stopPolling.signal);
     // A fulfilled CREATE can detach while the schema job is still running.
     // A rejected public outcome or IPC failure before the cut ends this wait.
     const traces = await Promise.race([atCut, submission.then(() => atCut)])
@@ -142,13 +150,15 @@ test('warm survivors backfill an existing global index after the schema finalize
     assert.equal(cuts.length, 1);
     assert.ok(traces.every((row) => !row.completed));
     const [{nodeId, cut}] = cuts;
-    assert.equal(cut.status, 'SUCCEEDED');
+    assert.deepEqual([cut.previousStatus, cut.status], ['RUNNING', 'SUCCEEDED']);
     assert.ok(typeof cut.jobId === 'string' && cut.jobId.length > 0);
     assert.equal(cut.workflowId, cut.jobId);
     assert.ok(typeof cut.ownerId === 'string' && cut.ownerId.length > 0);
     assert.ok(Number.isSafeInteger(cut.fenceToken) && cut.fenceToken > 0);
-    assert.ok(Number.isSafeInteger(cut.rowVersion) && cut.rowVersion > 1);
+    assert.ok(Number.isSafeInteger(cut.previousRowVersion) && cut.previousRowVersion > 0);
+    assert.equal(cut.rowVersion, cut.previousRowVersion + 1);
     assert.equal(cut.generation, 1);
+    assert.equal(cut.indexId, `${indexName}-gen1`);
     t.comment(JSON.stringify({stage: 'pre-kill durable finalizer cut', nodeId, cut}));
     const owner = members.find((node) => node.nodeId === nodeId);
     const survivors = members.filter((node) => node !== owner);
@@ -185,6 +195,9 @@ test('warm survivors backfill an existing global index after the schema finalize
       }
       assertSurvivingMajority(membership, partition.partition_id, nodeId, partition.requiresRf3);
     }
+    const beforeKill = await currentTraces(members);
+    assert.ok(beforeKill.every((row) => !row.firstTerminalAttemptNs && !row.completed),
+      'terminal update must not have started before the signal');
     assert.ok(process.hrtime.bigint() < BigInt(cut.expiresNs), 'finalizer hold still active before signal');
     const exited = once(owner.child, 'exit');
     assert.ok(owner.child.kill('SIGKILL'));
@@ -192,18 +205,24 @@ test('warm survivors backfill an existing global index after the schema finalize
     const confirmedExitNs = process.hrtime.bigint();
     assert.ok(confirmedExitNs < BigInt(cut.expiresNs), 'confirmed death precedes release of the finalizer');
     t.comment(JSON.stringify({stage: 'SIGKILL confirmed', nodeId, indexId: cut.indexId}));
-    // All processes held terminal writes before the submission. The same
-    // generation must still be incomplete after the OS confirms owner death.
+    // A survivor is free to advance at any time. Observe the incomplete
+    // generation once; a race won before this observation cannot prove this cut.
+    const incomplete = await read(catalogSql, [indexName]);
+    assert.equal(incomplete.length, 1);
+    assert.equal(incomplete[0].index_id, cut.indexId);
+    assert.ok(['CREATING', 'WRITE_ONLY', 'BACKFILLING'].includes(incomplete[0].state),
+      `post-exit generation already advanced to ${incomplete[0].state}`);
     const gsiAfterKill = await read(
       'SELECT partition_id, table_id, replica_count, leader_node_id FROM partitions WHERE table_id = ?',
       [cut.dataset]);
     await topology('post-kill membership and GSI services', survivors, gsiAfterKill);
-    await readUntil(t, observer, sessions.get(observer), catalogSql, [indexName],
-      (rows) => rows.length === 1 && rows[0].index_id === cut.indexId &&
-        ['CREATING', 'WRITE_ONLY', 'BACKFILLING'].includes(rows[0].state));
-    await Promise.all(survivors.map(async (node) =>
-      assert.ok((await node.channel.request('permitIndexTerminalWrite')).ok)));
-    const final = await waitForTrace(t, 'post-kill: two-row terminal checkpoint', survivors, (rows) => rows.some((row) => row.completed));
+    const final = await waitForTrace(t, 'post-kill: two-row terminal checkpoint', survivors, (rows) => {
+      for (const row of rows) {
+        if (row.firstTerminalAttemptNs) assert.ok(BigInt(row.firstTerminalAttemptNs) > confirmedExitNs,
+          `terminal update on ${row.nodeId} raced the confirmed exit`);
+      }
+      return rows.some((row) => row.completed);
+    });
     const winner = final.find((row) => row.completed);
     const {startedNs, ...checkpoint} = winner.completed;
     assert.ok(BigInt(startedNs) > confirmedExitNs, 'terminal checkpoint began after confirmed SIGKILL');

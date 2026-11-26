@@ -29,7 +29,7 @@ import {
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
 } from './transport-error-codes.js';
-import {observeConsensusSendReturned} from './message-router-socket-evidence.js';
+import {consensusItemFamily, observeConsensusSendReturned} from './message-router-socket-evidence.js';
 import {buildDeliveryEnvelope} from './transport-semantic-outcome.js';
 
 const {
@@ -230,7 +230,7 @@ function flushPendingConsensusBatch(router, batch) {
     }
     return;
   }
-  observeConsensusSendReturned(batch.ws, batch.byteLength);
+  observeConsensusSendReturned(batch.ws, batch.byteLength, items);
   router.consensusDelivery.written += items.length;
   router.consensusDelivery.framesWritten += TRANSPORT_NUM.ONE;
   for (const item of items) {
@@ -316,7 +316,7 @@ function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry)
   batch.byteLength += addedBytes;
   router.consensusDelivery.pendingBatchBytes += addedBytes;
   return new Promise((resolve) => {
-    batch.items.push({encodedEntry, resolve});
+    batch.items.push({encodedEntry, entryBytes, family: consensusItemFamily(entry.payload), resolve});
   });
 }
 

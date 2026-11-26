@@ -10,4 +10,23 @@ The target column identifies each missing voter at the census. A completed opera
 | node_endpoints-p1 | 3 | completed at 16:37:47.399 | activation_worker_revalidation settled at 16:37:46.341 |
 | service_definitions-p1 | 2 | completed at 16:37:47.396 | completed at 16:37:50.157 |
 | service_definitions-p1 | 3 | send at 16:37:55.686 | Unobserved |
-missing voter targets traced 24
+| service_endpoints-p1 | 2 | No recorded operation | Unobserved |
+| service_endpoints-p1 | 3 | send at 16:37:57.169 | Unobserved |
+| service_install_failures-p1 | 2 | send at 16:37:58.511 | createReplicaAsync entered at 16:38:01.520 |
+| service_install_failures-p1 | 3 | No recorded operation | Unobserved |
+| service_installations-p1 | 2 | No recorded operation | Unobserved |
+| service_installations-p1 | 3 | send at 16:38:01.379 | Unobserved |
+| service_instances-p1 | 2 | send at 16:38:02.441 | createReplicaAsync entered at 16:38:03.116 |
+| service_instances-p1 | 3 | No recorded operation | Unobserved |
+| service_packages-p1 | 2 | No recorded operation | Unobserved |
+| service_packages-p1 | 3 | send at 16:38:03.853 | Unobserved |
+| service_partition_access-p1 | 2 | send at 16:38:03.765 | request prepared at 16:38:05.338 |
+| service_partition_access-p1 | 3 | No recorded operation | Unobserved |
+| service_revisions-p1 | 2 | No recorded operation | Unobserved |
+| service_revisions-p1 | 3 | No recorded operation | Unobserved |
+| service_timers-p1 | 2 | No recorded operation | Unobserved |
+| service_timers-p1 | 3 | No recorded operation | Unobserved |
+| storage_reservations-p1 | 2 | No recorded operation | Unobserved |
+| storage_reservations-p1 | 3 | No recorded operation | Unobserved |
+| wasm_operations-p1 | 2 | No recorded operation | Unobserved |
+| wasm_operations-p1 | 3 | No recorded operation | Unobserved |
