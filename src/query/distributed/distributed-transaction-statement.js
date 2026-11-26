@@ -25,6 +25,14 @@ function enqueueDeferredWriteOperationPersist(tx, persistPromise) {
   tx.pendingWriteOperationPersists.push(persistPromise);
 }
 
+function drainPendingWriteOperationPersists(tx) {
+  if (!Array.isArray(tx?.pendingWriteOperationPersists) ||
+      tx.pendingWriteOperationPersists.length === 0) {
+    return Promise.resolve();
+  }
+  return Promise.all(tx.pendingWriteOperationPersists.splice(0));
+}
+
 function settledCycleRollbacksOf(coordinator) {
   if (coordinator.settledCycleRollbacksBySession === undefined) {
     coordinator.settledCycleRollbacksBySession = new Map();
@@ -167,7 +175,10 @@ const distributedTransactionStatementMethods = {
       });
       const tx = this.transactionsBySession.get(sessionId);
       const [persistSettled, writeSettled] = await Promise.allSettled([
-        persistActivePromise,
+        Promise.all([
+          persistActivePromise,
+          drainPendingWriteOperationPersists(tx),
+        ]),
         Promise.resolve().then(() =>
           executeWrite(tx ? statementTransactionIdentityOf(tx) : null)),
       ]);
@@ -182,7 +193,7 @@ const distributedTransactionStatementMethods = {
         sessionId,
         operation.operationId,
         result,
-        {deferPersistenceAwait: true},
+        {deferPersistenceAwait: result?.success === true},
       );
       if (tx?.telemetry) {
         tx.telemetry.statementsMs += Math.max(0, resolveNowMs() - startedAtMs);

@@ -70,15 +70,10 @@ async function enlistReadOnlyParticipants(coordinator, tx, sessionId, requested)
     (partitionId) => readOnlyMap.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE,
   );
   await settleAllOrThrow(newlyEnlisted.map(async (partitionId) => {
-    await coordinator.executeParticipantOperationWithRetry(
-      tx,
-      PARTICIPANT_STATUS.ACTIVE,
+    await coordinator.beginParticipant(
+      sessionId,
       partitionId,
-      () => coordinator.beginParticipant(
-        sessionId,
-        partitionId,
-        participantIdentityOf(tx, partitionId),
-      ),
+      participantIdentityOf(tx, partitionId),
     );
     const participant = readOnlyMap.get(partitionId);
     if (participant) {
@@ -226,15 +221,10 @@ const distributedTransactionParticipantSetMethods = {
       tx.participants.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE);
     await settleAllOrThrow(newlyEnlisted.map(async (partitionId) => {
       const participant = tx.participants.get(partitionId);
-      await this.executeParticipantOperationWithRetry(
-        tx,
-        PARTICIPANT_STATUS.ACTIVE,
+      await this.beginParticipant(
+        sessionId,
         partitionId,
-        () => this.beginParticipant(
-          sessionId,
-          partitionId,
-          participantIdentityOf(tx, partitionId),
-        ),
+        participantIdentityOf(tx, partitionId),
       );
       activeUpserts.push(participant);
     }));

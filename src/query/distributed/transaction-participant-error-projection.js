@@ -12,8 +12,6 @@ import {
 const LOCAL_STR_WRITE_WRITE_CONFLICT = 'Write-write conflict detected';
 const TX1_CONFLICT_FAILURE_CODES = new Set([
   PARTICIPANT_TRANSACTION_FAILURE_CODE.ALREADY_ACTIVE,
-  PARTICIPANT_TRANSACTION_FAILURE_CODE.CUTOVER_PAUSED,
-  PARTICIPANT_TRANSACTION_FAILURE_CODE.NOT_ACTIVE,
   PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARING,
   PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARE_CONTENT_CONFLICT,
   PARTICIPANT_TRANSACTION_FAILURE_CODE.REPLAY_DIVERGED,
@@ -77,8 +75,7 @@ function resolveParticipantCycleOverlay(result) {
 }
 
 function projectTransactionParticipantFailure(result) {
-  if (!result || result.success !== false ||
-      result.commitPointReached === true || result.deferred === true) {
+  if (!result || result.success !== false) {
     return result;
   }
   const cycleOverlay = resolveParticipantCycleOverlay(result);
