@@ -19,6 +19,7 @@
  * snapshot the test freezes (a lagging control-plane cache).
  */
 import Database from 'better-sqlite3';
+import {splitDescriptorWriteKey} from '../../src/partition/partition-split-descriptor-command.js';
 import {deriveParticipantEntryId} from '../../src/query/distributed/participant-entry-id.js';
 import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from '../../src/partition/partition-committed-statement-outcome-constants.js';
@@ -227,6 +228,11 @@ async function openDescriptorRecordStore(t, options) {
   t.teardown(() => group.dispose());
   await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
   const store = openRecordStore({...options, descriptorLeader: group.services[0]});
+  const leader = group.services[0];
+  store.childDescriptorOutcome = (intent) => {
+    const entryId = deriveParticipantEntryId(splitDescriptorWriteKey(intent), partitionId);
+    return readCommittedStatementOutcome(leader, leader.getCommittedEntryKey({entryId}));
+  };
   store.waitFor = group.waitFor;
   return store;
 }

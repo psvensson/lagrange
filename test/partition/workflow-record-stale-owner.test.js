@@ -30,7 +30,7 @@ import {claimWorkflowOwnershipCore} from
 import {buildWorkflow} from './managed-split-workflow-test-helpers.js';
 import {recordParticipant} from './workflow-record-test-support.js';
 import {
-  openRecordStore,
+  openDescriptorRecordStore,
   openView,
   parsePartitionTransition,
   readAuthoritativelyFrom,
@@ -71,8 +71,8 @@ function splitOwner(store, view, name, clock, overrides = {}) {
 
 // B's attempt 0 (deferred), B's stale copy of it, A's claim, provisioning
 // and recorded retirement facts.
-async function staleOwnerWorld() {
-  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+async function staleOwnerWorld(t) {
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
   const clock = {now: 1000};
   const b = splitOwner(store, openView(store), 'B', clock, {
     waitForTablePartitionMetadata: async () => {
@@ -138,7 +138,7 @@ const STALE_WRITES = Object.freeze([
 
 for (const [fact, write] of STALE_WRITES) {
   test(`W2 a stale owner cannot regress: ${fact}`, async (t) => {
-    const world = await staleOwnerWorld();
+    const world = await staleOwnerWorld(t);
     const {store, b, workflowId} = world;
     t.equal(world.prepared.success, true, 'setup: A prepared the split');
     const before = store.tablesRow();

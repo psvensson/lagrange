@@ -24,7 +24,9 @@ import {
 import {
   QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
+import {initialChildAuthority} from '../../src/partition/managed-split-child-handoff.js';
 import {
+  buildDescriptorWorkflow,
   buildWorkflow,
 } from './managed-split-workflow-test-helpers.js';
 import {
@@ -103,6 +105,7 @@ function persistForeignInFlightSplit(options) {
   const state = options.state ||
     PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING;
   const metadata = {
+    ...initialChildAuthority(),
     [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID]:
       `split-foreign-${options.sourcePartitionId}-v2`,
     [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID]:
@@ -122,7 +125,7 @@ function persistForeignInFlightSplit(options) {
 }
 
 /**
- * Build a split workflow wired to the shared durable world: the given
+ * Configure the split workflow's view of the shared durable world. The given
  * tables rows are the durable store (getTableInfo/listTableInfos read
  * them), partition rows come from the merged partition map, and the
  * workflow's own durable writes land on its table's row through the
@@ -131,11 +134,12 @@ function persistForeignInFlightSplit(options) {
  * @param {Object} options.tableRow - This workflow's table row.
  * @param {Array<Object>} options.allTableRows - Durable store.
  * @param {Object} options.partitionById - Partition rows by id.
- * @param {string} options.tableId - Table the workflow registers on.
- * @return {Object} buildWorkflow result.
+ * @param {string} [options.splitKey] - Key inside the candidate source range.
+ * @return {Object} Options for the split workflow fixture.
  */
-function buildGuardedSplitWorkflow(options) {
-  return buildWorkflow({
+function guardedSplitOptions(options) {
+  const splitKey = options.splitKey ?? 'k';
+  return {
     durableTableRows: [options.tableRow],
     getTableInfo: () => options.tableRow,
     listTableInfos: () => options.allTableRows,
@@ -147,23 +151,33 @@ function buildGuardedSplitWorkflow(options) {
         (row) => row.table_id === tableId,
       ),
     buildManagedSplitPlan: async (partitionInfo) => ({
-      medianKey: 'k',
+      medianKey: splitKey,
       leftPartition: {
         partitionId: `${partitionInfo.partition_id}-left`,
         keyRange: {
           start: partitionInfo.partition_key_start,
-          end: 'k',
+          end: splitKey,
         },
       },
       rightPartition: {
         partitionId: `${partitionInfo.partition_id}-right`,
         keyRange: {
-          start: 'k',
+          start: splitKey,
           end: partitionInfo.partition_key_end,
         },
       },
     }),
-  });
+  };
+}
+
+function assertIssuedChildren(t, store, tableRow, sourceId) {
+  const attempt = parseDurableTransition(tableRow)?.metadata?.workflowAttempt;
+  t.ok(Number.isSafeInteger(attempt) && attempt > 0, 'TABLES issued a split attempt');
+  for (const side of ['left', 'right']) {
+    const child = store.partitionRow(`${sourceId}-${side}`);
+    t.equal(child?.table_id, tableRow.table_id, `PARTITIONS contains the ${side} child`);
+    t.equal(child?.split_descriptor_attempt, attempt, `the ${side} child belongs to this attempt`);
+  }
 }
 
 test('overlap-refused-at-registration: a split whose source key range ' +
@@ -214,12 +228,11 @@ test('overlap-refused-at-registration: a split whose source key range ' +
 
   // Overlapping candidate: splitting orders-p1 [null,'n') touches the
   // persisted split's target child range ['q','t') ('q' < 'n').
-  const overlapping = buildGuardedSplitWorkflow({
+  const overlapping = buildWorkflow(guardedSplitOptions({
     tableRow: ordersTableRow,
     allTableRows,
     partitionById,
-    tableId: 'tbl-orders',
-  });
+  }));
   let thrown = null;
   try {
     await overlapping.workflow.execute('orders-p1');
@@ -233,12 +246,11 @@ test('overlap-refused-at-registration: a split whose source key range ' +
   // still active: refused with the plain already-in-progress error (not the
   // overlap suffix), because a single tables row cannot persist two concurrent
   // active transitions.
-  const sameTableDisjoint = buildGuardedSplitWorkflow({
+  const sameTableDisjoint = buildWorkflow(guardedSplitOptions({
     tableRow: ordersTableRow,
     allTableRows,
     partitionById,
-    tableId: 'tbl-orders',
-  });
+  }));
   let disjointThrown = null;
   try {
     await sameTableDisjoint.workflow.execute('orders-p2');
@@ -253,12 +265,12 @@ test('overlap-refused-at-registration: a split whose source key range ' +
   // candidate registers cleanly.
   ordersTableRow.partition_transition_state = null;
   ordersTableRow.partition_transition_metadata = null;
-  const nonOverlapping = buildGuardedSplitWorkflow({
+  const nonOverlapping = await buildDescriptorWorkflow(t, guardedSplitOptions({
     tableRow: ordersTableRow,
     allTableRows,
     partitionById,
-    tableId: 'tbl-orders',
-  });
+    splitKey: 'w',
+  }));
   let unexpected = null;
   let result = null;
   try {
@@ -270,6 +282,7 @@ test('overlap-refused-at-registration: a split whose source key range ' +
     'non-overlapping split registration is not refused');
   t.equal(result?.success, true,
     'non-overlapping split registration passes');
+  assertIssuedChildren(t, nonOverlapping.store, ordersTableRow, 'orders-p2');
 });
 
 test('durable-overlap-validation: the refusal is driven by the ' +
@@ -490,15 +503,15 @@ test('terminal durable transitions do not block registration ' +
     splitKey: 'q',
     state: PARTITION_TRANSITION_STATE.DEFERRED,
   });
-  const {workflow} = buildGuardedSplitWorkflow({
+  const {workflow, store} = await buildDescriptorWorkflow(t, guardedSplitOptions({
     tableRow: ordersTableRow,
     allTableRows,
     partitionById,
-    tableId: 'tbl-orders',
-  });
+  }));
   const result = await workflow.execute('orders-p1');
   t.equal(result.success, true,
     'retryable durable rows are skipped by the overlap guard');
+  assertIssuedChildren(t, store, ordersTableRow, 'orders-p1');
 });
 
 test('cross-table isolation: an in-flight transition on another table ' +
@@ -541,13 +554,13 @@ test('cross-table isolation: an in-flight transition on another table ' +
     sourceRange: {start: null, end: null},
     splitKey: '7e530709',
   });
-  const {workflow} = buildGuardedSplitWorkflow({
+  const {workflow, store} = await buildDescriptorWorkflow(t, guardedSplitOptions({
     tableRow: ordersTableRow,
     allTableRows,
     partitionById,
-    tableId: 'tbl-orders',
-  });
+  }));
   const result = await workflow.execute('orders-p1');
   t.equal(result.success, true,
     'in-flight split on logs [null, null) does not block tbl-orders split');
+  assertIssuedChildren(t, store, ordersTableRow, 'orders-p1');
 });

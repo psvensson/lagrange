@@ -86,6 +86,14 @@ function isRetirementFrozen(record, target) {
     Object.hasOwn(participant?.checkpoint || {}, FROZEN_SET_FIELD));
 }
 
+function sameProvisioningAttempt(current, issued) {
+  if (!current?.metadata || !issued?.metadata) return false;
+  return current.workflowId === issued.workflowId && current.tableId === issued.tableId &&
+    current.workflowOwnerId === issued.workflowOwnerId && Number.isSafeInteger(issued.fenceToken) &&
+    current.fenceToken === issued.fenceToken && Number.isSafeInteger(issued.metadata.workflowAttempt) && issued.metadata.workflowAttempt > 0 &&
+    current.metadata.workflowAttempt === issued.metadata.workflowAttempt;
+}
+
 /**
  * Make DISPATCHED durable for one target before its first create is sent: a
  * change of the record (a throw means nothing may be sent). Applied to the
@@ -93,22 +101,21 @@ function isRetirementFrozen(record, target) {
  * longer preparing (an abort landed first) refuses - no create follows; NONE
  * (or a missing mark) becomes DISPATCHED; nothing else of the record moves.
  * @param {Object} owner - The workflow owner (workflowCoordinator).
- * @param {string} workflowId
+ * @param {Object} issued - Captured owner, attempt and fence of the provisioning work.
  * @param {string} partitionId - The target about to be provisioned.
  * @return {Promise<Object>} The workflow projection.
  */
-function markTargetProvisioningDispatched(owner, workflowId, partitionId) {
+function markTargetProvisioningDispatched(owner, issued, partitionId) {
   const target = String(partitionId);
-  return owner.workflowCoordinator.updateWorkflow(workflowId, (current) => {
-    if (targetProvisioningOf(current.metadata, target) ===
-        TARGET_PROVISIONING.DISPATCHED) {
-      return RECORD_UNCHANGED;
+  return owner.workflowCoordinator.updateWorkflow(issued.workflowId, (current) => {
+    if (!sameProvisioningAttempt(current, issued)) {
+      return refuseRecordChange(MARK_REFUSAL.NOT_PREPARING, {superseded: true});
     }
-    if (!PROVISIONING_STATES.has(String(current.status)) ||
-        isRetirementFrozen(current, target)) {
-      // An abort (or any later phase) landed first, or the target's group
-      // retirement already froze its member set: no create may follow.
-      return refuseRecordChange(MARK_REFUSAL.NOT_PREPARING);
+    if (!PROVISIONING_STATES.has(current.status) || current.metadata.splitSourceFailure ||
+        !current.metadata[METADATA_FIELD.TARGET_PARTITION_IDS]?.includes(target) ||
+        isRetirementFrozen(current, target)) return refuseRecordChange(MARK_REFUSAL.NOT_PREPARING);
+    if (targetProvisioningOf(current.metadata, target) === TARGET_PROVISIONING.DISPATCHED) {
+      return RECORD_UNCHANGED;
     }
     return {...current, metadata: {...current.metadata,
       [FIELD]: {...(current.metadata?.[FIELD] || {}),
@@ -119,6 +126,7 @@ function markTargetProvisioningDispatched(owner, workflowId, partitionId) {
 export {
   TARGET_PROVISIONING,
   markTargetProvisioningDispatched,
+  sameProvisioningAttempt,
   targetProvisioningMarks,
   targetProvisioningOf,
 };

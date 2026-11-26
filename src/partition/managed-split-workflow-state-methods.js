@@ -622,7 +622,7 @@ class ManagedSplitWorkflowStateMethods {
     if (workflow) {
       await this.workflowCoordinator.recordExecutionOutcome(
         options.workflowId, {status: deniedState, delta: deniedDelta,
-          incident: {reason: failureMessage}});
+          incident: {reason: failureMessage}}, options.origin);
     }
 
     return {
@@ -722,7 +722,7 @@ class ManagedSplitWorkflowStateMethods {
       await this.workflowCoordinator.recordExecutionOutcome(
         options.workflowId, {status: PARTITION_TRANSITION_STATE.DEFERRED,
           delta: deferredDelta, incident: {reason: deferredDelta[
-            PARTITION_TRANSITION_METADATA_FIELD.FAILURE].message}});
+            PARTITION_TRANSITION_METADATA_FIELD.FAILURE].message}}, options.origin);
     }
 
     return {

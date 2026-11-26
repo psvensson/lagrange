@@ -1,3 +1,5 @@
+import {buildChildFinalizeIntent} from './partition-child-descriptor-effect.js';
+import {checkedChildPlan} from './managed-split-child-handoff.js';
 import {SIBLING_DESCRIPTOR_ACTION, isSiblingDescriptorReceiptFor} from './partition-sibling-descriptor-effect.js';
 import {siblingIntent} from './managed-split-sibling-plan.js';
 import {isSplitDescriptorReceiptFor} from './partition-split-descriptor-command.js';
@@ -41,16 +43,20 @@ function sameSourceFailure(left, right) {
     left.fenceToken === right.fenceToken && left.status === right.status);
 }
 
-function childIntent(tableId, workflowId, workflowAttempt, partitionId) {
-  return {action: 'finalizeChild', tableId, workflowId, workflowAttempt, partitionId};
+function childFinalIntent(metadata, tableId, partitionId) {
+  const {issued} = checkedChildPlan(metadata, tableId);
+  const command = issued.find((entry) => entry.partitionId === partitionId);
+  if (!command) throw invalidCleanupRecord(metadata.workflowId);
+  return buildChildFinalizeIntent(command);
 }
 
 function terminalSubjects(metadata, tableId) {
-  if (!distinctIds(metadata.splitIssuedChildren) || !Array.isArray(metadata.splitIssuedSiblings)) {
-    throw invalidCleanupRecord(metadata.workflowId);
-  }
-  const intents = new Map(metadata.splitIssuedChildren.map((id) => [id,
-    childIntent(tableId, metadata.workflowId, metadata.workflowAttempt, id)]));
+  const {issued, ids} = checkedChildPlan(metadata, tableId);
+  if (!Array.isArray(metadata.splitIssuedSiblings)) throw invalidCleanupRecord(metadata.workflowId);
+  // Before the last inbound receipt, either inherited child may need disposal.
+  // Its ID remains owed; no final command is authorized until transfer settles.
+  const intents = new Map(ids.map((id) => [id, null]));
+  for (const command of issued) intents.set(command.partitionId, buildChildFinalizeIntent(command));
   for (const subject of metadata.splitIssuedSiblings) {
     const intent = siblingIntent(tableId, metadata, subject,
       SIBLING_DESCRIPTOR_ACTION.FINALIZE);
@@ -75,8 +81,9 @@ function cleanupRecord(metadata, tableId) {
       !distinctIds(manifest.pendingChildren) || !distinctIds(manifest.pendingSiblings) ||
       !Array.isArray(manifest.receipts)) throw invalidCleanupRecord(metadata.workflowId);
   const remaining = terminalSubjects(metadata, tableId);
+  const {ids} = checkedChildPlan(metadata, tableId);
   for (const id of manifest.pendingChildren) {
-    if (!metadata.splitIssuedChildren.includes(id) || !remaining.delete(id)) throw invalidCleanupRecord(metadata.workflowId);
+    if (!ids.includes(id) || !remaining.delete(id)) throw invalidCleanupRecord(metadata.workflowId);
   }
   for (const id of manifest.pendingSiblings) {
     if (remaining.get(id)?.action !== SIBLING_DESCRIPTOR_ACTION.FINALIZE) throw invalidCleanupRecord(metadata.workflowId);
@@ -102,15 +109,15 @@ function splitCleanupRefusal(state, metadata, tableId) {
 function withSplitCleanupDecision(current, next) {
   if (!current?.metadata?.sourcePartitionId || current.status === STATE.FAILED ||
       next.status !== STATE.FAILED) return next;
-  const issued = current.metadata.splitIssuedChildren;
+  const {ids} = checkedChildPlan(current.metadata, current.tableId);
   terminalSubjects(current.metadata, current.tableId);
   return {...next, metadata: {...next.metadata, splitDescriptorCleanup: {
     tableId: current.tableId, workflowAttempt: current.metadata.workflowAttempt, decisionFence: current.fenceToken,
-    pendingChildren: [...issued], pendingSiblings: current.metadata.splitIssuedSiblings.map((item) => item.partitionId), receipts: [],
+    pendingChildren: [...ids], pendingSiblings: current.metadata.splitIssuedSiblings.map((item) => item.partitionId), receipts: [],
   }}};
 }
 
 export {
-  PRE_CUTOVER_SPLIT_STATES, SPLIT_FAILURE_PENDING, childIntent, cleanupRecord,
+  PRE_CUTOVER_SPLIT_STATES, SPLIT_FAILURE_PENDING, childFinalIntent, cleanupRecord,
   matchesTerminalReceipt, sameSourceFailure, sourceFailureAuthorization, splitCleanupRefusal, terminalSubjects, withSplitCleanupDecision,
 };

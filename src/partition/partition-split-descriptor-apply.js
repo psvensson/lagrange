@@ -1,11 +1,12 @@
 // Executed in the SQLite transaction that owns the applied index. The two
 // sibling commands use different entry keys; each consults the other's
 // committed disposition before executing a first mutation on this subject.
+import {applyChildDescriptorStatement} from './partition-child-descriptor-apply.js';
 import {deriveParticipantEntryId} from '../query/distributed/participant-entry-id.js';
 import {committedStatementEntryKey, readCommittedStatementOutcome} from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from './partition-committed-statement-outcome-constants.js';
 import {SIBLING_DESCRIPTOR_ACTION, siblingDescriptorDispositionIn} from './partition-sibling-descriptor-effect.js';
-import {descriptorRefusal, finalizeChildReceipt, isSiblingDescriptorAction, retainedSplitDescriptorAnswer,
+import {descriptorRefusal, isSiblingDescriptorAction, retainedSplitDescriptorAnswer,
   SPLIT_DESCRIPTOR_ERROR, splitDescriptorCommandDigest, splitDescriptorWriteKey} from './partition-split-descriptor-command.js';
 import {runCommittedPartitionStatement} from './partition-statement-admission.js';
 
@@ -24,8 +25,7 @@ function withReceipt(result, receipt) {
 function applySplitDescriptorStatement(service, command, descriptor) {
   const {intent} = descriptor;
   if (!isSiblingDescriptorAction(intent.action)) {
-    const result = runCommittedPartitionStatement(service, command);
-    return withReceipt(result, finalizeChildReceipt(service.db, intent, result.changes));
+    return applyChildDescriptorStatement(service, command, descriptor);
   }
 
   const promote = intent.action === SIBLING_DESCRIPTOR_ACTION.PROMOTE;

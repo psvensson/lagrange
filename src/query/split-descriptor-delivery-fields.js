@@ -8,7 +8,8 @@ function splitDescriptorIntentFields(options) {
 function splitDescriptorCommitFields(answer) {
   if (!answer || !Object.hasOwn(answer, 'splitDescriptorReceipt')) return {};
   const {splitDescriptorReceipt, committed, logIndex, term} = answer;
-  return {splitDescriptorReceipt, committed, logIndex, term};
+  return {splitDescriptorReceipt, committed, logIndex, term,
+    ...(Object.hasOwn(answer, 'lastInsertRowid') ? {lastInsertRowid: answer.lastInsertRowid} : {})};
 }
 
 // A one-target descriptor command can return the destination's typed refusal.

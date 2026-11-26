@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
@@ -10,7 +11,8 @@ import {bulkConnectionTransferSocket} from '../../src/raft/bulk-connection-trans
 import {buildSnapshotCatchupIdentityFromCache} from '../../src/raft/snapshot-catchup.js';
 import {buildSnapshotCatchupDecision, RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
   RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME} from '../../src/raft/snapshot-catchup-constants.js';
-import {listCheckpointGenerations} from '../../src/raft/snapshot-checkpoint-store.js';
+import {RAFT_CHECKPOINT_VALIDATION_OUTCOME} from '../../src/raft/snapshot-checkpoint-constants.js';
+import {listCheckpointGenerations, readCheckpoint} from '../../src/raft/snapshot-checkpoint-store.js';
 import {receiveSnapshotTransfer} from '../../src/raft/snapshot-transfer.js';
 import {RAFT_SNAPSHOT_TRANSFER_OUTCOME} from '../../src/raft/snapshot-transfer-constants.js';
 import {createBulkTransferChannelRegistry} from '../../src/transport/bulk-transfer-channel.js';
@@ -22,12 +24,19 @@ import {committedStatementEntryKey, createCommittedStatementOutcomeTable} from '
 import {PARTITIONS_SCHEMA_UNSUPPORTED, createPartitionServiceTable} from '../../src/partition/partition-service-table-bootstrap.js';
 import {buildReplacementServiceOptions} from '../../src/partition/partition-reopen-options.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {BOOTSTRAP_MEMBERSHIP_SOURCE} from '../../src/raft/raft-committed-membership-constants.js';
+import {BOOTSTRAP_MEMBERSHIP_SOURCE, COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../../src/raft/raft-committed-membership-constants.js';
+import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-stamp.js';
+import {readRaftRsPeerIdentityReservations} from '../../src/raft/raft-rs-peer-identity.js';
 import {PARTITION_COMMITTED_STATEMENT_ERROR_CODE} from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {createPartitionSnapshotCadence, RAFT_SNAPSHOT_CADENCE_OUTCOME} from '../../src/partition/partition-snapshot-cadence.js';
-import {isSplitDescriptorReceiptFor, SPLIT_DESCRIPTOR_FINALIZE_SQL, splitDescriptorWriteKey} from
+import {buildFreshSplitChildPair} from '../../src/partition/managed-split-child-descriptor.js';
+import {buildChildFinalizeIntent, buildChildTransferIntent, CHILD_DESCRIPTOR_ACTION as ACTION,
+  CHILD_DESCRIPTOR_DISPOSITION as DISPOSITION} from '../../src/partition/partition-child-descriptor-effect.js';
+import {buildRecipientChildForward, isSplitDescriptorReceiptFor, SPLIT_DESCRIPTOR_ERROR,
+  splitDescriptorProofLocator, splitDescriptorStatement, splitDescriptorWriteKey} from
   '../../src/partition/partition-split-descriptor-command.js';
-import {deriveParticipantEntryId} from '../../src/query/distributed/participant-entry-id.js';
+import {readPartitionWriteGeneration} from '../../src/partition/partition-participant-transaction-store.js';
+import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {scrubRaftRsCheckpointPayload, validateRaftRsPayloadTables} from '../../src/raft/snapshot-application-content.js';
 import {requestSnapshotInstall, resolveReplicaCheckpointsRoot} from '../../src/raft/snapshot-install.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../../src/raft/snapshot-install-constants.js';
@@ -38,22 +47,64 @@ import {settleGroupLeader, transferGroupLeadership} from './partition-group-raft
 const tableName = PARTITIONS_SCHEMA.tableName;
 const partitionId = getInitialPartitionId(tableName);
 const child = 'orders-left';
-const intent = {action: 'finalizeChild', tableId: 'orders', partitionId: child,
-  workflowId: 'orders-split', workflowAttempt: 1};
 const seed = 'INSERT INTO partitions (partition_id, table_id, split_descriptor_attempt, created_at, updated_at) ' +
   'VALUES (?, ?, ?, 1, 1)';
 const descriptor = {entity: {kind: ENTITY_TYPE.PARTITION, id: tableName}};
-const key = splitDescriptorWriteKey(intent);
-const entryId = deriveParticipantEntryId(key, partitionId);
-
-function finalize(service) {
-  return service.executeQuery(SPLIT_DESCRIPTOR_FINALIZE_SQL, [intent.tableId, intent.workflowAttempt, child],
-    {entryId, idempotencyKey: key, splitDescriptorIntent: intent});
+function freshPair(workflowAttempt) {
+  return buildFreshSplitChildPair({
+    workflow: {tableId: 'orders', workflowId: 'orders-split', partitionId: 'orders-source', metadata: {workflowAttempt}},
+    splitPlan: {leftPartition: {partitionId: child, keyRange: {start: null, end: 'm'}},
+      rightPartition: {partitionId: 'orders-right', keyRange: {start: 'm', end: null}}},
+    partitionInfo: {partition_key_type: 'TEXT'}, tableName: 'orders',
+    targetVersion: 2, replicaCount: 3, timestamp: workflowAttempt,
+  });
 }
 
-function storedReceipt(db) {
+function submit(service, intent) {
+  const {sql, params} = splitDescriptorStatement(intent);
+  return service.executeQuery(sql, params, {entryId: splitDescriptorProofLocator(intent).entryId,
+    idempotencyKey: splitDescriptorWriteKey(intent), splitDescriptorIntent: intent});
+}
+
+function storedReceipt(db, intent) {
+  const {entryId} = splitDescriptorProofLocator(intent);
   return db.prepare('SELECT entry_key, command_digest, owner_result_text, log_index, term, changes ' +
     'FROM _partition_statement_outcomes WHERE entry_key = ?').get(committedStatementEntryKey({entryId}));
+}
+
+async function committed(service, intent, disposition) {
+  const answer = await submit(service, intent);
+  assert.equal(answer.success, true, JSON.stringify(answer));
+  assert.equal(answer.committed, true, JSON.stringify(answer));
+  assert.ok(isSplitDescriptorReceiptFor(answer.splitDescriptorReceipt, intent));
+  assert.equal(answer.splitDescriptorReceipt.disposition, disposition);
+  const record = storedReceipt(service.db, intent);
+  assert.equal(record.command_digest, splitDescriptorProofLocator(intent).commandDigest);
+  assert.equal(record.term, answer.term);
+  assert.equal(record.log_index, answer.logIndex);
+  assert.deepEqual(JSON.parse(record.owner_result_text), answer.splitDescriptorReceipt);
+  return answer;
+}
+
+// In both handoffs only the left forward reached the destination.
+async function handoff(service, pair, workflowAttempt) {
+  const recipients = [];
+  for (const [index, intent] of pair.entries()) {
+    const transfer = buildChildTransferIntent(intent, {workflowId: intent.workflowId, workflowAttempt});
+    const answer = await committed(service, transfer, index === 0 ? DISPOSITION.TRANSFERRED : DISPOSITION.ABSENT);
+    recipients.push(buildRecipientChildForward(transfer, answer.splitDescriptorReceipt));
+  }
+  assert.deepEqual(recipients.map(({action}) => action), [ACTION.ADOPT, ACTION.CREATE]);
+  return recipients;
+}
+
+function childRows(db) {
+  return db.prepare('SELECT * FROM partitions WHERE table_id = ? ORDER BY partition_id').all('orders');
+}
+
+function effectCounts(db) {
+  const {owed, delivered} = countCdcObligations(db);
+  return [readPartitionWriteGeneration(db), owed + delivered];
 }
 
 test('PARTITIONS startup, checkpoint sealing and incoming image validation share the descriptor format', (t) => {
@@ -99,7 +150,16 @@ test('PARTITIONS startup, checkpoint sealing and incoming image validation share
 
 // Inject the positive snapshot decision at the production dispatcher's input.
 // A lagging member alone does not cause this system partition to compact.
-async function serveRequestedImage(leader, receiver, checkpointsRoot, boundary) {
+async function serveRequestedImage(leader, receiver, checkpointsRoot, boundary, members) {
+  const senderIdentity = buildSnapshotCatchupIdentityFromCache(leader);
+  const membership = await leader.raft.readCommittedMembership({purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP});
+  const stamp = committedStampOfAnswer(membership);
+  assert.ok(stamp, JSON.stringify(membership));
+  assert.deepEqual(stamp.voters.map((peerId) => stamp.identities[peerId]).sort(),
+    members.map(([replicaId]) => replicaId).sort());
+  assert.notEqual(senderIdentity.membershipEpoch, stamp.membershipGenerationIndex,
+    'cluster publication and the admitted group have different coordinates');
+  const reservations = readRaftRsPeerIdentityReservations(leader.db);
   const sender = createBulkTransferChannelRegistry({nodeId: leader.nodeId});
   const recipient = createBulkTransferChannelRegistry({nodeId: receiver.nodeId});
   try {
@@ -125,6 +185,14 @@ async function serveRequestedImage(leader, receiver, checkpointsRoot, boundary) 
     assert.equal(received.outcome, RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED, JSON.stringify(received));
     assert.equal(received.descriptor.lastIncludedIndex, dispatched.generationIndex);
     assert.ok(dispatched.generationIndex >= boundary);
+    assert.deepEqual(expectedIdentity, senderIdentity);
+    assert.equal(received.descriptor.membershipEpoch, senderIdentity.membershipEpoch);
+    assert.equal(received.descriptor.raftRs.membershipGenerationIndex, String(stamp.membershipGenerationIndex));
+    assert.deepEqual([...received.descriptor.raftRs.confState.voters].sort(), [...stamp.voters].sort());
+    assert.deepEqual(received.descriptor.raftRs.peerReservations, reservations);
+    const stale = readCheckpoint({checkpointDir: path.join(checkpointsRoot, String(dispatched.generationIndex)),
+      expectedIdentity: {...expectedIdentity, membershipEpoch: senderIdentity.membershipEpoch + 1}});
+    assert.equal(stale.outcome, RAFT_CHECKPOINT_VALIDATION_OUTCOME.STALE_EPOCH, JSON.stringify(stale));
     return {generationIndex: dispatched.generationIndex, expectedIdentity};
   } finally {
     sender.closeAll();
@@ -182,7 +250,7 @@ test('PARTITIONS refuses periodic compaction and replays the terminal receipt af
     assert.deepEqual(listCheckpointGenerations(resolveReplicaCheckpointsRoot(leader.dbPath)), []);
     const dbPath = group.dbFileOf(members[2]);
     const checkpointsRoot = resolveReplicaCheckpointsRoot(dbPath);
-    const image = await serveRequestedImage(leader, receiver, checkpointsRoot, leader.raft.readStatus().appliedIndex);
+    const image = await serveRequestedImage(leader, receiver, checkpointsRoot, leader.raft.readStatus().appliedIndex, members);
     const stale = new Database(dbPath, {readonly: true});
     try {
       assert.equal(readChild(stale).split_descriptor_attempt, intent.workflowAttempt);

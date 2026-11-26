@@ -35,6 +35,7 @@ import {
   createDefaultPartitionInfos,
 } from './managed-merge-workflow-test-helpers.js';
 import {
+  openDescriptorRecordStore,
   openRecordStore,
   openView,
   parsePartitionTransition,
@@ -100,7 +101,7 @@ const flipOf = (partitionId) => ({writer, sql, params}) =>
 
 test('W4b a lost acknowledgement of the current write: recognised on the ' +
   're-read, the step continues', async (t) => {
-  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
   const clock = {now: 1000};
   const provisioned = [];
   const a = splitOwner(store, openView(store), 'A', clock, {
@@ -186,7 +187,7 @@ test('W4e a record whose table row is gone: the owner\'s change is ' +
 test('W4c an earlier write of this owner landed while it saw a failure: ' +
   'nothing is sent on it, the record is adopted (never regressed), the ' +
   'abort is derived from it (no self-deadlock)', async (t) => {
-  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
   const clock = {now: 1000};
   const provisioned = [];
   const view = openView(store);
@@ -246,7 +247,7 @@ test('W4c an earlier write of this owner landed while it saw a failure: ' +
 
 test('W5 a healthy owner renews its lease through a long retirement; a ' +
   'dead one loses it at expiry', async (t) => {
-  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
   const clock = {now: 1000};
   const leaseTimers = fakeScheduler();
   const a = splitOwner(store, openView(store), 'A', clock, {

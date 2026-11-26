@@ -661,7 +661,7 @@ class ManagedMergeWorkflow {
       input.mergedPartitionId,
       input.executionTimeoutBudget,
     );
-    await markTargetProvisioningDispatched(this, input.workflowId,
+    await markTargetProvisioningDispatched(this, input.workflow,
       input.mergedPartitionId);
     await this.provisionInitialTablePartition({
       partitionWorkflowId: input.workflowId,

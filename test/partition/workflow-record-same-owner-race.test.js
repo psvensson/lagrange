@@ -130,7 +130,7 @@ const FAMILY = {
     teardown: (owner, workflowId) =>
       owner.workflow.teardownAbortedSplitChildren(workflowId,
         owner.workflow.workflowCoordinator.getWorkflowById(workflowId)),
-    store: () => openRecordStore({partitions: [{partition_id: SOURCE}]}),
+    store: (t) => openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]}),
   },
   merge: {
     owner: mergeOwner,
@@ -195,7 +195,7 @@ for (const family of Object.keys(FAMILY)) {
   for (const racer of RACERS) {
     test(`S1-R1 ${family}: the owner's own ${racer} racing its DISPATCHED ` +
       'flip never rolls the durable mark back', async (t) => {
-      const store = FAMILY[family].store();
+      const store = await FAMILY[family].store(t);
       const clock = {now: 1000};
       const provisioned = [];
       const a = FAMILY[family].owner(store, 'A', clock, {
@@ -207,6 +207,9 @@ for (const family of Object.keys(FAMILY)) {
       const armed = armRacer(store, family, racer, a, clock);
       FAMILY[family].start(a).catch(() => {});
       await turns(400);
+      if (family === 'split') {
+        t.ok(await store.waitFor(() => provisioned.length > 0), 'A reached its first dispatch');
+      }
       t.ok(armed.fired, 'setup: the racer fired while the flip was in flight');
       const raced = await armed.promise;
       t.comment(`racer: ${JSON.stringify(raced?.result ?? raced?.threw ??
@@ -225,9 +228,7 @@ for (const family of Object.keys(FAMILY)) {
     test(`S1-R3 ${family}: ${racer} race, the owner dies in the window, a ` +
       'successor recovers and aborts: the dispatched target is never ' +
       'deleted on an empty member set', async (t) => {
-      const store = family === 'split' ?
-        await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]}) :
-        FAMILY[family].store();
+      const store = await FAMILY[family].store(t);
       const clock = {now: 1000};
       const provisioned = [];
       const a = FAMILY[family].owner(store, 'A', clock, {
@@ -239,6 +240,9 @@ for (const family of Object.keys(FAMILY)) {
       const armed = armRacer(store, family, racer, a, clock);
       FAMILY[family].start(a).catch(() => {});
       await turns(400);
+      if (family === 'split') {
+        t.ok(await store.waitFor(() => provisioned.length > 0), 'A reached its first dispatch');
+      }
       await armed.promise;
       t.ok(armed.fired, 'setup: the racer fired during the flip');
       const target = provisioned[0];

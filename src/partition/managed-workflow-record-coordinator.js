@@ -280,9 +280,17 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
    * @return {Promise<Object>} {workflow, postCutoverIncident, state (what
    *   the record holds after it)}.
    */
-  async recordExecutionOutcome(workflowId, {status, delta, incident}) {
-    const workflow = await this.updateWorkflow(workflowId,
-      executionOutcomeChange(status, delta, incident));
+  async recordExecutionOutcome(workflowId, {status, delta, incident}, origin = this.requireWorkflow(workflowId)) {
+    // Immediate owner decisions use this call's claim. An ongoing execution
+    // passes the claim from registration, before its first asynchronous effect.
+    const {tableId, fenceToken, workflowOwnerId} = origin;
+    const attempt = workflowAttemptOf(origin.metadata);
+    const applyOutcome = executionOutcomeChange(status, delta, incident);
+    const workflow = await this.updateWorkflow(workflowId, (current) =>
+      current.tableId === tableId && current.workflowId === origin.workflowId &&
+      current.fenceToken === fenceToken && current.workflowOwnerId === workflowOwnerId &&
+      workflowAttemptOf(current.metadata) === attempt ? applyOutcome(current) :
+        refuseRecordChange(RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH, {superseded: true}));
     const postCutoverIncident = isCutoverOrLater(readStateField(workflow?.status));
     if (postCutoverIncident) {
       this.recordOwner.logger?.error?.(COORDINATOR_ERROR_MSG.POST_CUTOVER_INCIDENT,

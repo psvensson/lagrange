@@ -672,7 +672,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
       };
       await this.workflowCoordinator.recordExecutionOutcome(input.workflowId,
         {status: deniedState, delta: deniedDelta,
-          incident: {reason: input.admissionResult.decisionType}});
+          incident: {reason: input.admissionResult.decisionType}}, input.origin);
       return this.buildBlockedExecutionGateOutcome(
         this.buildAdmissionDeniedExecutionResult({
           partitionId: input.partitionId,

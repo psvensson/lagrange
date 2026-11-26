@@ -18,38 +18,17 @@ import {
   stampOwnershipClaimMetadata,
 } from './managed-workflow-ownership-core.js';
 import {RECORD_CHANGE_KIND} from './managed-workflow-record-store.js';
-import {
-  buildPartitionDescriptorEpochDecision,
-  isPartitionDescriptorEpochAccepted,
-} from './partition-descriptor-epoch-contract.js';
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
-import {splitDescriptorWriteKey} from './partition-split-descriptor-command.js';
-import {childIntent} from './managed-split-descriptor-cleanup.js';
+import {submitSplitChildFinalization} from './managed-split-child-descriptor.js';
+import {childFinalIntent} from './managed-split-descriptor-cleanup.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_SPLIT_EXECUTION_FAILURE = 'split_execution_failure';
 const LOCAL_STR_FAILED_TO_PERSIST_MANAGED_SPLIT_WORKFLOW = 'Failed to persist managed split workflow failure';
-const LOCAL_STR_PARTITION_ID = 'partition_id';
-const LOCAL_STR_TABLE_ID = 'table_id';
-const LOCAL_STR_TABLE_NAME = 'table_name';
-const LOCAL_STR_PARTITION_KEY_START = 'partition_key_start';
-const LOCAL_STR_PARTITION_KEY_END = 'partition_key_end';
-const LOCAL_STR_PARTITION_KEY_TYPE = 'partition_key_type';
-const LOCAL_STR_PARTITION_VERSION = 'partition_version';
 const LOCAL_STR_EPOCH_EFFECT_DETAIL =
   ': expected exactly 1 tables row update for workflow ';
-const LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_M = 'Managed split child partition metadata mismatch for ';
-
-function assertChildDescriptorWritten(result, partitionId) {
-  const changes = result?.partitionResult?.affectedRows ?? result?.affectedRows;
-  if (result?.success !== true || changes !== 1) {
-    throw Object.assign(new Error(result?.error || `Split descriptor write refused for ${partitionId}`), {
-      code: 'split_child_descriptor_write_refused', cause: result,
-    });
-  }
-}
 
 class ManagedSplitWorkflowPersistenceMethods {
   /**
@@ -59,7 +38,7 @@ class ManagedSplitWorkflowPersistenceMethods {
    * @return {Promise<void>}
    * @private
    */
-  async persistExecutionFailure(workflowId, error) {
+  async persistExecutionFailure(workflowId, error, origin) {
     const workflow = this.workflowCoordinator.getWorkflowById(workflowId);
     if (!workflow) {
       return;
@@ -83,7 +62,7 @@ class ManagedSplitWorkflowPersistenceMethods {
         status: PARTITION_TRANSITION_STATE.FAILED,
         delta: {[PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: failure},
         incident: {reason: failure.message,
-          classification: failure.classification}});
+          classification: failure.classification}}, origin);
     } catch (persistError) {
       this.logger.error(LOCAL_STR_FAILED_TO_PERSIST_MANAGED_SPLIT_WORKFLOW, {
         workflowId,
@@ -361,203 +340,9 @@ class ManagedSplitWorkflowPersistenceMethods {
     return null;
   }
 
-  /**
-   * Ensure child partition metadata rows exist with the expected identity.
-   * Retries after deferred execution reuse existing rows instead of reinserting.
-   * @param {Object} options
-   * @return {Promise<void>}
-   * @private
-   */
-  async ensureChildPartitionMetadata(options = {}) {
-    const {assertEffectAllowed} = options;
-    assertEffectAllowed?.();
-    const leftPartitionMetadata = options.leftPartitionMetadata;
-    const rightPartitionMetadata = options.rightPartitionMetadata;
-    const leftPartitionId = String(leftPartitionMetadata?.partition_id || '');
-    const rightPartitionId = String(rightPartitionMetadata?.partition_id || '');
-    const leftExistingPartition = this.resolveChildPartitionMetadataRow(
-      leftPartitionId,
-    );
-    const rightExistingPartition = this.resolveChildPartitionMetadataRow(
-      rightPartitionId,
-    );
-    const leftExists = !!leftExistingPartition;
-    const rightExists = !!rightExistingPartition;
-
-    if (!leftExists && !rightExists) {
-      await this.insertPartitionMetadataAtomically(
-        leftPartitionMetadata,
-        rightPartitionMetadata,
-        assertEffectAllowed,
-      );
-      return;
-    }
-
-    for (const [expected, existing] of [
-      [leftPartitionMetadata, leftExistingPartition],
-      [rightPartitionMetadata, rightExistingPartition],
-    ]) {
-      assertEffectAllowed?.();
-      if (!existing) {
-        await this.insertPartitionMetadata(expected);
-        continue;
-      }
-      this.assertExistingChildPartitionMetadataMatches(expected, existing);
-      const previous = existing.split_descriptor_attempt;
-      const next = expected.split_descriptor_attempt;
-      if (!Number.isSafeInteger(previous) || previous < 1 ||
-          !Number.isSafeInteger(next) || next < previous) {
-        throw Object.assign(new Error('Invalid split child descriptor ownership'), {
-          code: 'split_child_descriptor_owner_invalid', partitionId: expected.partition_id,
-        });
-      }
-      const acquired = await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: TABLES.PARTITIONS,
-        whereClause: {
-          table_id: expected.table_id,
-          table_name: expected.table_name,
-          partition_key_start: expected.partition_key_start,
-          partition_key_end: expected.partition_key_end,
-          partition_key_type: expected.partition_key_type,
-          partition_version: expected.partition_version,
-          split_descriptor_attempt: previous,
-          partition_id: expected.partition_id,
-        },
-        data: {split_descriptor_attempt: next},
-      }, this.buildManagedSplitMutationOptions());
-      assertChildDescriptorWritten(acquired, expected.partition_id);
-    }
-  }
-
-  /**
-   * Resolve one existing child metadata row by partition identity.
-   * @param {string} partitionId
-   * @return {Object|null}
-   * @private
-   */
-  resolveChildPartitionMetadataRow(partitionId) {
-    if (!partitionId) {
-      return null;
-    }
-    const partition = this.getPartitionInfo(partitionId);
-    const resolvedPartitionId = String(
-      partition?.partition_id ?? partition?.partitionId ?? '',
-    );
-    if (!resolvedPartitionId || resolvedPartitionId !== partitionId) {
-      return null;
-    }
-    return partition;
-  }
-
-  /**
-   * Assert an existing child row matches expected split metadata fields.
-   * @param {Object} expected
-   * @param {Object} existing
-   * @return {void}
-   * @private
-   */
-  assertExistingChildPartitionMetadataMatches(expected, existing) {
-    const mismatches = [];
-    const compareField = (label, expectedValue, existingValue) => {
-      if (expectedValue !== existingValue) {
-        mismatches.push({
-          field: label,
-          expected: expectedValue,
-          actual: existingValue,
-        });
-      }
-    };
-
-    compareField(
-      LOCAL_STR_PARTITION_ID,
-      expected.partition_id,
-      existing.partition_id ?? existing.partitionId ?? null,
-    );
-    compareField(
-      LOCAL_STR_TABLE_ID,
-      expected.table_id,
-      existing.table_id ?? existing.tableId ?? null,
-    );
-    compareField(
-      LOCAL_STR_TABLE_NAME,
-      expected.table_name,
-      existing.table_name ?? existing.tableName ?? null,
-    );
-    compareField(
-      LOCAL_STR_PARTITION_KEY_START,
-      expected.partition_key_start,
-      existing.partition_key_start ?? existing.partitionKeyStart ?? null,
-    );
-    compareField(
-      LOCAL_STR_PARTITION_KEY_END,
-      expected.partition_key_end,
-      existing.partition_key_end ?? existing.partitionKeyEnd ?? null,
-    );
-    compareField(
-      LOCAL_STR_PARTITION_KEY_TYPE,
-      expected.partition_key_type,
-      existing.partition_key_type ?? existing.partitionKeyType ?? null,
-    );
-    compareField(
-      LOCAL_STR_PARTITION_VERSION,
-      expected.partition_version,
-      existing.partition_version ?? existing.partitionVersion ?? null,
-    );
-    const descriptorEpochDecision = buildPartitionDescriptorEpochDecision({
-      tableDescriptor: {
-        active_partition_version: expected.partition_version,
-      },
-      partitionDescriptor: existing,
-      requirePartitionDescriptor: true,
-    });
-    if (!isPartitionDescriptorEpochAccepted(descriptorEpochDecision)) {
-      mismatches.push({
-        field: LOCAL_STR_PARTITION_VERSION,
-        expected: expected.partition_version,
-        actual: existing.partition_version ?? existing.partitionVersion ?? null,
-      });
-    }
-
-    if (mismatches.length > 0) {
-      throw new Error(
-        LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_M +
-        `${expected.partition_id}: ${JSON.stringify(mismatches)}`,
-      );
-    }
-  }
-
-  /**
-   * Insert one child partition row without a per-row cache wait.
-   * @param {Object} partitionMetadata - Partition row payload.
-   * @return {Promise<void>}
-   * @private
-   */
-  async insertPartitionMetadata(partitionMetadata) {
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
-      tableName: TABLES.PARTITIONS,
-      row: partitionMetadata,
-    }, this.buildManagedSplitMutationOptions());
-    assertChildDescriptorWritten(result, partitionMetadata.partition_id);
-  }
-
   async finalizeAbortedSplitChild(workflow, partitionId) {
-    const {tableId, workflowId} = workflow;
-    const workflowAttempt = workflow.metadata?.workflowAttempt;
-    const splitDescriptorIntent = childIntent(tableId, workflowId, workflowAttempt, partitionId);
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
-      tableName: TABLES.PARTITIONS,
-      whereClause: {table_id: tableId, split_descriptor_attempt: workflowAttempt,
-        partition_id: partitionId},
-    }, {...this.buildManagedSplitMutationOptions(), splitDescriptorIntent,
-      idempotencyKey: splitDescriptorWriteKey(splitDescriptorIntent)});
-    if (result?.success !== true) {
-      throw Object.assign(new Error(result?.error || 'Split descriptor submission failed'),
-        {cause: result});
-    }
-    return result.partitionResult;
+    const intent = childFinalIntent(workflow.metadata, workflow.tableId, partitionId);
+    return submitSplitChildFinalization(this, intent);
   }
 
   /**
@@ -577,51 +362,6 @@ class ManagedSplitWorkflowPersistenceMethods {
       tableName: TABLES.PARTITIONS,
       whereClause: {partition_id: partitionId},
     }, this.buildManagedSplitMutationOptions());
-  }
-
-  /**
-   * Insert two partition metadata rows atomically using the
-   * distributed transaction coordinator when available.
-   *
-   * @param {Object} leftMetadata - Left partition metadata.
-   * @param {Object} rightMetadata - Right partition metadata.
-   * @return {Promise<void>}
-   * @private
-   */
-  async insertPartitionMetadataAtomically(
-    leftMetadata, rightMetadata, assertEffectAllowed,
-  ) {
-    const txCoordinator = this.transactionCoordinator;
-    if (!txCoordinator ||
-        typeof txCoordinator.begin !== LOCAL_STR_FUNCTION ||
-        typeof txCoordinator.commit !== LOCAL_STR_FUNCTION ||
-        typeof txCoordinator.rollback !== LOCAL_STR_FUNCTION) {
-      throw new Error(
-        QUERY_ERROR_MSG.TABLE_SPLIT_TRANSACTION_COORDINATOR_REQUIRED,
-      );
-    }
-
-    const sessionId =
-      `split-${leftMetadata.partition_id}:` +
-      `${rightMetadata.partition_id}`;
-    const beginResult = await txCoordinator.begin(sessionId);
-    if (!beginResult.success) {
-      throw new Error(beginResult.error);
-    }
-    try {
-      assertEffectAllowed?.();
-      await Promise.all([
-        this.insertPartitionMetadata(leftMetadata),
-        this.insertPartitionMetadata(rightMetadata),
-      ]);
-      const commitResult = await txCoordinator.commit(sessionId);
-      if (!commitResult.success) {
-        throw new Error(commitResult.error);
-      }
-    } catch (error) {
-      await txCoordinator.rollback(sessionId);
-      throw error;
-    }
   }
 
   getControlPlaneSystemTableGateway() {

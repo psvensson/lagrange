@@ -27,6 +27,7 @@ import {
   createDefaultPartitionInfos,
 } from './managed-merge-workflow-test-helpers.js';
 import {
+  openDescriptorRecordStore,
   openRecordStore,
   openView,
   parsePartitionTransition,
@@ -63,7 +64,7 @@ function owner(family, store, name, overrides) {
 
 const FAMILY = {
   split: {
-    store: () => openRecordStore({partitions: [{partition_id: SOURCE}]}),
+    store: (t) => openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]}),
     start: (o) => o.workflow.execute(SOURCE),
     backfilling: 'split_backfilling',
   },
@@ -87,7 +88,7 @@ for (const family of Object.keys(FAMILY)) {
   for (const lag of ['own-earlier-record', 'record-before-the-claim']) {
     test(`S3 ${family}: a lost acknowledgement while the view shows the ` +
       `${lag}: no false rebuild, no false loss`, async (t) => {
-      const store = FAMILY[family].store();
+      const store = await FAMILY[family].store(t);
       const clock = {now: 1000};
       const sent = [];
       let lagging = null;
@@ -144,7 +145,7 @@ function carriesNoWriteIdentity(options) {
 for (const family of Object.keys(FAMILY)) {
   test(`S3c ${family}: a lagging authoritative read is never a false loss`,
     async (t) => {
-      const store = FAMILY[family].store();
+      const store = await FAMILY[family].store(t);
       // The record before this owner's claim: the table with no transition.
       const before = store.tablesRow();
       const clock = {now: 1000};

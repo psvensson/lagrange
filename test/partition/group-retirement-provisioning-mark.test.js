@@ -31,7 +31,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {PARTITION_TRANSITION_STATE} from
   '../../src/partition/partition-constants.js';
-import {buildWorkflow} from './managed-split-workflow-test-helpers.js';
+import {buildDescriptorWorkflow, buildWorkflow} from './managed-split-workflow-test-helpers.js';
 import {
   FIXTURE_LEFT_PARTITION_ID,
   FIXTURE_RIGHT_PARTITION_ID,
@@ -74,7 +74,7 @@ function countingLogger() {
 
 // The workflow's group-retirement reads and deletes, observed: no target in
 // these worlds has a group, so the committed-membership read throws.
-function observeTeardown(workflow, deleteFor) {
+function observeTeardown(workflow) {
   const seen = {membershipReads: [], deletes: [], deliveries: 0};
   workflow.readCommittedGroupMembers = async (partitionId) => {
     seen.membershipReads.push(partitionId);
@@ -85,19 +85,20 @@ function observeTeardown(workflow, deleteFor) {
     seen.deliveries += 1;
     return null;
   };
-  workflow[deleteFor] = async (partitionId) => {
-    seen.deletes.push(partitionId);
-    return {success: true, affectedRows: 1};
-  };
   return seen;
 }
 
-function splitWorld(options = {}) {
+async function splitWorld(t, options = {}) {
   const {lines, logger} = countingLogger();
-  const built = buildWorkflow({parsePartitionTransition, logger,
+  const built = await buildDescriptorWorkflow(t, {parsePartitionTransition, logger,
     groupRetirementScheduler: {setTimeout: () => null, clearTimeout() {}},
     ...options});
-  const seen = observeTeardown(built.workflow, 'deletePartitionMetadata');
+  const seen = observeTeardown(built.workflow);
+  built.store.observers.push((write) => {
+    if (write.changes === 1 && /^DELETE FROM partitions /u.test(write.sql)) {
+      seen.deletes.push(write.params.at(-1));
+    }
+  });
   return {...built, lines, seen};
 }
 
@@ -119,7 +120,7 @@ async function teardownSplit(world, metadata) {
 
 test('P1 split aborted between the child rows and the first create: both ' +
   'children are retired on their NONE mark', async (t) => {
-  const world = splitWorld({waitForTablePartitionMetadata: async () => {
+  const world = await splitWorld(t, {waitForTablePartitionMetadata: async () => {
     throw new Error('partition metadata never converged');
   }});
   const metadata = await executeSplitToAbort(t, world);
@@ -146,7 +147,7 @@ test('P1 split aborted between the child rows and the first create: both ' +
 
 test('P2 the durable flip fails: nothing is provisioned, both children are ' +
   'retired on their NONE mark', async (t) => {
-  const world = splitWorld();
+  const world = await splitWorld(t);
   const cdc = world.workflow.getCDCIntegrationService();
   const update = cdc.updateSystemTableRow.bind(cdc);
   cdc.updateSystemTableRow = async (tableName, where, data, options) => {
@@ -169,7 +170,7 @@ test('P2 the durable flip fails: nothing is provisioned, both children are ' +
 test('P3 a create lost after its durable flip: DISPATCHED with no group stays ' +
   'membership-unavailable (fail-closed); the NONE sibling is retired',
 async (t) => {
-  const world = splitWorld({provisionInitialTablePartition: async () => {
+  const world = await splitWorld(t, {provisionInitialTablePartition: async () => {
     throw new Error('host lost before the create landed');
   }});
   const metadata = await executeSplitToAbort(t, world);
@@ -188,7 +189,7 @@ async (t) => {
 test('P7 a record with no provisioning mark (written before the mark ' +
   'existed) stays membership-unavailable: a missing mark is not NONE',
 async (t) => {
-  const world = splitWorld({waitForTablePartitionMetadata: async () => {
+  const world = await splitWorld(t, {waitForTablePartitionMetadata: async () => {
     throw new Error('partition metadata never converged');
   }});
   const metadata = await executeSplitToAbort(t, world);
@@ -208,7 +209,11 @@ function mergeWorld(options = {}) {
   const built = buildMergeWorkflow({logger,
     groupRetirementScheduler: {setTimeout: () => null, clearTimeout() {}},
     ...options});
-  const seen = observeTeardown(built.workflow, 'deleteSourcePartitionMetadata');
+  const seen = observeTeardown(built.workflow);
+  built.workflow.deleteSourcePartitionMetadata = async (partitionId) => {
+    seen.deletes.push(partitionId);
+    return {success: true, affectedRows: 1};
+  };
   return {...built, lines, seen};
 }
 

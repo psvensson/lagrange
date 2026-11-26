@@ -1,3 +1,4 @@
+import {checkedChildPlan} from './managed-split-child-handoff.js';
 import {RECORD_CHANGE_REFUSAL} from './managed-workflow-record-changes.js';
 import {storedTransitionOf} from './managed-workflow-record-store.js';
 import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
@@ -98,6 +99,10 @@ function attachGroupRetirementResume(owner, spec) {
     if (spec.family === WORKFLOW_FAMILY.SPLIT) {
       const record = storedTransitionOf(row);
       const metadata = record?.metadata;
+      if (metadata?.splitChildHandoff && checkedChildPlan(metadata, row.table_id).handoff.pending.length) {
+        return {retiring: true, family: spec.family, workflowId: metadata.workflowId,
+          attempt: metadata.workflowAttempt, retiringPartitionIds: [], handoff: true};
+      }
       if (metadata?.sourcePartitionId && record.state === PARTITION_TRANSITION_STATE.FAILED) {
         const {pendingChildren, pendingSiblings, decisionFence} = cleanupRecord(metadata, row.table_id);
         return {retiring: pendingChildren.length + pendingSiblings.length > 0, family: spec.family, aborted: true,
@@ -235,6 +240,7 @@ function attachGroupRetirementResume(owner, spec) {
         retiringPartitionIds: retiring.retiringPartitionIds});
       return await owner.groupRetirementRedrive.exclusive(`resume:${workflowId}`, () => {
         const workflow = owner.resolveWorkflowState(workflowId);
+        if (retiring.handoff) return owner.resumeSplitChildHandoff(workflowId, retiring.attempt);
         if (retiring.failure) return owner.abortSplitOnSourceFailure(workflowId, retiring.failure);
         if (retiring.manifest && (workflow?.status !== PARTITION_TRANSITION_STATE.FAILED ||
             workflow.metadata.workflowAttempt !== retiring.attempt ||

@@ -38,6 +38,7 @@ import {
   createDefaultPartitionInfos,
 } from './managed-merge-workflow-test-helpers.js';
 import {
+  openDescriptorRecordStore,
   openRecordStore,
   openView,
   parsePartitionTransition,
@@ -98,7 +99,7 @@ function claimOf(store) {
 for (const bClockOffset of [0, LEASE_MS + 1000]) {
   test('W1 split: a stale second owner cannot register over a live lease ' +
     `(B clock +${bClockOffset})`, async (t) => {
-    const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+    const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
     const clock = {now: 1000};
     let attempt = 0;
     let bResult = null;
@@ -143,6 +144,8 @@ for (const bClockOffset of [0, LEASE_MS + 1000]) {
     bOwner.view.freeze(stale);
     a.workflow.execute(SOURCE).catch(() => {});
     await turns(400);
+    t.ok(await store.waitFor(() => bResult !== null),
+      'B answered during the stalled first dispatch on its frozen view');
     bOwner.view.thaw();
     const after = claimOf(store);
     t.same(provisioned, [[LEFT, 'dispatched']],
@@ -248,9 +251,13 @@ test('W1 merge: a stale second owner cannot register over a live lease',
 
 test('W3 two owners racing from the same read: exactly one registration ' +
   'lands, the loser stops after one refused write', async (t) => {
-  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
   const clock = {now: 1000};
-  const stall = () => NEVER;
+  const waitingForMetadata = new Set();
+  const stall = (_tableId, partitionId) => {
+    waitingForMetadata.add(partitionId);
+    return NEVER;
+  };
   const owners = ['A', 'B'].map((name) => splitOwner(store, openView(store),
     name, {now: () => clock.now, waitForTablePartitionMetadata: stall}));
   const initial = store.tablesRow();
@@ -265,6 +272,8 @@ test('W3 two owners racing from the same read: exactly one registration ' +
   for (const owner of owners) {
     owner.view.thaw();
   }
+  t.ok(await store.waitFor(() => waitingForMetadata.size === 2),
+    'the winner reached both metadata waits');
   const metadata = store.metadata();
   const winner = owners.find((owner) =>
     metadata.workflowOwnerId === owner.workflow.workflowOwnerId);
@@ -297,14 +306,20 @@ test('W3 two owners racing from the same read: exactly one registration ' +
 // anything - the precondition refuses before any compare-and-swap.
 test('W6 a live foreign lease writes nothing: registration and fresh claim ' +
   'refuse before any write', async (t) => {
-  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE}]});
   const clock = {now: 1000};
+  const waitingForMetadata = new Set();
   const a = splitOwner(store, openView(store), 'A', {
     now: () => clock.now,
-    waitForTablePartitionMetadata: async () => NEVER,
+    waitForTablePartitionMetadata: (_tableId, partitionId) => {
+      waitingForMetadata.add(partitionId);
+      return NEVER;
+    },
   });
   a.workflow.execute(SOURCE).catch(() => {});
   await turns(200);
+  t.ok(await store.waitFor(() => waitingForMetadata.size === 2),
+    'A reached both metadata waits before B reads the record');
   const held = claimOf(store);
   t.equal(held.owner, 'owner-A', 'setup: A holds the record');
   t.ok(held.lease > clock.now, 'setup: A\'s lease is live');

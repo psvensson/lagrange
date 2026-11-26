@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {TABLES} from '../../src/constants/index.js';
-import {SPLIT_DESCRIPTOR_DISPOSITION, SPLIT_DESCRIPTOR_ERROR, SPLIT_DESCRIPTOR_FINALIZE_SQL,
+import {buildFreshSplitChildPair} from '../../src/partition/managed-split-child-descriptor.js';
+import {CHILD_DESCRIPTOR_DISPOSITION, buildChildFinalizeIntent, buildChildTransferIntent, childDescriptorMutation}
+  from '../../src/partition/partition-child-descriptor-effect.js';
+import {SPLIT_DESCRIPTOR_ERROR, SPLIT_DESCRIPTOR_FINALIZE_SQL, buildRecipientChildForward, splitDescriptorStatement,
   splitDescriptorWriteKey} from '../../src/partition/partition-split-descriptor-command.js';
 import {SIBLING_DESCRIPTOR_ACTION, siblingDescriptorMutation} from
   '../../src/partition/partition-sibling-descriptor-effect.js';
@@ -13,22 +16,23 @@ import {selectRows, withSurface} from './unknown-outcome-surface-fixture.js';
 const TABLE = TABLES.PARTITIONS;
 const CHILD = 'invoices-child';
 const TABLE_ID = 'tbl-invoices';
-const FIRST = Object.freeze({action: 'finalizeChild', tableId: TABLE_ID, partitionId: CHILD,
-  workflowId: 'split-invoices', workflowAttempt: 1});
+const WORKFLOW_ID = 'split-invoices';
 
-function where(intent) {
-  return {table_id: intent.tableId, split_descriptor_attempt: intent.workflowAttempt,
-    partition_id: intent.partitionId};
+function freshChild(workflowAttempt) {
+  const [child] = buildFreshSplitChildPair({
+    workflow: {tableId: TABLE_ID, workflowId: WORKFLOW_ID, metadata: {workflowAttempt}},
+    splitPlan: {
+      leftPartition: {partitionId: CHILD, keyRange: {start: null, end: 'm'}},
+      rightPartition: {partitionId: 'invoices-right', keyRange: {start: 'm', end: null}},
+    },
+    partitionInfo: {partition_key_type: 'TEXT'}, tableName: 'invoices',
+    targetVersion: 2, replicaCount: 3, timestamp: 1002,
+  });
+  return child;
 }
 
-function insertChild(gateway, attempt, version = 2) {
-  return gateway.insertSystemTableRow(TABLE, {partition_id: CHILD, table_id: TABLE_ID,
-    table_name: 'invoices', partition_version: version, replica_count: 3, size_bytes: 0,
-    state: 'NORMAL', created_at: 1002, updated_at: 1002, split_descriptor_attempt: attempt});
-}
-
-function finalize(gateway, intent) {
-  return gateway.deleteSystemTableRow(TABLE, where(intent), {splitDescriptorIntent: intent});
+function submitChild(gateway, intent) {
+  return gateway.submitMutation(childDescriptorMutation(intent), {splitDescriptorIntent: intent});
 }
 
 test('gateway remote DELETE retains the committed split descriptor receipt across a same-ID successor',
@@ -37,22 +41,51 @@ test('gateway remote DELETE retains the committed split descriptor receipt acros
       const {dbPath, partitionId} = of(TABLE);
       const child = () => selectRows(dbPath,
         'SELECT * FROM partitions WHERE partition_id = ?', [CHILD]);
-      assert.equal((await insertChild(gateway, FIRST.workflowAttempt)).success, true);
-      const initial = await finalize(gateway, FIRST);
+      const create = freshChild(1);
+      const first = buildChildFinalizeIntent(create);
+      const created = await submitChild(gateway, create);
+      assert.equal(created.success, true, created.error);
+      const [{rowid}] = selectRows(dbPath, 'SELECT rowid FROM partitions WHERE partition_id = ?', [CHILD]);
+      assert.ok(Number.isSafeInteger(rowid) && rowid > 0);
+      const acquired = {...create, disposition: CHILD_DESCRIPTOR_DISPOSITION.ACQUIRED};
+      const createReplay = await submitChild(gateway, create);
+      assert.equal(createReplay.success, true, createReplay.error);
+      for (const {partitionResult} of [created, createReplay]) {
+        assert.deepEqual(partitionResult.splitDescriptorReceipt, acquired);
+        assert.equal(partitionResult.affectedRows, 1);
+        assert.equal(partitionResult.lastInsertRowid, rowid);
+        assert.equal(partitionResult.committed, true);
+        assert.equal(partitionResult.logIndex, created.partitionResult.logIndex);
+        assert.equal(partitionResult.term, created.partitionResult.term);
+      }
+      const createPackets = deliveries.filter((entry) =>
+        entry.entryId === deriveParticipantEntryId(splitDescriptorWriteKey(create), partitionId));
+      assert.equal(createPackets.length, 2);
+      for (const packet of createPackets) {
+        assert.equal(packet.sql, splitDescriptorStatement(create).sql);
+        assert.deepEqual(packet.answer.splitDescriptorReceipt, acquired);
+        assert.equal(packet.answer.changes, 1);
+        assert.equal(packet.answer.lastInsertRowid, rowid);
+      }
+      const initial = await submitChild(gateway, first);
       assert.equal(initial.success, true, initial.error);
       const answer = initial.partitionResult;
-      const receipt = {...FIRST, disposition: SPLIT_DESCRIPTOR_DISPOSITION.DELETED};
+      const receipt = {...first, disposition: CHILD_DESCRIPTOR_DISPOSITION.DELETED};
       assert.deepEqual(answer.splitDescriptorReceipt, receipt);
       assert.equal(answer.committed, true);
       assert.ok(Number.isSafeInteger(answer.logIndex) && answer.logIndex > 0);
       assert.ok(Number.isSafeInteger(answer.term) && answer.term > 0);
       assert.deepEqual(child(), []);
 
-      const successor = {...FIRST, workflowAttempt: 30};
-      assert.equal((await insertChild(gateway, successor.workflowAttempt)).success, true);
+      const successorCreate = freshChild(30);
+      const successor = buildChildFinalizeIntent(successorCreate);
+      const second = await submitChild(gateway, successorCreate);
+      assert.equal(second.success, true, second.error);
+      assert.deepEqual(second.partitionResult.splitDescriptorReceipt,
+        {...successorCreate, disposition: CHILD_DESCRIPTOR_DISPOSITION.ACQUIRED});
       const successorRows = child();
       assert.equal(successorRows[0].split_descriptor_attempt, successor.workflowAttempt);
-      const replay = await finalize(gateway, FIRST);
+      const replay = await submitChild(gateway, first);
       assert.equal(replay.success, true, replay.error);
       assert.deepEqual(replay.partitionResult.splitDescriptorReceipt, receipt);
       assert.equal(replay.partitionResult.logIndex, answer.logIndex);
@@ -61,24 +94,28 @@ test('gateway remote DELETE retains the committed split descriptor receipt acros
 
       const requests = deliveries.filter((entry) => entry.sql === SPLIT_DESCRIPTOR_FINALIZE_SQL);
       assert.equal(requests.length, 2);
-      const key = splitDescriptorWriteKey(FIRST);
+      const key = splitDescriptorWriteKey(first);
       for (const request of requests) {
         assert.equal(request.entryId, deriveParticipantEntryId(key, partitionId));
         assert.deepEqual(request.answer.splitDescriptorReceipt, receipt);
         assert.equal(request.answer.logIndex, answer.logIndex);
         assert.equal(request.answer.term, answer.term);
       }
-      const refused = await gateway.deleteSystemTableRow(TABLE, where(successor),
-        {splitDescriptorIntent: FIRST});
+      const refused = await gateway.submitMutation(childDescriptorMutation(successor), {splitDescriptorIntent: first});
       assert.equal(refused.errorCode, SPLIT_DESCRIPTOR_ERROR.BYTES);
       assert.deepEqual(child(), successorRows);
       assert.equal(deliveries.filter((entry) => entry.sql === SPLIT_DESCRIPTOR_FINALIZE_SQL).length, 2);
 
-      const older = {...FIRST, workflowAttempt: 2};
-      const stale = await finalize(gateway, older);
+      const {action, tableId, partitionId: childId, workflowId, workflowAttempt} = first;
+      const incomplete = await gateway.submitMutation(childDescriptorMutation(first),
+        {splitDescriptorIntent: {action, tableId, partitionId: childId, workflowId, workflowAttempt}});
+      assert.equal(incomplete.errorCode, SPLIT_DESCRIPTOR_ERROR.BYTES);
+      assert.equal(deliveries.filter((entry) => entry.sql === SPLIT_DESCRIPTOR_FINALIZE_SQL).length, 2);
+      const older = buildChildFinalizeIntent(freshChild(2));
+      const stale = await submitChild(gateway, older);
       assert.equal(stale.success, true, stale.error);
       assert.deepEqual(stale.partitionResult.splitDescriptorReceipt,
-        {...older, disposition: SPLIT_DESCRIPTOR_DISPOSITION.SUPERSEDED});
+        {...older, disposition: CHILD_DESCRIPTOR_DISPOSITION.SUPERSEDED});
       assert.deepEqual(child(), successorRows);
 
       // The handler commits the successor's own deletion, but the response
@@ -93,7 +130,7 @@ test('gateway remote DELETE retains the committed split descriptor receipt acros
         return buildDeliveryEnvelope({acknowledged: true}, partial);
       };
       try {
-        const ambiguous = await finalize(gateway, successor);
+        const ambiguous = await submitChild(gateway, successor);
         assert.equal(ambiguous.success, false);
         assert.equal(ambiguous.errorCode, SPLIT_DESCRIPTOR_ERROR.RECEIPT);
       } finally {
@@ -101,21 +138,50 @@ test('gateway remote DELETE retains the committed split descriptor receipt acros
       }
       assert.deepEqual(child(), []);
       const originalAnswer = deliveries.at(-1).answer;
-      const recovered = await finalize(gateway, successor);
+      const recovered = await submitChild(gateway, successor);
       assert.equal(recovered.success, true, recovered.error);
       assert.deepEqual(recovered.partitionResult.splitDescriptorReceipt,
-        {...successor, disposition: SPLIT_DESCRIPTOR_DISPOSITION.DELETED});
+        {...successor, disposition: CHILD_DESCRIPTOR_DISPOSITION.DELETED});
       assert.equal(recovered.partitionResult.logIndex, originalAnswer.logIndex);
       assert.equal(recovered.partitionResult.term, originalAnswer.term);
     }, {cdc: true});
   });
 
+test('the remote receiver admits adoption from the retained transfer of the same descriptor',
+  {timeout: 120000}, async () => withSurface([TABLE], async ({gateway, of}) => {
+    const create = freshChild(1);
+    const created = await submitChild(gateway, create);
+    assert.equal(created.success, true, created.error);
+    const transfer = buildChildTransferIntent(create, {workflowId: WORKFLOW_ID, workflowAttempt: 30});
+    const transferred = await submitChild(gateway, transfer);
+    assert.equal(transferred.success, true, transferred.error);
+    assert.deepEqual(transferred.partitionResult.splitDescriptorReceipt,
+      {...transfer, disposition: CHILD_DESCRIPTOR_DISPOSITION.TRANSFERRED});
+    const adopt = buildRecipientChildForward(transfer, transferred.partitionResult.splitDescriptorReceipt);
+    const adopted = await submitChild(gateway, adopt);
+    assert.equal(adopted.success, true, adopted.error);
+    assert.deepEqual(adopted.partitionResult.splitDescriptorReceipt,
+      {...adopt, disposition: CHILD_DESCRIPTOR_DISPOSITION.ACQUIRED});
+    assert.equal(adopted.partitionResult.affectedRows, 1);
+    assert.deepEqual(selectRows(of(TABLE).dbPath,
+      'SELECT rowid, split_descriptor_attempt FROM partitions WHERE partition_id = ?', [CHILD]),
+    [{rowid: created.partitionResult.lastInsertRowid, split_descriptor_attempt: adopt.workflowAttempt}]);
+    const finish = buildChildFinalizeIntent(adopt);
+    const deleted = await submitChild(gateway, finish);
+    assert.equal(deleted.success, true, deleted.error);
+    assert.deepEqual(deleted.partitionResult.splitDescriptorReceipt,
+      {...finish, disposition: CHILD_DESCRIPTOR_DISPOSITION.DELETED});
+  }, {cdc: true}));
+
 test('overlapping sibling finalizations with identical SQL and different plans reach destination collision',
   {timeout: 120000}, async () => withSurface([TABLE], async ({
     gateway, cdcIntegrationService, deliveries, messageRouter, of,
   }) => {
-    assert.equal((await insertChild(gateway, 0, 1)).success, true);
-    const a = {...FIRST, action: SIBLING_DESCRIPTOR_ACTION.FINALIZE, workflowAttempt: 7,
+    // This sibling already exists at the active epoch before the split.
+    const row = {...freshChild(1).row, split_descriptor_attempt: 0, partition_version: 1};
+    assert.equal((await gateway.insertSystemTableRow(TABLE, row)).success, true);
+    const a = {action: SIBLING_DESCRIPTOR_ACTION.FINALIZE, tableId: TABLE_ID,
+      partitionId: CHILD, workflowId: WORKFLOW_ID, workflowAttempt: 7,
       priorAttempt: 0, priorVersion: 1, targetVersion: 2};
     const b = {...a, priorAttempt: 1};
     assert.equal(splitDescriptorWriteKey(a), splitDescriptorWriteKey(b));

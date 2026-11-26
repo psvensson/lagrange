@@ -27,6 +27,7 @@ import {
 import {
 } from '../../src/workflow/workflow-constants.js';
 import {
+  buildDescriptorWorkflow,
   buildWorkflow,
   createAdmissionResult,
   createTransactionCoordinator,
@@ -337,7 +338,7 @@ test('ManagedSplitWorkflow silently falls back to sequential writes ' +
 
 test('advanceSplitPhase rejects phases not in the owner-managed set ' +
   '(uses ManagedSplitWorkflow as canonical split owner)', async (t) => {
-  const {workflow} = buildWorkflow();
+  const {workflow} = await buildDescriptorWorkflow(t);
   await workflow.execute('users-p1');
 
   // The workflow is removed in the finally block of executeInternal,
@@ -706,7 +707,7 @@ test('ManagedSplitWorkflow proceeds on committed durable split transition ' +
 test('persistWorkflowTransition persists canonical split participants and ' +
   'omits sourceCheckpoint before acknowledgements arrive', async (t) => {
   const updateCalls = [];
-  const {workflow} = buildWorkflow({updateCalls});
+  const {workflow} = await buildDescriptorWorkflow(t, {updateCalls});
 
   // Execute a normal split before any participant acknowledgements arrive.
   await workflow.execute('users-p1');

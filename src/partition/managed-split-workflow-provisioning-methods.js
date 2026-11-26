@@ -232,7 +232,7 @@ class ManagedSplitWorkflowProvisioningMethods {
     const recorded = workflow ?
       await this.workflowCoordinator.recordExecutionOutcome(
         options.workflowId, {status: deferredState, delta: deferredDelta,
-          incident: {reason: errorMessage}}) : null;
+          incident: {reason: errorMessage}}, options.origin) : null;
 
     return {
       success: false,

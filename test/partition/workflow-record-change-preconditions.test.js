@@ -87,10 +87,11 @@ test('the provisioning mark never flips on an aborted record (no create may ' +
   'follow an abort)', async (t) => {
   const {store, workflow, workflowId} = await ownerOf('split_preparing',
     {[LEFT]: 'none', [RIGHT]: 'none'});
+  const issued = workflow.resolveWorkflowState(workflowId);
   await workflow.persistExecutionFailure(workflowId, new Error('aborted'));
   t.equal(store.tablesRow().partition_transition_state, 'failed', 'setup');
   const landed = store.writes.filter((write) => write.changes > 0).length;
-  await t.rejects(markTargetProvisioningDispatched(workflow, workflowId,
+  await t.rejects(markTargetProvisioningDispatched(workflow, issued,
     LEFT), /refused/u, 'the flip is refused typed');
   t.equal(store.metadata().targetProvisioning[LEFT], 'none',
     'the mark stays NONE');
@@ -102,9 +103,10 @@ test('the provisioning mark never flips once its group froze a member set, ' +
   'even when the freeze landed under this owner', async (t) => {
   const {store, workflow, workflowId} = await ownerOf('split_preparing',
     {[LEFT]: 'none', [RIGHT]: 'none'});
+  const issued = workflow.resolveWorkflowState(workflowId);
   landForeignCheckpoint(store, {requiredReplicaIds: [],
     neverProvisioned: true});
-  await t.rejects(markTargetProvisioningDispatched(workflow, workflowId,
+  await t.rejects(markTargetProvisioningDispatched(workflow, issued,
     LEFT), /refused/u, 'the flip is refused typed on the re-read record');
   t.equal(store.metadata().targetProvisioning[LEFT], 'none',
     'the mark stays NONE beside the frozen never-provisioned set');

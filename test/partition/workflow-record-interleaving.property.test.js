@@ -356,13 +356,8 @@ function operation(ctx, owner) {
     },
     async () => {
       const target = rng.pick(spec.targets);
-      // (The pre-option-A signature took the caller's metadata: kept so
-      // this oracle runs red on that tree.)
-      await (markTargetProvisioningDispatched.length > 3 ?
-        markTargetProvisioningDispatched(owner.workflow, workflowId,
-          owner.workflow.resolveWorkflowState(workflowId)?.metadata ?? {},
-          target) :
-        markTargetProvisioningDispatched(owner.workflow, workflowId, target));
+      const issued = owner.workflow.resolveWorkflowState(workflowId);
+      await markTargetProvisioningDispatched(owner.workflow, issued, target);
       return {kind: 'mark', target};
     },
     async () => {

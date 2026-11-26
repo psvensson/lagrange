@@ -1,3 +1,4 @@
+import {refuseRecordChange} from './managed-workflow-record-store.js';
 import {createGroupRetirementRedrive} from
   './group-retirement-redrive.js';
 import {
@@ -23,7 +24,8 @@ import {
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {resolvePartitionRowKeyRange} from './partition-transition-overlap-guard.js';
-import {resolveDeclaredPartitionKeyType} from './partition-boundary-representation.js';
+import {buildFreshSplitChildPair, submitSplitChildForwards} from './managed-split-child-descriptor.js';
+import {issuedSplitChildForwards, prepareSplitChildDescriptors} from './managed-split-child-handoff.js';
 import {
   assertChildProvisioningAttempt,
   ManagedSplitWorkflowStateMethods,
@@ -58,7 +60,7 @@ import {
   buildSplitWorkflowOwnerId,
   ManagedSplitWorkflowOwnershipMethods,
 } from './managed-split-workflow-ownership-methods.js';
-import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
+import {markTargetProvisioningDispatched, sameProvisioningAttempt} from './target-provisioning-mark.js';
 import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
 
 const LOCAL_STR_FUNCTION = 'function';
@@ -67,7 +69,6 @@ const LOCAL_STR_MANAGED_SPLIT_WORKFLOW = 'managed-split-workflow';
 const LOCAL_STR_COMMA = ',';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
-const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
 // Durable ownership lease for split workflow claims: long enough to
@@ -384,12 +385,16 @@ class ManagedSplitWorkflow {
       return this.refuseSplitOwnershipAtStart(workflowId, partitionId,
         registration, tableInfo);
     }
-    const workflow = registration.workflow;
+    const workflow = {...registration.workflow};
     this.logger.info(MANAGED_SPLIT_LOG_MSG.OWNERSHIP_CLAIMED, {workflowId,
       partitionId, fenceToken: workflow.fenceToken,
       ownerId: this.workflowOwnerId});
 
     try {
+      if (workflow.metadata.splitChildHandoff) {
+        await this.drainSplitChildHandoff(workflow);
+        await this.activateTransferredSplitAttempt(workflow);
+      }
       const admissionResult = await this.evaluateSplitAdmission({
         candidateTargetNodeIds: snapshotCandidateTargetNodeIds,
         estimatedBytes,
@@ -410,6 +415,7 @@ class ManagedSplitWorkflow {
         },
       );
       const admissionGateOutcome = await this.resolveExecutionGateOutcome({
+        origin: workflow,
         partitionId,
         tableId,
         tableName,
@@ -431,6 +437,7 @@ class ManagedSplitWorkflow {
         tableId,
         primaryKeyColumn,
         deferralContext: {
+          origin: workflow,
           workflowId,
           partitionId,
           tableId,
@@ -482,6 +489,7 @@ class ManagedSplitWorkflow {
       };
       const childProvisioningDeferral =
         await this.handleChildProvisioningPrecheckFailure({
+          origin: workflow,
           workflowId,
           partitionId,
           tableId,
@@ -506,65 +514,17 @@ class ManagedSplitWorkflow {
           transitionTopologySnapshot,
         ...this.buildSplitPlanTransitionMetadata(splitPlan),
       };
-      const prepared = await this.workflowCoordinator.updateWorkflow(
-        workflowId, (current) => {
-          assertCurrentAttempt();
-          return {...current,
-            status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-            metadata: {...current.metadata, ...planDelta,
-              splitIssuedChildren: [splitPlan.leftPartition.partitionId,
-                splitPlan.rightPartition.partitionId]}};
-        });
+      const prepared = await prepareSplitChildDescriptors(this, workflow, planDelta,
+        () => buildFreshSplitChildPair({workflow, splitPlan, partitionInfo, tableInfo, tableName,
+          targetVersion, replicaCount, timestamp: now}), assertCurrentAttempt);
       const transitionMetadata = prepared.metadata;
-
-      const sourcePartitionKeyType =
-        partitionInfo?.partition_key_type ??
-        partitionInfo?.partitionKeyType ??
-        resolveDeclaredPartitionKeyType(tableInfo);
-      if (!sourcePartitionKeyType) {
-        throw new Error(
-          `Source partition key type authority is missing for partition ${partitionId}; split cannot proceed`,
-        );
+      const forwards = issuedSplitChildForwards(prepared);
+      const [leftPartitionMetadata, rightPartitionMetadata] = forwards.map((intent) => intent.row);
+      if (forwards.some(({row}) => row.replica_count !== replicaCount)) {
+        throw Object.assign(new Error('Issued split descriptor replication policy differs from source admission'),
+          {code: 'split_child_replica_policy_mismatch'});
       }
-
-      const leftPartitionMetadata = {
-        partition_id: splitPlan.leftPartition.partitionId,
-        table_id: tableId,
-        table_name: tableName,
-        partition_key_start: splitPlan.leftPartition.keyRange.start,
-        partition_key_end: splitPlan.leftPartition.keyRange.end,
-        partition_key_type: sourcePartitionKeyType,
-        partition_version: targetVersion,
-        split_descriptor_attempt: transitionMetadata.workflowAttempt,
-        replica_count: replicaCount,
-        size_bytes: 0,
-        leader_node_id: null,
-        state: ACTIVE_PARTITION_STATE,
-        created_at: now,
-        updated_at: now,
-      };
-      const rightPartitionMetadata = {
-        partition_id: splitPlan.rightPartition.partitionId,
-        table_id: tableId,
-        table_name: tableName,
-        partition_key_start: splitPlan.rightPartition.keyRange.start,
-        partition_key_end: splitPlan.rightPartition.keyRange.end,
-        partition_key_type: sourcePartitionKeyType,
-        partition_version: targetVersion,
-        split_descriptor_attempt: transitionMetadata.workflowAttempt,
-        replica_count: replicaCount,
-        size_bytes: 0,
-        leader_node_id: null,
-        state: ACTIVE_PARTITION_STATE,
-        created_at: now,
-        updated_at: now,
-      };
-
-      await this.ensureChildPartitionMetadata({
-        leftPartitionMetadata,
-        rightPartitionMetadata,
-        assertEffectAllowed: assertCurrentAttempt,
-      });
+      await submitSplitChildForwards(this, prepared, forwards, assertCurrentAttempt);
       await Promise.all([
         this.waitForTablePartitionMetadata(
           tableId,
@@ -579,7 +539,7 @@ class ManagedSplitWorkflow {
       ]);
 
       assertCurrentAttempt();
-      await markTargetProvisioningDispatched(this, workflowId,
+      await markTargetProvisioningDispatched(this, prepared,
         splitPlan.leftPartition.partitionId);
       await this.provisionInitialTablePartition({
         partitionWorkflowId: workflowId,
@@ -604,7 +564,7 @@ class ManagedSplitWorkflow {
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
       assertCurrentAttempt();
-      await markTargetProvisioningDispatched(this, workflowId,
+      await markTargetProvisioningDispatched(this, prepared,
         splitPlan.rightPartition.partitionId);
       await this.provisionInitialTablePartition({
         partitionWorkflowId: workflowId,
@@ -630,8 +590,10 @@ class ManagedSplitWorkflow {
       });
 
       const backfilling = await this.workflowCoordinator.updateWorkflow(
-        workflowId, (current) => ({...current,
-          status: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING}));
+        workflowId, (current) => sameProvisioningAttempt(current, prepared) &&
+          current.status === PARTITION_TRANSITION_STATE.SPLIT_PREPARING && !current.metadata.splitSourceFailure ?
+          {...current, status: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING} :
+          refuseRecordChange('split-provisioning-attempt-moved', {superseded: true}));
 
       await startSourceReplicationWithConfirmation({
         start: () => this.startSplitReplicationOnSourcePartition(
@@ -672,8 +634,10 @@ class ManagedSplitWorkflow {
       const activeWorkflow = this.workflowCoordinator.getWorkflowById(
         workflowId,
       );
+      if (error?.superseded || !sameProvisioningAttempt(activeWorkflow, workflow)) throw error;
       const deferredExecution =
         await this.handleRetryablePostAdmissionExecutionFailure({
+          origin: workflow,
           workflowId,
           partitionId,
           tableId,
@@ -689,10 +653,12 @@ class ManagedSplitWorkflow {
       if (deferredExecution) {
         return deferredExecution;
       }
-      await this.persistExecutionFailure(workflowId, error);
+      await this.persistExecutionFailure(workflowId, error, workflow);
       throw error;
     } finally {
-      this.workflowCoordinator.removeWorkflow(workflow.workflowId);
+      if (sameProvisioningAttempt(this.workflowCoordinator.getWorkflowById(workflow.workflowId), workflow)) {
+        this.workflowCoordinator.removeWorkflow(workflow.workflowId);
+      }
     }
   }
 }

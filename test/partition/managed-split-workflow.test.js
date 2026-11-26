@@ -5,8 +5,7 @@ import {
   PARTITION_TRANSITION_STATE,
   SPLIT_MERGE_LOG_MSG,
 } from '../../src/partition/partition-constants.js';
-import {
-} from '../../src/query/query-constants.js';
+import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -27,9 +26,11 @@ import {
   PARTICIPANT_ACK_RESULT,
 } from '../../src/workflow/workflow-constants.js';
 import {
+  buildDescriptorWorkflow,
   buildWorkflow,
   createAdmissionResult,
 } from './managed-split-workflow-test-helpers.js';
+import {parsePartitionTransition} from './workflow-record-sqlite-world.js';
 import {
   ManagedSplitTopologyAdapter,
 } from '../../src/partition/managed-split-topology-adapter.js';
@@ -113,7 +114,7 @@ test('ManagedSplitWorkflow persists admission_pending before planning and ' +
     workflow,
     updateCalls,
     admissionCalls,
-  } = buildWorkflow();
+  } = await buildDescriptorWorkflow(t);
 
   const result = await workflow.execute('users-p1');
 
@@ -201,10 +202,11 @@ test('ManagedSplitWorkflow lowers source quorum to one for critical system ' +
   const {
     workflow,
     admissionCalls,
-  } = buildWorkflow({
+  } = await buildDescriptorWorkflow(t, {
     durableTableRows: [publicationsTableRow],
     getPartitionInfo: () => ({
       partition_id: 'control_plane_publications-p1',
+      partition_key_type: 'TEXT',
       table_id: 'tbl-control-plane-publications',
       table_name: 'control_plane_publications',
       partition_key_start: null,
@@ -249,7 +251,7 @@ test('ManagedSplitWorkflow accepts and persists async source ' +
     updated_at: 1000,
   }];
   const updateCalls = [];
-  const {workflow} = buildWorkflow({
+  const {workflow} = await buildDescriptorWorkflow(t, {
     updateCalls,
     durableTableRows,
     parsePartitionTransition: (tableInfo) => {
@@ -268,6 +270,8 @@ test('ManagedSplitWorkflow accepts and persists async source ' +
   const ackResult = await workflow.acknowledgeSourceParticipant(
     result.workflowId,
     {
+      [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]:
+        JSON.parse(durableTableRows[0].partition_transition_metadata).workflowFenceToken,
       [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
         SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
       [PARTICIPANT_ACK_FIELD.STATUS]:
@@ -300,7 +304,7 @@ test('ManagedSplitWorkflow single-flights duplicate split execution',
       resolvePlan = resolve;
     });
     let buildCalls = 0;
-    const {workflow, admissionCalls} = buildWorkflow({
+    const {workflow, admissionCalls} = await buildDescriptorWorkflow(t, {
       calculateQuorumReplicaCount: () => 1,
       resolveProvisionTargetNodeIds: () => ['node-a'],
       getRoutablePartitionServiceNodeIds: () => ['node-a'],
@@ -515,7 +519,7 @@ test('ManagedSplitWorkflow executes write-driven split work under local ' +
     insertCalls,
     admissionCalls,
     provisionCalls,
-  } = buildWorkflow({
+  } = await buildDescriptorWorkflow(t, {
     pressureGovernor: {
       evaluate(request) {
         pressureRequest = request;
@@ -585,7 +589,7 @@ test('ManagedSplitWorkflow uses source-routable nodes when active target ' +
     workflow,
     updateCalls,
     provisionCalls,
-  } = buildWorkflow({
+  } = await buildDescriptorWorkflow(t, {
     resolveProvisionTargetNodeIds: () => ['node-a'],
     getRoutablePartitionServiceNodeIds: () => ['node-a', 'node-b'],
     calculateQuorumReplicaCount: () => 2,
@@ -654,7 +658,7 @@ test('ManagedSplitWorkflow spreads child bootstrap cohorts across newly ' +
     workflow,
     provisionCalls,
     updateCalls,
-  } = buildWorkflow({
+  } = await buildDescriptorWorkflow(t, {
     resolveProvisionTargetNodeIds: () => [
       'node-a',
       'node-b',
@@ -1177,7 +1181,7 @@ test('ManagedSplitWorkflow defers retryable post-admission provisioning ' +
     workflow,
     updateCalls,
     insertCalls,
-  } = buildWorkflow({
+  } = await buildDescriptorWorkflow(t, {
     provisionInitialTablePartition: async ({partitionId}) => {
       if (partitionId === 'users-p-left') {
         throw new Error(
@@ -1257,7 +1261,7 @@ async (t) => {
   const {
     workflow,
     updateCalls,
-  } = buildWorkflow({
+  } = await buildDescriptorWorkflow(t, {
     provisionInitialTablePartition: async ({partitionId}) => {
       if (partitionId !== 'users-p-right') {
         return;
@@ -1312,98 +1316,36 @@ async (t) => {
 
 test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
   'on deferred retries instead of rebuilding a new split plan', async (t) => {
-  const existingWorkflowId = 'split-tbl-users-users-p1-v2';
-  const existingTransition = {
-    state: PARTITION_TRANSITION_STATE.DEFERRED,
-    metadata: {
-      [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID]:
-        existingWorkflowId,
-      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 2,
-      [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]: 'm',
-      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
-        'users-p-left',
-        'users-p-right',
-      ],
-    },
-  };
-  const sourcePartition = {
-    partition_id: 'users-p1',
-    table_id: 'tbl-users',
-    table_name: 'users',
-    partition_key_start: null,
-    partition_key_end: null,
-    partition_key_type: 'TEXT',
-    partition_version: 1,
-    replica_count: 3,
-    leader_node_id: 'node-a',
-    size_bytes: 128,
-  };
-  const leftPartition = {
-    partition_id: 'users-p-left',
-    table_id: 'tbl-users',
-    table_name: 'users',
-    partition_key_start: null,
-    partition_key_end: 'm',
-    partition_key_type: 'TEXT',
-    partition_version: 2,
-    replica_count: 3,
-    leader_node_id: null,
-    size_bytes: 0,
-  };
-  const rightPartition = {
-    partition_id: 'users-p-right',
-    table_id: 'tbl-users',
-    table_name: 'users',
-    partition_key_start: 'm',
-    partition_key_end: null,
-    partition_key_type: 'TEXT',
-    partition_version: 2,
-    replica_count: 3,
-    leader_node_id: null,
-    size_bytes: 0,
-  };
-  const insertCalls = [];
-  const {
-    workflow,
-    provisionCalls,
-  } = buildWorkflow({
-    getPartitionInfo: (partitionId) => {
-      switch (partitionId) {
-      case 'users-p1':
-        return sourcePartition;
-      case 'users-p-left':
-        return leftPartition;
-      case 'users-p-right':
-        return rightPartition;
-      default:
-        return null;
-      }
-    },
-    getTableInfo: () => ({
-      table_id: 'tbl-users',
-      table_name: 'users',
-      partition_key: 'id',
-      partition_key_type: 'TEXT',
-      active_partition_version: 1,
-      partition_transition_state: PARTITION_TRANSITION_STATE.DEFERRED,
-      partition_transition_metadata: JSON.stringify(existingTransition.metadata),
-    }),
-    parsePartitionTransition: () => existingTransition,
-    buildManagedSplitPlan: async () => {
-      t.fail('deferred retry should reuse persisted split plan metadata');
-    },
-    cdcIntegrationService: {
-      async updateSystemTableRow() {
-        return {success: true, affectedRows: 1};
+  let now = 1000;
+  const {workflow, durableRow, store, insertCalls: allInserts} =
+    await buildDescriptorWorkflow(t, {
+      now: () => now,
+      parsePartitionTransition,
+      provisionInitialTablePartition: async ({partitionId}) => {
+        throw new Error(QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId);
       },
-      async insertSystemTableRow(tableName, row) {
-        insertCalls.push({tableName, row});
-        return {success: true, affectedRows: 1};
-      },
-    },
-  });
-
+    });
+  const predecessor = await workflow.execute('users-p1');
+  t.equal(predecessor.state, PARTITION_TRANSITION_STATE.DEFERRED);
+  const prior = parsePartitionTransition(durableRow).metadata;
+  const children = ['users-p-left', 'users-p-right'];
+  t.same(children.map((id) => store.partitionRow(id)?.split_descriptor_attempt),
+    children.map(() => prior.workflowAttempt), 'both predecessor descriptors committed');
+  const insertOffset = allInserts.length;
+  now = Date.parse(prior.retry.nextAttemptAt) + 1;
+  workflow.buildManagedSplitPlan = async () => {
+    t.fail('deferred retry should reuse persisted split plan metadata');
+  };
+  const provisionCalls = [];
+  workflow.provisionInitialTablePartition = async (context) => {
+    provisionCalls.push(context);
+  };
   const result = await workflow.execute('users-p1');
+  const insertCalls = allInserts.slice(insertOffset);
+  const adopted = parsePartitionTransition(durableRow).metadata;
+  t.ok(adopted.workflowAttempt > prior.workflowAttempt);
+  t.same(children.map((id) => store.partitionRow(id)?.split_descriptor_attempt),
+    children.map(() => adopted.workflowAttempt), 'the retry acquired both descriptor rows');
 
   t.equal(result.success, true);
   t.equal(

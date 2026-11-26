@@ -1,3 +1,4 @@
+import {checkedChildPlan, HANDOFF_PENDING, inheritedChildAuthority} from './managed-split-child-handoff.js';
 import {sameSourceFailure, sourceFailureAuthorization, splitCleanupRefusal,
   SPLIT_FAILURE_PENDING, withSplitCleanupDecision} from './managed-split-descriptor-cleanup.js';
 import {buildMergeSourceParticipantKey, MERGE_ACK_FAILURE_STATUSES, MERGE_ACK_STATUS} from './merge-ack-constants.js';
@@ -118,10 +119,12 @@ function phaseMonotonicChange(change) {
     if (isSentinelAnswer(next)) return next;
     const failure = workflow?.metadata?.splitSourceFailure;
     if (failure && workflow.status !== STATE.FAILED &&
-        (next.status !== workflow.status || next.metadata.splitIssuedChildren !== workflow.metadata.splitIssuedChildren) &&
+        (next.status !== workflow.status || next.metadata.splitDescriptorChildren !== workflow.metadata.splitDescriptorChildren) &&
         !(next.status === STATE.FAILED && sameSourceFailure(failure, next.metadata.failure?.sourceFailure))) {
       return refuseRecordChange(SPLIT_FAILURE_PENDING);
     }
+    if (workflow?.metadata?.splitChildHandoff?.pending?.length && next.status !== workflow.status &&
+        ![STATE.FAILED, STATE.DEFERRED, STATE.BLOCKED].includes(next.status)) return refuseRecordChange(HANDOFF_PENDING);
     if (!isCutoverRegression(stored?.state ?? null, next.status)) {
       return withSplitCleanupDecision(workflow, next);
     }
@@ -253,9 +256,14 @@ function registrationChange(owner, registration, read, revalidate) {
         {input: movedInput});
     }
     const attempt = stored.generation + 1;
+    const children = inheritedChildAuthority(stored, registration, attempt);
+    if (children.refusal) return refuseRecordChange(children.refusal);
     return {...registration,
+      // An original executor with the exact claim activates B after the
+      // transfers land. An orphaned handoff stays retryable across restart.
+      status: children.fields.splitChildHandoff ? stored.state : registration.status,
       metadata: {...(registration.metadata || {}),
-        ...(registration.metadata?.sourcePartitionId ? {splitIssuedChildren: [], splitIssuedSiblings: [],
+        ...(registration.metadata?.sourcePartitionId ? {...children.fields, splitIssuedSiblings: [],
           splitDescriptorBaseVersion: stored.row?.active_partition_version} : {}),
         [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: attempt},
       fenceToken: Math.max((stored.claim.fenceToken ?? 0) + 1, attempt),
@@ -629,6 +637,8 @@ function clearChange(owner, fence, attempt, states) {
     }
     const pendingCleanup = splitCleanupRefusal(workflow.status, workflow.metadata, workflow.tableId);
     if (pendingCleanup) return refuseRecordChange(pendingCleanup);
+    if (workflow.metadata?.sourcePartitionId && workflow.status !== STATE.FAILED && !isCutoverOrLater(workflow.status) &&
+        checkedChildPlan(workflow.metadata, workflow.tableId).ids.length) return refuseRecordChange(HANDOFF_PENDING);
     if (workflowAttemptOf(workflow.metadata) !== attempt) {
       return refuseRecordChange(RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH);
     }

@@ -1,3 +1,5 @@
+import {DEFERRED_STATES, checkedChildPlan, recordChildTransfer} from './managed-split-child-handoff.js';
+import {submitSplitChildTransfer} from './managed-split-child-descriptor.js';
 import {cleanupRecord, matchesTerminalReceipt, terminalSubjects} from './managed-split-descriptor-cleanup.js';
 import {SIBLING_DESCRIPTOR_ACTION} from './partition-sibling-descriptor-effect.js';
 import {submitSplitSiblingDescriptor} from './managed-split-sibling-descriptor.js';
@@ -453,11 +455,75 @@ class ManagedSplitWorkflowDissolutionMethods {
    * @return {Promise<void>}
    * @private
    */
+  async activateTransferredSplitAttempt(snapshot) {
+    return this.workflowCoordinator.updateWorkflow(snapshot.workflowId, (current) => {
+      const {handoff} = checkedChildPlan(current.metadata, current.tableId);
+      if (current.metadata.workflowAttempt !== snapshot.metadata.workflowAttempt ||
+          current.fenceToken !== snapshot.fenceToken || !DEFERRED_STATES.has(current.status) ||
+          !handoff || handoff.pending.length) return refuseRecordChange('split-child-handoff-not-active', {superseded: true});
+      return {...current, status: PARTITION_TRANSITION_STATE.ADMISSION_PENDING};
+    });
+  }
+
+  async acknowledgeSplitChildTransfer(snapshot, intent, result) {
+    return this.workflowCoordinator.updateWorkflow(snapshot.workflowId, (record) =>
+      recordChildTransfer(record, intent, result));
+  }
+
+  // Each submission is the original command, even if its committed answer
+  // was lost before TABLES observed it. A lease change can checkpoint the
+  // same transfer, while the immutable recipient prevents a later attempt
+  // from accepting that answer.
+  async drainSplitChildHandoff(snapshot) {
+    const {workflowId, metadata, tableId} = snapshot;
+    const {handoff} = checkedChildPlan(metadata, tableId);
+    if (!handoff?.pending.length) return snapshot;
+    let current = snapshot;
+    for (const transfer of handoff.transfers) {
+      if (!handoff.pending.includes(transfer.partitionId)) continue;
+      const result = await submitSplitChildTransfer(this, transfer);
+      current = await this.acknowledgeSplitChildTransfer(snapshot, transfer, result);
+    }
+    if (current.metadata.workflowAttempt !== metadata.workflowAttempt ||
+        checkedChildPlan(current.metadata, tableId).handoff?.pending.length) {
+      throw Object.assign(new Error('Split child transfer is not confirmed'), {code: 'split-child-handoff-unconfirmed'});
+    }
+    return {...current};
+  }
+
+  async resumeSplitChildHandoff(workflowId, attempt) {
+    const id = this.resolveWorkflowState(workflowId)?.metadata.sourcePartitionId;
+    if (!id) return false;
+    return this.groupRetirementRedrive.exclusive(workflowId + ':child-handoff', async () => {
+      try {
+        const live = this.resolveWorkflowState(workflowId);
+        if (!live || live.metadata.workflowAttempt !== attempt) {
+          this.groupRetirementRedrive.settle(workflowId, id, attempt);
+          return false;
+        }
+        const current = await this.drainSplitChildHandoff({...live});
+        this.groupRetirementRedrive.settle(workflowId, id, attempt);
+        if (current.status === PARTITION_TRANSITION_STATE.FAILED) {
+          await this.resumeAbortedSplitCleanup(workflowId, current);
+        }
+        return true;
+      } catch (error) {
+        this.groupRetirementRedrive.report({workflowId, attempt, partitionId: id, unacknowledged: [],
+          superseded: error?.superseded === true,
+          redrive: () => this.resumeSplitChildHandoff(workflowId, attempt)});
+        return false;
+      }
+    }, {attempt});
+  }
+
   async resumeAbortedSplitCleanup(workflowId, live) {
     // projectWorkflow updates a live projection in place. This pair of
     // asynchronous effects must retain the original terminal decision even
     // if the next attempt reuses its workflow ID and descriptors mid-await.
     const workflow = {...live};
+    if (checkedChildPlan(workflow.metadata, workflow.tableId).handoff?.pending.length) {
+      return this.resumeSplitChildHandoff(workflowId, workflow.metadata.workflowAttempt);
+    }
     await this.teardownAbortedSplitChildren(workflowId, workflow);
     await this.restoreAbortedSplitSiblings(workflow);
   }
@@ -466,6 +532,7 @@ class ManagedSplitWorkflowDissolutionMethods {
     if (workflow?.workflowId !== workflowId || workflow.status !== PARTITION_TRANSITION_STATE.FAILED) {
       return false;
     }
+    if (checkedChildPlan(workflow.metadata, workflow.tableId).handoff?.pending.length) return false;
     for (const childPartitionId of cleanupRecord(workflow.metadata, workflow.tableId).pendingChildren) {
       await this.teardownAbortedSplitChild(workflowId, workflow,
         childPartitionId);

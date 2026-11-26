@@ -35,6 +35,41 @@ function createTransactionCoordinator(now = () => 1000) {
   });
 }
 
+// Keep each proof's TABLES CAS and read view. Route every PARTITIONS write
+// through its actual CDC gateway and admitted partition service.
+function descriptorWorkflowCdc(store, tablesCdc, insertCalls, updateCalls) {
+  const cdc = store.cdcFor('split-workflow');
+  return {
+    updateSystemTableRow(tableName, whereClause, data, options) {
+      if (tableName === TABLES.TABLES) {
+        return tablesCdc.updateSystemTableRow(tableName, whereClause, data, options);
+      }
+      updateCalls.push({tableName, whereClause, data, options});
+      return cdc.updateSystemTableRow(tableName, whereClause, data, options);
+    },
+    insertSystemTableRow(tableName, row, options) {
+      insertCalls.push({tableName, row, options});
+      return cdc.insertSystemTableRow(tableName, row, options);
+    },
+    deleteSystemTableRow: cdc.deleteSystemTableRow.bind(cdc),
+  };
+}
+
+async function buildDescriptorWorkflow(t, options = {}) {
+  const {openDescriptorRecordStore} = await import('./workflow-record-sqlite-world.js');
+  const store = options.descriptorStore ?? await openDescriptorRecordStore(t, {
+    tableId: options.tableId ?? options.durableTableRows?.[0]?.table_id,
+    tableName: options.tableName ?? options.durableTableRows?.[0]?.table_name,
+    partitions: options.partitions ?? [{partition_id: 'users-p1'}],
+  });
+  const fixture = buildWorkflow({...options, descriptorStore: store,
+    getPartitionInfo: options.getPartitionInfo ?? store.partitionRow,
+  });
+  fixture.workflow.readAuthoritativeWorkflowRecord = async (id) =>
+    fixture.durableRow?.table_id === id ? {...fixture.durableRow} : null;
+  return {...fixture, store};
+}
+
 function buildWorkflow(options = {}) {
   const updateCalls = options.updateCalls || [];
   // One shared durable tables row per built workflow so the ownership
@@ -75,45 +110,48 @@ function buildWorkflow(options = {}) {
     Object.prototype.hasOwnProperty.call(options, 'transactionCoordinator') ?
       options.transactionCoordinator :
       createTransactionCoordinator(options.now || (() => 1000));
+  const recordingCdc = options.cdcIntegrationService || {
+    async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
+      updateCalls.push({tableName, whereClause, data, options: updateOptions});
+      // Model the real CDC seam: every where-clause column is an
+      // exact-match predicate. The ownership CAS guards on the full
+      // previous partition_transition_metadata payload — a mock that
+      // applies data without honouring that predicate would let a
+      // stale claim/transition "land" in tests while the real
+      // conditional update would match zero rows.
+      const matchesWhere = (row) => Object.entries(whereClause || {})
+        .every(([column, expected]) => {
+          const actual = tablesColumnOf(row, column);
+          if (expected === null || expected === undefined) {
+            return actual === null || actual === undefined;
+          }
+          return String(actual ?? '') === String(expected);
+        });
+      let affectedRows = 0;
+      if (tableName === TABLES.TABLES &&
+          durableTableRows &&
+          durableTableRows.length > 0) {
+        if (matchesWhere(durableTableRows[0])) {
+          Object.assign(durableTableRows[0], data);
+          affectedRows = 1;
+        }
+      } else {
+        // No durable row to match: the default single-row world.
+        affectedRows = 1;
+      }
+      return {success: true, affectedRows};
+    },
+    async insertSystemTableRow(tableName, row, options) {
+      insertCalls.push({tableName, row, options});
+      return {success: true, affectedRows: 1};
+    },
+  };
   const workflow = new ManagedSplitWorkflow({
     workflowOwnerId: options.workflowOwnerId,
     nodeId: 'node-a',
-    cdcIntegrationService: options.cdcIntegrationService || {
-      async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
-        updateCalls.push({tableName, whereClause, data, options: updateOptions});
-        // Model the real CDC seam: every where-clause column is an
-        // exact-match predicate. The ownership CAS guards on the full
-        // previous partition_transition_metadata payload — a mock that
-        // applies data without honouring that predicate would let a
-        // stale claim/transition "land" in tests while the real
-        // conditional update would match zero rows.
-        const matchesWhere = (row) => Object.entries(whereClause || {})
-          .every(([column, expected]) => {
-            const actual = tablesColumnOf(row, column);
-            if (expected === null || expected === undefined) {
-              return actual === null || actual === undefined;
-            }
-            return String(actual ?? '') === String(expected);
-          });
-        let affectedRows = 0;
-        if (tableName === TABLES.TABLES &&
-            durableTableRows &&
-            durableTableRows.length > 0) {
-          if (matchesWhere(durableTableRows[0])) {
-            Object.assign(durableTableRows[0], data);
-            affectedRows = 1;
-          }
-        } else {
-          // No durable row to match: the default single-row world.
-          affectedRows = 1;
-        }
-        return {success: true, affectedRows};
-      },
-      async insertSystemTableRow(tableName, row, options) {
-        insertCalls.push({tableName, row, options});
-        return {success: true, affectedRows: 1};
-      },
-    },
+    cdcIntegrationService: options.descriptorStore ?
+      descriptorWorkflowCdc(options.descriptorStore, recordingCdc, insertCalls, updateCalls) :
+      recordingCdc,
     getPartitionInfo: options.getPartitionInfo || (() => ({
       partition_id: 'users-p1',
       table_id: 'tbl-users',
@@ -244,6 +282,7 @@ function buildWorkflow(options = {}) {
 }
 
 export {
+  buildDescriptorWorkflow,
   buildWorkflow,
   createAdmissionResult,
   createTransactionCoordinator,
