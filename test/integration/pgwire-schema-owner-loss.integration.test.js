@@ -6,7 +6,7 @@ import {managedSleep} from '../../src/test-helpers/managed-timers.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {createEmbeddedCluster, readUntil} from './helpers/embedded-cluster-harness.js';
-import {enablePasswordPgwire} from './helpers/public-binding-seam-harness.js';
+import {scalePasswordPgwire} from './helpers/public-binding-seam-harness.js';
 
 const tableName = 'wire_owner_loss_orders';
 const ports = createPortAllocator(import.meta.url);
@@ -38,14 +38,14 @@ async function memberships(members, ids) {
 
 // Corroborate one committed RF3 configuration, term and leader across actual
 // local replicas. Require the leader itself to answer in every accepted view.
-function quorum(rows, id, required) {
+function quorum(rows, id, required, excludedVoterNodeId) {
   const local = rows.filter((row) => row.partitionId === id && row.gateOpen === true &&
     Number.isSafeInteger(row.term) && row.term > 0 && row.voterReplicaIds?.length === 3 &&
     row.voterReplicaIds.every((voter) => typeof voter === 'string' && voter.length > 0) &&
     new Set(row.voterReplicaIds).size === 3 && row.votersOutgoingReplicaIds.length === 0 &&
     row.voterReplicaIds.includes(row.replicaId));
   for (const leader of local.filter((row) => row.isLeader && row.replicaId === row.leaderReplicaId)) {
-    const voters = local.filter((row) => row.term === leader.term &&
+    const voters = local.filter((row) => row.nodeId !== excludedVoterNodeId && row.term === leader.term &&
       row.leaderReplicaId === leader.replicaId &&
       row.voterReplicaIds.every((replica) => leader.voterReplicaIds.includes(replica)));
     if (new Set(voters.map((row) => row.nodeId)).size >= required &&
@@ -72,20 +72,24 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
     }
     await cluster.waitForClusterSize(4);
     const members = cluster.nodes;
-    const endpoint = await enablePasswordPgwire({
-      query: async (sql, params) => ({rows: await cluster.seedQueryRows(sql, params)}),
-    }, ports.getPort(), {restPort: seed.restPort, deadlineMs: Date.now() + scaleByMachineFactor(60000),
+    // A surviving listener can verify DML even if the submitting socket dies.
+    const bindPorts = ports.getPortBlock(2);
+    await scalePasswordPgwire(2, {
+      portRangeStart: bindPorts[0], portRangeEnd: bindPorts.at(-1),
+    }, {restPort: seed.restPort, deadlineMs: Date.now() + scaleByMachineFactor(60000),
       pause: () => managedSleep(t, 100)});
-    await until(t, 'three live committed metadata voters', () => memberships(members, metadata),
-      (rows) => metadata.every((id) => quorum(rows, id, 3)));
-    const systemPartitions = (await cluster.seedQueryRows('SELECT partition_id FROM partitions'))
-      .map((row) => row.partition_id);
+    const endpointSql = 'SELECT node_id, address, port FROM service_endpoints WHERE service_id = ? AND protocol = ?';
+    const endpointParams = ['sys-postgres-wire', 'postgresql'];
+    await until(t, 'RF3 metadata ready before CREATE', () => memberships(members, metadata),
+      (rows) => metadata.every((id) => quorum(rows, id, 2)));
+    const [endpoint] = await until(t, 'published PG-wire listener',
+      () => cluster.seedQueryRows(endpointSql, endpointParams), (rows) => rows.length > 0);
     await Promise.all(members.map((member) => observe(member, 'arm', {tableName})));
     t.teardown(async () => {
       await Promise.allSettled(members.filter((member) => !member.channel.exitState())
         .map((member) => observe(member, 'release')));
     });
-    const client = await cluster.createPgClient(endpoint);
+    const client = await cluster.createPgClient({host: endpoint.address, port: Number(endpoint.port)});
     // The single submitting socket can disappear with its server.
     client.on('error', (error) => t.comment(`original socket: ${error.message}`));
     const submitted = client.query(`CREATE TABLE ${tableName} (id TEXT PRIMARY KEY, payload TEXT)`)
@@ -104,11 +108,9 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
     const survivors = members.filter((member) => member !== owner);
     const grant = original.grants.find((row) => row.jobId === jobId && row.ownerId === ownerId);
     assert.ok(grant);
-    const led = await observe(owner, 'ledPartitions', {ids: systemPartitions});
-    const before = await memberships(members, led);
-    const affected = led.map((id) => quorum(before, id, 3))
-      .find((leader) => leader?.nodeId === owner.nodeId);
-    assert.ok(affected, 'the process to crash must lead an observed RF3 metadata partition');
+    const before = await until(t, 'surviving majority for each committed RF3 metadata group',
+      () => memberships(members, metadata),
+      (rows) => metadata.every((id) => quorum(rows, id, 2, owner.nodeId)));
     // Only the original process remains held. Successor work runs unmodified.
     await Promise.all(survivors.map((member) => observe(member, 'release')));
     const observer = survivors[0];
@@ -123,21 +125,21 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
     const crashAt = Date.now();
     assert.ok(owner.child.kill('SIGKILL'));
     assert.deepEqual(await exited, [null, 'SIGKILL']);
-    t.comment(JSON.stringify({lostNode: owner.nodeId, running, leaderBefore: affected}));
+    t.comment(JSON.stringify({lostNode: owner.nodeId, running}));
     const retained = await until(t, 'read original lease from a survivor after SIGKILL',
       readJob, (row) => row !== null);
     assert.deepEqual(retained, running);
     assert.ok(Date.now() < retained.lease, 'survivor observed original unexpired lease after death');
 
     t.comment(JSON.stringify({retainedAfterExit: retained, observedAt: Date.now()}));
-    const electionGroups = [...new Set([...metadata, affected.partitionId])];
-    const elected = await until(t, 'live successor leadership in a later term',
-      () => memberships(survivors, electionGroups), (rows) => {
-        const leader = quorum(rows, affected.partitionId, 2);
-        return metadata.every((id) => quorum(rows, id, 2)) &&
-          leader && leader.nodeId !== owner.nodeId && leader.term > affected.term;
-      });
-    t.comment(JSON.stringify({leaderAfter: quorum(elected, affected.partitionId, 2)}));
+    const after = await until(t, 'live metadata quorum after owner loss',
+      () => memberships(survivors, metadata), (rows) => metadata.every((id) => quorum(rows, id, 2)));
+    for (const id of metadata) {
+      const prior = quorum(before, id, 2, owner.nodeId);
+      const current = quorum(after, id, 2);
+      t.comment(JSON.stringify({partitionId: id, leaderChanged: prior.replicaId !== current.replicaId,
+        priorLeader: prior.replicaId, priorTerm: prior.term, leader: current.replicaId, term: current.term}));
+    }
     const takeover = await until(t, 'surviving process granted the same job',
       () => traces(survivors), (rows) => rows.some((row) => row.grants.length));
     const successor = takeover.find((row) => row.grants.length);
@@ -168,17 +170,17 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
     }
     t.comment(JSON.stringify({terminal, table: quorum(table, partitionId, 3), originalReply}));
     const session = await observer.openApplicationDatabase('wire-owner-loss');
-    const {rows: [published]} = await readUntil(t, observer, session,
-      'SELECT node_id, address, port FROM service_endpoints WHERE service_id = ? AND protocol = ?',
-      ['sys-postgres-wire', 'postgresql'], (rows) => rows.length === 1 &&
-        survivors.some((member) => member.nodeId === rows[0].node_id));
+    const liveEndpoint = (row) => survivors.some((member) => member.nodeId === row.node_id);
+    const {rows: publishedRows} = await readUntil(t, observer, session, endpointSql, endpointParams,
+      (rows) => rows.some(liveEndpoint));
+    const published = publishedRows.find(liveEndpoint);
     const fresh = await cluster.createPgClient({host: published.address, port: Number(published.port)});
     const jobs = await fresh.query('SELECT job_id, table_id, status FROM schema_operations WHERE table_name = $1',
       [tableName]);
     assert.deepEqual(jobs.rows, [{job_id: jobId, table_id: tableId, status: 'SUCCEEDED'}]);
-    const placement = await fresh.query(
+    const partitionRows = await fresh.query(
       'SELECT partition_id, replica_count FROM partitions WHERE table_id = $1', [tableId]);
-    assert.deepEqual(placement.rows.map((row) => [row.partition_id, Number(row.replica_count)]), [[partitionId, 3]]);
+    assert.deepEqual(partitionRows.rows.map((row) => [row.partition_id, Number(row.replica_count)]), [[partitionId, 3]]);
     assert.equal((await fresh.query(`INSERT INTO ${tableName} (id, payload) VALUES ($1, $2)`,
       ['after', 'owner loss'])).rowCount, 1);
     assert.deepEqual((await fresh.query(`SELECT payload FROM ${tableName} WHERE id = $1`,

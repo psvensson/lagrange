@@ -66,6 +66,8 @@ function traceCreateWorker(handler, request, boundary, outcome, error = null, el
     boundary,
     outcome,
     elapsedMs,
+    ...(boundary === 'participant_release' && outcome !== 'started' ?
+      {releaseHops: request.releaseTrace?.hops} : {}),
     errorCode: error?.code ?? null,
   });
 }

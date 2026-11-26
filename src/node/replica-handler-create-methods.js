@@ -640,10 +640,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             // answer advances the local activation checkpoint.
             if (!participantReleased) {
               requireFreshCreateReleaseRoute(this);
+              work.releaseTrace = {hops: {}};
               await measureCreateStage(this, work, 'participant_release', () =>
                 observeCreateActivation(this, work, deadlineAtMs, () =>
                   this.participantReleaseRecovery.releaseFreshCreate(partitionId, {
-                    createAdmissionEvidence, identityExisted: existed, deadlineAtMs,
+                    createAdmissionEvidence, identityExisted: existed, deadlineAtMs, trace: work.releaseTrace,
                   })));
               requireReplicaCreateWork(this, work);
               participantReleased = true;

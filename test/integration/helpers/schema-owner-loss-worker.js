@@ -89,10 +89,6 @@ registerEmbeddedWorkerOperations({
       ownerId: row.workflow_owner_id, fence: row.workflow_fence_token,
       lease: row.workflow_lease_expires_at, version: row.row_version};
   },
-  ledPartitions: ({ids}) => [...partitions.values()]
-    .filter((service) => ids.includes(service.partitionId) && service.initialized &&
-      !service.isShutdown && service.getStatus().isLeader)
-    .map((service) => service.partitionId),
   membership: async ({ids}) => {
     const local = [...partitions.values()].filter((service) =>
       ids.includes(service.partitionId) && service.initialized && !service.isShutdown);

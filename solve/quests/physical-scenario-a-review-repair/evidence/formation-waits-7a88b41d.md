@@ -13,7 +13,7 @@ The same seed refused a proposed copy of `wasm_operations-p1` in three observed 
 | 209 s | 3106 | 2 / 2 | 5 | 1 / 6 | 80.59% | 85.29% | 16.43 ms |
 | 233 s | 3455 | 1 / 1 | 0 | No copy check | 70.81% | 73.03% | 8.29 ms |
 
-At the last census the seed held the only active voter for this partition. A copy for node 2 was in SENDING. Its worker reached final revalidation before the deadline. The trace contains no second target operation by the deadline. The earlier source-capacity refusals are directly observed. The exact succession of all intervening decisions remains unmeasured.
+At the last census the seed held the only active voter for this partition. A copy for node 2 was in SENDING. Its worker reached final revalidation before the deadline. The trace contains no second target operation by the deadline. The earlier source-capacity refusals are directly observed. The exact succession of all intervening decisions remains unmeasured. On the seed's clock, operation 1173 completed at 15:14:38.191, 0.956 seconds after expiry. Operation 1192 started 70 milliseconds later and completed at 15:14:48.956. The separate promotion operation 1205 completed at 15:14:49.396, 12.161 seconds after expiry. Neither an eventual RF3 row nor the public workload was verified inside the deadline.
 
 Across both remote workers, participant release took 20.319 seconds at p95 in the first run (72 successful waits and one 58.293-second failure). It took 4.304 seconds at p95 in the repeat (92 successes). These distributions include work completed after the deadline. Five of the first run’s long releases finished within a 12-millisecond window on one host.
 
