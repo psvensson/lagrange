@@ -158,6 +158,9 @@ function nodeEnv({nodeId, host, hostName, seedHost, connection, declaredHostCoun
     env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
   } else {
     env.FORMATION_DECLARED_HOST_COUNT = declaredHostCount;
+    // Diagnostic campaign only. Sample the seed while retaining its application budgets.
+    env.LAGRANGE_LOOP_GAP_PROFILE = '1';
+    env.LAGRANGE_LOOP_GAP_THRESHOLD_MS = '25';
   }
   return arrayFlatMap(Object.entries(env), ([key, value]) => ['-e', `${key}=${value}`]);
 }
