@@ -10,11 +10,11 @@ Prepared 20 November 2026 for programme item 07 under the existing open
 `quest-evidence-and-candidate-binding` owner. Investigation source:
 `6c0bdff11f24e32459178e9d2c0d9f563e7cd790`, rule-set revision 5. The source investigation led to a managed negative witness.
 The existing [evidence Quest log](../../quests/quest-evidence-and-candidate-binding/log.ndjson)
-records its independent review and original execution. The current WIP
-includes the bounded admission repair in the support-envelope, management
-and rolling-upgrade owners. The design below records the original assignment.
-Current results and the physical qualification still owed are recorded in the
-[core integration handoff](../operation-integrity-and-reliable-formation.md#core-integration-handoff-21-november-2026).
+records its independent review and original execution. The recorded WIP
+included the bounded admission repair in the support-envelope, management and
+rolling-upgrade owners. The design below records that original assignment.
+Consult [current work](../operation-integrity-and-reliable-formation.md#current-work)
+for reconciled source, assignments and remaining qualification.
 
 Loaded sources: AGENTS, rules/router, Quest workflow, artifact custody owner,
 the investigation/navigation skills, current operation-integrity summary and

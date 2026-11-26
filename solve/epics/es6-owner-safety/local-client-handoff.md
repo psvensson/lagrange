@@ -17,11 +17,10 @@ only. The local implementation client coordinates its existing source writers
 and integration work. Routine diagnosis, bounded implementation, review and
 landing within existing authority do not need another approval round.
 
-Use ordinary ES6 JavaScript, the existing Node runtime and current test/lint
-tools. Do not introduce TypeScript, `checkJs`, generated typings, transpilation,
-a build step, Deno or a runtime migration. Keep one semantic owner and one
-execution path; remove replaced paths in the affected closure. Do not add a
-generic framework, duplicate state ledger, silent fallback or dormant cutover.
+Follow the standing [language and toolchain constraints](../../../docs/development/code-style.md#language-and-toolchain)
+and the epic's bounded mechanisms. Keep one semantic owner and one execution
+path; remove replaced paths in the affected closure. Do not add a generic
+framework, duplicate state ledger, silent fallback or dormant cutover.
 
 ## Pickup
 

@@ -1,12 +1,15 @@
 ---
 audience: agent
-last_reviewed: 2026-11-25
+last_reviewed: 2026-11-26
 ---
 
 # Owner router
 
 Policy and declared contracts state what is required; enforcement implements
 checks, and references explain usage. Consult only the relevant concern.
+The semantic owner decides domain behavior; the policy owner holds binding
+instructions. Author, reviewer and integration owner are delivery roles under
+[`quest-subagents.md`](../development/quest-subagents.md#roles-and-concurrency).
 
 | Key | Policy or declared contract | Enforcement / reference | Consult when |
 | --- | --- | --- | --- |
@@ -37,13 +40,13 @@ Load only relevant owners; `npm run audit:doc-audience` governs public links.
 | runtime, control-plane or partition behaviour; workflow authority, permits, recovery or a new state store | [`runtime-contracts.md`](../../architecture/runtime-contracts.md); [`authority-and-recovery.md`](../../architecture/contracts/authority-and-recovery.md) |
 | code style, file size, naming | [`code-style.md`](../development/code-style.md) |
 | recording or retaining Quest artifacts | [`quest-artifacts.md`](../development/quest-artifacts.md) |
-| interpreting Quest statuses or preparing a handoff | [`quest-lifecycle.md`](../development/quest-lifecycle.md) |
+| interpreting Quest statuses | [`quest-lifecycle.md#current-vocabulary`](../development/quest-lifecycle.md#current-vocabulary) |
 | closing a Quest or recording blocked, exhausted or superseded work | [`quest-closure.md`](../development/quest-closure.md) |
 | choosing probes, validating acceptance or reusing evidence | [`quest-validators.md`](../development/quest-validators.md) |
 | delegating work, coordinating roles or arranging independent review | [`quest-subagents.md`](../development/quest-subagents.md) |
 | project agent skills, Serena navigation, Context7 documentation, installation or tooling evidence | [`agent-tooling.md`](../development/agent-tooling.md); existing Quest owners retain workflow authority |
 | proposing or changing roadmap policy | [`roadmap-policy.md`](../development/roadmap-policy.md) |
-| resuming a milestone or selecting the next cutover unit | the active epic's current summary under [`documentation-lifecycle.md`](../development/documentation-lifecycle.md); current correction coordination: [`operation-integrity-and-reliable-formation.md`](../../solve/epics/operation-integrity-and-reliable-formation.md). Follow dated plans only as linked rationale, not live assignments. |
+| resuming a milestone, handing off or selecting the next cutover unit | the active epic's `#current-work` under [`documentation-lifecycle.md`](../development/documentation-lifecycle.md#current-summaries-and-steering-revisions); current coordination: [`operation-integrity-and-reliable-formation.md#current-work`](../../solve/epics/operation-integrity-and-reliable-formation.md#current-work). Dated plans supply rationale, not live assignments. |
 | choosing a physical test runner or continuing a queued run | [`home-lab.md`](../development/home-lab.md) |
 
 ## Known owner gap

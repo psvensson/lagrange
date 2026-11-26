@@ -1,9 +1,6 @@
 ---
-scope: style
-status: canonical
-always_load: false
-source_of_truth: self
-last_reviewed: 2026-11-16
+audience: development
+last_reviewed: 2026-11-26
 ---
 
 > **Canonical source.** Lint, formatting, naming. Reached from the
@@ -31,6 +28,21 @@ subsystem ownership, use:
 - [`test/guidelines/INDEX.md`](../../test/guidelines/INDEX.md) - testing policy
 - [`architecture/INDEX.md`](../../architecture/INDEX.md) - owner maps
 - [`agpl-feature-map.md`](agpl-feature-map.md) - roadmap scope
+
+## Language And Toolchain
+
+Use ES6 JavaScript, the supported Node runtime and existing tools. Do not
+introduce TypeScript, `checkJs`, generated declarations, compiler-dependent
+contracts, transpilation, a new build step, Deno or a runtime migration. This
+standing constraint does not request a repository-wide syntax or dependency
+rewrite. A parser's configured language version is tooling capability, not
+permission to expand the source-language policy.
+
+Existing tools may internally use another language, such as the
+[JavaScript navigation backend](agent-tooling.md#scope-and-authority); that does
+not authorize a source-language migration. Preserve historical sealed records;
+resolve an incompatible active mechanism through explicit supersession, as
+recorded in the [ES6 owner-safety plan](../../solve/epics/es6-owner-safety.md#superseding-the-earlier-type-checking-direction).
 
 ## Linting Compliance
 
@@ -116,6 +128,11 @@ When writing or modifying code:
   exempts exactly these. Aliases like `TYPEOF.FUNCTION`, `NUM.ZERO`, and
   file-local `LOCAL_NUM_ONE`-style names are retired-codemod residue — do not
   add new ones, and inline them when other work touches the line.
+- A semantic decision uses the owner-defined named outcome, including internal
+  decisions. Interpret payload emptiness within that outcome's contract: for
+  example, `READY` with no rows can mean absence, while `UNAVAILABLE` means the
+  owner could not establish the answer. Empty payloads never stand in for failure
+  or unavailability; see [authority and recovery](../../architecture/contracts/authority-and-recovery.md).
 - When one semantic outcome depends on multiple signals, use one normalized
   snapshot plus one explicit state model or decision table rather than a bag of
   independent `if` statements.
@@ -242,6 +259,5 @@ const example = "value"
 
 ## Reference
 
-See `eslint.config.js` (ESLint 9 flat config) for the complete, live ESLint
-configuration. The root `.eslintrc.json` is the legacy-format file and is NOT
-read by the `npm run lint` scripts; do not edit it expecting effect.
+See `eslint.config.js` (ESLint 9 flat config) for the live lint configuration;
+source-language constraints remain in [Language And Toolchain](#language-and-toolchain).

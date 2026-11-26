@@ -1,9 +1,6 @@
 ---
-scope: governance
-status: canonical
-always_load: false
-source_of_truth: self
-last_reviewed: 2026-11-13
+audience: development
+last_reviewed: 2026-11-26
 ---
 
 > **Canonical source.** Quest validation and honesty policy. Reached from the
@@ -100,9 +97,11 @@ scope amendment. Recording that reference does not grant authority.
 
 The assignment is an untyped append-only finding. Its latest entry defines the
 package scope; a new assignment explicitly amends it without changing the Quest
-seal or clearing a blocked hold. Include required generated outputs in the
-assignment and refresh them before requesting content-bound approval. `land`
-checks all staged, unstaged and untracked nonignored changes before staging,
+seal or clearing a blocked hold. Follow the
+[complete candidate sequence](../steering/workflow-guidelines/solver-quests.md#normal-sequence):
+include required generated outputs in the assignment and refresh them before
+content-bound approval. There is no separate preparation command. `land` checks
+all staged, unstaged and untracked nonignored changes before staging,
 preserving exact filenames and both sides of renames. It reloads the Quest and
 checks scope, holds, acceptance, proof inputs and review binding after generation,
 after commit-time checks and after proof. A generated input that changes after
@@ -135,12 +134,8 @@ not an automatic user stop or a requirement to replace an otherwise valid quest.
 ## Terminal Truth
 
 Only `land` writes `solved`, after the probe, guards, staged-tree proof and
-commit succeed. `note` can record `blocked`, `exhausted` or `superseded` with
-the required fields; it cannot assert `solved`. A blocked hold is cleared by a
-later attempt or typed finding, so record a clearance only after its reason is
-resolved. An unavailable test or reviewer is a pending input, not evidence of
-success or exhaustion.
-
-The current epic summary and human reports link these records. They do not
-invent attempts, revise terminal history, grant release acceptance, or claim
-that unrequested work is running.
+commit succeed. `note` can record the other supported dispositions; see
+[Quest Closure](quest-closure.md#blocked-exhausted-and-superseded) for their use
+and [Current Vocabulary](quest-lifecycle.md#current-vocabulary) for the current
+hold-clearing side effect, including evidence uploads. Reports link actual
+records; they cannot revise history, grant wider acceptance or start work.

@@ -128,7 +128,7 @@ table as an Artifact or that a Cell becomes a Raft member.
 | CDC | Change data capture: committed changes propagated to consumers; here, notably system-table updates feeding routing caches |
 | System-table cache | Node-local observational read model used for routing |
 | Reconciliation | Repeated comparison of desired and actual state until they match |
-| Fallback witness | Bounded bootstrap/recovery evidence used while canonical evidence is incomplete; not a second durable owner |
+| Fallback witness | Historical term for bootstrap/recovery evidence. Classify its actual authority and consequence under the [owner contract](../architecture/runtime-contracts.md#owner-and-path-detail); the label does not authorize substitute evidence, a competing decision or promotion while canonical authority is unavailable. |
 
 A cache records what a local consumer has observed and may lag committed
 changes. Owner rows remain the durable source of ownership truth. Internal

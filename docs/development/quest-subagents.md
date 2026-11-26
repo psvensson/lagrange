@@ -1,9 +1,6 @@
 ---
-scope: governance
-status: canonical
-always_load: false
-source_of_truth: self
-last_reviewed: 2026-11-13
+audience: development
+last_reviewed: 2026-11-26
 ---
 
 > **Canonical source.** Delegated worker policy for Quest attempts. Reached
@@ -100,9 +97,9 @@ review record; they do not need a Quest solely to store that review.
 Assigned agents decide routine repairs, proof scheduling and landing under
 existing authority. The user decides genuine product/scope tradeoffs or grants
 missing authority. A blocked review or test needs a concrete next owner and
-action. For actual asynchronous work, record its request or run, revision,
-status and observer/resumption mechanism; if none exists, report the pending
-action honestly. Do not imply that an idle or unavailable agent is working.
+action under [Quest Closure](quest-closure.md#blocked-exhausted-and-superseded).
+Report actual asynchronous work and its observer, or the pending action honestly;
+do not imply that an idle or unavailable agent is working.
 
 If independent verification is unavailable, continue other authorized work
 that does not depend on its approval, and leave the affected landing blocked with

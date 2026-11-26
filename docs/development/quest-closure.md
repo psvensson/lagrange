@@ -1,9 +1,6 @@
 ---
-scope: governance
-status: canonical
-always_load: false
-source_of_truth: self
-last_reviewed: 2026-10-22
+audience: development
+last_reviewed: 2026-11-26
 ---
 
 > **Canonical source.** Quest closure and failure migration policy. Reached
@@ -13,18 +10,12 @@ last_reviewed: 2026-10-22
 
 ## Repair, Milestone And Release
 
-Close the claim the unit was sealed to prove. A bounded repair is accepted
-when its reproducer and affected interaction meet the sealed `doneWhen`, the
-required independent review is current, and the landing guards and change
-proof pass. It may then close and integrate even while a wider distributed
-scenario remains red for a separately identified cause. Record that limit.
-
-The distributed service milestone retains its own end-to-end acceptance. A
-repair receipt does not close it. Publication or release retains the exact
-candidate gates and receipts owned by the existing publisher and release
-process. Conversely, do not make every bounded repair wait for unrelated
-milestone or release proof. Scope these claims correctly before sealing;
-existing sealed acceptance changes only through explicit supersession.
+Close only the sealed claim under
+[Separate Acceptance Claims](../../test/guidelines/release-gate.md#separate-acceptance-claims).
+A bounded repair can close and integrate while a different recorded cause keeps
+the wider milestone red. Record that limit and route the remaining cause. A
+repair receipt does not discharge service or exact-candidate release acceptance;
+a changed sealed premise requires explicit supersession.
 
 ## Solved
 

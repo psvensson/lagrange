@@ -5,11 +5,11 @@ description: Independently verify a Lagrange candidate and its evidence, tracing
 
 # Review the actual candidate
 
-Read AGENTS and the routed verification owners. Use the existing verification
-templates appropriate to the changed interaction. The reviewer inspects and
-measures the candidate; the author owns implementation repairs. Existing workflow
-owners retain landing and publication. A direct change needs no Quest solely to
-record review.
+Read AGENTS and follow [bounded independent review](../../../docs/development/quest-subagents.md#bounded-independent-review)
+with the existing [verification templates](../../../docs/development/verification-templates/INDEX.md)
+for the changed interaction. Inspect and measure the candidate; the author repairs
+it and the existing workflow owners retain landing and publication. A direct
+change needs no Quest solely to record review.
 Selected upstream provenance is in scripts/agent-tooling/NOTICE.md.
 
 Record author and verifier identities, base/HEAD, worktree, changed-file digests,

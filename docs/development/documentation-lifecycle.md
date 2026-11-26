@@ -33,13 +33,29 @@ state. Active goals and evidence remain owned by the Solver.
 
 ## Current Summaries And Steering Revisions
 
-An active epic has one mutable current summary, maintained by the agent holding
-the integration role. It records the governing rule-set revision and source
-commit, last-checked time, current unit, first demonstrated blocker, next action
-and continuation owner. Link to the authoritative contract and immutable evidence
-for each claim. Unknown or unmeasured state is explicit. The summary is an index,
-not a second acceptance ledger, capability declaration or replacement for logs.
-Update it when work integrates, the blocker changes or responsibility hands off.
+An active epic has one mutable `## Current work` summary near its beginning,
+maintained by the integration owner. Keep the `#current-work` anchor stable as
+dates and assignments change. Adopt this heading when updating an existing
+summary; do not create another status record or mass-retitle historical
+checkpoints. Where another epic coordinates the same work, link its current
+summary instead of copying live state. Aim for a short entry point (roughly 300-600 words,
+not a quota); link detail rather than copying it. Record:
+
+- last-checked time, governing rule-set revision and source commit;
+- published baseline, actual integration candidate and active writer when known;
+- last measured candidate, configuration and original evidence;
+- current bounded unit, first demonstrated blocker, next action and its owner;
+- work awaiting review, test or integration, including solved but unintegrated units;
+- actual pending request/run and observer, if any, under
+  [Quest Closure](quest-closure.md#blocked-exhausted-and-superseded).
+
+Distinguish a published baseline from accepted runtime proof. A dated handoff
+cannot establish a live writer or candidate; mark unknown or unmeasured state
+explicitly and reconcile it before overlapping work. Link each claim to its
+contract, Quest/PR or immutable evidence. The summary is an index, not a second
+acceptance ledger, capability declaration or replacement for logs. Update it
+when work integrates, the blocker changes or responsibility hands off. A
+standalone `class: fix` uses its existing Quest record and log.
 
 Recorded attempts, findings, verdicts, receipts and terminal entries remain
 immutable. Correct them with a new record. Current explanatory documents and
@@ -60,6 +76,9 @@ gap to its existing active owner rather than creating a permanent gap matrix in
 steering. A policy update never establishes a new product capability; generated
 capability facts change only with their own evidence. Revise the rule-set
 manifest only when an invariant changes, not for detail within its existing owner.
+A wording or routing clarification retains the invariant revision and is identified
+by its source commit. Review semantic scope and obligations as well as the
+manifest: the structural rule-set checker cannot establish prose equivalence.
 
 ## Evidence-bound capability and convergence claims
 
@@ -83,12 +102,9 @@ Keep implementation gaps visible to pilots without inventing a separate
 capability ledger. The [current-capabilities checker](../../scripts/check-current-capabilities.js)
 is a source consistency guard, **not** end-to-end certification.
 
-An active milestone's existing current summary may also include a small
-**convergence snapshot**: accepted base and exact integration candidate, first
-demonstrated representative-service blocker, distinct unresolved causal families
-and ages or recurrence when established, reviewed-but-unintegrated work and its
-remaining integration actions, and elapsed diagnosis,
-review, queue, test and integration phases where original timestamps exist.
+Where existing records permit, extend the current summary with distinct
+unresolved causal families and their ages or recurrence, and elapsed diagnosis,
+review, queue, test and integration phases from original timestamps.
 Derive every entry from the existing Quest/PR/runner records. Say
 `unmeasured` for unavailable counts or phase times, never manufacture a
 trend, sum incompatible test cones or create another tracker. Update on

@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-11-25
+last_reviewed: 2026-11-26
 ---
 
 # Rules
@@ -62,7 +62,8 @@ not duplicated. Private named constants and language primitives remain permitted
 **Invariant.** A decision outcome is an explicit named state, never inferred
 from an empty, absent or ambiguous value.
 **Owner.** `guideline-audits`
-**On conflict.** Name the state and decide on it.
+**On conflict.** Use the owner's named outcome; interpret payload emptiness only
+within that outcome's contract, never as a substitute for unavailability or failure.
 
 ## R08. A shared contract has one canonical shape
 
@@ -112,8 +113,9 @@ release conditions; durable obligations remain owned until properly settled.
 
 ## R14. Mutations are idempotent
 
-**Invariant.** Repeating the same logical mutation cannot duplicate its effect;
-retries preserve the owner's outcome and reconciliation semantics.
+**Invariant.** Repeating the same logical mutation, under its owner-defined
+identity, cannot duplicate its effect; retries preserve the owner's outcome and
+reconciliation semantics.
 **Owner.** `contracts`
 **On conflict.** Make the operation idempotent rather than guarding the caller.
 
@@ -214,9 +216,9 @@ extend it.
 
 ## R27. A probe measures, it never acts
 
-**Invariant.** A probe reads the tree and prints a number; it never starts a
-cluster, a demo, or a network call. The solver marks its measurement, and every
-harness refuses to run under that mark.
+**Invariant.** A Solver acceptance probe reads the candidate tree or retained
+evidence and returns a numeric measurement; it never starts a cluster, demo or
+network call. Solver marks measurement; every harness refuses to run under that mark.
 **Owner.** `solve-probes`
 **On conflict.** Move the work the probe would have started into an attempt;
 a probe that needs to act is a harness wearing a probe's name.

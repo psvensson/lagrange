@@ -164,9 +164,10 @@ To prevent overlap and contradictory runtime behavior:
 10. **WASM Entity Management:** External module/service administration flows
    through the default replicated meta service (`sys-wasm-meta`). Other APIs
    may expose adapters, but must delegate to the meta-service command path.
-11. **Admin API Ownership:** Node-local admin APIs are compatibility adapters.
-    Service-owned handlers (`sys-admin-meta` and `sys-wasm-meta`) are the
-    mutation/control owners.
+11. **Admin API Ownership:** Node-local admin ingress delegates to
+    service-owned handlers (`sys-admin-meta` and `sys-wasm-meta`), the
+    mutation/control owners. An ingress adapter may translate the declared
+    representation; it cannot retain a replaced semantic implementation.
 12. **Programmatic Runtime API Ownership:** The public invocation surface for
     partition functions and reducers is the call Binding (`CALL BINDING $1`);
     see [query-runtime.md](query-runtime.md) and
