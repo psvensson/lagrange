@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2816,
+    "ordinary": 2819,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2842,
-  "digest": "fnv1a32-b7877473",
+  "censusSize": 2845,
+  "digest": "fnv1a32-41ba29eb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1592,6 +1592,7 @@
     "test/partition/split-cutover-owner-delegation.test.js": "ordinary",
     "test/partition/split-descriptor-checkpoint.test.js": "ordinary",
     "test/partition/split-descriptor-finalization.test.js": "ordinary",
+    "test/partition/split-descriptor-redrive-attempt.test.js": "ordinary",
     "test/partition/split-dissolution-durable-proof.test.js": "ordinary",
     "test/partition/split-execution-state-reconstruction.test.js": "ordinary",
     "test/partition/split-key-comparator.test.js": "ordinary",
@@ -1603,6 +1604,8 @@
     "test/partition/split-progress-depends-on-process-local-state.test.js": "ordinary",
     "test/partition/split-rebalance-trigger.test.js": "ordinary",
     "test/partition/split-recovery-after-restart.test.js": "ordinary",
+    "test/partition/split-sibling-descriptor-finalization.test.js": "ordinary",
+    "test/partition/split-sibling-workflow-recovery.test.js": "ordinary",
     "test/partition/split-source-participant-ack.test.js": "ordinary",
     "test/partition/sql-statement-parser-coverage-matrix.test.js": "ordinary",
     "test/partition/table-partition-structure.property.test.js": "ordinary",

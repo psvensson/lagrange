@@ -18,17 +18,17 @@
     "runtime-primitives": 24,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 263,
+    "storage-partition": 266,
     "storage-raft": 166,
     "test-infrastructure": 173,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2842,
-  "digest": "fnv1a32-5d24d95e",
+  "censusSize": 2845,
+  "digest": "fnv1a32-2b49ed04",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a64711ee",
+  "observationDigest": "fnv1a32-f537e1b4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1612,6 +1612,7 @@
     "test/partition/split-cutover-owner-delegation.test.js": "storage-partition",
     "test/partition/split-descriptor-checkpoint.test.js": "storage-partition",
     "test/partition/split-descriptor-finalization.test.js": "storage-partition",
+    "test/partition/split-descriptor-redrive-attempt.test.js": "storage-partition",
     "test/partition/split-dissolution-durable-proof.test.js": "storage-partition",
     "test/partition/split-execution-state-reconstruction.test.js": "storage-partition",
     "test/partition/split-key-comparator.test.js": "storage-partition",
@@ -1623,6 +1624,8 @@
     "test/partition/split-progress-depends-on-process-local-state.test.js": "storage-partition",
     "test/partition/split-rebalance-trigger.test.js": "storage-partition",
     "test/partition/split-recovery-after-restart.test.js": "storage-partition",
+    "test/partition/split-sibling-descriptor-finalization.test.js": "storage-partition",
+    "test/partition/split-sibling-workflow-recovery.test.js": "storage-partition",
     "test/partition/split-source-participant-ack.test.js": "storage-partition",
     "test/partition/sql-statement-parser-coverage-matrix.test.js": "storage-partition",
     "test/partition/table-partition-structure.property.test.js": "storage-partition",
@@ -14737,7 +14740,26 @@
     },
     "test/partition/managed-split-epoch-persistence-effects.test.js": {
       "files": [
-        "src/partition/partition-constants.js"
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/managed-split-metrics-provider.test.js": {
@@ -17631,6 +17653,29 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/split-descriptor-redrive-attempt.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/split-dissolution-durable-proof.test.js": {
       "files": [
         "src/partition/partition-constants.js"
@@ -17661,6 +17706,62 @@
       "files": [
         "src/partition/partition-service.js",
         "src/workflow/durable-workflow-coordinator.js"
+      ]
+    },
+    "test/partition/split-sibling-descriptor-finalization.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/split-sibling-workflow-recovery.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/split-source-participant-ack.test.js": {
@@ -18987,6 +19088,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-sibling-descriptor-effect.js",
         "src/partition/partition-split-descriptor-command.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
