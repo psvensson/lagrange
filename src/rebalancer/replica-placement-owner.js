@@ -1,3 +1,4 @@
+import {isDeepStrictEqual} from 'node:util';
 import {createPlacementDecisionDiagnostics} from './replica-placement-decision-diagnostics.js';
 import {promotedVoterReplicaIdsByPartition} from './replica-placement-owner-retained-repair-statement.js';
 // Public entry: createReplicaPlacementOwner, attachReplicaPlacementOwner, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID.
@@ -225,6 +226,9 @@ class ReplicaPlacementOwner {
 
   beginCustody(tenure) {
     this.custody = createTenureCustody(tenure);
+    this.custody.serviceWakes = {previousUpdate: null, pendingUpdates: 0, pendingRepeats: 0,
+      totals: {adjacentRepeatedUpdates: 0, serviceOnlyPasses: 0, serviceOnlyEvaluations: 0,
+        repeatOnlyPasses: 0, repeatOnlyEvaluations: 0, repeatOnlyProposals: 0, repeatOnlyAdmissions: 0}};
     this.adaptiveBudgetController?.resetForNewLeadership?.();
     this.attachListeners();
     if (this.workflowOwner) this.workflowOwner.repository.observeRetainedLedgerLeadershipStart();
@@ -305,7 +309,7 @@ class ReplicaPlacementOwner {
   handleCacheChange(tableName, row, op = null) {
     if (!this.isLeader) return;
     const directTrigger = CACHE_TABLE_TRIGGER[tableName];
-    if (directTrigger) return void this.notify(directTrigger);
+    if (directTrigger) return void this.notify(directTrigger, op === 'UPDATE' ? row : null);
     if (tableName === TABLES.NODES && row && op !== CACHE_OP_DELETE) {
       this.adaptiveBudgetController?.observeNodeRow(row[COLUMN.NODE_ID], row, this.now());
     } else if (tableName === TABLES.REPLICA_OPERATIONS &&
@@ -313,10 +317,21 @@ class ReplicaPlacementOwner {
       this.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
     }
   }
-  notify(trigger) {
+  notify(trigger, updatedRow = null) {
     if (!this.isLeader) return;
     if (Object.hasOwn(PLACEMENT_TRIGGER, trigger)) {
       this.observation.triggerNotifications[trigger]++;
+    }
+    if (trigger === PLACEMENT_TRIGGER.SERVICES_CHANGED) {
+      const wakes = this.custody.serviceWakes;
+      wakes.pendingUpdates++;
+      // One previous apply-time image per tenure. Interleaved keys undercount repeats.
+      if (updatedRow?.[COLUMN.SERVICE_ID] && wakes.previousUpdate?.[COLUMN.SERVICE_ID] ===
+          updatedRow[COLUMN.SERVICE_ID] && isDeepStrictEqual(wakes.previousUpdate, updatedRow)) {
+        wakes.totals.adjacentRepeatedUpdates++;
+        wakes.pendingRepeats++;
+      }
+      wakes.previousUpdate = updatedRow;
     }
     this.pendingTriggers.add(trigger);
     this.drainQueue();
@@ -347,10 +362,15 @@ class ReplicaPlacementOwner {
     try {
       do {
         const triggers = new Set([...custody.retainedTriggers, ...this.pendingTriggers]);
+        const wakes = custody.serviceWakes;
+        const repeatOnly = custody.retainedTriggers.size === 0 && wakes.pendingUpdates > 0 &&
+          wakes.pendingRepeats === wakes.pendingUpdates;
+        wakes.pendingUpdates = 0;
+        wakes.pendingRepeats = 0;
         custody.retainedTriggers.clear();
         this.pendingTriggers.clear();
         try {
-          await this.runPass(triggers);
+          await this.runPass(triggers, repeatOnly);
         } catch (error) {
           for (const trigger of triggers) custody.retainedTriggers.add(trigger);
           this.logger.warn(LOG_PASS_FAILED, {nodeId: this.nodeId,
@@ -818,7 +838,7 @@ class ReplicaPlacementOwner {
   }
 
   // One pass under the custody current at its start (the drain's own).
-  async runPass(triggers) {
+  async runPass(triggers, repeatOnly = false) {
     const pass = beginPlacementPass(this.observation, this.custody, triggers);
     try {
       await this.runPassSteps(pass);
@@ -828,11 +848,23 @@ class ReplicaPlacementOwner {
     } finally {
       if (pass.stoppedAt === CHECKPOINT.RUNNING) pass.stoppedAt = CHECKPOINT.ABORTED;
       this.placementResyncAdmissions += resyncAdmissionsOf(pass, triggers);
+      if (pass.custody && triggers.size === 1 && triggers.has(PLACEMENT_TRIGGER.SERVICES_CHANGED)) {
+        const totals = pass.custody.serviceWakes.totals;
+        totals.serviceOnlyPasses++;
+        totals.serviceOnlyEvaluations += pass.evaluated;
+        if (repeatOnly) {
+          totals.repeatOnlyPasses++;
+          totals.repeatOnlyEvaluations += pass.evaluated;
+          totals.repeatOnlyProposals += pass.proposals;
+          totals.repeatOnlyAdmissions += pass.operationIds.length;
+        }
+      }
       if (pass.custody === this.custody || this.custody === null) {
         if (pass.decisionDiagnostics && pass.custody === this.custody) {
           this.lastPlacementDecision = {...pass.decisionDiagnostics.snapshot,
             triggerNotifications: {...this.observation.triggerNotifications},
             passesByTrigger: {...this.observation.passesByTrigger},
+            serviceWakes: {...pass.custody.serviceWakes.totals},
           };
         }
         this.lastPassSnapshot = Object.freeze({...placementPassSnapshot(pass,

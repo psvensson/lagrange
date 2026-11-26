@@ -26,6 +26,7 @@ const DEFAULT_INDEX_TYPE = INDEX_TYPE.BTREE;
 const DEFAULT_READABLE_STATE = INDEX_READABLE_STATE.READY;
 const GSI_RECOVERY_QUEUE_NAME = 'gsi-completion-recovery';
 const GSI_RECOVERY_REASON = 'gsi_schema_succeeded_recovery';
+const GSI_INVENTORY_REASON = 'gsi_recovery_inventory';
 const MAX_GSI_RECOVERY_ATTEMPTS = 20;
 const DEFAULT_GSI_RECOVERY_RETRY_DELAY_MS = 40;
 const MIN_GSI_RECOVERY_RETRY_DELAY_MS = 15;
@@ -212,6 +213,8 @@ function ensureGsiRecoveryQueue(indexService) {
         isRetryableError: isTransientGlobalIndexError,
         getRetryAfterMs: () => resolveGsiRecoveryRetryDelayMs(indexService),
         maxAttempts: MAX_GSI_RECOVERY_ATTEMPTS,
+        shouldResetAttempts: (_previous, current, {ownerKey, reason}) =>
+          reason === GSI_INVENTORY_REASON && current.indexId === ownerKey,
       },
     });
   }
@@ -428,7 +431,7 @@ const indexServiceGlobalMethods = {
    * @param {Object} [options={}]
    * @return {Promise<Array>}
    */
-  async recoverIncompleteGlobalIndexesFromSchemaJobs() {
+  async recoverIncompleteGlobalIndexesFromSchemaJobs({ordinaryDiscovery = false} = {}) {
     const jobOwner = this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
     if (!jobOwner || this.shuttingDown) return [];
     if (!this.initialized) await this.initialize({skipSchemaJobRecovery: true});
@@ -446,7 +449,15 @@ const indexServiceGlobalMethods = {
     const queue = ensureGsiRecoveryQueue(this);
     const completions = [];
     for (const [name, indexId] of pending) {
-      completions.push(queue.enqueueAndWait(indexId, GSI_RECOVERY_REASON, {name, indexId}));
+      if (ordinaryDiscovery) {
+        // Active bursts own their next attempt. Inventory only admits idle
+        // keys; the worker checks the exact durable generation before use.
+        if (!queue.has(indexId) && !queue.isInFlight(indexId)) {
+          queue.enqueue(indexId, GSI_INVENTORY_REASON, {name, indexId});
+        }
+      } else {
+        completions.push(queue.enqueueAndWait(indexId, GSI_RECOVERY_REASON, {name, indexId}));
+      }
     }
     return Promise.all(completions);
   },

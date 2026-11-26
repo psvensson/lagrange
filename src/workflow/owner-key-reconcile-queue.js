@@ -44,6 +44,7 @@ import {
   enqueueAndWaitForOwner,
   mergeWorkItemCompletionWaiters,
   rejectAllQueueCompletionWaiters,
+  rejectExhaustedCompletionWaiter,
   rejectStaleFenceCompletionWaiter,
   rejectStoppedCompletionWaiter,
   rejectWorkItemCompletionWaiters,
@@ -344,13 +345,8 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     )) {
       return false;
     }
-    this._mergeEnqueuedWork(
-      exhausted,
-      reason,
-      context,
-      fenceToken,
-      completionWaiter,
-    );
+    this._mergeEnqueuedWork(exhausted, reason, context, fenceToken);
+    rejectExhaustedCompletionWaiter(completionWaiter, exhausted.retryState);
     return true;
   }
 

@@ -1481,6 +1481,7 @@ test('Production construction 10 (4B): crash immediately after schema job SUCCEE
     try {
       await engine2.tableCreationService.resumeDurableProvisioningJobs();
       await recoveryOwner.indexRecovery;
+      await engine2.indexService._gsiRecoveryQueue?.awaitCurrentWorkIdle();
       t.type(falseEmptyVersion, 'number', 'one successful but empty catalog point read was delivered');
       t.equal(version(), falseEmptyVersion, 'no intervening index catalog update');
       t.equal(gateway.db.prepare('SELECT state FROM indices WHERE index_id = ?').get(initialIndexId).state,
@@ -1489,6 +1490,7 @@ test('Production construction 10 (4B): crash immediately after schema job SUCCEE
       timers[0].callback();
       await new Promise((resolve) => setImmediate(resolve));
       await recoveryOwner.indexRecovery;
+      await engine2.indexService._gsiRecoveryQueue?.awaitCurrentWorkIdle();
       t.equal(deliveredWrongId, true, 'next read returned a terminal row of a different incarnation');
       t.equal(version(), falseEmptyVersion, 'catalog projection did not change between attempts');
       t.equal(engine2.indexService.getGlobalIndexCoordinator().catalog.get('idx_users_email').index_id,
@@ -1543,6 +1545,7 @@ test('warm index owner queues catalog CDC and catches a missed listener on the s
       await engine.activateDistributedTransactionRecovery();
       await engine.tableCreationService.resumeDurableProvisioningJobs();
       await owner.indexRecovery;
+      await indexService._gsiRecoveryQueue?.awaitCurrentWorkIdle();
       const reads = [];
       const find = owner.findSucceededGlobalIndexIntent.bind(owner);
       owner.findSucceededGlobalIndexIntent = (dataset, generation) => {
@@ -1565,7 +1568,50 @@ test('warm index owner queues catalog CDC and catches a missed listener on the s
       timers[0].callback();
       await new Promise((resolve) => setImmediate(resolve));
       await owner.indexRecovery;
+      await indexService._gsiRecoveryQueue?.awaitCurrentWorkIdle();
       t.ok(reads.some(([dataset, gen]) => dataset === '__idx_users_missed' && gen === 2),
         'the same warm queue reconsidered the missed catalog change');
     });
   });
+
+test('fresh GSI retains a returned pending grant and founds the exact durable partition on retry', async (t) => {
+  await withFoundingPlacementEnvironment(async ({engine, gateway, createdReplicas, leader}) => {
+    const owner = engine.tableCreationService.schemaProvisioningJobOwner;
+    const provision = engine.provisionInitialTablePartition.bind(engine);
+    const grants = [];
+    let retry;
+    owner.retrySetTimeoutFn = (callback) => { retry = callback; return {}; };
+    owner.retryClearTimeoutFn = () => {};
+    engine.provisionInitialTablePartition = (grant) => {
+      grants.push({partitionId: grant.partitionId, tableId: grant.tableId});
+      if (grants.length === 1) return {contractState: 'pending', nextAction: 'wait',
+        requestedReplicaCount: grant.replicaCount, minimumRoutableReplicaCount: 1,
+        committedReplicaCount: 0, routableReplicaCount: 0};
+      return provision(grant);
+    };
+    // The bare index name is also a real application table with a live
+    // partition. Only the index dataset may satisfy index partition discovery.
+    const result = await engine.executeQuery('CREATE GLOBAL INDEX users ON users (email)');
+    t.equal(result.deferred, true);
+    const readJob = () => gateway.db.prepare(
+      'SELECT * FROM schema_operations WHERE job_id = ?').get(result.jobId);
+    const pending = readJob();
+    t.equal(pending.status, 'PENDING');
+    t.equal(createdReplicas.length, 0);
+    const [part] = JSON.parse(pending.normalized_ddl).partitions;
+    const [catalog] = gateway.db.prepare(
+      'SELECT partition_id, replica_count FROM partitions WHERE table_id = ?').all(pending.table_id);
+    t.same(catalog, {partition_id: part.partitionId, replica_count: part.replicaCount});
+    t.same(grants, [{partitionId: part.partitionId, tableId: pending.table_id}]);
+    retry();
+    t.ok(await waitForCondition(() => readJob().status === 'SUCCEEDED', 3000, 15));
+    const terminal = readJob();
+    t.equal(JSON.parse(terminal.result_json).partitionId, catalog.partition_id);
+    t.same(grants[1], grants[0]);
+    t.equal(createdReplicas[0].partitionId, catalog.partition_id);
+    t.ok(ledgerRows(leader).some((row) => row.partition_id === catalog.partition_id));
+    t.ok(await waitForCondition(() => gateway.db.prepare(
+      'SELECT state FROM indices WHERE index_id = ?').get(result.indexId)?.state ===
+      GLOBAL_INDEX_STATE.READ_WRITE, 3000, 15));
+  });
+});

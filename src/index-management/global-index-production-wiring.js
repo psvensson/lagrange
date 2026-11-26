@@ -722,11 +722,9 @@ function buildProductionCoordinatorOptions(indexService) {
     }
     const record = coord ? coord.catalog.get(indexName) : null;
     const tableName = record ? extractTableNameFromRow(record) : null;
-    const targets = [indexName];
-    if (tableName) {
-      targets.unshift(getGlobalIndexDatasetName(tableName, indexName));
-    }
-    return discoverPartitionsForTargets(indexService, runtimeState, targets);
+    if (!tableName) return [];
+    return discoverPartitionsForTargets(indexService, runtimeState,
+      [getGlobalIndexDatasetName(tableName, indexName)]);
   };
 
   const resolveTableSchema = (tableName) => {

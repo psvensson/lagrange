@@ -1197,7 +1197,20 @@ test('OwnerKeyReconcileQueue - retry exhaustion is loud and only a new ' +
     retryableDrainExhaustedCount: 1,
   }, 'the terminal failed vector remains diagnosable without a live timer');
 
-  queue.enqueue('owner-a', 'live_veto', {generation: 1});
+  await t.rejects(queue.enqueueAndWait('owner-a', 'live_veto', {generation: 1}), {
+    code: 'retryable_drain_exhausted', ownerKey: 'owner-a', failureCount: 3,
+  }, 'later completion settles from the exhausted generation');
+  t.equal(queue.exhaustedWorkItems.get('owner-a').completionWaiters.length, 0,
+    'exhausted state retains no settled or unserviceable waiters');
+  const latest = {generation: 1, evidence: 'updated'};
+  queue.enqueue('owner-a', 'retained_observation', latest, {fenceToken: 7});
+  const retained = queue.exhaustedWorkItems.get('owner-a');
+  t.same(retained.context, latest, 'retains latest evidence for the reset classifier');
+  t.equal(retained.fenceToken, 7, 'retains the accepted fence');
+  t.ok(retained.reasons.has('retained_observation'), 'retains the additional reason');
+  await t.rejects(queue.enqueueAndWait('owner-a', 'source_changed',
+    {generation: 2}, {fenceToken: 6}), /stale fence token/i,
+  'a stale fence cannot reopen the key');
   await new Promise((resolve) => setTimeout(resolve, 5));
   t.equal(callCount, 3,
     'same-generation nudges cannot reset an exhausted retry forever');

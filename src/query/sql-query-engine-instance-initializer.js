@@ -63,7 +63,7 @@ function bindSchemaJobGsiCompletionHandler(engine) {
   }
   if (owner?.setSucceededGlobalIndexRecoveryHandler) {
     owner.setSucceededGlobalIndexRecoveryHandler(
-      () => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.(),
+      () => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.({ordinaryDiscovery: true}),
     );
   }
 }

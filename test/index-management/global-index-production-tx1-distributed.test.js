@@ -284,6 +284,7 @@ async function setupStrictCluster(t, options = {}) {
     return {
       partitionId: ctx.partitionId,
       replicaIds: [ps.replicaId],
+      committedReplicaCount: 1, routableReplicaCount: 1,
     };
   };
 

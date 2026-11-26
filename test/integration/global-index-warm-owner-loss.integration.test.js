@@ -48,7 +48,7 @@ test('warm survivors backfill an existing global index after the schema callback
     }
     await waitForTrace(t, 'setup: READY discovery', members, (traces) => traces.every((row) => row.warm));
     for (const node of members) {
-      assert.ok((await node.channel.request('armIndexLoss', {indexName})).ok);
+      assert.ok((await node.channel.request('armIndexLoss', {tableName: table, indexName})).ok);
     }
     const stopPolling = new AbortController();
     const submission = query(issuer, `CREATE GLOBAL INDEX ${indexName} ON ${table} (email)`);
@@ -67,6 +67,23 @@ test('warm survivors backfill an existing global index after the schema callback
     const owner = members.find((node) => node.nodeId === nodeId);
     const survivors = members.filter((node) => node !== owner);
     const catalogSql = 'SELECT index_id, state, backfill_total_rows FROM indices WHERE index_name = ?';
+    const observer = survivors[0];
+    const topology = async (stage, nodes) => {
+      const partitions = fulfilledRows(await query(observer,
+        'SELECT partition_id, table_id, replica_count, leader_node_id FROM partitions WHERE table_id = ?',
+        [cut.dataset]));
+      const partitionId = cut.partitions[0].partitionId;
+      const services = fulfilledRows(await query(observer,
+        'SELECT service_id, node_id, raft_role, status FROM services WHERE partition_id = ?', [partitionId]));
+      const membership = await Promise.all(nodes.map(async (node) => {
+        const response = await node.channel.request('indexMembership', {partitionId});
+        assert.ok(response.ok, JSON.stringify(response.error));
+        return {nodeId: node.nodeId, replicas: response.value};
+      }));
+      t.comment(JSON.stringify({stage, partitionId, partitions, services, membership, ownerNodeId: nodeId}));
+    };
+    assert.equal(cut.result.partitionId, cut.partitions[0].partitionId);
+    await topology('survivor catalog before kill', members);
     const exited = once(owner.child, 'exit');
     assert.ok(owner.child.kill('SIGKILL'));
     assert.deepEqual(await exited, [null, 'SIGKILL']);
@@ -74,7 +91,7 @@ test('warm survivors backfill an existing global index after the schema callback
     t.comment(JSON.stringify({stage: 'SIGKILL confirmed', nodeId, indexId: cut.indexId}));
     // All processes held terminal writes before the submission. The same
     // generation must still be incomplete after the OS confirms owner death.
-    const observer = survivors[0];
+    await topology('survivor catalog after kill', survivors);
     await readUntil(t, observer, sessions.get(observer), catalogSql, [indexName],
       (rows) => rows.length === 1 && rows[0].index_id === cut.indexId &&
         ['CREATING', 'WRITE_ONLY', 'BACKFILLING'].includes(rows[0].state));

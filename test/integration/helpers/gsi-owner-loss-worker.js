@@ -6,6 +6,20 @@ import {GlobalIndexLifecycleCoordinator} from
   '../../../src/index-management/global-index-lifecycle-coordinator.js';
 import {registerEmbeddedWorkerOperations} from './embedded-node-worker.js';
 
+import {PartitionService} from '../../../src/partition/partition-service.js';
+import {readPartitionReplicaMembership} from
+  '../../../src/partition/partition-service-raft-membership-administration.js';
+import {getGlobalIndexDatasetName} from '../../../src/index-management/global-index-dataset-manager.js';
+
+let targetDataset;
+const datasetReplicas = new Map();
+const initializePartition = PartitionService.prototype.initialize;
+PartitionService.prototype.initialize = async function(...args) {
+  const result = await initializePartition.apply(this, args);
+  if (targetDataset && this.tableName === targetDataset) datasetReplicas.set(this.replicaId, this);
+  return result;
+};
+
 let target;
 let warm = false;
 let cut;
@@ -62,7 +76,12 @@ const notify = SchemaProvisioningJobOwner.prototype.notifyBackgroundSucceeded;
 SchemaProvisioningJobOwner.prototype.notifyBackgroundSucceeded = async function(intent, outcome, options) {
   if (target && intent.globalIndex?.indexName === target) {
     const row = await this.repository.findByTableIdentity(intent.tableIdentityKey);
+    const persisted = JSON.parse(row.normalized_ddl);
+    const result = JSON.parse(row.result_json);
     cut = {status: row.status, jobId: row.job_id, dataset: row.table_id,
+      partitions: persisted.partitions, result: {partitionId: result.partitionId,
+        contractState: result.contractState, requested: result.requestedReplicaCount,
+        routable: result.routableReplicaCount, committed: result.committedReplicaCount},
       indexId: intent.globalIndex.indexId, generation: intent.globalIndex.generation,
       background: options.background, registeredCallback: this.retryCompletionHandlers.has(row.job_id)};
     // Parent verifies the cut and kills this process before forwarding the callback.
@@ -94,7 +113,18 @@ GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord = async function(
 };
 
 registerEmbeddedWorkerOperations({
-  armIndexLoss: ({indexName}) => { target = indexName; },
+  armIndexLoss: ({tableName, indexName}) => {
+    target = indexName;
+    targetDataset = getGlobalIndexDatasetName(tableName, indexName);
+  },
+  indexMembership: async ({partitionId}) => {
+    const facts = [];
+    for (const replica of datasetReplicas.values()) {
+      if (replica.partitionId !== partitionId || replica.isShutdown) continue;
+      facts.push(await readPartitionReplicaMembership(replica, replica.replicaId));
+    }
+    return facts;
+  },
   permitIndexTerminalWrite: () => permitTerminalCheckpoint.resolve(),
   indexLossTrace: () => ({warm, cut, progress, completed}),
 });

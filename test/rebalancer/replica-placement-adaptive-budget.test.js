@@ -592,12 +592,33 @@ test('one placement pass distinguishes admissions sharing a copy source and clas
     const before = owner.lastPlacementDecision;
     owner.notify(PLACEMENT_TRIGGER.RESYNC);
     for (let i = 0; i < 2; i++) {
-      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, spread[0]);
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {...spread[0], [COLUMN.SERVICE_ID]: 'service-a'});
     }
     await owner.awaitCurrentWorkIdle();
     const decision = owner.lastPlacementDecision;
     assert.equal(decision.triggerNotifications.SERVICES_CHANGED - before.triggerNotifications.SERVICES_CHANGED, 2);
     assert.equal(decision.passesByTrigger.SERVICES_CHANGED - before.passesByTrigger.SERVICES_CHANGED, 1);
+    assert.equal(decision.serviceWakes.adjacentRepeatedUpdates - before.serviceWakes.adjacentRepeatedUpdates, 1);
+    assert.equal(decision.serviceWakes.repeatOnlyPasses, before.serviceWakes.repeatOnlyPasses);
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {...spread[0], [COLUMN.SERVICE_ID]: 'service-a'});
+    await owner.awaitCurrentWorkIdle();
+    const observed = owner.lastPlacementDecision.serviceWakes;
+    assert.equal(observed.repeatOnlyPasses, decision.serviceWakes.repeatOnlyPasses + 1);
+    const repeatedPass = owner.lastPassSnapshot;
+    assert.equal(observed.serviceOnlyPasses - decision.serviceWakes.serviceOnlyPasses, 1);
+    assert.ok(repeatedPass.evaluated > 0 && repeatedPass.evaluated <= 5);
+    assert.equal(observed.repeatOnlyEvaluations - decision.serviceWakes.repeatOnlyEvaluations, repeatedPass.evaluated);
+    assert.equal(observed.serviceOnlyEvaluations - decision.serviceWakes.serviceOnlyEvaluations, repeatedPass.evaluated);
+    assert.equal(observed.repeatOnlyProposals - decision.serviceWakes.repeatOnlyProposals, repeatedPass.proposals);
+    assert.equal(observed.repeatOnlyAdmissions - decision.serviceWakes.repeatOnlyAdmissions, 0);
+    owner.notify(PLACEMENT_TRIGGER.RESYNC);
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {...spread[0], [COLUMN.SERVICE_ID]: 'service-a'});
+    owner.notify(PLACEMENT_TRIGGER.RESYNC);
+    await owner.awaitCurrentWorkIdle();
+    assert.deepEqual(new Set(owner.lastPassSnapshot.triggers),
+      new Set([PLACEMENT_TRIGGER.SERVICES_CHANGED, PLACEMENT_TRIGGER.RESYNC]));
+    assert.deepEqual(owner.lastPlacementDecision.serviceWakes, {...observed,
+      adjacentRepeatedUpdates: observed.adjacentRepeatedUpdates + 1});
     assert.ok(comparisons.length > 0);
     for (const {actual, reference, evaluated, referenceEvaluated} of comparisons) {
       assert.deepEqual(actual, reference);
@@ -623,6 +644,31 @@ test('one placement pass distinguishes admissions sharing a copy source and clas
     assert.ok(accepted.disposition === 'ADMITTED' || accepted.busy);
     assert.equal(accepted.sourceNodeId ?? decision.activeCopies.find(
       (copy) => copy.partitionId === admitted.partition_id)?.sourceNodeId, 'n1');
+    // Complete an old-tenure pass after the new tenure has published its own decision.
+    const oldCustody = owner.custody;
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const steps = owner.runPassSteps.bind(owner);
+    owner.runPassSteps = async (pass) => {
+      await steps(pass);
+      if (pass.custody === oldCustody) {
+        entered.resolve();
+        await release.promise;
+      }
+    };
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {...spread[0], [COLUMN.SERVICE_ID]: 'service-a'});
+    await entered.promise;
+    const oldRun = oldCustody.running;
+    owner.setLeader(false);
+    owner.setLeader(true);
+    try {
+      await owner.custody.running;
+    } finally {
+      release.resolve();
+      await oldRun;
+    }
+    assert.equal(owner.lastPlacementDecision.serviceWakes.repeatOnlyPasses, 0);
+    assert.equal(owner.lastPlacementDecision.serviceWakes.adjacentRepeatedUpdates, 0);
   } finally {
     owner.shutdown();
     ledger.db.close();
