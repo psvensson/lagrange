@@ -1,0 +1,746 @@
+{
+  "sourceCommit": "8b71826e0d5e504e06388ab2b6777b34a10080bc",
+  "host": "tv-dator",
+  "scope": "Four logical processes on one managed host with three surviving processes after confirmed owner kill. The controller failed waiting for durable schema success. During terminal failure capture, both responding applied ledger copies reported index 552.",
+  "observations": [
+    {
+      "publishedBefore": [
+        {
+          "node_id": "4ecfe559-1c07-4113-bf49-bd64ad203930",
+          "address": "127.0.0.1",
+          "port": 59065
+        },
+        {
+          "node_id": "5e492427-4dc4-4e19-beb2-3b5d14e1029a",
+          "address": "127.0.0.1",
+          "port": 59064
+        }
+      ]
+    },
+    {
+      "lostNode": "4ecfe559-1c07-4113-bf49-bd64ad203930",
+      "running": {
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "status": "RUNNING",
+        "ownerId": "schema-worker-3ee0c475-9c4f-48c9-a84e-744e4832dd47",
+        "fence": 1,
+        "lease": 1795722237452,
+        "version": 6
+      }
+    },
+    {
+      "retainedAfterExit": {
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "status": "RUNNING",
+        "ownerId": "schema-worker-3ee0c475-9c4f-48c9-a84e-744e4832dd47",
+        "fence": 1,
+        "lease": 1795722237452,
+        "version": 6
+      },
+      "observedAt": 1795722207967
+    },
+    {
+      "partitionId": "schema_operations-p1",
+      "leaderChanged": false,
+      "priorLeader": "schema_operations-p1-r1",
+      "priorTerm": 1,
+      "leader": "schema_operations-p1-r1",
+      "term": 1
+    },
+    {
+      "partitionId": "replica_operations-p1",
+      "leaderChanged": false,
+      "priorLeader": "replica_operations-p1-r1",
+      "priorTerm": 1,
+      "leader": "replica_operations-p1-r1",
+      "term": 1
+    },
+    {
+      "partitionId": "services-p1",
+      "leaderChanged": false,
+      "priorLeader": "services-p1-r1",
+      "priorTerm": 1,
+      "leader": "services-p1-r1",
+      "term": 1
+    },
+    {
+      "partitionId": "tables-p1",
+      "leaderChanged": true,
+      "priorLeader": "replace-replica-a6b11f72569fca1a3192f462818e90af",
+      "priorTerm": 2,
+      "leader": "tables-p1-r1",
+      "term": 3
+    },
+    {
+      "partitionId": "partitions-p1",
+      "leaderChanged": true,
+      "priorLeader": "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+      "priorTerm": 3,
+      "leader": "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+      "term": 5
+    },
+    {
+      "partitionId": "nodes-p1",
+      "leaderChanged": false,
+      "priorLeader": "nodes-p1-r1",
+      "priorTerm": 1,
+      "leader": "nodes-p1-r1",
+      "term": 1
+    },
+    {
+      "successorNode": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+      "next": {
+        "ownerId": "schema-worker-8cfd2b42-973d-4d43-94ed-6b6877197735",
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "key": "global.wire_owner_loss_orders",
+        "fence": 2,
+        "at": 1795722238022
+      },
+      "claim": {
+        "ownerId": "schema-worker-8cfd2b42-973d-4d43-94ed-6b6877197735",
+        "fence": 2,
+        "lease": 1795722267616,
+        "at": 1795722237834
+      }
+    },
+    {
+      "lostNode": "4ecfe559-1c07-4113-bf49-bd64ad203930",
+      "schemaMembershipBefore": [
+        {
+          "state": "voter",
+          "replicaId": "schema_operations-p1-r1",
+          "partitionId": "schema_operations-p1",
+          "term": 1,
+          "commitIndex": 12,
+          "appliedIndex": 12,
+          "gateOpen": true,
+          "leaderReplicaId": "schema_operations-p1-r1",
+          "voterReplicaIds": [
+            "replace-replica-23f3c6fbed6cb29e8af89f83286e5cec",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": true,
+          "nodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-d656d6d395838a2ebfee1b2c15521127",
+          "partitionId": "schema_operations-p1",
+          "term": 1,
+          "commitIndex": 12,
+          "appliedIndex": 12,
+          "gateOpen": true,
+          "leaderReplicaId": "schema_operations-p1-r1",
+          "voterReplicaIds": [
+            "replace-replica-23f3c6fbed6cb29e8af89f83286e5cec",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 3500,
+          "isLeader": false,
+          "nodeId": "5e492427-4dc4-4e19-beb2-3b5d14e1029a"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-23f3c6fbed6cb29e8af89f83286e5cec",
+          "partitionId": "schema_operations-p1",
+          "term": 1,
+          "commitIndex": 12,
+          "appliedIndex": 12,
+          "gateOpen": true,
+          "leaderReplicaId": "schema_operations-p1-r1",
+          "voterReplicaIds": [
+            "replace-replica-23f3c6fbed6cb29e8af89f83286e5cec",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": false,
+          "nodeId": "4ecfe559-1c07-4113-bf49-bd64ad203930"
+        }
+      ],
+      "schemaMembershipAfter": [
+        {
+          "state": "voter",
+          "replicaId": "schema_operations-p1-r1",
+          "partitionId": "schema_operations-p1",
+          "term": 1,
+          "commitIndex": 12,
+          "appliedIndex": 12,
+          "gateOpen": true,
+          "leaderReplicaId": "schema_operations-p1-r1",
+          "voterReplicaIds": [
+            "replace-replica-23f3c6fbed6cb29e8af89f83286e5cec",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": true,
+          "nodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-d656d6d395838a2ebfee1b2c15521127",
+          "partitionId": "schema_operations-p1",
+          "term": 1,
+          "commitIndex": 12,
+          "appliedIndex": 12,
+          "gateOpen": true,
+          "leaderReplicaId": "schema_operations-p1-r1",
+          "voterReplicaIds": [
+            "replace-replica-23f3c6fbed6cb29e8af89f83286e5cec",
+            "schema_operations-p1-r1",
+            "replace-replica-d656d6d395838a2ebfee1b2c15521127"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 3500,
+          "isLeader": false,
+          "nodeId": "5e492427-4dc4-4e19-beb2-3b5d14e1029a"
+        }
+      ],
+      "partitionsMembershipBefore": [
+        {
+          "state": "voter",
+          "replicaId": "partitions-p1-r1",
+          "partitionId": "partitions-p1",
+          "term": 3,
+          "commitIndex": 208,
+          "appliedIndex": 208,
+          "gateOpen": true,
+          "leaderReplicaId": "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+          "voterReplicaIds": [
+            "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+            "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+            "partitions-p1-r1"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": false,
+          "nodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+          "partitionId": "partitions-p1",
+          "term": 3,
+          "commitIndex": 208,
+          "appliedIndex": 208,
+          "gateOpen": true,
+          "leaderReplicaId": "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+          "voterReplicaIds": [
+            "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+            "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+            "partitions-p1-r1"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": true,
+          "nodeId": "4ecfe559-1c07-4113-bf49-bd64ad203930"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+          "partitionId": "partitions-p1",
+          "term": 3,
+          "commitIndex": 208,
+          "appliedIndex": 208,
+          "gateOpen": true,
+          "leaderReplicaId": "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+          "voterReplicaIds": [
+            "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+            "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+            "partitions-p1-r1"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 3500,
+          "isLeader": false,
+          "nodeId": "137d0ff3-7022-40e6-8d7a-68072eb13ac6"
+        }
+      ],
+      "partitionsMembershipAfter": [
+        {
+          "state": "voter",
+          "replicaId": "partitions-p1-r1",
+          "partitionId": "partitions-p1",
+          "term": 5,
+          "commitIndex": 210,
+          "appliedIndex": 210,
+          "gateOpen": true,
+          "leaderReplicaId": "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+          "voterReplicaIds": [
+            "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+            "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+            "partitions-p1-r1"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 6000,
+          "isLeader": false,
+          "nodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0"
+        },
+        {
+          "state": "voter",
+          "replicaId": "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+          "partitionId": "partitions-p1",
+          "term": 5,
+          "commitIndex": 210,
+          "appliedIndex": 210,
+          "gateOpen": true,
+          "leaderReplicaId": "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+          "voterReplicaIds": [
+            "replace-replica-fd382a27d359eb9d87e384ff27c37fbd",
+            "replace-replica-bf4e2b39f65e4316910b72a707091df6",
+            "partitions-p1-r1"
+          ],
+          "learnerReplicaIds": [],
+          "votersOutgoingReplicaIds": [],
+          "role": "VOTER",
+          "transferWindowMaxMs": 3500,
+          "isLeader": true,
+          "nodeId": "137d0ff3-7022-40e6-8d7a-68072eb13ac6"
+        }
+      ]
+    },
+    {
+      "nodeId": "5e492427-4dc4-4e19-beb2-3b5d14e1029a",
+      "observedAt": 1795722373483,
+      "releaseReports": []
+    },
+    {
+      "nodeId": "137d0ff3-7022-40e6-8d7a-68072eb13ac6",
+      "observedAt": 1795722373484,
+      "releaseReports": [
+        {
+          "at": 1795722210840,
+          "subsystem": "replica-handler",
+          "partitionId": "partitions-p1",
+          "outcome": "release_fact_unavailable",
+          "missingFact": "current_control_owner_fact",
+          "reason": null,
+          "blockedGroupId": null,
+          "blockedReplicaId": null,
+          "recoveryPhase": null,
+          "statusOutcome": null,
+          "failure": null,
+          "controlPartitionId": "sql_transactions-p1",
+          "controlNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+          "controlOutcome": "release_fact_unavailable",
+          "inspectNodeId": "4ecfe559-1c07-4113-bf49-bd64ad203930",
+          "inspectReplicaId": "replace-replica-05271c2b1741d0f1ceb70a0d9aab4009",
+          "controlMissingFact": "replica_release_reply",
+          "controlPhase": "inspect",
+          "controlReason": null
+        },
+        {
+          "at": 1795722370532,
+          "subsystem": "replica-handler",
+          "partitionId": "partitions-p1",
+          "outcome": "release_fact_unavailable",
+          "missingFact": "current_control_owner_fact",
+          "reason": null,
+          "blockedGroupId": null,
+          "blockedReplicaId": null,
+          "recoveryPhase": null,
+          "statusOutcome": null,
+          "failure": null,
+          "controlPartitionId": "sql_transactions-p1",
+          "controlNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+          "controlOutcome": "release_fact_unavailable",
+          "inspectNodeId": "4ecfe559-1c07-4113-bf49-bd64ad203930",
+          "inspectReplicaId": "replace-replica-05271c2b1741d0f1ceb70a0d9aab4009",
+          "controlMissingFact": "replica_release_reply",
+          "controlPhase": "inspect",
+          "controlReason": null
+        }
+      ]
+    },
+    {
+      "nodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+      "observedAt": 1795722373519,
+      "releaseReports": [
+        {
+          "at": 1795722209535,
+          "subsystem": "replica-handler",
+          "partitionId": "partitions-p1",
+          "outcome": "release_fact_unavailable",
+          "missingFact": "current_control_owner_fact",
+          "reason": null,
+          "blockedGroupId": null,
+          "blockedReplicaId": null,
+          "recoveryPhase": null,
+          "statusOutcome": null,
+          "failure": null,
+          "controlPartitionId": "sql_transactions-p1",
+          "controlNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+          "controlOutcome": "release_fact_unavailable",
+          "inspectNodeId": "4ecfe559-1c07-4113-bf49-bd64ad203930",
+          "inspectReplicaId": "replace-replica-05271c2b1741d0f1ceb70a0d9aab4009",
+          "controlMissingFact": "replica_release_reply",
+          "controlPhase": "inspect",
+          "controlReason": null
+        },
+        {
+          "at": 1795722364058,
+          "subsystem": "replica-handler",
+          "partitionId": "partitions-p1",
+          "outcome": "release_fact_unavailable",
+          "missingFact": "current_control_owner_fact",
+          "reason": null,
+          "blockedGroupId": null,
+          "blockedReplicaId": null,
+          "recoveryPhase": null,
+          "statusOutcome": null,
+          "failure": null,
+          "controlPartitionId": "sql_transactions-p1",
+          "controlNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+          "controlOutcome": "release_fact_unavailable",
+          "inspectNodeId": "4ecfe559-1c07-4113-bf49-bd64ad203930",
+          "inspectReplicaId": "replace-replica-05271c2b1741d0f1ceb70a0d9aab4009",
+          "controlMissingFact": "replica_release_reply",
+          "controlPhase": "inspect",
+          "controlReason": null
+        },
+        {
+          "at": 1795722210464,
+          "subsystem": "replica-handler",
+          "partitionId": "sql_transactions-p1",
+          "outcome": "release_fact_unavailable",
+          "missingFact": "replica_release_reply",
+          "reason": null,
+          "blockedGroupId": null,
+          "blockedReplicaId": null,
+          "recoveryPhase": null,
+          "statusOutcome": null,
+          "failure": null
+        },
+        {
+          "at": 1795722363025,
+          "subsystem": "replica-handler",
+          "partitionId": "sql_transactions-p1",
+          "outcome": "release_fact_unavailable",
+          "missingFact": "replica_release_reply",
+          "reason": null,
+          "blockedGroupId": null,
+          "blockedReplicaId": null,
+          "recoveryPhase": null,
+          "statusOutcome": null,
+          "failure": null
+        }
+      ]
+    },
+    {
+      "nodeId": "5e492427-4dc4-4e19-beb2-3b5d14e1029a",
+      "observedAt": 1795722373523,
+      "ledger": [
+        {
+          "replicaId": "replace-replica-2ed2ac8c7ca0003280de674a9b89636b",
+          "term": 1,
+          "isLeader": false,
+          "appliedIndex": "552",
+          "subjects": [
+            {
+              "partitionId": "schema_operations-p1",
+              "truncated": false,
+              "operations": []
+            },
+            {
+              "partitionId": "sql_transactions-p1",
+              "truncated": false,
+              "operations": []
+            },
+            {
+              "partitionId": "partitions-p1",
+              "truncated": false,
+              "operations": []
+            },
+            {
+              "partitionId": "tbl-3f73314ae44bd3770c7285bd3ce2556b-p1",
+              "truncated": false,
+              "operations": [
+                {
+                  "operationId": "pl-tbl-3f73314ae44bd3770c7285bd3ce2556b-p1-427-1",
+                  "type": "ADD",
+                  "replicaId": "replace-replica-e7819afb9dbe882be86c6eec486fccf4",
+                  "sourceReplicaId": null,
+                  "sourceNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+                  "targetNodeId": "137d0ff3-7022-40e6-8d7a-68072eb13ac6",
+                  "workflowStep": "ACTIVE",
+                  "status": "active",
+                  "updatedAt": 1795722300729,
+                  "voterRetirement": null,
+                  "removalIntent": null
+                },
+                {
+                  "operationId": "pl-tbl-3f73314ae44bd3770c7285bd3ce2556b-p1-427-2",
+                  "type": "ADD",
+                  "replicaId": "replace-replica-8738dc3f334891eb36c257b03ebcf8ce",
+                  "sourceReplicaId": null,
+                  "sourceNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+                  "targetNodeId": "5e492427-4dc4-4e19-beb2-3b5d14e1029a",
+                  "workflowStep": "ACTIVE",
+                  "status": "active",
+                  "updatedAt": 1795722300729,
+                  "voterRetirement": null,
+                  "removalIntent": null
+                },
+                {
+                  "operationId": "pl-tbl-3f73314ae44bd3770c7285bd3ce2556b-p1-427-0",
+                  "type": "ADD",
+                  "replicaId": "replace-replica-5c4124b01a70216a2cc26e6b3d213ec5",
+                  "sourceReplicaId": null,
+                  "sourceNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+                  "targetNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+                  "workflowStep": "SYNCING",
+                  "status": "syncing",
+                  "updatedAt": 1795722239440,
+                  "voterRetirement": null,
+                  "removalIntent": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "nodeId": "137d0ff3-7022-40e6-8d7a-68072eb13ac6",
+      "observedAt": 1795722373529,
+      "ledger": []
+    },
+    {
+      "nodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+      "observedAt": 1795722373659,
+      "ledger": [
+        {
+          "replicaId": "replica_operations-p1-r1",
+          "term": 1,
+          "isLeader": true,
+          "appliedIndex": "552",
+          "subjects": [
+            {
+              "partitionId": "schema_operations-p1",
+              "truncated": false,
+              "operations": []
+            },
+            {
+              "partitionId": "sql_transactions-p1",
+              "truncated": false,
+              "operations": []
+            },
+            {
+              "partitionId": "partitions-p1",
+              "truncated": false,
+              "operations": []
+            },
+            {
+              "partitionId": "tbl-3f73314ae44bd3770c7285bd3ce2556b-p1",
+              "truncated": false,
+              "operations": [
+                {
+                  "operationId": "pl-tbl-3f73314ae44bd3770c7285bd3ce2556b-p1-427-1",
+                  "type": "ADD",
+                  "replicaId": "replace-replica-e7819afb9dbe882be86c6eec486fccf4",
+                  "sourceReplicaId": null,
+                  "sourceNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+                  "targetNodeId": "137d0ff3-7022-40e6-8d7a-68072eb13ac6",
+                  "workflowStep": "ACTIVE",
+                  "status": "active",
+                  "updatedAt": 1795722300729,
+                  "voterRetirement": null,
+                  "removalIntent": null
+                },
+                {
+                  "operationId": "pl-tbl-3f73314ae44bd3770c7285bd3ce2556b-p1-427-2",
+                  "type": "ADD",
+                  "replicaId": "replace-replica-8738dc3f334891eb36c257b03ebcf8ce",
+                  "sourceReplicaId": null,
+                  "sourceNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+                  "targetNodeId": "5e492427-4dc4-4e19-beb2-3b5d14e1029a",
+                  "workflowStep": "ACTIVE",
+                  "status": "active",
+                  "updatedAt": 1795722300729,
+                  "voterRetirement": null,
+                  "removalIntent": null
+                },
+                {
+                  "operationId": "pl-tbl-3f73314ae44bd3770c7285bd3ce2556b-p1-427-0",
+                  "type": "ADD",
+                  "replicaId": "replace-replica-5c4124b01a70216a2cc26e6b3d213ec5",
+                  "sourceReplicaId": null,
+                  "sourceNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+                  "targetNodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+                  "workflowStep": "SYNCING",
+                  "status": "syncing",
+                  "updatedAt": 1795722239440,
+                  "voterRetirement": null,
+                  "removalIntent": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "onTerminalWaitExpiry": [
+    {
+      "nodeId": "bc377b97-820a-43dc-8b4a-a27e105546e0",
+      "grants": [
+        {
+          "ownerId": "schema-worker-8cfd2b42-973d-4d43-94ed-6b6877197735",
+          "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+          "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+          "key": "global.wire_owner_loss_orders",
+          "fence": 2,
+          "at": 1795722238022
+        },
+        {
+          "ownerId": "schema-worker-8cfd2b42-973d-4d43-94ed-6b6877197735",
+          "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+          "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+          "key": "global.wire_owner_loss_orders",
+          "fence": 7,
+          "at": 1795722365512
+        }
+      ],
+      "claims": [
+        {
+          "ownerId": "schema-worker-8cfd2b42-973d-4d43-94ed-6b6877197735",
+          "fence": 2,
+          "lease": 1795722267616,
+          "at": 1795722237834
+        },
+        {
+          "ownerId": "schema-worker-8cfd2b42-973d-4d43-94ed-6b6877197735",
+          "fence": 7,
+          "lease": 1795722395532,
+          "at": 1795722365548
+        }
+      ],
+      "barrier": {
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "partitionId": "tbl-3f73314ae44bd3770c7285bd3ce2556b-p1",
+        "ownerId": "schema-worker-8cfd2b42-973d-4d43-94ed-6b6877197735"
+      },
+      "attemptCount": 6,
+      "attempts": [
+        {
+          "number": 1,
+          "fence": 2,
+          "stage": "executor threw",
+          "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "Timed out waiting for routable partition service for partition tbl-3f73314ae44bd3770c7285bd3ce2556b-p1"
+          }
+        },
+        {
+          "number": 6,
+          "fence": 7,
+          "stage": "executor entered"
+        }
+      ],
+      "pending": [
+        {
+          "fence": 2,
+          "at": 1795722268080,
+          "cause": {
+            "code": "INTERNAL_ERROR",
+            "message": "Timed out waiting for routable partition service for partition tbl-3f73314ae44bd3770c7285bd3ce2556b-p1"
+          },
+          "outcome": {
+            "state": "pending",
+            "nextAction": "retry",
+            "reasons": [
+              "schema_replica_convergence_pending"
+            ]
+          }
+        },
+        {
+          "fence": 6,
+          "at": 1795722364434,
+          "cause": {
+            "code": "INTERNAL_ERROR",
+            "message": "Timed out waiting for routable partition service for partition tbl-3f73314ae44bd3770c7285bd3ce2556b-p1"
+          },
+          "outcome": {
+            "state": "pending",
+            "nextAction": "retry",
+            "reasons": [
+              "schema_replica_convergence_pending"
+            ]
+          }
+        }
+      ],
+      "provisioning": [
+        {
+          "fence": 2,
+          "at": 1795722238060,
+          "provisionerWired": true,
+          "requested": 3,
+          "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "Timed out waiting for routable partition service for partition tbl-3f73314ae44bd3770c7285bd3ce2556b-p1"
+          }
+        },
+        {
+          "fence": 7,
+          "at": 1795722365522,
+          "provisionerWired": true,
+          "requested": 3
+        }
+      ]
+    },
+    {
+      "nodeId": "5e492427-4dc4-4e19-beb2-3b5d14e1029a",
+      "grants": [],
+      "claims": [],
+      "attemptCount": 0,
+      "attempts": [],
+      "pending": [],
+      "provisioning": []
+    },
+    {
+      "nodeId": "137d0ff3-7022-40e6-8d7a-68072eb13ac6",
+      "grants": [],
+      "claims": [],
+      "attemptCount": 0,
+      "attempts": [],
+      "pending": [],
+      "provisioning": []
+    }
+  ],
+  "reportSha256": {
+    "lagrange-1941-ddl-tv-dator.log": "047ba28e873075c78eeb371aedc8c55638a442d411dd2ef9f2789cdfd9ae4ba6",
+    "lagrange-embedded-cluster-gwT2Ie-137d0ff3-7022-40e6-8d7a-68072eb13ac6-owner-loss.log": "0c74ab7b23101e853fa8d46536610f0d979269de37cb41733916244bb8988f6c",
+    "lagrange-embedded-cluster-gwT2Ie-4ecfe559-1c07-4113-bf49-bd64ad203930-owner-loss.log": "a5ad1f42639c0115f6f5b2e9aa46222c4e9ea50f241802684d9fd723558c99af",
+    "lagrange-embedded-cluster-gwT2Ie-5e492427-4dc4-4e19-beb2-3b5d14e1029a-owner-loss.log": "983a23cf5cc73a6c6b7c8165442f17d5c300b5842c64b873f8126406d630df8b",
+    "lagrange-embedded-cluster-gwT2Ie-bc377b97-820a-43dc-8b4a-a27e105546e0-owner-loss.log": "760f4567b023f05dce80098a67a422f18111f2f8a71c3de369326a4a4b55feea"
+  }
+}

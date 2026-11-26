@@ -1,0 +1,37 @@
+{
+  "sourceCommit": "f8d8396627f548f45320dfb88f67503ab6e6d302",
+  "hostReports": [
+    {
+      "test": "rebalance-coordinator-leader-placement-cure.test.js",
+      "host": "adam-laptop",
+      "assertions": 36,
+      "reportSha256": "378c3a8e97beb5be4b99f5946d74a982574887bd078609d3c53339e04ca224b6"
+    },
+    {
+      "test": "user-table-leader-placement-cure.test.js",
+      "host": "adam-laptop",
+      "assertions": 368,
+      "reportSha256": "9183f64d88ab924b0a53716cf621dd4928b269772adcf7350e8fe3b754eba752"
+    },
+    {
+      "test": "placement-cure-source-transfer.test.js",
+      "host": "adams-gamla",
+      "assertions": 1,
+      "reportSha256": "5aaf7154acf50bfebd015da2906cba172423277d78165bfd47da07208f27b45e"
+    },
+    {
+      "test": "placement-cure-transfer-refusals.test.js",
+      "host": "adams-gamla",
+      "assertions": 4,
+      "reportSha256": "37ff4bf65e3ac9913b71a1d7b962c121046641eb7753ca5d6a74bfb67706978a"
+    },
+    {
+      "test": "transfer-leadership-property.test.js",
+      "host": "adams-gamla",
+      "assertions": 6,
+      "reportSha256": "ec35109b5ad696b9a30fd8872f402e393dd1d25553f5c7857fa77a126a290d18"
+    }
+  ],
+  "controlTestBlob": "7ba9b236e4e2932792ca583dc1a6794299fa3a82",
+  "scope": "Matched three-voter native control plus queued-authority refusal, property and placement owner suites. Actual achieved physical timing is measured separately."
+}

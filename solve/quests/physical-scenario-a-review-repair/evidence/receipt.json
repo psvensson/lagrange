@@ -5,14 +5,23 @@
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": false,
+      "campaign": "bench-review-named-three-1947",
+      "sourceCommit": "f8d8396627f548f45320dfb88f67503ab6e6d302",
+      "observed": "readiness_exhausted; 1 of 46 system partitions below RF3 at the last complete predeadline census; workload not started",
+      "evidenceFile": "bench-review-named-three-1947/result.json",
+      "evidenceSha256": "bcbd3f7fb64fffb4881472c71b30b17c01715ac579bb01d00ad26b6b35ea01d1"
+    }
+  ],
+  "priorObservations": [
+    {
+      "id": "scenario-a-three-physical-hosts",
+      "passed": false,
       "campaign": "bench-review-owed-three-1929",
       "sourceCommit": "a723f28f16ac39c760da5d48cdd0706a931a3246",
       "observed": "readiness_exhausted; 5 of 46 system partitions below RF3 at the last complete predeadline census; workload not started",
       "evidenceFile": "bench-review-owed-three-1929/result.json",
       "evidenceSha256": "30daf2ccd4293d5f2b54fd834fd0af16a60fac2f74810e681085c3a7adb550c9"
-    }
-  ],
-  "priorObservations": [
+    },
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": false,

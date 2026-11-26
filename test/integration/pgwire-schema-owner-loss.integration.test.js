@@ -245,17 +245,32 @@ async function proveOwnerLoss(t, cluster) {
     t.comment(JSON.stringify({partitionId: id, leaderChanged: prior.replicaId !== current.replicaId,
       priorLeader: prior.replicaId, priorTerm: prior.term, leader: current.replicaId, term: current.term}));
   }
-  const takeover = await until(t, 'surviving process granted the same job',
-    () => traces(survivors), (rows) => rows.some((row) => row.grants.length)).catch(async (error) => {
+  const reportTimeout = async (error) => {
     t.comment(JSON.stringify({lostNode: owner.nodeId,
       schemaMembershipBefore: before.filter((row) => row.partitionId === 'schema_operations-p1'),
-      schemaMembershipAfter: after.filter((row) => row.partitionId === 'schema_operations-p1')}));
-    await Promise.allSettled(survivors.map(async (member) => {
-      const reports = await observe(member, 'releaseObservation');
-      t.comment(JSON.stringify({nodeId: member.nodeId, observedAt: Date.now(), releaseReports: reports}));
+      schemaMembershipAfter: after.filter((row) => row.partitionId === 'schema_operations-p1'),
+      partitionsMembershipBefore: before.filter((row) => row.partitionId === 'partitions-p1'),
+      partitionsMembershipAfter: after.filter((row) => row.partitionId === 'partitions-p1')}));
+    await Promise.all(survivors.map(async (member) => {
+      try {
+        const reports = await observe(member, 'releaseObservation');
+        t.comment(JSON.stringify({nodeId: member.nodeId, observedAt: Date.now(), releaseReports: reports}));
+      } catch (readError) {
+        t.comment(JSON.stringify({nodeId: member.nodeId, releaseReadUnavailable: readError.message}));
+      }
+    }));
+    await Promise.all(survivors.map(async (member) => {
+      try {
+        const ledger = await observe(member, 'retirementRecords', {createdPartitionId: partitionId});
+        t.comment(JSON.stringify({nodeId: member.nodeId, observedAt: Date.now(), ledger}));
+      } catch (readError) {
+        t.comment(JSON.stringify({nodeId: member.nodeId, retirementReadUnavailable: readError.message}));
+      }
     }));
     throw error;
-  });
+  };
+  const takeover = await until(t, 'surviving process granted the same job',
+    () => traces(survivors), (rows) => rows.some((row) => row.grants.length)).catch(reportTimeout);
   const successor = takeover.find((row) => row.grants.length);
   const next = successor.grants[0];
   assert.deepEqual([next.jobId, next.tableId, next.key], [jobId, tableId, grant.key]);
@@ -265,7 +280,7 @@ async function proveOwnerLoss(t, cluster) {
   assert.ok(claim && claim.at >= running.lease && claim.lease > claim.at);
   t.comment(JSON.stringify({successorNode: successor.nodeId, next, claim}));
   const finished = await until(t, 'successor committed terminal transition',
-    () => traces(survivors), (rows) => rows.some((row) => row.completed));
+    () => traces(survivors), (rows) => rows.some((row) => row.completed)).catch(reportTimeout);
   const winner = finished.find((row) => row.completed);
   assert.equal(winner.nodeId, successor.nodeId);
   assert.deepEqual([winner.completed.jobId, winner.completed.tableId, winner.completed.ownerId,
