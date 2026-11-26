@@ -50,5 +50,6 @@ documentClass: generated
 - [parallel-query-execution-metrics.js](parallel-query-execution-metrics.js) - Tracks execution metrics for a single partition query. (importers: many)
 - [parallel-query-hedging.js](parallel-query-hedging.js) - Straggler-hedging state for parallel query fan-outs. (importers: few)
 - [parallel-query-partition-outcomes.js](parallel-query-partition-outcomes.js) - Normalize one partition-execution failure snapshot. (importers: many)
+- [parallel-write-settlement.js](parallel-write-settlement.js) - A caller cutoff closes admission. (importers: one)
 - [straggler-detector.js](straggler-detector.js) - Straggler Detector - Detects slow partitions and triggers mitigation. (importers: few)
 - [transaction-participant-error-projection.js](transaction-participant-error-projection.js) - No leading comment; first export: isPrepareWriteConflictFailure. (importers: few)
