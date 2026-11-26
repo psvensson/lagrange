@@ -1442,6 +1442,19 @@ test('A10-1, A9-2, A9-3: multicore low normalized CPU never vetoes measured even
   assert.equal(healthyMulticoreDecision.action, ACTION.INCREASE);
   assert.equal(healthyMulticoreDecision.reason, REASON.HEALTHY_BUDGET_CONSTRAINED_DEMAND);
   assert.equal(healthyMulticoreDecision.limit, 7);
+  const backgroundWorkerCpuDecision = decideAdaptiveResourceWindow(
+    null,
+    {
+      ...baseObs, sampleId: 504, congestionEpochId: 504,
+      cpuUsagePercent: 25, singleCoreCpuPercent: 108,
+      eventLoopDelayMs: 30, eventLoopUtilizationPercent: 45,
+    },
+    ctx,
+    config,
+  );
+  assert.equal(backgroundWorkerCpuDecision.action, ACTION.INCREASE);
+  assert.equal(backgroundWorkerCpuDecision.reason, REASON.HEALTHY_BUDGET_CONSTRAINED_DEMAND);
+  assert.equal(backgroundWorkerCpuDecision.limit, 7);
 
   const existingRow = {
     [COLUMN.NODE_ID]: 'n2', [COLUMN.NODE_ADDRESS]: '127.0.0.1:9102', [COLUMN.HOST_ID]: 'h2',

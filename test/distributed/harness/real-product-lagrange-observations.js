@@ -797,6 +797,7 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
   const tableReadyAt = {};
   const seedHost = nodeRoles[0]?.host ?? null;
   let lastTables = null;
+  let lastTablesObservedAt = startedAt;
   let lastVerdictReady = false;
   const readiness = await readinessOf(ctx, component, async (pollContext) => {
     const attempt = pollContext?.attempt ?? 1;
@@ -810,12 +811,18 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
     const tables = canReuseTablesWhileUnderReplicated ?
       lastTables :
       await readSystemTables(query, ctx, pollContext);
-    lastTables = tables;
     const now = clock();
+    if (!canReuseTablesWhileUnderReplicated) {
+      lastTables = tables;
+      lastTablesObservedAt = now;
+    }
+    const evaluationNow = canReuseTablesWhileUnderReplicated ?
+      lastTablesObservedAt :
+      now;
     recordTableRoutability(tableReadyAt, tables, {
       requiredTables,
       expectedNodeIds,
-      now,
+      now: evaluationNow,
       startedAt,
     });
     const verdict = evaluateLagrangeClusterReadiness({
@@ -823,7 +830,7 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
       expectedNodeIds,
       requiredServiceIds: [PG_WIRE_SERVICE_ID],
       requiredTables,
-      now,
+      now: evaluationNow,
     });
     lastVerdictReady = verdict.ready && !canReuseTablesWhileUnderReplicated;
     const shouldInspectServeLane = lastVerdictReady || attempt <= 1;
