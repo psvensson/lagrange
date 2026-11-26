@@ -78,7 +78,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
           continue;
         }
         if (!this.isReplicaOperationLocallyOwned(row)) {
-          await this.sendDirectDispatchWakeup(this.buildOperationFromRow(row));
+          await this.sendDirectDispatchWakeupFromRow(row);
           continue;
         }
         this.operationDispatchQueue.enqueue(

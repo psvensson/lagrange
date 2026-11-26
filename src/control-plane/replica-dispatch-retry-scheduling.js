@@ -394,7 +394,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @return {boolean}
    * @private
    */
-  coalesceActiveDirectDispatchWakeup(operationId, row = null) {
+  coalesceActiveDirectDispatchWakeup(operationId, row = null, validatedReplay = false) {
     if (!operationId) {
       return false;
     }
@@ -410,14 +410,14 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     ) {
       return true;
     }
-    if (!this.directDispatchWakeupsInFlight.has(operationId)) {
+    const current = this.directDispatchWakeupsInFlight.get(operationId);
+    if (!current) {
       return false;
     }
-    if (row) {
-      this.directDispatchWakeupsInFlight.set(
-        operationId,
-        this.cloneDeferredOperationDispatchRow(row),
-      );
+    if (row && row !== current.row) {
+      this.directDispatchWakeupsInFlight.set(operationId, {
+        row: this.cloneDeferredOperationDispatchRow(row), validatedReplay,
+      });
     }
     return true;
   }
@@ -429,14 +429,11 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @return {void}
    * @private
    */
-  markDirectDispatchWakeupInFlight(operationId, row = null) {
+  markDirectDispatchWakeupInFlight(operationId, row = null, validatedReplay = false) {
     if (!operationId) {
       return;
     }
-    this.directDispatchWakeupsInFlight.set(
-      operationId,
-      this.cloneDeferredOperationDispatchRow(row),
-    );
+    this.directDispatchWakeupsInFlight.set(operationId, {row: this.cloneDeferredOperationDispatchRow(row), validatedReplay});
   }
 
   /**
@@ -447,7 +444,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @private
    */
   clearDirectDispatchWakeupInFlight(operationId, fallbackRow = null) {
-    const retainedRow = this.directDispatchWakeupsInFlight.get(operationId);
+    const retainedRow = this.directDispatchWakeupsInFlight.get(operationId)?.row;
     this.directDispatchWakeupsInFlight.delete(operationId);
     return retainedRow || this.cloneDeferredOperationDispatchRow(fallbackRow);
   }

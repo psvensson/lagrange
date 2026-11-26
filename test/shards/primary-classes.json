@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2457,
+    "unit": 2458,
     "integration": 137,
     "bootstrap": 234,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2835,
-  "digest": "fnv1a32-efb8803b",
+  "censusSize": 2836,
+  "digest": "fnv1a32-5f0ca525",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -730,6 +730,7 @@
     "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js": "integration",
     "test/control-plane/replica-dispatch-atomic-claim.integration.test.js": "integration",
     "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js": "unit",
+    "test/control-plane/replica-dispatch-direct-wakeup-wire.test.js": "unit",
     "test/control-plane/replica-dispatch-node-authority-deferred-read.test.js": "unit",
     "test/control-plane/replica-dispatch-node-state-update-cache-replay.test.js": "unit",
     "test/control-plane/replica-dispatch-node-state-update-dispatch-readiness.test.js": "unit",

@@ -208,7 +208,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
 
     const operationId = row.operation_id;
     if (!this.isReplicaOperationLocallyOwned(row)) {
-      await this.sendDirectDispatchWakeup(this.buildOperationFromRow(row));
+      await this.sendDirectDispatchWakeupFromRow(row);
       return;
     }
 

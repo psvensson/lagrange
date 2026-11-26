@@ -180,7 +180,7 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         whereClause.replica_id = operation.replicaId;
         whereClause.target_node_id = operation.targetNodeId;
       }
-      return whereClause;
+      return Object.assign(whereClause, options.createGrantCasFields);
     }
   }
 

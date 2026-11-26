@@ -1,6 +1,6 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from
   './operation-workflow-owner-shared.js';
-import {operationCarriesReplicaCreateAdmission} from
+import {matchesRequestedCreateGrant, operationCarriesReplicaCreateAdmission, requiresPartitionCreateGrant} from
   './replica-operation-create-admission-fields.js';
 import {isTerminalSuccessfulCreateOperation} from './replica-status.js';
 
@@ -104,7 +104,8 @@ function resolveTerminalCreateDelivery(owner, operation, errorMsg) {
 function isRetainedAdmission(owner, requested, authoritative) {
   return Boolean(authoritative) &&
     sameCreateDispatchIdentity(requested, authoritative) &&
-    operationCarriesReplicaCreateAdmission(authoritative) &&
+    (requiresPartitionCreateGrant(requested) ? matchesRequestedCreateGrant(requested, authoritative) :
+      operationCarriesReplicaCreateAdmission(authoritative)) &&
     !owner.repository.isOperationTerminal(authoritative);
 }
 
@@ -142,6 +143,10 @@ async function resolveAmbiguousCreateDeliveryFailure(
     Object.assign(operation, authoritativeOperation);
     return resolveTerminalCreateDelivery(owner, operation, errorMsg);
   }
+  if (requiresPartitionCreateGrant(operation) && operationCarriesReplicaCreateAdmission(authoritativeOperation)) {
+    scheduleCreateDeliveryObservation(owner, operation);
+    return buildDeferredCreateDelivery(owner, operation, errorMsg);
+  }
   if (owner.deferDispatchRetry(operation, errorLike)) {
     return buildDeferredCreateDelivery(owner, operation, errorMsg);
   }
@@ -150,6 +155,10 @@ async function resolveAmbiguousCreateDeliveryFailure(
     deferWhenCreateAdmissionWins: true,
   });
   if (terminalOutcome?.createAdmissionWon === true) {
+    if (!isRetainedAdmission(owner, operation, terminalOutcome.createAdmissionOperation)) {
+      scheduleCreateDeliveryObservation(owner, operation);
+      return buildDeferredCreateDelivery(owner, operation, errorMsg);
+    }
     Object.assign(operation, terminalOutcome.createAdmissionOperation);
     return buildRetainedCreateDelivery(operation, errorMsg, owner);
   }

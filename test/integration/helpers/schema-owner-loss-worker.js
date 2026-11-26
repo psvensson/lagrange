@@ -9,6 +9,20 @@ import {registerEmbeddedWorkerOperations} from './embedded-node-worker.js';
 
 import {armListenerObservation, listenerObservation} from './schema-owner-loss-listener-observer.js';
 
+import {LoggingService} from '../../../src/logging/logging-service.js';
+import {PARTICIPANT_RELEASE_LOG} from '../../../src/partition/partition-participant-transaction-cutover-constants.js';
+
+let observeRelease = false;
+const releaseReports = [];
+const info = LoggingService.prototype.info;
+LoggingService.prototype.info = function(message, fields) {
+  if (observeRelease && message === PARTICIPANT_RELEASE_LOG &&
+      fields?.partitionId === 'schema_operations-p1') {
+    retain(releaseReports, {at: Date.now(), ...fields});
+  }
+  return info.call(this, message, fields);
+};
+
 const partitions = new Map();
 const grants = [];
 const claims = [];
@@ -132,6 +146,8 @@ SchemaProvisioningJobOwner.prototype.transitionTerminal = async function(intent,
 registerEmbeddedWorkerOperations({
   arm: ({tableName, sql}) => { target = tableName; armListenerObservation(sql); },
   trace: () => ({grants, claims, barrier, completed, attemptCount, attempts, pending, provisioning}),
+  armReleaseObservation: () => { observeRelease = true; },
+  releaseObservation: () => releaseReports,
   closeProvenance: listenerObservation,
   release: () => release.resolve(),
   job: async ({key}) => {

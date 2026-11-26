@@ -14,3 +14,15 @@ The three-host run issued 100 operations. Its 57 terminal failures occurred on t
 The first failure now has a controlled reproduction using the SQL engine and two partition participants. On `ce239691d` the losing transaction updated the district from its stale read, then its dependent orders insert failed. On `96c7d87ba` the repair rejected the stale update with a serialization conflict. All four focused cases passed, including a genuine duplicate and intervening disjoint writes. That result applies to the same-participant read-before-write case. [Investigation and verification record](../../log.ndjson)
 
 The transport events establish when application and metadata deliveries began to fail. For the initial timed-out message the existing trace does not locate the missing frame or ACK within the two hosts. The subsequent fleet experiment records socket-level evidence alongside the product's own delivery decisions. The readiness filter and transaction rollback obligations still apply during that experiment.
+
+## Where committed requests spent their time
+
+The open-loop driver recorded intended issue, actual issue, worker start and completion on the same monotonic clock. For the 43 committed requests, the 95th percentile from intended issue to completion was 97.413 seconds. Most requests had to wait for a worker. The committed set had a median issue lag of 1 ms.
+
+| Committed requests | Count | Worker queue p50 / p95, seconds | Worker start to completion p50 / p95, seconds |
+|---|---:|---:|---:|
+| All | 43 | 35.338 / 93.303 | 3.989 / 14.465 |
+| New order | 23 | 48.312 / 93.303 | 6.549 / 15.304 |
+| Payment | 12 | 26.148 / 103.421 | 2.038 / 5.183 |
+
+Each column uses nearest-rank percentiles over its own interval. Worker execution includes SQL, network waits and any retries. The 57 terminal failures remain in the campaign accounting. The missing final-state read invalidates the measurement. A repeat can compare the same intervals, transaction kinds and outcomes under the original offering schedule. [Open-loop timing owner](../../../../../test/distributed/harness/oltp-open-loop-step-owner.js) · [Statistical capacity Quest](../../../benchmark-statistical-capacity-protocol/quest.json)

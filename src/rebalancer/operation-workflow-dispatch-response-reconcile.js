@@ -1,4 +1,4 @@
-import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
+import {hasDurableCreateDispatchTuple} from './replica-operation-create-admission-fields.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {
@@ -111,6 +111,25 @@ function logSendOperationAttempt(owner, operation, payload) {
   owner.logger[level](REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
     ...payload, workflowStep, firstAttemptForStep, firstRepeatCreate,
   });
+  return isCreate && (firstAttemptForStep || firstRepeatCreate);
+}
+
+function logCreateDispatchOutcome(owner, identity, transport, answer, error) {
+  if (!identity) return;
+  try {
+    owner.logger.info(REBALANCE_COORDINATOR_LOG_MSG.CREATE_DISPATCH_OUTCOME, {
+      ...identity,
+      deliveryState: transport?.deliveryState ?? null,
+      transportReason: transport?.reasonCode ?? null,
+      thrown: error !== null,
+      errorCode: error?.errorCode ?? error?.code ?? answer?.errorCode ?? null,
+      answerStatus: answer?.status ?? null,
+      answerReason: answer?.reason ?? null,
+      answerSuccess: answer?.success ?? null,
+    });
+  } catch {
+    // A diagnostic sink cannot settle delivery or displace the original error.
+  }
 }
 
 function isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) {
@@ -129,22 +148,6 @@ function buildCreateDispatchRefreshDeferred(operation, observation) {
   error.deferRetry = true;
   error.retryAfterMs = observation?.deferredOutcome?.retryAfterMs;
   return error;
-}
-
-function hasDurableCreateDispatchTuple(operation) {
-  return [
-    Object.values(CREATE_ADMISSION_STATE).includes(operation?.createAdmissionState),
-    typeof operation?.createAdmissionToken === 'string' &&
-      operation.createAdmissionToken.length > 0,
-    Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt),
-    typeof operation?.createAdmissionAttemptToken === 'string' &&
-      operation.createAdmissionAttemptToken.length > 0,
-    Number.isSafeInteger(operation?.createAdmissionAttemptSeq) &&
-      operation.createAdmissionAttemptSeq > 0,
-    Number.isSafeInteger(operation?.createAdmissionWorkflowUpdatedAt),
-    Number.isSafeInteger(operation?.createAdmissionOwnerIncarnation) &&
-      operation.createAdmissionOwnerIncarnation > 0,
-  ].every(Boolean);
 }
 
 function allowCreateDispatchAuthority(operation) {
@@ -705,25 +708,33 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     let response;
     let transport = null;
     let retainedCreateDeliveryResolution = null;
+    let createSendIdentity = null;
     const strandedRemovePreimage = captureStrandedRemovePreimage(operation);
     try {
       const {delivery, wait} = await deliverAdmittedOperationEffect(
         this, operation, target, request, dispatchNodeId, removalEffectTurn,
         readinessEntryLevel, options?.routineCreateRearmWake === true,
-        (createReceipt) => logSendOperationAttempt(this, operation, {
-          operationId: operation.operationId, target, type: messageType, entityType,
-          entityId, replaceRemovePhase: replaceRemoveDispatchPhase,
-          ...(createReceipt ? {
-            createReceipt,
-            boundary: options?.boundary ?? null,
-            cause: options?.cause ?? null,
-            dispatchWake: options?.dispatchWake ?? null,
-          } : {}),
-        }));
+        (createReceipt) => {
+          const observe = logSendOperationAttempt(this, operation, {
+            operationId: operation.operationId, target, type: messageType, entityType,
+            entityId, replaceRemovePhase: replaceRemoveDispatchPhase,
+            ...(createReceipt ? {
+              createReceipt,
+              boundary: options?.boundary ?? null,
+              cause: options?.cause ?? null,
+              dispatchWake: options?.dispatchWake ?? null,
+            } : {}),
+          });
+          if (observe) createSendIdentity = {
+            operationId: operation.operationId, workflowStep: operation.workflowStep,
+            targetNodeId: dispatchNodeId, attemptToken: createReceipt.attemptToken,
+          };
+        });
       if (wait) return wait;
       transport = deliveryTransportOf(delivery);
       response = deliveryAnswerOf(delivery) ?? {};
     } catch (error) {
+      logCreateDispatchOutcome(this, createSendIdentity, null, null, error);
       if (strandedRemovePreimage) {
         return resolveStrandedRemoveReply(this, operation, null, strandedRemovePreimage);
       }
@@ -760,6 +771,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         return settleDispatchFailure(this, operation, errorMsg);
       }
     }
+    if (transport) logCreateDispatchOutcome(this, createSendIdentity, transport, response, null);
     if (
       !retainedCreateDeliveryResolution &&
       response?.success === false &&

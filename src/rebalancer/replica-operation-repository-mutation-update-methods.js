@@ -16,7 +16,8 @@ import {
 import {
   resolveOperationOwnerLeaseExpiryForPersist,
 } from './replica-operation-owner-lease.js';
-import {operationCarriesReplicaCreateAdmission} from
+import {WORKFLOW_STEP} from '../constants/workflow.js';
+import {hasLiveCreateGrant, requiresPartitionCreateGrant, operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
 import {operationCarriesMessageGroupMembership} from
   './replica-operation-message-group-membership-fields.js';
@@ -195,6 +196,13 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         expectedWorkflowStep,
         terminalTransition,
       );
+      const grantRequired = expectedWorkflowStep !== WORKFLOW_STEP.CREATING &&
+        operation.workflowStep === WORKFLOW_STEP.CREATING &&
+        requiresPartitionCreateGrant(operation);
+      if (grantRequired && !hasLiveCreateGrant(operation)) {
+        return buildOperationUpdateOutcome({persisted: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null});
+      }
       const {acknowledgedRemovePreimage} = options;
       const removeReplyCasFields = acknowledgedRemovePreimage ?
         buildAcknowledgedRemoveCasFields(
@@ -282,6 +290,17 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             expectedWorkflowStep,
             {
               terminalTransition,
+              createGrantCasFields: grantRequired ? {
+                workflow_step: WORKFLOW_STEP.SENDING, completed_at: null,
+                replica_id: operation.replicaId, target_node_id: operation.targetNodeId,
+                create_admission_state: operation.createAdmissionState,
+                create_admission_token: operation.createAdmissionToken,
+                create_admission_attempt_token: operation.createAdmissionAttemptToken,
+                create_admission_attempt_seq: operation.createAdmissionAttemptSeq,
+                create_admission_replica_created_at: operation.createAdmissionReplicaCreatedAt,
+                create_admission_workflow_updated_at: operation.createAdmissionWorkflowUpdatedAt,
+                create_admission_owner_incarnation: operation.createAdmissionOwnerIncarnation,
+              } : null,
               requireCreateAdmissionAbsent:
                 options.requireCreateAdmissionAbsent === true,
               requireExactCreateTarget: options.requireExactCreateTarget === true,

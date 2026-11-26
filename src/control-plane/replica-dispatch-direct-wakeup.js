@@ -18,6 +18,19 @@ const DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD = Object.freeze({
   TIMEOUT_MS: 'timeoutMs',
 });
 
+// A persisted row is flat. An input with extra fields or non-scalar values
+// still goes through the canonical decoder and wake-row builder.
+function samePersistedWakeRow(left, right) {
+  if (!left || !right) return false;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every((key) => {
+    const value = left[key];
+    const type = typeof value;
+    return (value === null || type === 'string' || type === 'number' || type === 'boolean') &&
+      Object.hasOwn(right, key) && Object.is(value, right[key]);
+  });
+}
+
 /**
  * Direct owner wake-up methods attached to the dispatch service prototype.
  * These resolve one replica operation's owner node and deliver one bounded
@@ -85,6 +98,14 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
     return deliveryOptions;
   },
 
+  sendDirectDispatchWakeupFromRow(row) {
+    const current = this.directDispatchWakeupsInFlight.get(row.operation_id);
+    if (current?.validatedReplay && samePersistedWakeRow(row, current.row)) {
+      return Promise.resolve(this.coalesceActiveDirectDispatchWakeup(row.operation_id, current.row, true));
+    }
+    return this.sendDirectDispatchWakeup(this.buildOperationFromRow(row), row);
+  },
+
   /**
    * Send one bounded direct owner wake-up when a newly created operation is
    * owned by another node and CDC/cache visibility may lag.
@@ -92,7 +113,7 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
    * @return {Promise<boolean>}
    * @private
    */
-  async sendDirectDispatchWakeup(operation) {
+  async sendDirectDispatchWakeup(operation, replayRow = null) {
     if (
       !operation?.operationId ||
       !this.messageRouter ||
@@ -101,10 +122,12 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
       return false;
     }
     const operationRow = this.buildOperationRowFromCoordinator(operation);
+    const validatedReplay = samePersistedWakeRow(replayRow, operationRow);
     if (
       this.coalesceActiveDirectDispatchWakeup(
         operation.operationId,
         operationRow,
+        validatedReplay,
       )
     ) {
       return true;
@@ -114,7 +137,7 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
     if (!targetAddress) {
       return false;
     }
-    this.markDirectDispatchWakeupInFlight(operation.operationId, operationRow);
+    this.markDirectDispatchWakeupInFlight(operation.operationId, operationRow, validatedReplay);
     try {
       const deliveryEnvelope = await this.messageRouter.deliver(
         targetAddress,

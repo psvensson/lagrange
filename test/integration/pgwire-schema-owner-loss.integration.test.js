@@ -186,6 +186,7 @@ async function proveOwnerLoss(t, cluster) {
   await Promise.all(survivors.map((member) => observe(member, 'release')));
   const observer = survivors[0];
   const readJob = () => observe(observer, 'job', {key: grant.key});
+  await Promise.all(survivors.map((member) => observe(member, 'armReleaseObservation')));
   const running = await until(t, 'leader-backed RUNNING row', readJob, (row) => row !== null);
   assert.deepEqual([running.status, running.ownerId, running.fence, running.jobId, running.tableId],
     ['RUNNING', ownerId, grant.fence, jobId, tableId]);
@@ -212,7 +213,16 @@ async function proveOwnerLoss(t, cluster) {
       priorLeader: prior.replicaId, priorTerm: prior.term, leader: current.replicaId, term: current.term}));
   }
   const takeover = await until(t, 'surviving process granted the same job',
-    () => traces(survivors), (rows) => rows.some((row) => row.grants.length));
+    () => traces(survivors), (rows) => rows.some((row) => row.grants.length)).catch(async (error) => {
+    t.comment(JSON.stringify({lostNode: owner.nodeId,
+      schemaMembershipBefore: before.filter((row) => row.partitionId === 'schema_operations-p1'),
+      schemaMembershipAfter: after.filter((row) => row.partitionId === 'schema_operations-p1')}));
+    await Promise.allSettled(survivors.map(async (member) => {
+      const reports = await observe(member, 'releaseObservation');
+      t.comment(JSON.stringify({nodeId: member.nodeId, observedAt: Date.now(), releaseReports: reports}));
+    }));
+    throw error;
+  });
   const successor = takeover.find((row) => row.grants.length);
   const next = successor.grants[0];
   assert.deepEqual([next.jobId, next.tableId, next.key], [jobId, tableId, grant.key]);

@@ -7,7 +7,7 @@
     "bootstrap-membership": 358,
     "cdc-metadata": 81,
     "cli-tooling": 99,
-    "control-plane": 245,
+    "control-plane": 246,
     "convergence-topology": 88,
     "distributed-harness": 226,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2835,
-  "digest": "fnv1a32-df3f2c02",
+  "censusSize": 2836,
+  "digest": "fnv1a32-6e1f8fa6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-848d2eb0",
+  "observationDigest": "fnv1a32-54a3c60b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -749,6 +749,7 @@
     "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js": "control-plane",
     "test/control-plane/replica-dispatch-atomic-claim.integration.test.js": "control-plane",
     "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js": "control-plane",
+    "test/control-plane/replica-dispatch-direct-wakeup-wire.test.js": "control-plane",
     "test/control-plane/replica-dispatch-node-authority-deferred-read.test.js": "control-plane",
     "test/control-plane/replica-dispatch-node-state-update-cache-replay.test.js": "control-plane",
     "test/control-plane/replica-dispatch-node-state-update-dispatch-readiness.test.js": "control-plane",
@@ -6634,6 +6635,16 @@
         "src/control-plane/replica-dispatch-service.js",
         "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/control-plane/replica-dispatch-direct-wakeup-wire.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "src/control-plane/replica-dispatch-service.js",
+        "src/transport/message-router-shared-vocabulary.js"
       ]
     },
     "test/control-plane/replica-dispatch-node-authority-deferred-read.test.js": {

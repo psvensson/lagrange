@@ -226,6 +226,7 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   INITIALIZED: 'RebalanceCoordinator initialized',
   CREATE_OPERATION: 'Creating operation',
   SEND_OPERATION: 'Sending replica operation',
+  CREATE_DISPATCH_OUTCOME: 'Replica CREATE dispatch outcome',
   STEP_CHANGED: 'Operation step changed',
   OPERATION_COMPLETED: 'Operation completed',
   OPERATION_FAILED: 'Operation failed',
