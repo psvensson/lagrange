@@ -7,7 +7,7 @@
 
 import {LoggingService} from '../../logging/logging-service.js';
 import {ConfigurationManager} from '../../config/configuration-manager.js';
-import {METRICS_LOG_TAG, TABLES} from '../../constants/index.js';
+import {METRICS_LOG_TAG} from '../../constants/index.js';
 import {
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
@@ -32,6 +32,7 @@ import {
 import {
   installParallelQueryCoordinatorHedgingMethods,
 } from './parallel-query-coordinator-hedging-methods.js';
+import {createParallelWriteSettlement} from './parallel-write-settlement.js';
 import {settleHedgedPartition} from './parallel-query-hedging.js';
 
 
@@ -103,14 +104,13 @@ class ParallelQueryCoordinator {
   /**
    * Create a new parallel query coordinator.
    * @param {Object} options - Configuration options.
-   * @param {Object} options.systemCache - System table cache for partition lookups.
-   * @param {Object} options.replicaRegistry - Registry of replica services.
-   * @param {string} options.nodeId - Node ID for logging.
+   * @param {Function} options.partitionQueryExecutor - Partition routing owner.
    */
   constructor(options = {}) {
-    this.systemCache = options.systemCache || null;
-    this.replicaRegistry = options.replicaRegistry || new Map();
-    this.partitionQueryExecutor = options.partitionQueryExecutor || null;
+    if (typeof options.partitionQueryExecutor !== 'function') {
+      throw new TypeError('ParallelQueryCoordinator requires a partitionQueryExecutor');
+    }
+    this.partitionQueryExecutor = options.partitionQueryExecutor;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.PARALLEL_QUERY_COORDINATOR;
     this.logger = this.initLogger();
 
@@ -156,69 +156,6 @@ class ParallelQueryCoordinator {
         logErr.message);
     }
     return console;
-  }
-
-  /**
-   * Set the system cache.
-   * @param {Object} cache - System table cache.
-   */
-  setSystemCache(cache) {
-    this.systemCache = cache;
-  }
-
-  /**
-   * Set the replica registry.
-   * @param {Map|Object} registry - Replica registry.
-   */
-  setReplicaRegistry(registry) {
-    this.replicaRegistry = registry;
-  }
-
-  /**
-   * Get a partition by ID from system cache.
-   * @param {string} partitionId - Partition ID.
-   * @return {Object|null} Partition info or null.
-   * @private
-   */
-  getPartition(partitionId) {
-    if (!this.systemCache) {
-      return null;
-    }
-    if (typeof this.systemCache.get === 'function') {
-      return this.systemCache.get(TABLES.PARTITIONS, partitionId);
-    }
-    if (typeof this.systemCache.filter === 'function') {
-      const matches = this.systemCache.filter(
-        TABLES.PARTITIONS,
-        (partition) =>
-          partition.partition_id === partitionId,
-      );
-      return matches[0] || null;
-    }
-    if (typeof this.systemCache.getAll === 'function') {
-      const partitions =
-        this.systemCache.getAll(TABLES.PARTITIONS) || [];
-      return partitions.find((partition) =>
-        partition.partition_id === partitionId,
-      ) || null;
-    }
-    return null;
-  }
-
-  /**
-   * Get alternative replicas for a partition.
-   * @param {string} partitionId - Partition ID.
-   * @return {Array} Array of replica services.
-   * @private
-   */
-  getAlternativeReplicas(partitionId) {
-    let replicas;
-    if (this.replicaRegistry instanceof Map) {
-      replicas = this.replicaRegistry.get(partitionId);
-    } else {
-      replicas = this.replicaRegistry[partitionId];
-    }
-    return replicas || [];
   }
 
   /**
@@ -356,17 +293,19 @@ class ParallelQueryCoordinator {
   ) {
     const partitionChunks = this.buildPartitionChunks(partitionIds);
     const allResults = [];
-    for (const partitionChunk of partitionChunks) {
-      const chunkResults = await this.executeChunkWithTimeoutAndStragglers(
-        sql,
-        partitionChunk,
-        params,
-        metrics,
-        options,
-      );
-      allResults.push(...chunkResults);
+    const writes = options.forRead === true ? null : createParallelWriteSettlement(options);
+    try {
+      for (const partitionChunk of partitionChunks) {
+        const chunkResults = await this.executeChunkWithTimeoutAndStragglers(
+          sql, partitionChunk, params, metrics, options, writes,
+        );
+        if (writes?.cutoff && !writes.submitted) throw writes.cutoff;
+        allResults.push(...chunkResults);
+      }
+      return allResults;
+    } finally {
+      writes?.dispose();
     }
-    return allResults;
   }
 
   /**
@@ -385,11 +324,12 @@ class ParallelQueryCoordinator {
     params,
     metrics,
     options,
+    writes = null,
   ) {
     this.activeConnections += partitionIds.length;
     let timeoutId = null;
     const effectiveTimeoutMs = this.resolveTimeoutMs(options?.timeoutMs);
-    const cancellationPromise = this.createCancellationPromise(
+    const cancellationPromise = writes ? null : this.createCancellationPromise(
       options?.cancellationToken || null,
     );
 
@@ -414,6 +354,7 @@ class ParallelQueryCoordinator {
             `${effectiveTimeoutMs}${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX}`,
           );
           timeoutError.errorCode = QUERY_ERROR_CODE.TIMEOUT;
+          writes?.expire(timeoutError);
           reject(timeoutError);
         }, outerTimeoutMs);
       });
@@ -435,6 +376,14 @@ class ParallelQueryCoordinator {
           cancellationPromise,
           partitionOptions,
         );
+      }
+
+      if (writes) {
+        const results = await Promise.all(partitionIds.map((partitionId) =>
+          this.executeOnPartitionWithMetrics(sql, partitionId, params, metrics,
+            partitionOptions, (run) => writes.execute(run, timeoutPromise))));
+        this.detectAndLogStragglers(metrics);
+        return results;
       }
 
       // Simple parallel execution with timeout
@@ -480,34 +429,15 @@ class ParallelQueryCoordinator {
     params,
     metrics,
     options = {},
+    runWrite = null,
   ) {
     const partitionMetrics = new PartitionQueryMetrics(partitionId);
     partitionMetrics.start();
 
-    const partition = this.partitionQueryExecutor ?
-      null :
-      this.getPartition(partitionId);
-    if (!this.partitionQueryExecutor && !partition) {
-      partitionMetrics.fail(new Error(QUERY_ERROR_MSG.PARTITION_NOT_FOUND));
-      metrics.addPartitionMetrics(partitionMetrics);
-      return buildPartitionExecutionFailureOutcome(
-        normalizePartitionExecutionFailureSnapshot(
-          partitionId,
-          partitionMetrics,
-          {error: QUERY_ERROR_MSG.PARTITION_NOT_FOUND},
-          QUERY_ERROR_MSG.PARTITION_NOT_FOUND,
-        ),
-      );
-    }
-
     try {
-      const result = await this.executeQueryOnService(
-        partition,
-        sql,
-        params,
-        partitionId,
-        options,
-      );
+      const result = runWrite ? await runWrite(async (scope) =>
+        this.partitionQueryExecutor(sql, partitionId, params, {...options, ...scope})) :
+        await this.partitionQueryExecutor(sql, partitionId, params, options);
       if (result && result.success === false) {
         partitionMetrics.fail(
           new Error(result.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED),
@@ -546,27 +476,6 @@ class ParallelQueryCoordinator {
         ),
       );
     }
-  }
-
-  /**
-   * Execute query on a service.
-   * @param {Object} service - Partition or replica service.
-   * @param {string} sql - SQL query.
-   * @param {Array} params - Query parameters.
-   * @return {Promise<Object>} Query result.
-   * @private
-   */
-  async executeQueryOnService(service, sql, params, partitionId, options = {}) {
-    if (this.partitionQueryExecutor) {
-      return this.partitionQueryExecutor(sql, partitionId, params, options);
-    }
-    if (!service) {
-      throw new Error(QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND);
-    }
-    if (typeof service.executeQuery === 'function') {
-      return service.executeQuery(sql, params);
-    }
-    throw new Error(QUERY_ERROR_MSG.SERVICE_EXECUTE_UNSUPPORTED);
   }
 
   /**
@@ -672,8 +581,6 @@ class ParallelQueryCoordinator {
     result,
     speculativeMetrics,
     metrics,
-    results,
-    pendingPartitions,
     hedging,
   }) {
     if (result && result.success === false) {
@@ -690,7 +597,7 @@ class ParallelQueryCoordinator {
       getResultRowCount(result),
       estimateResultPayloadBytes(result),
     );
-    if (results.has(partitionId)) {
+    if (hedging.results.has(partitionId)) {
       this.logger.debug(QUERY_LOG_MSG.HEDGE_LOSER_RESULT_DISCARDED, {
         partitionId,
       });
@@ -702,12 +609,7 @@ class ParallelQueryCoordinator {
       speculativeMetrics,
       result,
     );
-    if (hedging) {
-      settleHedgedPartition(hedging, partitionId, outcome);
-      return result;
-    }
-    results.set(partitionId, outcome);
-    pendingPartitions.delete(partitionId);
+    settleHedgedPartition(hedging, partitionId, outcome);
     return result;
   }
 

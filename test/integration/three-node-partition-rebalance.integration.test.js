@@ -141,7 +141,7 @@ function insertReadyNode(cache, nodeId) {
     id: nodeId,
     node_id: nodeId,
     status: 'active',
-    cpu_usage_percent: 10,
+    host_cpu_utilization_percent: 10,
     memory_usage_percent: 20,
     disk_usage_percent: 10,
     connection_state: 'ready',

@@ -451,10 +451,6 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     return this.movePlanner.sortNodesBySuitability(nodes, policy);
   }
 
-  calculateNodeLoad(node) {
-    return this.movePlanner.calculateNodeLoad(node);
-  }
-
   calculateMoves(currentReplicas, targetState, planningContext) {
     return this.movePlanner.calculateMoves(
       currentReplicas,

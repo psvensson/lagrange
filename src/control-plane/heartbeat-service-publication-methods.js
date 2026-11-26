@@ -1,3 +1,4 @@
+import {encodeResourceSample} from '../diagnostics/placement-resource-sample.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   COLUMN, ENDPOINT_STATUS, NODE_STATE, NUM, SERVICE_STATUS, STATE, STRING, TRANSPORT_TYPE,
@@ -42,57 +43,6 @@ import {
   isTerminalNodeLifecycleSource, NODE_LIFECYCLE_PUBLICATION_OUTCOME,
 } from './node-lifecycle-publication.js';
 
-function extractExplicitStatsSampledAt(stats) {
-  if (Number.isFinite(stats?.sampledAtMs)) return Math.floor(stats.sampledAtMs);
-  if (Number.isFinite(stats?.timestamp)) return Math.floor(stats.timestamp);
-  return null;
-}
-
-function resolveTelemetrySampledAtValue(service, stats, existing, now, explicitSampledAt, sameRef) {
-  if (explicitSampledAt !== null) return explicitSampledAt;
-  if (sameRef && Number.isFinite(service.lastPublishedTelemetrySampledAt)) {
-    return service.lastPublishedTelemetrySampledAt;
-  }
-  return stats !== undefined && stats !== null ? now : existing?.telemetry_sampled_at;
-}
-
-function resolveTelemetrySampleIdValue(service, explicitSampleId, sameRef, sampledAt) {
-  if (explicitSampleId !== null) return explicitSampleId;
-  if (sameRef && service.lastPublishedTelemetrySampleId !== undefined) {
-    return service.lastPublishedTelemetrySampleId;
-  }
-  return sampledAt;
-}
-
-function isSameUnstampedStatsRef(service, stats, explicitSampledAt, explicitSampleId) {
-  return Boolean(stats && typeof stats === 'object') &&
-    service.lastHeartbeatStatsRef === stats &&
-    explicitSampledAt === null && explicitSampleId === null;
-}
-
-function buildTelemetrySampleFieldsRecord(sampledAt, sampleId) {
-  const fields = {};
-  if (Number.isFinite(sampledAt)) fields.telemetry_sampled_at = sampledAt;
-  if (sampleId !== undefined && sampleId !== null) fields.telemetry_sample_id = sampleId;
-  return fields;
-}
-
-function resolveHeartbeatTelemetrySampleFields(service, stats, existing, now) {
-  const explicitSampledAt = extractExplicitStatsSampledAt(stats);
-  const explicitSampleId = stats?.sampleId ?? null;
-  const sameRef = isSameUnstampedStatsRef(service, stats, explicitSampledAt, explicitSampleId);
-  const sampledAt = resolveTelemetrySampledAtValue(
-    service, stats, existing, now, explicitSampledAt, sameRef,
-  );
-  const sampleId = resolveTelemetrySampleIdValue(service, explicitSampleId, sameRef, sampledAt);
-  if (stats && typeof stats === 'object') {
-    service.lastHeartbeatStatsRef = stats;
-    service.lastPublishedTelemetrySampledAt = sampledAt;
-    service.lastPublishedTelemetrySampleId = sampleId;
-  }
-  return buildTelemetrySampleFieldsRecord(sampledAt, sampleId);
-}
-
 class HeartbeatServicePublicationMethods {
   shouldTreatEndpointHeartbeatWriteAsDeferred(resultOrError, writeOptions) {
     if (writeOptions?.deferOnPressure !== true || !resultOrError) return false;
@@ -115,13 +65,12 @@ class HeartbeatServicePublicationMethods {
       options.allowReadyPromotion !== true &&
       existing?.status === NODE_STATE.JOINING &&
       this.isNodeLifecycleReady?.() !== true;
+    const sample = this.resourceDiagnosticsSampler?.getSharedReport().latest;
     const updateRow = {
       node_address: this.nodeAddress || existing?.node_address || STRING.UNKNOWN,
       cpu_cores: Number.isFinite(stats?.cpu?.count) ? stats.cpu.count : existing?.cpu_cores || 0,
       memory_mb: Number.isFinite(memoryMb) ? memoryMb : existing?.memory_mb || 0,
       disk_gb: Number.isFinite(stats?.diskGb) ? stats.diskGb : existing?.disk_gb || 0,
-      cpu_usage_percent: Number.isFinite(stats?.cpu?.usagePercent) ?
-        stats.cpu.usagePercent : existing?.cpu_usage_percent || 0,
       memory_usage_percent: Number.isFinite(stats?.memory?.usagePercent) ?
         stats.memory.usagePercent : existing?.memory_usage_percent || 0,
       disk_usage_percent: Number.isFinite(stats?.diskUsagePercent) ?
@@ -131,7 +80,9 @@ class HeartbeatServicePublicationMethods {
       capabilities: capabilities ?
         JSON.stringify(capabilities) : existing?.capabilities || STRING.EMPTY_JSON_ARRAY,
       last_heartbeat: now,
-      ...resolveHeartbeatTelemetrySampleFields(this, stats, existing, now),
+      telemetry_sampled_at: sample?.timestamp ?? null,
+      telemetry_sample_id: sample?.sampleId ?? null,
+      ...encodeResourceSample(sample?.process),
       ...resolveHeartbeatBudgetFields(existing),
     };
     this.recordMemoryTrendSample(updateRow.memory_usage_percent, now);
@@ -660,6 +611,7 @@ class HeartbeatServicePublicationMethods {
       isHeartbeatEscalatedPublicationMode:
         isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
       lastHeartbeatPublicationDecision: this.lastHeartbeatPublicationDecision,
+      lastPlacementPressureReason: this.lastPlacementPressureReason,
       lastNodeHeartbeatUtilizationSignature: this.lastNodeHeartbeatUtilizationSignature,
       lastNodeHeartbeatWriteAt: this.lastNodeHeartbeatWriteAt,
       lastNodeHeartbeatWriteSignature: this.lastNodeHeartbeatWriteSignature,

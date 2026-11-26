@@ -5,6 +5,9 @@
  * subsystem counters to help isolate leak and hot-loop behavior.
  */
 
+import {isMainThread} from 'node:worker_threads';
+import {effectiveCpuCores, hostBusyPercent, hostTicks} from './resource-cpu-capacity.js';
+import {resourceSampleFields} from './placement-resource-sample.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import {monitorEventLoopDelay, performance} from 'node:perf_hooks';
@@ -80,7 +83,7 @@ function roundToTwo(value) {
 function readIntervalEventLoopDelayMs(histogram) {
   const meanNs = histogram.mean;
   histogram.reset();
-  if (!Number.isFinite(meanNs) || meanNs <= 0) return 0;
+  if (!Number.isFinite(meanNs) || meanNs <= 0) return null;
   const delayMs = Math.max(
     0,
     (meanNs / NANOS_PER_MILLISECOND) - EVENT_LOOP_DELAY_RESOLUTION_MS,
@@ -130,8 +133,13 @@ class ResourceDiagnosticsSampler {
       RESOURCE_DIAGNOSTICS_DEFAULT.TOP_SIGNAL_LIMIT,
     );
     this.nowFn = options.nowFn ?? defaultNowMs;
+    this.intervalClock = options.nowFn ?? (() => performance.now());
     this.cpuUsageFn = options.cpuUsageFn ?? (() => process.cpuUsage());
     this.cpusFn = options.cpusFn ?? (() => os.cpus());
+    this.threadCpuUsageFn = options.threadCpuUsageFn ??
+      (() => isMainThread ? process.threadCpuUsage?.() : null);
+    this.lastThreadUsage = this.threadCpuUsageFn();
+    this.lastHostTicks = hostTicks(this.cpusFn());
     this.eluFn = options.eluFn ?? defaultEluSample;
     this.eventLoopDelayHistogram = options.eventLoopDelayProvider ?
       null :
@@ -146,7 +154,7 @@ class ResourceDiagnosticsSampler {
     this.lastReportTimestampMs = null;
     const initialNowMs = this.nowFn();
     this.lastCpuUsage = this.cpuUsageFn();
-    this.lastCpuTimestampMs = initialNowMs;
+    this.lastCpuTimestampMs = this.intervalClock();
     this.lastWriteBytes = this.readProcessWriteBytes();
     this.lastWriteTimestampMs = initialNowMs;
     this.lastEluSample = this.eluFn();
@@ -217,11 +225,9 @@ class ResourceDiagnosticsSampler {
       tr.topGrowingSignals.slice(0, RESOURCE_DIAGNOSTICS_DEFAULT.COMPACT_TOP_SIGNAL_LIMIT) :
       [];
     return {
-      cpuPercent: proc.cpuPercent ?? null,
-      singleCoreCpuPercent: proc.singleCoreCpuPercent ?? null,
+      processCpuPercentOfHostCores: proc.processCpuPercentOfHostCores ?? null,
       cpuCount: proc.cpuCount ?? null,
-      eventLoopUtilizationPercent: proc.eventLoopUtilizationPercent ?? null,
-      eventLoopDelayMs: proc.eventLoopDelayMs ?? null,
+      ...resourceSampleFields(proc),
       rssGrowthPerMinBytes: tr.rssGrowthPerMinBytes ?? null,
       writeRateBytesPerSec: tr.writeRateBytesPerSec ?? null,
       topGrowingSignals: signals,
@@ -235,7 +241,7 @@ class ResourceDiagnosticsSampler {
    * @private
    */
   readEventLoopDelayMs() {
-    const value = Number(this.eventLoopDelayProvider());
+    const value = this.eventLoopDelayProvider();
     return Number.isFinite(value) && value >= 0 ? roundToTwo(value) : null;
   }
 
@@ -247,15 +253,19 @@ class ResourceDiagnosticsSampler {
     const nowMs = this.nowFn();
     const memory = process.memoryUsage();
     const processUsage = process.resourceUsage();
+    const intervalEndMs = this.intervalClock();
     const cpuUsage = this.cpuUsageFn();
     const cpuDeltaUserUs = Math.max(0, cpuUsage.user - this.lastCpuUsage.user);
     const cpuDeltaSystemUs = Math.max(0, cpuUsage.system - this.lastCpuUsage.system);
     const cpuDeltaTotalUs = cpuDeltaUserUs + cpuDeltaSystemUs;
-    const elapsedCpuMs = Math.max(
-      RESOURCE_DIAGNOSTICS_DEFAULT.MIN_ELAPSED_MS,
-      nowMs - this.lastCpuTimestampMs,
-    );
-    const cpuCount = Math.max(1, (this.cpusFn() || []).length);
+    const cpus = this.cpusFn();
+    const cpuCount = cpus.length;
+    const currentHostTicks = hostTicks(cpus);
+    const thread = this.threadCpuUsageFn();
+    const sampleIntervalMs = intervalEndMs - this.lastCpuTimestampMs;
+    const intervalUs = sampleIntervalMs * RESOURCE_DIAGNOSTICS_DEFAULT.MICROS_PER_MILLISECOND;
+    const threadDeltaUs = thread && this.lastThreadUsage ?
+      thread.user - this.lastThreadUsage.user + thread.system - this.lastThreadUsage.system : null;
 
     const writeBytesTotal = this.readProcessWriteBytes();
     const elapsedIoMs = Math.max(
@@ -291,11 +301,16 @@ class ResourceDiagnosticsSampler {
         cpuUserDeltaUs: cpuDeltaUserUs,
         cpuSystemDeltaUs: cpuDeltaSystemUs,
         cpuCount,
-        cpuPercent: this.calculateCpuPercent(cpuDeltaTotalUs, elapsedCpuMs, cpuCount),
-        singleCoreCpuPercent:
-          this.calculateSingleCoreCpuPercent(cpuDeltaTotalUs, elapsedCpuMs),
-        eventLoopUtilizationPercent:
-          roundToTwo(eluDelta.utilization * RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR),
+        processCpuPercentOfHostCores: this.calculateProcessCpuPercentOfHostCores(cpuDeltaTotalUs, sampleIntervalMs, cpuCount),
+        sampleIntervalMs: sampleIntervalMs > 0 ? sampleIntervalMs : null,
+        mainThreadCpuPercent: intervalUs > 0 && threadDeltaUs !== null && threadDeltaUs >= 0 ?
+          roundToTwo(100 * threadDeltaUs / intervalUs) : null,
+        processCpuCores: intervalUs > 0 ? cpuDeltaTotalUs / intervalUs : null,
+        effectiveCpuCores: effectiveCpuCores(),
+        hostCpuUtilizationPercent: intervalUs > 0 ?
+          hostBusyPercent(this.lastHostTicks, currentHostTicks) : null,
+        eventLoopUtilizationPercent: intervalUs > 0 && Number.isFinite(eluDelta.utilization) ?
+          roundToTwo(eluDelta.utilization * RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR) : null,
         eventLoopDelayMs: this.readEventLoopDelayMs(),
         maxRssBytes:
           processUsage.maxRSS * NUM.BYTES_PER_KIB,
@@ -313,8 +328,10 @@ class ResourceDiagnosticsSampler {
       componentSignals,
     };
 
+    this.lastHostTicks = currentHostTicks;
+    this.lastThreadUsage = thread;
     this.lastCpuUsage = cpuUsage;
-    this.lastCpuTimestampMs = nowMs;
+    this.lastCpuTimestampMs = intervalEndMs;
     this.lastWriteBytes = writeBytesTotal;
     this.lastWriteTimestampMs = nowMs;
 
@@ -344,11 +361,8 @@ class ResourceDiagnosticsSampler {
         externalBytes: sample.process.externalBytes,
         arrayBuffersBytes: sample.process.arrayBuffersBytes,
         cpuCount: sample.process.cpuCount,
-        cpuPercent: sample.process.cpuPercent,
-        singleCoreCpuPercent: sample.process.singleCoreCpuPercent,
-        eventLoopUtilizationPercent:
-          sample.process.eventLoopUtilizationPercent,
-        eventLoopDelayMs: sample.process.eventLoopDelayMs,
+        processCpuPercentOfHostCores: sample.process.processCpuPercentOfHostCores,
+        ...resourceSampleFields(sample.process),
         fsReadOps: sample.process.fsReadOps,
         fsWriteOps: sample.process.fsWriteOps,
       },
@@ -546,32 +560,15 @@ class ResourceDiagnosticsSampler {
    * Calculate process CPU percent across all cores.
    * @param {number} cpuDeltaUs
    * @param {number} elapsedMs
-   * @param {number} [cpuCountOverride]
-   * @return {number}
+   * @param {number} cpuCount
+   * @return {number|null}
    * @private
    */
-  calculateCpuPercent(cpuDeltaUs, elapsedMs, cpuCountOverride = null) {
-    const cpuCount = Number.isFinite(cpuCountOverride) && cpuCountOverride > 0 ?
-      cpuCountOverride :
-      Math.max(1, (this.cpusFn() || []).length);
+  calculateProcessCpuPercentOfHostCores(cpuDeltaUs, elapsedMs, cpuCount) {
+    if (!(elapsedMs > 0 && cpuCount > 0)) return null;
     const elapsedUs =
       elapsedMs * RESOURCE_DIAGNOSTICS_DEFAULT.MICROS_PER_MILLISECOND;
     const normalized = cpuDeltaUs / (elapsedUs * cpuCount);
-    return roundToTwo(normalized * RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR);
-  }
-
-  /**
-   * Calculate single-core process CPU percent without dividing by host CPU count,
-   * so single-thread JavaScript saturation is not masked on multi-core hosts.
-   * @param {number} cpuDeltaUs
-   * @param {number} elapsedMs
-   * @return {number}
-   * @private
-   */
-  calculateSingleCoreCpuPercent(cpuDeltaUs, elapsedMs) {
-    const elapsedUs =
-      elapsedMs * RESOURCE_DIAGNOSTICS_DEFAULT.MICROS_PER_MILLISECOND;
-    const normalized = cpuDeltaUs / elapsedUs;
     return roundToTwo(normalized * RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR);
   }
 

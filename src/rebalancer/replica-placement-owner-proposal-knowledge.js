@@ -84,6 +84,7 @@ function passAbortOf(partitionId, knowledge, cause) {
  */
 function classifyCandidateFailure(pass, partitionId, progress, error) {
   const knowledge = proposalKnowledgeOf(progress);
+  pass.decisionDiagnostics?.disposition(partitionId, knowledge);
   if (knowledge === PROPOSAL_KNOWLEDGE.NOT_PROPOSED || knowledge === PROPOSAL_KNOWLEDGE.REFUSED) {
     recordCandidateFailure(pass, partitionId, error);
     return CANDIDATE_FAILED;
@@ -95,6 +96,7 @@ function classifyCandidateFailure(pass, partitionId, progress, error) {
   } else {
     recordUncertainCandidate(pass, partitionId, error);
   }
+  if (pass.decisionDiagnostics) pass.decisionDiagnostics.snapshot.stopReason = 'candidate_failure';
   throw passAbortOf(partitionId, knowledge, error);
 }
 

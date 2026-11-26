@@ -85,7 +85,7 @@ function createRig() {
     [COLUMN.CONNECTION_STATE]: 'ready',
     [COLUMN.READY_LEASE_EXPIRES_AT]: lease,
     [COLUMN.LAST_HEARTBEAT]: START_MS - HEARTBEAT_AGE_MS,
-    [COLUMN.CPU_USAGE_PERCENT]: 10,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 10,
     [COLUMN.MEMORY_USAGE_PERCENT]: 10,
     [COLUMN.DISK_USAGE_PERCENT]: 10,
   });
@@ -103,7 +103,7 @@ function createRig() {
     [COLUMN.CONNECTION_STATE]: 'ready',
     [COLUMN.READY_LEASE_EXPIRES_AT]: lease,
     [COLUMN.LAST_HEARTBEAT]: START_MS - HEARTBEAT_AGE_MS,
-    [COLUMN.CPU_USAGE_PERCENT]: 10,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 10,
     [COLUMN.MEMORY_USAGE_PERCENT]: 10,
     [COLUMN.DISK_USAGE_PERCENT]: 10,
   });
@@ -254,7 +254,7 @@ test('a heartbeat carrying saturating load closes routing at once and after ' +
   rig.cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.LAST_HEARTBEAT]: rig.clock.now,
-    [COLUMN.CPU_USAGE_PERCENT]: SATURATED_LOAD_PERCENT,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: SATURATED_LOAD_PERCENT,
   });
   assert.equal(rig.route(), false,
     'saturating load is a revoking change: the committed record is stale');

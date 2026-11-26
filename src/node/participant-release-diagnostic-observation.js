@@ -254,6 +254,7 @@ function participantReleaseSeedBudgetObservation(start, terminal, budgetMs) {
 }
 
 export {
+  controlRefusalText as releaseDiagnosticText,
   captureParticipantControlRefusal,
   captureParticipantReleaseRecoveryDetail,
   captureParticipantReleaseDiagnosticTrigger,

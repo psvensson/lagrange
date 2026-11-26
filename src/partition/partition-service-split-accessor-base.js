@@ -1,3 +1,5 @@
+import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
+import {reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceCdcStreamBase} from './partition-service-cdc-stream-base.js';
 import {
@@ -6,12 +8,6 @@ import {
   isPartitionLocalServiceStatusRecord,
 } from './partition-local-service-status-contract.js';
 import {partitionSizeRetryOptions} from './partition-service-write-path-helpers.js';
-import {
-  MIRROR_RETENTION_CUSTODY_ACTION,
-  pruneSettledMirrorOutcomeEffects,
-  releaseSourceMirrorRetentionCustody,
-  replicateSourceMirrorRetentionCustody,
-} from './partition-committed-statement-outcome.js';
 import {buildReplayCursorCheckpoint} from './partition-mirror-replay-cursor.js';
 import {
   assertSplitRoutingDescriptorEpochForService,
@@ -19,7 +15,6 @@ import {
   reconstructSplitExecutionStateForService,
   resolveSplitDescriptorEpochEvidenceForService,
 } from './partition-service-split-replication-state.js';
-import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
@@ -43,7 +38,6 @@ const CONSENSUS_CORE_REFUSED = 'core-refused';
 const CONSENSUS_PORT_UNAVAILABLE = 'consensus-port-unavailable';
 const CONSENSUS_STATUS_READ_THREW = 'consensus-status-read-threw';
 const CONSENSUS_STATUS_UNAVAILABLE = 'consensus-status-unavailable';
-const SPLIT_CUSTODY_FAMILY = 'split';
 
 function makeUnavailableConsensusAuthority(outcome, reason, nowMs, role = null, term = 0) {
   return {
@@ -120,23 +114,10 @@ function resolveConsensusLeadership(service, fields, statusLeaderId) {
   return {isLeader, leaderId};
 }
 
-async function authorizeSplitSnapshotStart(owner, metadata, options) {
-  if (options.startAuthorized === true) return;
-  const start = await owner.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
-  const r = start?.result;
-  if (r !== PARTICIPANT_ACK_RESULT.ACCEPTED && r !== PARTICIPANT_ACK_RESULT.DUPLICATE) {
-    throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
-  }
-}
 
 async function runSplitBackfillPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING) return;
   owner.seedSplitReplayCursorFromDurableLog(handle);
-  await replicateSourceMirrorRetentionCustody(owner, handle, {
-    action: MIRROR_RETENTION_CUSTODY_ACTION.PIN,
-    barrierIndex: handle.snapshotBarrierIndex ?? 0,
-    family: SPLIT_CUSTODY_FAMILY,
-  });
   const snapshot = owner.openSplitSnapshotDatabase();
   try {
     await owner.backfillSplitSnapshot(snapshot, metadata);
@@ -150,27 +131,14 @@ async function runSplitCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP) return;
   await owner.flushSplitReplicationQueue();
   const settledWatermark = handle.replayWatermarkIndex;
-  await replicateSourceMirrorRetentionCustody(owner, handle, {
-    action: MIRROR_RETENTION_CUSTODY_ACTION.PIN,
-    barrierIndex: settledWatermark ?? handle.snapshotBarrierIndex ?? 0,
-    family: SPLIT_CUSTODY_FAMILY,
-  });
+
   const cp = buildReplayCursorCheckpoint(
     SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, settledWatermark,
   );
   const ack = await owner.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.CATCHUP_READY, cp);
-  const ackAccepted = ack?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
-    ack?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
-  if (ackAccepted) {
-    handle.catchupCheckpointAccepted = true;
-  }
   if (ack?.splitCutoverApplied !== true) {
     throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
   }
-  pruneSettledMirrorOutcomeEffects(owner, settledWatermark, {
-    metadata,
-    family: SPLIT_CUSTODY_FAMILY,
-  });
   handle.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
 }
 
@@ -186,12 +154,9 @@ async function runSplitCutoverPhase(owner, handle, metadata) {
     {[SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false, ...cp},
   );
   handle.terminal = cleanupAck?.splitSourceRetired === true;
-  if (handle.terminal) {
-    await releaseSourceMirrorRetentionCustody(owner, handle, {
-      barrierIndex: settledWatermark ?? 0,
-      family: SPLIT_CUSTODY_FAMILY,
-    });
-  }
+  const accepted = cleanupAck?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
+    cleanupAck?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (accepted) await reconcileFailedMirrorCustody(owner);
 }
 
 class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
@@ -306,10 +271,10 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @return {Promise<void>}
    * @private
    */
-  async runSplitReplicationWorkflow(options = {}) {
+  async runSplitReplicationWorkflow() {
     const splitReplication = this.splitReplication;
     const metadata = splitReplication?.metadata || null;
-    if (!metadata) {
+    if (!metadata || !splitReplication.authorized) {
       throw new Error(
         PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
       );
@@ -318,7 +283,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       partitionId: this.partitionId, targetPartitionIds: metadata.targetPartitionIds,
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
-    await authorizeSplitSnapshotStart(this, metadata, options);
+
     await runSplitBackfillPhase(this, splitReplication, metadata);
     await runSplitCatchupPhase(this, splitReplication, metadata);
     await runSplitCutoverPhase(this, splitReplication, metadata);
