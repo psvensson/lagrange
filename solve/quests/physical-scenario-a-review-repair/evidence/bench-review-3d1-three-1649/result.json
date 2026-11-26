@@ -1,0 +1,53 @@
+{
+  "campaignId": "bench-review-3d1-three-1649",
+  "sourceCommit": "3d18262898fcfe563eec949f069345d3256c53dc",
+  "imageRepoDigest": "lagrange@sha256:7c35aff4790053c99bad51a39f170c4c99d7dd3170fa8f32659fea24c5bef78d",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T16:56:29.335Z",
+  "lastCompleteCensusAt": "2026-11-26T16:56:24.346Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 12,
+  "attempted": [
+    {
+      "runId": "bench-review-3d1-three-1649-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 80,
+    "medianMs": 1336,
+    "p95Ms": 38233,
+    "maxMs": 54327
+  },
+  "evidenceSha256": {
+    "bench-review-3d1-three-1649-deadline-census.ndjson": "1dab10fd83a76fda02025e289938cb5fbc84a8be05efa54b8e6c24e7729a848f",
+    "bench-review-3d1-three-1649-decision-samples.ndjson": "6fe96f0d402b5c7bd62efcf703532c91f8bcbe4d5b1ed7412f0c6a8d3b5fcaeb",
+    "bench-review-3d1-three-1649-formation.ndjson": "e8f20a9bb9e71d56b8c3b7c4217d458e0bee3010087ae6b505c4e2229ee15e3a",
+    "bench-review-3d1-three-1649-node1-tcp.ndjson.gz": "9186f01e3b16113c257fb3c0f56ffd3c9786738b1c17b001f4d6622d99809c2b",
+    "bench-review-3d1-three-1649-node1.log.gz": "af9801cb52cce331b6166496dc025af2a07142590fa3b2fdb5d914660ba6feb5",
+    "bench-review-3d1-three-1649-node2-tcp.ndjson.gz": "f94b250b7d63f8145e94805569c5ffa909d4572000fdb3aa87fb864cde4028e2",
+    "bench-review-3d1-three-1649-node2.log.gz": "2324ff110f335f93006db10f2ea5f309dd04977d04ccf423dfc4013ecb3c87d3",
+    "bench-review-3d1-three-1649-node3-tcp.ndjson.gz": "6dc72f19746284ecd39a3839d15524029f1caa96655b3836b9ec105acc4761f1",
+    "bench-review-3d1-three-1649-node3.log.gz": "e89df8a46d4d613f950219d80a94b0784116476fe9995f93dee9ff588989f9c7",
+    "bench-review-3d1-three-1649-raw.ndjson": "e72dc4e16b993189ef8e63dcd9594f3fc611ba6aaa4d5b6ab34631b80b673d64",
+    "bench-review-3d1-three-1649-runtime-1.json": "85f9664a2bfe0880dd4dc14c8b6404c3ba4c9e31ea12350492884935a0d677bd",
+    "bench-review-3d1-three-1649-runtime-2.json": "772e0f9adca29f950e898598820f5ebe6a204c88ce4e21edba32d29ead847767",
+    "bench-review-3d1-three-1649-runtime-3.json": "aaf63e4037be8e25590476dec511822192462d809ea57557398fd6b1ef9077ea",
+    "comparative-campaign-bench-review-3d1-three-1649.json": "bd22083f5859fac06074eea7cc44489ae03eb7a92826b28ae2106c8ad110b7e2",
+    "partition-admission.md": "7b9094d0b60f4e1ff943552924bd026730d0b57f699b0eebf4468b85a1c3fdd5",
+    "partition-waits.json": "bbc3de703322a36497a8b344b85b711ea3ac41848eac3cef7458dd4c67b3f680",
+    "partition-waits.md": "92790f212dabf6f81311960b2025f8666fb22e865da6ced78f9042edf7e3f743",
+    "stage-results.txt": "6fdd45b0377902e18b3f3da66de3d82bf38b63e7c6e36ae98eed0937e09793e4"
+  }
+}
