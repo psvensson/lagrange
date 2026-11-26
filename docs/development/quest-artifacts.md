@@ -1,9 +1,6 @@
 ---
-scope: governance
-status: canonical
-always_load: false
-source_of_truth: self
-last_reviewed: 2026-10-24
+audience: development
+last_reviewed: 2026-11-26
 ---
 
 > **Canonical source.** Quest artifact ownership and tracked data. Reached
@@ -40,19 +37,11 @@ rewrite earlier evidence or imply that an old run measured a new candidate.
 
 ## One Current Summary
 
-Keep one mutable current summary in the owning epic, maintained by its
-integration owner. It links the current accepted baseline, active blocker and
-owned interaction, work awaiting review/test/integration, relevant quest and
-evidence records, and the next action with its owner. It is an index into those
-authorities, not another acceptance contract or evidence ledger. Update that
-summary when state changes; append historical findings and verdicts to the
-quest log. Avoid parallel status documents that later agents must reconcile.
-A standalone `class: fix` uses its existing quest record and log; it does not
-need a new epic solely for this summary.
-
-`probe` and `board` project the records on demand. Optional reports and caches
-are convenience views and cannot override their source records. Retired v1
-state/report paths and executor files do not define the current workflow.
+Follow [Documentation Lifecycle](documentation-lifecycle.md#current-summaries-and-steering-revisions)
+for the epic's mutable `#current-work` index and handoff. A standalone `class: fix`
+uses its existing Quest record and log. `probe` and `board` project those records
+on demand; optional reports and caches cannot override them. Retired v1 state,
+report paths and executor files do not define the current workflow.
 
 ## Bulk Evidence Goes To The Store
 

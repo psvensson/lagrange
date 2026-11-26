@@ -41,10 +41,18 @@ uses ordinary ES6 JavaScript and the existing Node runtime, lint, dependency
 checks, test runners and evidence owners.
 
 The user approved this plan and its documentation merge on 19 November 2026.
-The current integration owner is named in
-[operation integrity](operation-integrity-and-reliable-formation.md#current-integration-summary-20-november-2026---reliability-and-agent-usability).
+Current coordination and any unresolved assignment are recorded in
+[operation integrity](operation-integrity-and-reliable-formation.md#current-work).
 
-## Current summary
+## Current work
+
+The integration owner maintains live source, assignments, blockers and next
+actions in [operation integrity](operation-integrity-and-reliable-formation.md#current-work).
+Reconcile this pilot's packages and receipt applicability there before starting
+overlapping work. The checkpoint below retains its dated implementation credit;
+it does not establish a current candidate, writer or runtime acceptance.
+
+## Planning checkpoint (20 November 2026)
 
 - **Planning base:** main `3f5a67599e5b91138e34977934703c9af2eaee15` (PR #229),
   refreshed at WP0 to main `5edfcadb508f9a82783159026364d3005836cc5c` (PR #234),
@@ -122,10 +130,9 @@ this maintenance pilot to unrelated owners.
 
 ## Fixed implementation constraints
 
-1. **ES6 JavaScript only.** No TypeScript, `checkJs`, generated declarations,
-   compiler-dependent contracts, transpilation, new build step, Deno or runtime
-   migration. Use the currently supported Node runtime and existing tools. Do
-   not turn this into a repository-wide syntax or dependency cleanup.
+1. **ES6 JavaScript only.** Follow the standing
+   [language and toolchain constraints](../../docs/development/code-style.md#language-and-toolchain).
+   This pilot does not authorize syntax, dependency or runtime migration.
 2. **One semantic path.** Reuse existing owners and remove the replaced path
    with its affected callers. No compatibility reader, dual authority, silent
    fallback, dormant replacement behind a flag, or test-only safety policy.

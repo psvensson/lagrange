@@ -1,9 +1,6 @@
 ---
-scope: architecture
-status: canonical
-always_load: false
-source_of_truth: self
-last_reviewed: 2026-11-13
+audience: development
+last_reviewed: 2026-11-26
 ---
 
 > **Canonical source.** Runtime, control-plane, data, cache and transport
@@ -39,13 +36,14 @@ Required runtime patterns:
    through those dependencies.
 3. A shared row may have multiple owners only when field subsets are explicit
    and non-overlapping.
-4. Temporary delegators may forward to the owner, but must not add a second
-   decision path.
-5. A transitional delegator must have a removal task, target owner, and
-   structural guard preventing new callers from binding to it.
-6. A permanent ingress or encoding adapter may translate representation under
-   the owner's declared contract. This is distinct from a transitional delegator:
-   it has a continuing boundary responsibility, not a second semantic decision.
+4. Delegation consumes the owner's decision; it never adds a second algorithm.
+   Remove replaced implementations and transitional delegators with their
+   affected callers. A removal task or flag does not authorize a retained
+   compatibility reader, dormant alternative or competing semantic path.
+5. For an inherited transitional delegator, its target owner, removal task and
+   structural guard against new callers document debt, not an approved exception.
+6. A permanent ingress or encoding adapter translates representation under the
+   owner's declared contract and keeps a continuing boundary responsibility.
 7. Conversion preserves identity and generation domains, remaining deadline
    budget, typed outcomes, durable obligations and recovery meaning. An adapter
    cannot remint authority, reset a deadline, drop retry debt or reinterpret an
@@ -561,8 +559,7 @@ Forbidden patterns:
 
 ## User-Facing Model
 
-The external platform model is tables, services, SQL, and policies. Relocated
-verbatim from the retired `system-guidelines.md` §12, which had no other home.
+The external platform model is tables, services, SQL, and policies.
 
 Required contract:
 

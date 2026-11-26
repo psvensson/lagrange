@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-11-16
+last_reviewed: 2026-11-26
 ---
 
 # Quest workflow
@@ -8,6 +8,28 @@ last_reviewed: 2026-11-16
 Conditional: read when starting, recording, scoping or landing a unit of
 work. Rules R15 to R23 and R26 own the invariants. The generated
 [`command reference`](../generated/solve-commands.md) owns the CLI.
+
+## Normal sequence
+
+1. Choose the direct or Quest route below; independent review alone does not
+   require a Quest.
+2. Record the authorized scope, candidate/base, acceptance and exclusions. For
+   a Quest, seal a genuine red probe and record its package assignment. Complete
+   triggered transition and design review before dependent implementation.
+3. Implement the bounded change and measure it through the applicable proof
+   owners. Retain the original failures and record the attempt.
+4. Prepare the complete candidate, including required generated outputs, and
+   isolate unrelated work before review.
+5. Obtain required independent review of that content and its acceptance inputs;
+   repair findings and renew affected review when the candidate changes.
+6. Land the Quest through `land`, or commit an eligible direct change with its
+   applicable guards and review. Landing rechecks the actual collected bytes.
+7. Publish within existing task and destination authority, satisfying the
+   applicable exact-candidate gates. Use the runbook's documentation-only PR
+   route when that proof scope applies. Landing and publication are separate.
+
+The [runbook](../../development/solver-runbook.md#complete-quest-example) shows
+supported commands for the whole sequence; preparation is work, not a new command.
 
 ## Choosing the unit
 
@@ -18,10 +40,9 @@ owner-boundary contract, is a quest (R15). A known local defect with an unchange
 contract and an obvious regression witness may use the direct-change route;
 several competing causal hypotheses or a boundary change require a quest.
 Elapsed session time alone does not choose the route. Direct source/proof changes
-retain independent review in their existing review record; review alone does
-not require a quest. Define repair acceptance by the reproducer and affected
-interaction. Wider service and release claims retain their own owners; a repair
-may integrate while another recorded cause keeps the wider scenario red.
+retain independent review in their existing review record. Define the bounded
+claim under [Separate Acceptance Claims](../../../test/guidelines/release-gate.md#separate-acceptance-claims);
+a repair may integrate while a separately recorded cause keeps wider claims red.
 
 A quest directory holds its record, append-only log and required evidence.
 The record names the statement, owning epic (or `class: fix`) and one
@@ -126,32 +147,25 @@ This applies existing rules without rewriting sealed acceptance. Select current
 work from the active epic's current summary; dated contract-first plans provide
 rationale, not current writer assignments or execution-substrate authority.
 
-## Decision owners and work in progress
+## Delivery roles and work in progress
 
-The author owns routine diagnosis and repair; an independent reviewer owns
-verification; one integration owner coordinates acceptance, proof and landing.
-Existing authority persists. Judgment, audit repair and authorized landing do
-not automatically require a human stop. Ask the user for a genuine product or
-scope decision or missing authority after resolving what the records allow.
-
-Use one writer per changing interaction and serialize its integration. Parallel
-investigation, review and independent interactions remain useful. Count work
-awaiting review, test and integration as WIP. The integration owner maintains
-one current summary in the epic, linking the baseline, blocker, active work,
-evidence and next owner/action; authoritative records retain their own claims.
-For a standalone `class: fix`, the existing quest record and log suffice.
+The author, independent reviewer and integration owner follow
+[Quest Delegation](../../development/quest-subagents.md#roles-and-concurrency),
+which owns concurrency, review and re-review. Use one writer per changing
+interaction; independent investigations and reviews can proceed in parallel.
+The integration owner maintains the epic's
+[current work](../../development/documentation-lifecycle.md#current-summaries-and-steering-revisions).
+A standalone `class: fix` uses its existing Quest record and log.
 
 ## Recording and review
 
 Append findings, attempts, verifications and terminal entries. An attempt
 records its head and changed paths. Correct history in the current open owning
 or successor record, linking the original; terminal records remain closed (R21).
-Bound review to the candidate, affected interaction and acceptance. Return all
-reachable material findings together, then review repairs and what they
-invalidate. Retain applicable unaffected evidence; do not broaden acceptance
-or impose a fixed number of review rounds. Route unrelated findings to owners.
-When a recorded decision refines a general instruction, update the canonical
-owner guidance in the same change and preserve the historical decision.
+Use [bounded independent review](../../development/quest-subagents.md#bounded-independent-review)
+for scope, consolidated findings and applicability on re-review. When a recorded
+decision refines a general instruction, update the canonical owner guidance in
+the same change and preserve the historical decision.
 
 A change under `src/` lands only behind independent approval newer than the
 last attempt, naming the verifier and reviewed content. The same review
@@ -190,9 +204,7 @@ and review enforcement. `land` never pushes. After intended commits land,
 publish within existing authority through the exact-candidate gates (R22, R23).
 Neither repair acceptance nor an earlier receipt grants broader readiness.
 
-When an input is missing, record why, the actual next owner and action. A
-pending run needs its request or run id, revision, workload, status and an
-owner or mechanism that will observe and resume it. If none exists, report the
-pending action; do not claim background execution. Unavailable measurement is
-not exhaustion. Record `exhausted` only when no honest remaining move exists,
-or `superseded` when the sealed premise is gone.
+For missing inputs, pending runs and terminal dispositions, follow
+[Quest Closure](../../development/quest-closure.md#blocked-exhausted-and-superseded).
+Name the actual next owner and action; unavailable measurement is not exhaustion,
+and a pending action without a submitted run is not background execution.

@@ -15,15 +15,13 @@ runtime reproduction, execution receipt or formation acceptance. No test or lab
 run was launched for this note. Existing receipts and historical seals remain
 unchanged.
 
-For current execution, the integration summary records the composed RELEASE
-budget, the managed CREATE replacement tests and the physical missing replies.
-CREATE and RELEASE have managed caller-lifetime evidence on later sources.
-The remaining recovery work includes proving that temporary loss of operation
-or target visibility preserves the correct incarnation and that cleanup of an
-earlier callback cannot clear its successor. The integration owner records the
-originals, the failed controls and the current test selection in the
-[core integration handoff](../operation-integrity-and-reliable-formation.md#core-integration-handoff-21-november-2026).
-The census below describes the planning commit.
+The [dated integration record](../operation-integrity-and-reliable-formation.md#core-integration-handoff-21-november-2026)
+describes the composed RELEASE budget, managed CREATE replacement tests and
+physical missing replies. It records caller-lifetime evidence on later sources
+and the recovery questions then remaining. Consult
+[current work](../operation-integrity-and-reliable-formation.md#current-work)
+for reconciled assignments, source and next actions. The census below describes
+the planning commit.
 
 The 21 November transport investigation also reached the actual query MessageGroup
 handoff. At `a40592aa3` the query executor supplies the remaining budget to

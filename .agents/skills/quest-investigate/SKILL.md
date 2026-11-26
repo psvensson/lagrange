@@ -18,21 +18,11 @@ Git history, earlier Quest findings and the real prior failure/fix. Check that t
 earlier explanation still applies to today's producer, decoder and consumer.
 Use quest-navigate where available and name dynamic-reference limits.
 
-For a change to an authoritative transition, owner-boundary contract, recovery
-semantics, durable obligation or state store, complete the existing contract-first
-checklist in the owning design note. For an unchanged-contract repair, cite the
-existing transition and record the defect, affected path and discriminating
-witness; resolve any missing contract fact before dependent implementation.
-The full checklist covers:
-
-- Both endpoints and the one semantic owner.
-- The producer's actual shape and persistence/decoding contract.
-- Identity, incarnation, generation and authority scope.
-- Ordering and currency of observations.
-- Authoritative absence versus unavailable or partial evidence.
-- The actual commit point and what an ambiguous answer means.
-- Retained obligations after failure, retry or restart.
-- The responsible wake, teardown and resource lifetime.
+Apply the workflow's [transition trigger and complete checklist](../../../docs/steering/workflow-guidelines/solver-quests.md#contract-first-owner-work).
+Record applicable transition facts in the existing work record; use its owning
+design note when design review is required. For an unchanged-contract repair,
+cite the transition and record the defect, affected path and discriminating
+witness. Resolve missing contract facts before dependent implementation.
 
 State a falsifiable hypothesis, the first causal divergence and a discriminating
 observation. Exercise actual producers and consumers before dependent edits.

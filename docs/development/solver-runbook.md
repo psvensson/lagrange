@@ -11,48 +11,68 @@ no policy and no second boot sequence: the load order is owned by
 generated CLI reference by
 [`solve-commands.md`](../steering/generated/solve-commands.md).
 
-## The Four Verbs
+## Complete Quest Example
+
+First choose the [direct or Quest route](../steering/workflow-guidelines/solver-quests.md#choosing-the-unit).
+An eligible direct change records scope, applicable checks and required review
+in its existing PR/review record, then commits and publishes. It needs no Quest
+solely for independent review. The example below is for work requiring a Quest.
+
+Prepare `solve/quests/<id>/quest.json` and a newline-delimited assignment file
+containing exact repository-relative paths or directory prefixes ending in `/`,
+including generated outputs. Then use the supported commands:
 
 ```sh
-node scripts/solve.js start --id <id>       # seals against a red probe
-node scripts/solve.js note  --id <id> --attempt "<what changed>"
-node scripts/solve.js probe --id <id>       # measures doneWhen, changes nothing
-node scripts/solve.js land  --id <id>       # guards, tests, commits; never pushes
+quest_id='<quest-id>'
+paths_file='/path/to/reviewed-paths.txt'
+node scripts/solve.js start --id "$quest_id"  # requires a measuring red probe
+node scripts/solve.js note --id "$quest_id" --assignment '<bounded scope>' \
+  --paths-file "$paths_file" --authority '<existing task/scope authorization>'
 ```
 
-`evidence add <path> --id <id>` uploads a file too large for git and records it
-only after re-download and re-hash (`evidence relocate` moves already committed
-bulk evidence the same way, see below); `board` lists open epics and quests.
-Consult the generated reference for supported operations. Older frontier,
-strategy-rung, `run`/`step` and generic executor instructions are retired.
+Implement and measure the bounded change, retain its evidence, and refresh the
+required generated outputs with their existing producers (for example,
+`npm run steering:generate` for generated steering). Isolate unrelated changes
+and record the completed attempt before independent review:
 
-`note` takes exactly one of `--finding`, `--attempt`, `--verification`,
-`--assignment`, `--blocked`, `--exhausted` or `--superseded`. An assignment takes
-`--paths-file <list>` and `--authority "<existing task/scope authorization>"`;
-the paths are exact repository-relative files or directory prefixes ending in
-`/`. Record a necessary amendment before editing beyond the assignment. The
-reference records existing authority; it does not grant new authority.
-A verification also takes
-`--verifier subagent:<id>` and `--verdict approve|reject`. Changes under `src/`
-cannot land without an approving verification newer than the last attempt.
-The workflow's review requirement also covers changes to proof and acceptance
-semantics; see [Workflow Validators](quest-validators.md#evidence-applicability-and-review)
-for the distinction between that policy and the current automatic trigger.
+```sh
+node scripts/solve.js note --id "$quest_id" --attempt '<change and measurement>'
+node scripts/solve.js probe --id "$quest_id"  # measures; submits no test job
+```
+
+Have an independent reviewer inspect the complete candidate and acceptance
+inputs. Only after that review, record its actual verdict. An approval example is:
+
+```sh
+node scripts/solve.js note --id "$quest_id" --verification '<review and evidence>' \
+  --verifier 'subagent:<reviewer-id>' --verdict approve
+node scripts/solve.js land --id "$quest_id"  # rechecks, proves and commits
+npm run publish                             # within existing publication authority
+```
+
+A repair after review requires a new attempt and affected re-review before
+landing. `land` collects all changes and never pushes. The
+[validator owner](quest-validators.md#required-conduct-and-executable-coverage)
+describes scope and content-binding checks; the
+[publication section](#publish-and-git-exceptions) describes the exact-candidate
+route and its documentation-only proof scope.
+
+Use the generated [command reference](../steering/generated/solve-commands.md)
+for every supported `note` disposition and flag. `board` projects open work;
+`evidence add` verifies custody before recording an upload. Its current
+[hold-clearing side effect](quest-lifecycle.md#current-vocabulary) still requires
+re-recording an unresolved hold. Older frontier, rung, `run`/`step` and generic
+executor instructions are retired.
 
 ## After A Rejection
 
-Agree the candidate, affected interaction, acceptance and review scope before
-review. The reviewer returns every reachable material finding together,
-separating blocking defects from optional improvements and unrelated work.
-Record rejection with `--verdict reject`, answer the complete set, and record
-the next attempt with `note --attempt`. A rejection stands until an attempt
-is newer than it; source landing then needs current independent approval.
-
-Re-review the repairs and what they invalidate. Preserve applicable unaffected
-findings and evidence; do not restart the entire review or widen its acceptance
-for each round. A newly discovered concrete safety defect still needs a
-disposition. Repeated rejection is a reason to reassess the design, evidence,
-owner or review scope, without a fixed round count or an automatic human stop.
+Use [bounded independent review](quest-subagents.md#bounded-independent-review)
+for scope, consolidated findings and applicability on re-review. Record the
+actual rejection with `note --verification ... --verdict reject`, answer the
+findings, and record the repair with `note --attempt`. A standing rejection
+blocks landing; where review is required, obtain current independent approval
+after the last attempt. Re-review the repairs and what they invalidate rather
+than silently widening acceptance or restarting unaffected review.
 
 ## When Landing Refuses
 
@@ -71,46 +91,26 @@ None of these is worked around. Each names the thing to fix.
 
 ## Deciding Without Asking
 
-Existing authority in the session, quest and owning epic persists. The author
-chooses routine diagnosis and implementation; an independent reviewer verifies;
-the integration owner coordinates proof, acceptance and authorized landing or
-publication. Make reasonable implementation choices and record material ones
-as findings. Audit repair, review rejection or terminal landing does not by
-itself transfer judgment to the user.
+Use the [existing delivery roles](quest-subagents.md#roles-and-concurrency) and
+[publication authority](../steering/workflow-guidelines/solver-quests.md#publication-authority).
+Routine diagnosis, audit repair and authorized landing remain agent decisions.
+Resolve existing authority before asking for a missing product/scope decision;
+a new session, review rejection or repeated symptom is not itself a user stop.
 
-Ask the user when a product tradeoff, genuine scope change or outward action
-needs authority that is absent. First resolve what existing decisions and
-evidence already allow, then present the concrete remaining choice. Do not
-ask again merely because a new agent or session takes over.
-
-Reassess the lever when evidence stops supporting it: inspect the failing
-interaction, ruled-out causes and missing observation before another patch.
-Record an `altitude-check` finding when the existing landing guard requires
-it (more than three attempts since the last such finding), or earlier when
-useful. Repetition alone neither requires a new quest nor authorizes rewriting
-its acceptance. A changed scope needs an explicit decision; a changed sealed
-premise needs explicit supersession. Route a separate owner defect to its own
-unit instead of enlarging the current repair indefinitely.
+When evidence refutes a hypothesis, reconsider its owner, witness and scope.
+Record an `altitude-check` finding when the landing guard requires it (more than
+three attempts since the last such finding), or earlier when useful. Amend a
+necessary scope under existing authority; explicitly supersede a changed sealed
+premise. Route a separate owner defect to its own unit.
 
 ## Repair Acceptance And Current State
 
-Before sealing, distinguish the bounded repair from the distributed service
-milestone and from release acceptance. The repair's reproducer and affected
-interaction determine its acceptance; the milestone keeps its public scenario
-requirements; the publisher and release process keep their exact-candidate
-gates. A repair that satisfies its sealed acceptance can close and integrate
-while a wider scenario remains red for a different recorded cause. Link that
-remaining cause and its owner. Do not reinterpret an already-sealed broad
-predicate as a local one to declare success.
-
-The integration owner keeps one mutable current summary in the existing epic.
-Link the accepted baseline and evidence, current blocker and interaction owner,
-work awaiting review/test/integration, and next action. Quest logs retain the
-append-only history; contracts and receipts retain acceptance authority. This
-summary replaces duplicate status prose, not those records. Start a later
-session from it and follow only the links needed for the next action.
-A standalone `class: fix` uses its existing quest record and log; do not create
-an epic solely to hold a summary.
+Use [Separate Acceptance Claims](../../test/guidelines/release-gate.md#separate-acceptance-claims)
+before sealing. A completed repair can integrate while a separately recorded
+cause keeps the service milestone red; do not reinterpret a broader seal.
+Resume from the epic's [current work](documentation-lifecycle.md#current-summaries-and-steering-revisions),
+which links authoritative records and next actions. A standalone `class: fix`
+uses its existing Quest record and log, without a new summary epic.
 
 ## Commit On Completion
 
@@ -129,20 +129,11 @@ Ad-hoc commits need the same deliberate scope control.
 
 ## Choosing What To Run In Parallel
 
-Use one writer per changing interaction and one integration owner. An
-interaction includes both sides of a coupled owner boundary and its contract;
-separate files or worktrees alone do not make it independent. Investigations,
-focused reviews and independent interactions can proceed concurrently. Count
-items awaiting review, test and integration as WIP before admitting more work
-that competes for the same owner or scarce runner. There is no fixed agent
-count or project-wide ban on independent work.
-
-Proof can run concurrently when its inputs and required capacity are independent.
-Sequence dependent changes, measurements that share mutable state, and final
-integration of one candidate. Consolidate reviewer findings before repair, and
-prove the composed candidate through its existing interaction and publication
-gates. Prefer completing an accepted repair over accumulating more unintegrated
-patches on the same interaction.
+Follow [Roles And Concurrency](quest-subagents.md#roles-and-concurrency): one
+writer per changing interaction, independent investigation/review in parallel,
+and serialized dependent integration. Proof can run concurrently only when its
+inputs and required capacity are independent. Sequence work sharing mutable
+state and prove the composed candidate through its existing gates.
 
 ## Proof Cost And Waiting For Capacity
 
@@ -193,6 +184,23 @@ Their executability is not authorization. Registered inputs include:
 A refusal names what it wanted. Naming the wrong version, the wrong project or
 the wrong head is a refusal, not a warning: authorizing one thing never
 authorizes another.
+
+## Documentation-Only Publication
+
+For documentation-only planning, roadmap and policy changes, apply the
+[documentation-only proof scope](../../test/guidelines/release-gate.md#documentation-only-changes).
+Commit the reviewed candidate to a branch and use a GitHub PR for publication.
+Before merging, verify the actual candidate, applicable documentation, rule-set,
+link and generated-consistency checks, required independent review, and ordinary
+GitHub required checks and merge controls. Existing task and destination authority
+still governs the action. Record the merged SHA and the actual check outcomes.
+
+The current `npm run publish` has no documentation-only mode: it runs runtime
+gates and can schedule remaining corpus work. The PR route satisfies the scoped
+documentation policy without invoking that extra runtime work. It does not
+bypass a required check, authorize a different execution substrate, or create
+or transfer a runtime/corpus receipt. Accompanying executable behavior or
+acceptance-predicate changes retain their own proof and publication requirements.
 
 ## Publish And Git Exceptions
 
@@ -313,10 +321,8 @@ authorized-substrate and invocation-accounting rules as a thermal refusal.
 `lab fleet` shows who holds each machine; set `LAGRANGE_LAB_AGENT` (for example
 `claude:SESSION`) to name yourself in the record.
 
-Documentation-only planning, roadmap and policy changes use the
-[documentation-only proof scope](../../test/guidelines/release-gate.md#documentation-only-changes).
-Their approval requires the applicable documentation checks and review, not a
-new runtime or whole-corpus run. It does not create or transfer a runtime receipt.
+For documentation-only changes, use the
+[scoped PR route](#documentation-only-publication) above.
 
 For changes that require corpus proof, a head merged through GitHub met neither
 this hook nor the publisher, so it has NO corpus proof until

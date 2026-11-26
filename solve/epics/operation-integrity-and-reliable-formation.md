@@ -118,6 +118,54 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
+## Current work
+
+**Last reconciled:** 26 November 2026, 16:03 CET, against published baseline
+`0e0b32412584357ce098c868f323eca2a83e4021`, under rule-set revision 5.
+This section indexes current observations and next actions. Linked contracts,
+Quest records and original evidence retain their authority.
+
+**Live assignment:** The current local integration candidate and active runtime
+writer are not established by the checked-in coordination records inspected for
+this update. Preserve incumbent work and reconcile its actual branch, candidate
+and assignment before starting an overlapping repair. Dated assignments below
+do not establish who is working now.
+
+**Latest observed formation result:** The
+[26 November formation-health run](https://github.com/psvensson/lagrange/actions/runs/45748726137)
+completed with failure on `e26459fe318855aa7bf4fadd0ddf6b9f96dd3312`. The
+[checked-in trend](../../data/formation-health/trend.ndjson) records
+`movielens-lagrange-formation-only-live` as `FAIL`,
+`reason=schema_admission_blocked`, `admissionState=denied`, with a 242,688 ms
+observation window. This is the latest reported blocker, not an established
+causal mechanism. Inspect the original report and run evidence before assigning
+a runtime cause or comparing this result with another profile.
+
+**Most recent composed checkpoint recorded in this epic:** The
+[24 November reconciliation](https://github.com/psvensson/lagrange/blob/e42d9682a6500cda5b534150f44e3a89a54f7550/solve/epics/operation-integrity-and-reliable-formation.md#L159-L195)
+records candidate `b1e097b09912507b3f04d82dfca3bd1cf2e801df`, selected regression
+proof, two local repeated-restart smoke passes, and valid GCP smoke observations
+for Lagrange, TiDB/TiKV and single-primary PostgreSQL. It also records remaining
+corpus, original-profile local formation, Patroni readiness, Wi-Fi readiness and
+capacity-comparison work. These are dated claims with their own evidence and
+limits; reconcile their disposition and applicability to later source.
+
+**Next action and owner:** The incumbent integration owner first reconciles live
+assignments and subsequent source changes, retrieves the original 26 November
+formation report, and identifies the next discriminating observation within the
+existing formation work. Record the actual owner, candidate, blocker and next
+action here when verified. This documentation update establishes no new runtime
+assignment, test submission or background continuation; no pending run or
+observer is verified here.
+
+Continue through the existing
+[formation Quest](../quests/fresh-formation-user-table-routability/quest.json)
+and [composition acceptance](../quests/canonical-authority-formation-acceptance/quest.json)
+as their current records require. The adopted alpha and implementation-safety
+plans below retain their scope; reconcile later proposals with incumbent work.
+Bounded repair completion, service success and release acceptance remain
+separate claims.
+
 ## Reliable application operations (candidate, 23 November 2026)
 
 The [epic candidate](operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md)
@@ -894,11 +942,13 @@ and the acceptance predicates. GCP comparison follows the physical
 formation and smoke gates. Snapshot, backup and PITR keep their existing
 milestone allocations.
 
-## Current integration summary (20 November 2026 - reliability and agent usability)
+## Historical integration summary (20 November 2026 - reliability and agent usability)
 
-This section records programme adoption and its dated starting position. Use
-the [21 November integration handoff](#core-integration-handoff-21-november-2026)
-for current source, measured results, and outstanding decisions.
+This section records programme adoption and its dated starting position.
+Use [Current work](#current-work) for the latest reconciled observations,
+assignments and next action. The
+[21 November handoff](#core-integration-handoff-21-november-2026) remains a dated
+evidence checkpoint.
 
 - **Owner and checked source:** the current Codex root session owns integration,
   taking over the stopped Antigravity session. The clean starting candidate is

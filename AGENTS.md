@@ -30,21 +30,15 @@ Name the affected decision and production or proof path in the existing work rec
 
 A Quest has `solve/quests/<id>/quest.json` (statement, epic or `class: fix`, `doneWhen`)
 and an append-only `log.ndjson` of findings, attempts, verifications and a terminal
-entry. Assigned agents own judgment, independent verification, audit repair and
-landing within existing authority. Ask the user only for a missing decision or
-authority; the workflow owner defines continuation responsibilities. Source and
-proof/acceptance changes require independent verification under
-[`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md)
-(`note --verification ... --verifier subagent:<id> --verdict approve`). Review
-the actual collected candidate and isolate unrelated changes before landing;
-Solver does not select an assignment from a mixed worktree and never pushes.
+entry. Follow the workflow for assignment, independent source/proof review,
+landing and continuation within existing authority. Review the complete candidate
+and isolate unrelated changes; Solver collects all changes and never pushes.
+Keep [repair, service and release claims separate](test/guidelines/release-gate.md#separate-acceptance-claims).
 
-A bounded repair, a representative service milestone and full release acceptance
-are separate claims. Record the remaining service blocker after a repair closes;
-do not enlarge the repair merely to make the whole milestone green.
-
-After the intended commits land, publish the exact HEAD with `npm run publish`
-within the task and destination's existing authority. The
+Publish the intended commits within the task and destination's existing authority.
+Use `npm run publish` for normal publication or the runbook's
+[documentation-only PR route](docs/development/solver-runbook.md#documentation-only-publication)
+when that proof scope applies. The
 [workflow](docs/steering/workflow-guidelines/solver-quests.md#publication-authority)
 owns that boundary; the [runbook](docs/development/solver-runbook.md) describes
 clean-candidate checks, inert-data rebasing and GitHub post-merge proof.

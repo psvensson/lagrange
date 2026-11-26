@@ -1,12 +1,12 @@
 # Core System Logic Contract
 
-> **Reading this contract.** The block immediately below is the machine-readable
-> `system-contract` consumed by `npm run model:contracts` — you do not need to
-> read the JSON. For the human narrative, jump to
-> [Operational Analysis](#operational-analysis); the
-> [Failure Classes](#failure-classes), [Invariants](#invariants),
-> [Runtime Bindings](#runtime-bindings), and [Model Bindings](#model-bindings)
-> sections render the same contract in prose.
+> **Reading this contract.** The `system-contract` block immediately below is
+> the complete machine-readable declaration checked by `npm run model:contracts`.
+> The prose sections summarize selected obligations; they are not a complete
+> rendering of that block. Start with [Operational Analysis](#operational-analysis)
+> for context, then inspect the declaration's applicable invariants and bindings
+> when changing or reviewing the contract. The checked declaration governs any
+> detail omitted from the summary.
 
 <!-- system-contract
 {
@@ -291,7 +291,7 @@ own contracts.
 
 ## Operational Analysis
 
-The retry and recoverable-wake invariants below govern runtime progression.
+The retry and recoverable-wake invariants in the declaration above govern runtime progression.
 They do not prescribe a number of engineering attempts, require a user decision
 after repeated symptoms, or create a new work unit automatically. Engineering
 reassessment follows the workflow owner and the actual evidence; runtime retry
