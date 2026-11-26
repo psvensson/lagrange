@@ -525,7 +525,7 @@ describe('data-local call missing-cell activation', () => {
       entityType: 'runtime_service',
       moveStateProvider: {
         getAvailableNodes: () => [NODE_A, NODE_B].map((nodeId) => ({
-          cpu_usage_percent: 0,
+          host_cpu_utilization_percent: 0,
           disk_usage_percent: 0,
           memory_usage_percent: 0,
           node_id: nodeId,

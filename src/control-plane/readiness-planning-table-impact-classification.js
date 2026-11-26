@@ -252,7 +252,7 @@ function localSemanticRecord(tableName, record) {
   if (!record) return null;
   if (tableName === TABLES.NODES) {
     return objectFreeze({
-      cpuUsagePercent: record[COLUMN.CPU_USAGE_PERCENT] ?? null,
+      hostCpuUtilizationPercent: record[COLUMN.HOST_CPU_UTILIZATION_PERCENT] ?? null,
       diskUsagePercent: record[COLUMN.DISK_USAGE_PERCENT] ?? null,
       memoryUsagePercent: record[COLUMN.MEMORY_USAGE_PERCENT] ?? null,
     });

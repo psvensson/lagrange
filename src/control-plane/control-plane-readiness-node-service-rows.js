@@ -300,7 +300,7 @@ function hasActiveAddressedNonMessageGroupService(service, serviceRows) {
 
 function isLoadReady(service, nodeRow) {
   const loadValues = [
-    Number(nodeRow?.[COLUMN.CPU_USAGE_PERCENT]),
+    nodeRow?.[COLUMN.HOST_CPU_UTILIZATION_PERCENT],
     Number(nodeRow?.[COLUMN.MEMORY_USAGE_PERCENT]),
     Number(nodeRow?.[COLUMN.DISK_USAGE_PERCENT]),
   ];

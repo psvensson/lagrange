@@ -143,6 +143,8 @@ function createServiceDiagnosticsProvider(owner) {
       lifecycle: lifecycleDiagnostics,
       reconciler: reconcilerDiagnostics,
       resources: resourceDiagnostics,
+      lastPlacementDecision: owner?.rebalanceCoordinator?.replicaPlacementOwner
+        ?.lastPlacementDecision ?? null,
       cdcSubscriptionStatus,
     };
   };
@@ -680,6 +682,7 @@ async function shutdownAdminRuntimeComposition(adminRuntime) {
 }
 
 export {
+  createServiceDiagnosticsProvider,
   createReadinessStateWithDiagnostics,
   createSqlRuntimeComposition,
   hydrateBootstrapApiRuntime,

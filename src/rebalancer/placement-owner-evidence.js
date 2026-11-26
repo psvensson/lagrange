@@ -82,7 +82,7 @@ function normalizeCandidateNodes(nodes) {
           nodeId,
           valid: false,
           ordinal: index,
-          cpuUsagePercent: 0,
+          hostCpuUtilizationPercent: null,
           memoryUsagePercent: 0,
           diskUsagePercent: 0,
           latencyGroupId: PLACEMENT_OWNER_EMPTY_STRING,
@@ -93,9 +93,8 @@ function normalizeCandidateNodes(nodes) {
         nodeId,
         valid: true,
         ordinal: index,
-        cpuUsagePercent: normalizeNonNegativeNumber(
-          node?.[COLUMN.CPU_USAGE_PERCENT],
-        ),
+        hostCpuUtilizationPercent: Number.isFinite(node[COLUMN.HOST_CPU_UTILIZATION_PERCENT]) ?
+          node[COLUMN.HOST_CPU_UTILIZATION_PERCENT] : null,
         memoryUsagePercent: normalizeNonNegativeNumber(
           node?.[COLUMN.MEMORY_USAGE_PERCENT],
         ),

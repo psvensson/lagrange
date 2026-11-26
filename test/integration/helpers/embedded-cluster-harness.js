@@ -388,7 +388,7 @@ function createEmbeddedCluster(t, options = {}) {
   async function startEmbeddedNode(nodeOptions = {}) {
     const role = nodeOptions.role ?? EMBEDDED_NODE_ROLE.SEED;
     const nodeId = nodeOptions.nodeId ?? randomUUID();
-    const listenerPorts = getUniqueListenerPorts();
+    const listenerPorts = nodeOptions.listenerPorts ?? getUniqueListenerPorts();
     const node = {
       adminPort: listenerPorts.adminWebSocketPort,
       dataDir: nodeOptions.dataDir ?? join(rootDir, `node-${nodes.length}`),
@@ -404,7 +404,7 @@ function createEmbeddedCluster(t, options = {}) {
     mkdirSync(node.dataDir, {recursive: true});
     const logFd = openSync(node.logPath, 'a');
     const startedAt = Date.now();
-    node.child = fork(WORKER_PATH, [], {
+    node.child = fork(nodeOptions.workerPath ?? WORKER_PATH, [], {
       cwd: REPOSITORY_ROOT,
       env: buildNodeEnvironment(
         node,

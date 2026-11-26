@@ -98,7 +98,7 @@ function nodeRow(nodeId) {
     [COLUMN.CONNECTION_STATE]: 'ready',
     [COLUMN.LAST_HEARTBEAT]: 1_000,
     [COLUMN.READY_LEASE_EXPIRES_AT]: 2_000,
-    [COLUMN.CPU_USAGE_PERCENT]: 10,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 10,
     [COLUMN.MEMORY_USAGE_PERCENT]: 20,
     [COLUMN.DISK_USAGE_PERCENT]: 30,
   };
@@ -161,7 +161,7 @@ test('direct planning table classifier keeps raw cadence separate from node ' +
   );
 
   const load = fixture.apply(TABLES.NODES, CDC_OPERATION.UPDATE, {
-    [COLUMN.CPU_USAGE_PERCENT]: 95,
+    [COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 95,
     [COLUMN.NODE_ID]: NODE_A,
   });
   t.equal(load.globalChanged, false, 'load is node-local planning evidence');

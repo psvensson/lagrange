@@ -21,14 +21,21 @@ import {
 } from '../../src/topology/node-host-identity.js';
 import {
   NODES_SCHEMA,
+  generateCreateIndexSQL,
+  generateCreateTableSQL,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
+  NODES_SCHEMA_UNSUPPORTED,
   PARTITION_TABLE_OBSERVATION,
   createPartitionServiceTable,
   readPartitionServiceTableSchemaIn,
 } from '../../src/partition/partition-service-table-bootstrap.js';
 import {renderTableDefinitionSql} from '../../src/query/sql-table-definition.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
+import {buildReplacementServiceOptions} from '../../src/partition/partition-reopen-options.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {PartitionServiceEntryApplyBase} from
   '../../src/partition/partition-service-entry-apply-base.js';
 import {
@@ -131,10 +138,123 @@ test('schema: a fresh NODES table declares host_id, writes and reads it ' +
   const previousSchema = {...NODES_SCHEMA, columns: NODES_SCHEMA.columns
     .filter((column) => column.name !== COLUMN.HOST_ID)};
   older.exec(renderTableDefinitionSql(SYSTEM_TABLE_NAME.NODES, previousSchema));
-  createPartitionServiceTable(nodesService(older));
+  assert.throws(() => createPartitionServiceTable(nodesService(older)),
+    {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
   const observed = readPartitionServiceTableSchemaIn(older, NODES_SCHEMA);
   assert.equal(observed.state, PARTITION_TABLE_OBSERVATION.UNAVAILABLE);
   assert.deepEqual(observed.missingColumns, [COLUMN.HOST_ID]);
+});
+
+test('generated NODES SQL opens with the same nullable host metric as partition DDL', (t) => {
+  const db = new Database(':memory:');
+  t.after(() => db.close());
+  db.exec(generateCreateTableSQL(NODES_SCHEMA));
+  for (const sql of generateCreateIndexSQL(NODES_SCHEMA)) db.exec(sql);
+  createPartitionServiceTable(nodesService(db));
+  const host = db.pragma('table_info(nodes)').find(({name}) =>
+    name === COLUMN.HOST_CPU_UTILIZATION_PERCENT);
+  assert.equal(host.type, 'REAL');
+  assert.equal(host.notnull, 0);
+  assert.equal(host.dflt_value, null);
+});
+
+test('NODES rejects the previous CPU schema on reopen and fresh allocation', (t) => {
+  const db = new Database(':memory:');
+  t.after(() => db.close());
+  const service = nodesService(db);
+  const previous = {...NODES_SCHEMA, columns: NODES_SCHEMA.columns.map((column) =>
+    column.name === COLUMN.HOST_CPU_UTILIZATION_PERCENT ?
+      {name: 'cpu_usage_percent', type: 'REAL', defaultValue: 0} : column)};
+  assert.throws(() => createPartitionServiceTable({...service, schema: previous}),
+    {code: NODES_SCHEMA_UNSUPPORTED, source: 'catalog'});
+  db.exec(renderTableDefinitionSql(SYSTEM_TABLE_NAME.NODES, previous));
+  assert.throws(() => createPartitionServiceTable(service),
+    {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
+  assert.ok(db.pragma('table_info(nodes)').some(({name}) => name === 'cpu_usage_percent'));
+});
+
+test('NODES catalog requires the declared keys and indexes before creating any table', (t) => {
+  const db = new Database(':memory:');
+  t.after(() => db.close());
+  for (const schema of [
+    {...NODES_SCHEMA, columns: NODES_SCHEMA.columns.map((col) =>
+      col.primaryKey ? {...col, primaryKey: false} : col)},
+    {...NODES_SCHEMA, columns: NODES_SCHEMA.columns.map((col) =>
+      col.unique ? {...col, unique: false} : col)},
+    {...NODES_SCHEMA, indices: NODES_SCHEMA.indices.slice(1)},
+  ]) {
+    assert.throws(() => createPartitionServiceTable({...nodesService(db), schema}),
+      {code: NODES_SCHEMA_UNSUPPORTED, source: 'catalog'});
+    assert.equal(db.prepare("SELECT sql FROM sqlite_schema WHERE name = 'nodes'").get(), undefined);
+  }
+});
+
+test('NODES fresh creation rolls back when another table owns a required index name', (t) => {
+  const db = new Database(':memory:');
+  t.after(() => db.close());
+  db.exec('CREATE TABLE unrelated(status TEXT); CREATE INDEX idx_nodes_status ON unrelated(status)');
+  assert.throws(() => createPartitionServiceTable(nodesService(db)),
+    {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
+  assert.equal(db.prepare("SELECT type FROM sqlite_schema WHERE name='nodes'").get(), undefined);
+  assert.equal(db.prepare("SELECT tbl_name FROM sqlite_schema WHERE name='idx_nodes_status'").get()
+    .tbl_name, 'unrelated');
+});
+
+test('NODES fresh partition enforces identity and replacement refuses a damaged store', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'nodes-strict-reopen-'));
+  const services = [];
+  const open = async (options) => {
+    const service = new PartitionService({...options, systemTableCache: new SystemTableCache()});
+    services.push(service);
+    await service.initialize();
+    return service;
+  };
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  try {
+    ConfigurationManager.getInstance().initialize({node: {id: NODE_ID}});
+    LoggingService.getInstance().initialize({level: 'error'});
+    const first = await open(withFoundingStamp({partitionId: 'nodes-p1', tableId: 'nodes',
+      tableName: 'nodes', replicaId: 'nodes-p1-r1', nodeId: NODE_ID,
+      dbPath: join(directory, 'nodes.sqlite'), schema: NODES_SCHEMA}));
+    const write = first.db.prepare('INSERT INTO nodes (node_id,node_address,cpu_cores,memory_mb,' +
+      'disk_gb,last_heartbeat,created_at) VALUES (?,?,1,1,1,1,1)');
+    write.run('n1', 'a1');
+    assert.throws(() => write.run('n1', 'a2'), {code: 'SQLITE_CONSTRAINT_PRIMARYKEY'});
+    assert.throws(() => write.run('n2', 'a1'), {code: 'SQLITE_CONSTRAINT_UNIQUE'});
+    const replacement = buildReplacementServiceOptions(first);
+    await first.shutdown();
+    const reopened = await open(replacement);
+    assert.equal(reopened.db.prepare('SELECT node_address FROM nodes WHERE node_id=?').get('n1')
+      .node_address, 'a1');
+    await reopened.shutdown();
+    const db = new Database(replacement.dbPath);
+    try {
+      db.exec('DROP INDEX idx_nodes_address');
+      await assert.rejects(open(replacement), {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
+      assert.equal(db.prepare("SELECT name FROM sqlite_schema WHERE name='idx_nodes_address'").get(),
+        undefined, 'the missing index is not recreated on reopen');
+      db.exec('CREATE INDEX idx_nodes_address ON nodes(status)');
+      await assert.rejects(open(replacement), {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
+      db.exec('DROP TABLE nodes');
+      await assert.rejects(open(replacement), {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
+      for (const key of ['primaryKey', 'unique']) {
+        const withoutKey = {...NODES_SCHEMA, columns: NODES_SCHEMA.columns.map((col) =>
+          col[key] ? {...col, [key]: false} : col)};
+        db.exec(generateCreateTableSQL(withoutKey));
+        for (const sql of generateCreateIndexSQL(NODES_SCHEMA)) db.exec(sql);
+        await assert.rejects(open(replacement), {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
+        db.exec('DROP TABLE nodes');
+      }
+    } finally {
+      db.close();
+    }
+  } finally {
+    for (const service of services) await service.shutdown();
+    await rm(directory, {recursive: true, force: true});
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
 });
 
 test('every joiner registration row carries the declared host; without one ' +

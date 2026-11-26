@@ -755,18 +755,28 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
   );
   tableSchemas.set('warehouse', new Set(CANONICAL_TABLE_COLUMNS.warehouse));
 
-  // Partial schema (1..8 tables present) is refused with schema-mismatch:
+  // Resume the same canonical CREATE for an unroutable table and create the
+  // missing suffix before the preserved cohort is reset.
   store.delete('history');
-  await assert.rejects(
-    createLagrangeOltpAdapter({
-      endpoint: {host: '127.0.0.1', port: 5433},
-      connection: {user: 'bench', database: 'bench'},
-      createClient: () => fakeClient,
-      workload: {scale: 1, workers: 1},
-    }),
-    (error) => error.code === OLTP_DATASET_RESET_OUTCOME.SCHEMA_MISMATCH,
-  );
-  store.set('history', []);
+  const repairSql = [];
+  let interruptProbe = true;
+  const repaired = await createLagrangeOltpAdapter({
+    endpoint: {host: '127.0.0.1', port: 5433},
+    connection: {user: 'bench', database: 'bench'},
+    workload: {scale: 1, workers: 1},
+    createClient: () => ({...fakeClient, async query(sql, params) {
+      repairSql.push(sql);
+      if (interruptProbe && sql === 'SELECT COUNT(*) AS row_count FROM new_order') {
+        interruptProbe = false;
+        throw Object.assign(new Error('Partition service not found'), {code: 'XX000'});
+      }
+      return fakeClient.query(sql, params);
+    }}),
+  });
+  assert.deepEqual(repairSql.filter((sql) => /^CREATE TABLE /u.test(sql))
+    .map((sql) => sql.split(' ')[2]), ['new_order', 'history']);
+  assert.equal(repairSql.filter((sql) => /^TRUNCATE TABLE /u.test(sql)).length, 9);
+  await repaired.close();
 
   // Engine that refuses TRUNCATE TABLE on preserved cohort is refused with reset-unsupported:
   const truncateRefusingClient = {

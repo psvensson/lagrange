@@ -1,3 +1,5 @@
+import {hasPendingSourceGrants} from './managed-workflow-record-store.js';
+import {terminalMirrorIdentity} from './partition-mirror-custody-codec.js';
 import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
 import {SERVICE_TYPE} from '../constants/index.js';
@@ -198,11 +200,16 @@ class ManagedSplitWorkflowDissolutionMethods {
    * @return {Promise<boolean>} True when the split reached its terminal.
    * @private
    */
-  finalizeSplitDissolutionIfReady(workflowId) {
+  async finalizeSplitDissolutionIfReady(workflowId) {
+    return Boolean(await this.finalizeSplitDissolutionEvidence(workflowId));
+  }
+
+  finalizeSplitDissolutionEvidence(workflowId) {
     // One run per workflow at a time; a trigger arriving during a run
     // (ack, node-ready, fallback) runs it once more after it.
     return this.groupRetirementRedrive.exclusive(workflowId,
-      () => this.finalizeSplitDissolutionStep(workflowId));
+      () => this.finalizeSplitDissolutionStep(workflowId),
+      {terminal: (result) => Boolean(result)});
   }
 
   /**
@@ -213,7 +220,8 @@ class ManagedSplitWorkflowDissolutionMethods {
    */
   async finalizeSplitDissolutionStep(workflowId) {
     const workflow = this.resolveWorkflowState(workflowId);
-    if (this.isSplitWorkflowStateUnavailable(workflow)) {
+    if (this.isSplitWorkflowStateUnavailable(workflow) ||
+        await hasPendingSourceGrants(this, workflow)) {
       return false;
     }
     if (!SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES.has(
@@ -258,10 +266,11 @@ class ManagedSplitWorkflowDissolutionMethods {
           PARTITION_TRANSITION_STATE.SPLIT_SOURCE_DISSOLVING) {
       return false;
     }
+    const terminal = terminalMirrorIdentity(terminalWorkflow, 'split');
     await this.persistTerminalTransitionClear(terminalWorkflow);
     this.emitTerminalSplitCompleted(terminalWorkflow);
     this.workflowCoordinator.removeWorkflow(workflowId);
-    return true;
+    return terminal;
   }
 
   /**

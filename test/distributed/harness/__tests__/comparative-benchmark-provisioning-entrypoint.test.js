@@ -312,8 +312,7 @@ test('with --lagrange-image-content the data hosts are re-checked by content: co
   'not hold is image_unavailable before anything is placed on the load generator', () => {
   const content = `sha256:${'0'.repeat(64)}`;
   const {stderr, state} = provisionFailing(() => {}, ['--lagrange-image-content', content]);
-  assert.match(stderr, new RegExp(`^image_unavailable: pinned image content ${content} is not ` +
-    'on 10\\.20\\.0\\.1$', 'mu'));
+  assert.match(stderr, /^image_unavailable: pinned image on 10\.20\.0\.1: reference_content_mismatch$/mu);
   assert.deepEqual(state.pushes, []);
   assert.equal(ranOn(state, CLIENT, /^docker pull|git (init|checkout)|npm /u), false);
 });

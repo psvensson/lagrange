@@ -1,3 +1,6 @@
+import {MIRROR_RETENTION_CUSTODY_ACTION} from './partition-committed-statement-outcome-constants.js';
+import {endsSourceExecutionAttempt} from './partition-constants.js';
+import {validMirrorCustody} from './partition-mirror-custody-codec.js';
 /**
  * Owner contract:
  * Owner: every write of a split or merge workflow's durable record - the
@@ -491,6 +494,62 @@ async function compareAndSwap(owner, tableId, base, encoded) {
   }
 }
 
+// Remove this source's grants only after its group has committed the release.
+// The exact authoritative bytes and generation also fence concurrent source ACKs.
+async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
+  const {partitionId, custody, action, logIndex} = receipt;
+  const {metadata, state} = storedRecordOf(row);
+  if (action !== MIRROR_RETENTION_CUSTODY_ACTION.RELEASE || !validMirrorCustody(custody) ||
+      !(BigInt(logIndex) > 0n) ||
+      custody.workflowId !== metadata.workflowId || custody.workflowAttempt !== metadata.workflowAttempt ||
+      custody.targetPartitionVersion !== metadata.targetPartitionVersion ||
+      !(custody.family === 'split' ? metadata.sourcePartitionId === partitionId :
+        metadata.sourcePartitionIds?.includes(partitionId)) ||
+      !metadata.mirrorCustodyGrants?.some((grant) =>
+        grant.partitionId === partitionId && grant.fence === custody.workflowFenceToken &&
+        (grant.release || (metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(state))))) {
+    throw new TypeError('Mirror release acknowledgement does not match terminal workflow');
+  }
+  let base = row;
+  for (let attempt = 0; attempt < MAX_COMPARE_AND_SWAP_ATTEMPTS; attempt++) {
+    const current = storedRecordOf(base);
+    const remaining = current.metadata.mirrorCustodyGrants.filter((grant) => grant.partitionId !== partitionId);
+    const encoded = withNextGeneration({data: {partition_transition_metadata:
+      JSON.stringify({...current.metadata, mirrorCustodyGrants: remaining})},
+    options: {workClass: PRESSURE_WORK_CLASS.CRITICAL}}, base);
+    const result = await compareAndSwap(owner, base.table_id, base, encoded);
+    const written = writtenRowOf(base, {...encoded, writtenState: current.state}, base.table_id);
+    const observed = result.landed ? written : await authoritativeRecordOf(owner, base.table_id);
+    if (observed && sameBytes(observed, written)) {
+      if (!endsSourceExecutionAttempt(current.state)) {
+        await owner.resumeGroupRetirement?.(observed, 'source-custody-released');
+      }
+      return true;
+    }
+    if (result.submitError && (!observed || sameBytes(base, observed))) throw result.submitError;
+    if (!observed || rereadLagsBase(observed, base)) return false;
+    const moved = storedRecordOf(observed);
+    if (moved.workflowId !== custody.workflowId ||
+        moved.metadata?.workflowAttempt !== custody.workflowAttempt ||
+        moved.metadata.targetPartitionVersion !== custody.targetPartitionVersion) return false;
+    const grants = moved.metadata.mirrorCustodyGrants.filter((grant) => grant.partitionId === partitionId);
+    if (!grants.length) return true;
+    if (!grants.some((grant) => grant.fence === custody.workflowFenceToken) ||
+        !grants.every((grant) => grant.release ||
+          (moved.metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(moved.state)))) return false;
+    base = observed;
+  }
+  return false;
+}
+
+export async function hasPendingSourceGrants(owner, workflow) {
+  const row = await authoritativeRecordOf(owner, workflow.tableId);
+  const record = storedRecordOf(row);
+  return record.workflowId !== workflow.workflowId ||
+    record.metadata.workflowAttempt !== workflow.metadata.workflowAttempt ||
+    Boolean(record.metadata.mirrorCustodyGrants?.length);
+}
+
 // Apply the change to one base: the change's own answer, decoded.
 function applyChangeTo(owner, workflowId, change, base) {
   const answer = change(decodedWorkflowOf(owner, workflowId, base),
@@ -504,6 +563,27 @@ function applyChangeTo(owner, workflowId, change, base) {
   if (answer !== RECORD_CLEARED &&
       (!answer || typeof answer !== OBJECT_TYPE)) {
     throw new TypeError(RECORD_CHANGE_ERROR_MSG.NOT_A_CHANGE + workflowId);
+  }
+  // A retried plan or owner reaction cannot turn a terminal release back
+  // into executable work, or overwrite a source grant while the ACK races.
+  const prior = storedRecordOf(base);
+  const grants = prior.metadata?.mirrorCustodyGrants;
+  if (grants?.length && answer !== RECORD_CLEARED) {
+    if (grants.some((owed) => !answer.metadata?.mirrorCustodyGrants?.some(
+          (grant) => grant.partitionId === owed.partitionId && grant.fence === owed.fence &&
+            (!owed.acquired || grant.acquired) && (!owed.release || grant.release)))) {
+      return {refusal: refuseRecordChange('source-mirror-release-pending')};
+    }
+  }
+  if (answer !== RECORD_CLEARED && prior.metadata?.mirrorExecutionEnded &&
+      answer.metadata?.workflowAttempt === prior.metadata.workflowAttempt &&
+      !endsSourceExecutionAttempt(answer.status)) {
+    return {refusal: refuseRecordChange('source-mirror-attempt-ended')};
+  }
+  if (answer !== RECORD_CLEARED && grants?.length && endsSourceExecutionAttempt(answer.status)) {
+    // A scheduled retry registers a fresh attempt. The old source's grant
+    // stays addressable even if the retry is due before RELEASE commits.
+    return {next: {...answer, metadata: {...answer.metadata, mirrorExecutionEnded: true}}};
   }
   return {next: answer};
 }
@@ -766,6 +846,8 @@ function recordChangeRefusedError(workflowId, write) {
 }
 
 export {
+  authoritativeRecordOf,
+  acknowledgeMirrorCustodyRelease,
   RECORD_CHANGE_KIND,
   RECORD_CHANGE_OUTCOME,
   RECORD_CLEARED,

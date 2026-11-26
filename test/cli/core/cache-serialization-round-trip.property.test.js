@@ -20,7 +20,7 @@ const nodeArb = fc.record({
     .filter((s) => /^[a-z0-9-]+$/i.test(s)),
   node_address: fc.string({minLength: 5, maxLength: 30}),
   status: fc.constantFrom('active', 'inactive', 'failed'),
-  cpu_usage_percent: fc.float({min: 0, max: 100}),
+  host_cpu_utilization_percent: fc.float({min: 0, max: 100}),
   memory_usage_percent: fc.float({min: 0, max: 100}),
 });
 
