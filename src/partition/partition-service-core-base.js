@@ -54,27 +54,8 @@ const {
 // reconciliation, and callers hand in the shared system-table declaration.
 // Taking it by reference made a minted replacement replica append to the
 // declaration itself, so every later reader saw a raised replication factor.
-function resolvePrimaryPeerId(replicaIds, stamp, partitionId) {
-  if (typeof stamp?.leaderId === 'string' && stamp.leaderId.length > 0) {
-    return stamp.leaderId;
-  }
-  const founderId = `${partitionId}-r1`;
-  return replicaIds.includes(founderId) ? founderId : null;
-}
-
-function copyPeerList(replicaIds, ownReplicaId, stamp = null, partitionId = null) {
-  if (!Array.isArray(replicaIds)) return [ownReplicaId];
-  if (Array.isArray(stamp?.founders) && stamp.founders.length > 0) {
-    return [...stamp.founders];
-  }
-  const primaryId = resolvePrimaryPeerId(replicaIds, stamp, partitionId);
-  if (!primaryId || ownReplicaId === primaryId || !replicaIds.includes(primaryId)) {
-    return [...replicaIds];
-  }
-  const others = replicaIds.filter((id) => id !== primaryId && id !== ownReplicaId);
-  return replicaIds.includes(ownReplicaId) ?
-    [primaryId, ...others, ownReplicaId] :
-    [primaryId, ...others];
+function copyPeerList(replicaIds, ownReplicaId) {
+  return Array.isArray(replicaIds) ? [...replicaIds] : [ownReplicaId];
 }
 
 class PartitionServiceCoreBase extends EventEmitter {
@@ -110,12 +91,7 @@ class PartitionServiceCoreBase extends EventEmitter {
       end: PARTITION_SERVICE_DEFAULT.KEY_RANGE_END,
     };
     this.replicaId = options.replicaId;
-    this.replicaIds = copyPeerList(
-      options.replicaIds,
-      this.replicaId,
-      options.bootstrapMembership,
-      this.partitionId,
-    );
+    this.replicaIds = copyPeerList(options.replicaIds, this.replicaId);
     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
     this.transport = options.transport || null;
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
