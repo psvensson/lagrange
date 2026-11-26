@@ -150,3 +150,29 @@ test('duplicate order with a current district read retains the deterministic sta
   assert.notEqual(resolveFailureSqlState(duplicate), '40001');
   await success('current', 'ROLLBACK');
 });
+
+for (const disjointCommit of [false, true]) {
+  test(`current allocation commits after ${disjointCommit ? 'a disjoint district commit' : 'an unchanged generation'}`,
+    async (t) => {
+      const {success, district, orders} = await allocationFixture(t);
+      if (disjointCommit) {
+        const seeded = await district.executeQuery('INSERT INTO district ' +
+          '(warehouse_id, district_id, ytd_cents, next_order_id) VALUES (?, ?, ?, ?)',
+        [1, 1, 0, 70], {entryId: 'seed-other-district'});
+        assert.equal(seeded.success, true, JSON.stringify(seeded));
+      }
+      await success('reader', 'BEGIN');
+      assert.deepEqual((await success('reader', read, [1, 2])).rows, [{next_order_id: 14}]);
+      if (disjointCommit) {
+        await success('other', 'BEGIN');
+        await success('other', advance, [71, 1, 1]);
+        await success('other', 'COMMIT');
+        assert.equal(district.db.prepare('SELECT next_order_id FROM district WHERE district_id = 1').get().next_order_id, 71);
+      }
+      await success('reader', advance, [15, 1, 2]);
+      await success('reader', insert, [1, 2, 14, 7, 10, 1]);
+      await success('reader', 'COMMIT');
+      assert.equal(district.db.prepare('SELECT next_order_id FROM district WHERE district_id = 2').get().next_order_id, 15);
+      assert.equal(orders.db.prepare('SELECT order_id FROM orders').get().order_id, 14);
+    });
+}

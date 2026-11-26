@@ -619,11 +619,9 @@ function inspectRetainedPreparedObligations(service) {
   })));
 }
 
-function committedGenerationsAreDisjoint(service, baseGen, currentGen, candidate) {
-  const rows = readOrReconstructGenerationHistoryRange(service.db, baseGen, currentGen,
+function committedGenerationRows(service, baseGen, currentGen) {
+  return readOrReconstructGenerationHistoryRange(service.db, baseGen, currentGen,
     (opsText) => extractOperationsRowKeyFootprint(service, operationsOf(opsText)));
-  return rows.length === currentGen - baseGen &&
-    areGenerationRowsDisjointFromCandidate(rows, baseGen, candidate);
 }
 
 function sessionReadDependenciesCurrent(service, session, generation) {
@@ -631,8 +629,9 @@ function sessionReadDependenciesCurrent(service, session, generation) {
       (!session.hasUnscopedRead && session.readKeyCount === 0)) return true;
   if (session.hasUnscopedRead || !isSessionSchemaCurrent(service, session)) return false;
   const reads = getSessionReadDependencySnapshot(session);
-  return committedGenerationsAreDisjoint(service, session.generationBase, generation,
-    normalizeTransactionFootprint(null, false, reads));
+  const rows = committedGenerationRows(service, session.generationBase, generation);
+  return rows.length === generation - session.generationBase &&
+    areGenerationRowsDisjointFromCandidate(rows, session.generationBase, reads);
 }
 
 function canAdvanceCommittedValidationText(service, validationText, operationsFootprint) {
@@ -649,9 +648,10 @@ function canAdvanceCommittedValidationText(service, validationText, operationsFo
   }
   const candidate = normalizeTransactionFootprint(
     operationsFootprint.rowKeys, operationsFootprint.hasUnscopedWrite, decoded.readDependencies);
-  const disjoint = committedGenerationsAreDisjoint(service, baseGen, currentGen, candidate);
+  const rows = committedGenerationRows(service, baseGen, currentGen);
+  if (rows.length !== currentGen - baseGen) return false;
   hydrateCommittedHistoryFromStore(service, baseGen, currentGen);
-  return disjoint;
+  return areGenerationRowsDisjointFromCandidate(rows, baseGen, candidate);
 }
 
 function recordCommittedAutocommitRowKeys(service, command, generation) {

@@ -721,6 +721,13 @@ test('Review §1 Witness 4: deliberate regression controls catch omitted/malform
         true,
       );
     }
+    // Stage before the concurrent commit so PREPARE owns the first stale-read check.
+    assert.equal(
+      (await leader.handleRemoteQuery(
+        queryMessage(txOverflowReader, UPDATE_BY_ID_SQL, ['vo-mod', 'k-other']),
+      )).success,
+      true,
+    );
     // Concurrent transaction modifies the 257th key ('k-256') and commits:
     assert.equal(
       (await leader.handleRemoteQuery(
@@ -730,13 +737,6 @@ test('Review §1 Witness 4: deliberate regression controls catch omitted/malform
     );
     await commitParticipantTx(leader, proposed, txCommitterOnOverflowKey);
 
-    // txOverflowReader stages a write on 'k-other' and attempts PREPARE -> must be refused!
-    assert.equal(
-      (await leader.handleRemoteQuery(
-        queryMessage(txOverflowReader, UPDATE_BY_ID_SQL, ['vo-mod', 'k-other']),
-      )).success,
-      true,
-    );
     const overflowReaderPrep = await send(leader, prepareMessage(txOverflowReader));
     assertPrepareConflict40001(
       overflowReaderPrep,
@@ -754,17 +754,17 @@ test('Review §1 Witness 4: deliberate regression controls catch omitted/malform
     );
     assert.equal(
       (await leader.handleRemoteQuery(
+        queryMessage(txScanReader, UPDATE_BY_ID_SQL, ['vo-mod2', 'k-other']),
+      )).success,
+      true,
+    );
+    assert.equal(
+      (await leader.handleRemoteQuery(
         queryMessage(txScanWriter, UPDATE_BY_ID_SQL, ['v0-mod', 'k-0']),
       )).success,
       true,
     );
     await commitParticipantTx(leader, proposed, txScanWriter);
-    assert.equal(
-      (await leader.handleRemoteQuery(
-        queryMessage(txScanReader, UPDATE_BY_ID_SQL, ['vo-mod2', 'k-other']),
-      )).success,
-      true,
-    );
     const scanPrep = await send(leader, prepareMessage(txScanReader));
     assertPrepareConflict40001(scanPrep, 'Control 4C: unscoped SELECT * must reject PREPARE');
   } finally {
