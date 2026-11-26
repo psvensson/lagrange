@@ -304,23 +304,23 @@ async function inspectProducts({sshRun, opts, roles, signal, deadlineAtMs, now})
  * harness's identity_unverified and propagates: it is never read as absence.
  */
 async function observeProductsAfterWindow({sshRun, opts, products, signal, deadlineAtMs, now}) {
-  const observed = [];
-  for (const product of products) {
+  const results = await settleConcurrentBatch(products, async (product) => {
     try {
       const nowState = await inspectRunningContainer({sshRun, opts, host: product.host,
         containerId: product.containerId, role: product.role, signal, deadlineAtMs, now});
       // The window does not change what the product answered: its version and,
       // where it answered none, the reason travel together (D33).
-      observed.push({...nowState, reportedVersion: product.reportedVersion,
+      return {...nowState, reportedVersion: product.reportedVersion,
         ...(product.reportedVersion === null ?
           {reportedVersionError: product.reportedVersionError ?? null} : {}),
         ...(product.bootProvenance !== undefined ?
-          {bootProvenance: product.bootProvenance} : {})});
+          {bootProvenance: product.bootProvenance} : {})};
     } catch (error) {
       if (error?.code !== DEPLOYMENT_FAILURE.CONTAINER_ABSENT) throw error;
+      return null;
     }
-  }
-  return observed;
+  });
+  return arrayFilter(results, (entry) => entry !== null);
 }
 
 /**
