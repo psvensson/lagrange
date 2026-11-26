@@ -662,6 +662,8 @@ test('the elapsed REPLACE CAS fences a same-source change to the stored source c
       assert.equal(run.reservation().released_at, null);
       assert.deepEqual(run.failures, []);
       assert.equal(run.owner.stats.operationsTimedOut, before);
+      const admitted = await run.target.claim(run.request);
+      assertRetained(run, admitted);
       run.reply({status: ReplicaOperationResponseStatus.INITIATED});
       assert.equal((await run.execution).success, true);
     });

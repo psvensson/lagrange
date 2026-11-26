@@ -254,27 +254,37 @@ test('native ADD dispatch bootstrap is durable and reused by a fresh workflow', 
   });
 });
 
+function targetAdmissionOnLedger(leader) {
+  return new ReplicaCreateAdmissionOwner({nodeId: NODE.B, ownerIncarnation: 1,
+    gateway: {
+      async readAuthoritativeRows(table, sql, params) {
+        const rows = table === SYSTEM_TABLE_NAME.NODES ?
+          [{node_id: NODE.B, boot_incarnation: 1}] : leader.db.prepare(sql).all(...params);
+        return {success: true, rows};
+      },
+      async updateSystemTableRow(tableName, whereClause, data) {
+        const {sql, params} = planner.buildSqlMutationPlan({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE, tableName, whereClause, data,
+        });
+        const entry = 'bootstrap:target-first-claim';
+        assert.equal(commitLedgerStatement(leader, entry, sql, params), null);
+        return {success: true, partitionResult: {
+          affectedRows: readCommittedStatementOutcome(leader, `entry:${entry}`).changes,
+        }};
+      },
+    }});
+}
+
+function claimIssuedCreate(target, request) {
+  return target.claim({...request, admissionToken: request.createAdmissionToken,
+    workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt,
+    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq});
+}
+
 test('lost native placement CREATE preserves first claim and fences stale progress', async () => {
   await withNativeCreate(async (leader, row) => {
     const requests = [];
-    const target = new ReplicaCreateAdmissionOwner({nodeId: NODE.B, ownerIncarnation: 1,
-      gateway: {
-        async readAuthoritativeRows(table, sql, params) {
-          const rows = table === SYSTEM_TABLE_NAME.NODES ?
-            [{node_id: NODE.B, boot_incarnation: 1}] : leader.db.prepare(sql).all(...params);
-          return {success: true, rows};
-        },
-        async updateSystemTableRow(tableName, whereClause, data) {
-          const {sql, params} = planner.buildSqlMutationPlan({
-            operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE, tableName, whereClause, data,
-          });
-          const entry = 'bootstrap:target-first-claim';
-          assert.equal(commitLedgerStatement(leader, entry, sql, params), null);
-          return {success: true, partitionResult: {
-            affectedRows: readCommittedStatementOutcome(leader, `entry:${entry}`).changes,
-          }};
-        },
-      }});
+    const target = targetAdmissionOnLedger(leader);
     const coordinator = createBindingCoordinator(leader, () => committedStampFor([VOTER_ID]),
       async (_address, request) => {
         requests.push(request);
@@ -293,9 +303,7 @@ test('lost native placement CREATE preserves first claim and fences stale progre
       // wrongly advanced: one assertion reports both durable decisions.
       let claimError = null;
       try {
-        await target.claim({...request, admissionToken: request.createAdmissionToken,
-          workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt,
-          attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq});
+        await claimIssuedCreate(target, request);
       } catch (error) {
         claimError = error.code ?? error.message;
       }
@@ -571,13 +579,17 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
             row.operation_id]), null);
       }
       const [interrupted] = ledgerRows(leader);
+      assert.equal(interrupted.workflow_step, step);
+      assert.equal(interrupted.create_admission_state, null);
+      const target = targetAdmissionOnLedger(leader);
       const requests = [];
       let membershipReads = 0;
       const coordinator = createBindingCoordinator(leader, () => {
         membershipReads += 1;
         return committedStampFor([VOTER_ID]);
-      }, (_address, request) => {
+      }, async (_address, request) => {
         requests.push(request);
+        await claimIssuedCreate(target, request);
         return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
         });
@@ -597,6 +609,8 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
       try {
         assert.equal(await recover(), OPERATION_RECONCILE_OUTCOME.REFUSED);
         assert.deepEqual(ledgerRows(leader), [interrupted]);
+        assert.equal(requests.length, 0);
+        assert.equal(membershipReads, 0);
 
         reservation = {authorityUnavailable: true};
         await assert.rejects(recover, {reservationAuthorityUnavailable: true, deferRetry: true});
@@ -610,6 +624,11 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         assert.equal(membershipReads, 1);
         assert.equal(requests.length, 1, 'the original attempt crossed the delivery boundary');
         assert.equal(requests[0].operationId, row.operation_id);
+        const [progress] = ledgerRows(leader);
+        assert.equal(progress.workflow_step, WORKFLOW_STEP.CREATING);
+        assert.equal(progress.completed_at, null);
+        assert.equal(progress.create_admission_state, CREATE_ADMISSION_STATE.ADMITTED);
+        assert.equal(progress.create_admission_attempt_token, requests[0].createAdmissionAttemptToken);
         assert.deepEqual(reservationOptions,
           [{allowCreate: false}, {allowCreate: false}, {allowCreate: false}]);
       } finally {

@@ -297,8 +297,7 @@ class OperationWorkflowTransitionOrchestration
   // removal-intent boundary (quest replace-source-removal-owner).
   async updateStep(operation, step, reason, options) {
     const createBasis = step === WORKFLOW_STEP.CREATING && requiresPartitionCreateGrant(operation) ?
-      {createAdmissionAttemptToken: operation.createAdmissionAttemptToken,
-        createAdmissionOwnerIncarnation: operation.createAdmissionOwnerIncarnation, updatedAt: operation.updatedAt} : null;
+      {...operation} : null;
     const replay = await this.resolveOperationTransitionBeforeWrite(operation, step, options);
     if (replay) {
       if (isTerminalTransitionOutcomeSettled(replay)) {

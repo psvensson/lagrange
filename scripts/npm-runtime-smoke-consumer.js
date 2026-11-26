@@ -1,5 +1,6 @@
 // Copied into the fresh consumer directory by the npm packaging proof owner.
 // Only the installed public facade and Node built-ins are available here.
+import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {once} from 'node:events';
@@ -64,7 +65,7 @@ async function waitForCliReadiness(baseUrl, nodeId, signal) {
         const health = await fetch(baseUrl + '/health', {signal});
         const identity = await health.json();
         if (!health.ok || identity.nodeId !== nodeId || identity.ready !== true) {
-          throw new Error('foreground readiness did not identify the installed seed and its SQL engine');
+          throw new Error('foreground health did not identify the installed seed');
         }
         return;
       }
@@ -73,6 +74,54 @@ async function waitForCliReadiness(baseUrl, nodeId, signal) {
       }
     }
     await delay(250, undefined, {signal});
+  }
+}
+
+async function verifyForegroundSql(adminPort, nodeId) {
+  const socket = new WebSocket(`ws://${LOOPBACK}:${adminPort}/api/admin/stream`);
+  const statements = [
+    'CREATE TABLE npm_smoke (id INTEGER PRIMARY KEY, value TEXT)',
+    `INSERT INTO npm_smoke (id, value) VALUES (1, '${nodeId}')`,
+    'SELECT id, value FROM npm_smoke WHERE id = 1',
+  ];
+  let index = -1;
+  let queryId;
+  function submit() {
+    queryId = randomUUID();
+    console.log('Installed foreground SQL submitting', statements[index]);
+    socket.send(JSON.stringify({type: 'query', queryId, sql: statements[index]}));
+  }
+  try {
+    await new Promise((resolve, reject) => {
+      socket.onerror = (event) => reject(event.error ?? new Error(event.message));
+      socket.onclose = (event) => reject(new Error(`SQL socket closed at statement ${index + 1}: ${event.code} ${event.reason}`));
+      socket.onmessage = ({data}) => {
+        try {
+          const message = JSON.parse(data);
+          if (message.type === 'error') throw new Error(JSON.stringify(message));
+          if (index === -1 && message.type === 'cache_dump') {
+            assert.equal(message.nodeId, nodeId, 'SQL socket must belong to the fresh foreground seed');
+            index++;
+            submit();
+          } else if (message.type === 'query_result' && message.queryId === queryId && index >= 0) {
+            console.log('Installed foreground SQL result', JSON.stringify(message));
+            if (message.error || message.errorCode) throw new Error(JSON.stringify(message));
+            if (index === 1) assert.equal(message.affectedRows, 1);
+            if (index === 2) {
+              assert.deepEqual(message.results, [{id: 1, value: nodeId}]);
+              resolve();
+            } else {
+              index++;
+              submit();
+            }
+          }
+        } catch (error) {
+          reject(error);
+        }
+      };
+    });
+  } finally {
+    socket.close();
   }
 }
 
@@ -89,17 +138,18 @@ async function verifyForegroundCli() {
   const stopProbe = new AbortController();
   const closed = once(child, 'close');
   const earlyExit = closed.then(([code, signal]) => {
-    throw new Error(`foreground CLI exited before readiness: ${code} (${signal})`);
+    throw new Error(`foreground CLI exited before completing public SQL: ${code} (${signal})`);
   });
   try {
     await Promise.race([earlyExit, waitForCliReadiness(
       `http://${LOOPBACK}:${rest}`, nodeId, stopProbe.signal)]);
+    await Promise.race([earlyExit, verifyForegroundSql(admin, nodeId)]);
     if (!child.kill('SIGINT')) throw new Error('foreground CLI did not receive SIGINT');
     const [code, signal] = await closed;
     if (code !== 0 || signal !== null) {
       throw new Error(`foreground CLI did not shut down cleanly: ${code} (${signal})`);
     }
-    console.log('Installed foreground CLI returned ready and exited 0 after SIGINT');
+    console.log('Installed foreground CLI verified CREATE/INSERT/SELECT and exited 0 after SIGINT');
   } finally {
     stopProbe.abort();
     if (child.exitCode === null && child.signalCode === null && child.pid) {

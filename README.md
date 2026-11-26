@@ -102,7 +102,32 @@ In a second terminal, check readiness:
 curl -fsS http://127.0.0.1:8080/readyz
 ```
 
-Wait for HTTP 200 with `"ready":true`. To shut down cleanly, press Ctrl-C once (SIGINT) in the foreground terminal and wait for the command to exit. The node keeps its data in `./single-node-data`.
+After HTTP 200 with `"ready":true`, open a Node.js 22 REPL in the second terminal with `node`. Connect to the admin SQL stream and wait for the initial `cache_dump` before submitting statements:
+
+```js
+const socket = (() => {
+  const ws = new WebSocket('ws://127.0.0.1:8081/api/admin/stream');
+  ws.onmessage = ({data}) => {
+    const message = JSON.parse(data);
+    if (message.type === 'cache_dump') console.log('Connected to', message.nodeId);
+    if (['query_result', 'error'].includes(message.type)) console.log(message);
+  };
+  return ws;
+})();
+const query = sql => socket.send(JSON.stringify({type: 'query', queryId: crypto.randomUUID(), sql}));
+```
+
+Run each line after the previous query succeeds:
+
+```js
+query('CREATE TABLE npm_smoke (id INTEGER PRIMARY KEY, value TEXT)');
+query("INSERT INTO npm_smoke (id, value) VALUES (1, 'hello')");
+query('SELECT id, value FROM npm_smoke WHERE id = 1');
+```
+
+The SELECT should return one row with `id: 1` and `value: 'hello'`. Close the client with `socket.close()`. The [admin API reference](docs/admin-api-reference.md#admin-websocket-message-contract) describes the request and result envelopes.
+
+To shut down cleanly, press Ctrl-C once (SIGINT) in the foreground terminal and wait for the command to exit. The node keeps its data in `./single-node-data`.
 
 ### Run the account-summary demonstration from source
 

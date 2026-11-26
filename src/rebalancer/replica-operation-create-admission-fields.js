@@ -1,3 +1,4 @@
+import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
 import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {OperationType} from './replica-operation-progress.js';
@@ -54,9 +55,16 @@ function matchesRequestedCreateGrant(requested, durable) {
   if (!hasLiveCreateGrant(durable)) return false;
   if (requested.createAdmissionAttemptToken != null) {
     return requested.createAdmissionAttemptToken === durable.createAdmissionAttemptToken &&
+      requested.createAdmissionToken === durable.createAdmissionToken &&
+      requested.createAdmissionAttemptSeq === durable.createAdmissionAttemptSeq &&
+      requested.createAdmissionReplicaCreatedAt === durable.createAdmissionReplicaCreatedAt &&
+      requested.createAdmissionWorkflowUpdatedAt === durable.createAdmissionWorkflowUpdatedAt &&
       requested.createAdmissionOwnerIncarnation === durable.createAdmissionOwnerIncarnation;
   }
-  return durable.createAdmissionAttemptSeq === 1 &&
+  const admissionToken = buildReplicaCreateAdmissionToken(requested);
+  return admissionToken !== null && durable.createAdmissionToken === admissionToken &&
+    durable.createAdmissionAttemptToken === buildReplicaCreateAttemptToken(admissionToken, 1) &&
+    durable.createAdmissionAttemptSeq === 1 &&
     durable.createAdmissionWorkflowUpdatedAt === requested.updatedAt;
 }
 

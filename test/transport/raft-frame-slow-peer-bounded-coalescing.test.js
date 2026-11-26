@@ -312,6 +312,90 @@ test('successful socket flushes report admitted Raft item families and encoded e
   }
 });
 
+test('independent check callbacks share one heartbeat flush at the first eligible check phase', async () => {
+  configureRouterProcess();
+  const router = new MessageRouter({nodeId: 'sender', bootIncarnation: TEST_BOOT_INCARNATION});
+  try {
+    const socket = createFakeSocket();
+    attachConnectedPeer(router, 'peer', socket);
+    const target = 'peer/partition/g-r2';
+    const deliveries = [];
+    const first = new Promise((resolve) => setImmediate(() => {
+      deliveries.push(router.deliver(target, buildEnvelope('g1', 1)));
+      // Queued behind the first flush, ahead of any flush rearmed by the next producer.
+      setImmediate(() => resolve(socket.sentFrames.map((frame) => frame.envelopes.length)));
+    }));
+    const second = new Promise((resolve) => setImmediate(() => {
+      const response = buildEnvelope('g2', 2);
+      response.message.msgType = RAFT.HEARTBEAT_RESPONSE;
+      deliveries.push(router.deliver(target, response));
+      resolve(socket.sentFrames.length);
+    }));
+    assert.equal(await second, 0, 'first producer left the event loop free for the second');
+    assert.deepEqual(await first, [2], 'second producer did not extend the first deadline');
+    const results = await Promise.all(deliveries);
+    assert.ok(results.every((result) => isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result))));
+  } finally {
+    await router.shutdown();
+    resetRouterProcess();
+  }
+});
+
+test('urgent Raft input expedites queued heartbeat FIFO and receipt settlement', async () => {
+  configureRouterProcess();
+  const router = new MessageRouter({nodeId: 'sender', bootIncarnation: TEST_BOOT_INCARNATION});
+  try {
+    const socket = createFakeSocket();
+    attachConnectedPeer(router, 'peer', socket);
+    const target = 'peer/partition/g-r2';
+    for (const [type, context] of [[RAFT.APPEND], [RAFT.APPEND_RESPONSE], [RAFT.REQUEST_VOTE],
+      [RAFT.TIMEOUT_NOW], [RAFT.HEARTBEAT, 'YQ=='], [RAFT.HEARTBEAT_RESPONSE, 'YQ==']]) {
+      const before = socket.sentFrames.length;
+      const receipts = [];
+      const send = (envelope) => router.deliver(target, envelope).then((result) => {
+        assert.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)));
+        receipts.push(envelope.groupId);
+      });
+      const first = send(buildEnvelope('ordinary', 1));
+      await Promise.resolve();
+      assert.equal(socket.sentFrames.length, before);
+      const urgent = buildEnvelope('urgent', 2, context);
+      urgent.message.msgType = type;
+      const second = send(urgent);
+      assert.deepEqual(receipts, []);
+      await Promise.resolve();
+      assert.equal(socket.sentFrames.length, before + 1, 'urgent work flushes before check phase');
+      assert.deepEqual(socket.sentFrames[before].envelopes.map((entry) => entry.payload.groupId),
+        ['ordinary', 'urgent']);
+      await Promise.all([first, second]);
+      assert.deepEqual(receipts, ['ordinary', 'urgent']);
+    }
+  } finally {
+    await router.shutdown();
+    resetRouterProcess();
+  }
+});
+
+test('one synchronous burst of 129 heartbeats splits at the 64-item frame bound', async () => {
+  configureRouterProcess();
+  const router = new MessageRouter({nodeId: 'sender', bootIncarnation: TEST_BOOT_INCARNATION});
+  try {
+    const socket = createFakeSocket();
+    attachConnectedPeer(router, 'peer', socket);
+    const deliveries = Array.from({length: 129}, (_, index) =>
+      router.deliver('peer/partition/g-r2', buildEnvelope('g', index)));
+    const results = await Promise.all(deliveries);
+    assert.ok(results.every((result) => isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result))));
+    assert.deepEqual(socket.sentFrames.map((frame) => frame.envelopes.length), [64, 64, 1]);
+    const order = socket.sentFrames.flatMap((frame) => frame.envelopes.map((entry) => entry.payload.message.index));
+    assert.deepEqual(order, Array.from({length: 129}, (_, index) => String(index)));
+    assert.equal(router.getStats().consensusDelivery.pendingBatchBytes, 0);
+  } finally {
+    await router.shutdown();
+    resetRouterProcess();
+  }
+});
+
 test('(c1-peer-bound) per-peer slow-socket (ws.bufferedAmount + pending ' +
   'batch) refuses excess envelopes with PEER_BUFFER_EXCEEDED, counts them, ' +
   'reports failure to Raft, and never stalls a healthy peer', async () => {
