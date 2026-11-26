@@ -29,6 +29,7 @@ import {
   queuedCreateMayStart,
   lostBootPhysicalWorkerError,
   traceCreateWorker,
+  measureCreateStage,
   matchesRetainedCreateActivation,
   observeCreateActivation,
   ownsReplicaCreateWork,
@@ -630,25 +631,26 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             // SYNCING owns the attached runtime. The caller's budget bounds
             // observation, while the service owns and drives the same request.
             if (!work.admissionReady) {
-              await waitForMaterializedCreateReadiness(
-                this, work, request, deadlineAtMs, isJoiningExistingGroup);
+              await measureCreateStage(this, work, 'voter_readiness', () =>
+                waitForMaterializedCreateReadiness(
+                  this, work, request, deadlineAtMs, isJoiningExistingGroup));
             }
             // The named release operation owns a committed origin even when
             // this caller cannot observe its reply. Only a current, timely
             // answer advances the local activation checkpoint.
             if (!participantReleased) {
               requireFreshCreateReleaseRoute(this);
-              await observeCreateActivation(this, work, deadlineAtMs, () =>
-                this.participantReleaseRecovery.releaseFreshCreate(partitionId, {
-                  createAdmissionEvidence, identityExisted: existed, deadlineAtMs,
-                }));
+              await measureCreateStage(this, work, 'participant_release', () =>
+                observeCreateActivation(this, work, deadlineAtMs, () =>
+                  this.participantReleaseRecovery.releaseFreshCreate(partitionId, {
+                    createAdmissionEvidence, identityExisted: existed, deadlineAtMs,
+                  })));
               requireReplicaCreateWork(this, work);
               participantReleased = true;
             }
-            if (work.claim && !await observeCreateActivation(
-              this, work, deadlineAtMs, () =>
-                work.owner.revalidatePhysicalWorker(work.claim),
-            )) {
+            if (work.claim && !await measureCreateStage(this, work, 'activation_worker_revalidation', () =>
+              observeCreateActivation(this, work, deadlineAtMs, () =>
+                work.owner.revalidatePhysicalWorker(work.claim)))) {
               return retireReplicaCreateWork(this, work);
             }
             requireReplicaCreateWork(this, work);

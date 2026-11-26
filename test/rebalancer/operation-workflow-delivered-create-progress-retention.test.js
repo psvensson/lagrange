@@ -421,8 +421,10 @@ test('CREATE delivery receipts bind the live target boot and exact granted attem
   const operation = buildRuntimeOperation({
     entityType: 'partition', createAdmissionOwnerIncarnation: 1,
     createAdmissionState: 'ADMITTED', createAdmissionToken: 'admission',
-    createAdmissionAttemptToken: 'attempt-1',
+    createAdmissionAttemptToken: 'attempt-1', createAdmissionAttemptSeq: 1,
+    createAdmissionReplicaCreatedAt: 100,
   });
+  operation.createAdmissionWorkflowUpdatedAt = operation.updatedAt;
   const request = {
     type: 'CREATE_REPLICA', operationType: operation.type,
     entityType: operation.entityType, entityId: operation.entityId,
@@ -434,10 +436,25 @@ test('CREATE delivery receipts bind the live target boot and exact granted attem
   };
   const reply = {status: ReplicaOperationResponseStatus.INITIATED, nodeId: TARGET_NODE_ID,
     operationId: operation.operationId, replicaId: operation.replicaId};
-  let deliver = () => buildDeliveryEnvelope({acknowledged: true}, reply);
+  const worker = () => ({
+    operationId: request.operationId, operationType: request.operationType, entityType: request.entityType,
+    entityId: request.entityId, partitionId: request.partitionId, replicaId: request.replicaId,
+    targetNodeId: TARGET_NODE_ID, admissionToken: request.createAdmissionToken,
+    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq,
+    workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt, ownerIncarnation: boot,
+    replicaCreatedAt: operation.createAdmissionReplicaCreatedAt,
+  });
+  const confirmed = () => buildDeliveryEnvelope({acknowledged: true}, {...reply, createWorkerReceipt: worker()});
+  let deliver = confirmed;
+  let endpointAhead = false;
   const originalGet = owner.repository.systemTableCache.get.bind(owner.repository.systemTableCache);
-  owner.repository.systemTableCache.get = (table, key) => table === 'nodes' && key === TARGET_NODE_ID ?
-    {node_id: key, boot_incarnation: boot} : originalGet(table, key);
+  owner.repository.systemTableCache.get = (table, key) => {
+    if (table === 'nodes' && key === TARGET_NODE_ID) return {boot_incarnation: boot};
+    if (table === 'node_endpoints' && key === `ep-${TARGET_NODE_ID}-ws`) {
+      return {boot_incarnation: endpointAhead ? boot + 1 : boot};
+    }
+    return originalGet(table, key);
+  };
   owner.deliverReplicaOperationRequest = () => {
     deliveries += 1;
     return deliver();
@@ -458,7 +475,7 @@ test('CREATE delivery receipts bind the live target boot and exact granted attem
     t.equal(sends[1].routineWake, false);
     t.equal(sends[1].attemptToken, request.createAdmissionAttemptToken);
     operation.createAdmissionAttemptToken = request.createAdmissionAttemptToken = 'attempt-2';
-    request.createAdmissionAttemptSeq = 2;
+    operation.createAdmissionAttemptSeq = request.createAdmissionAttemptSeq = 2;
     await run();
     t.equal(deliveries, 3, 'a different attempt requires its own reply');
     boot = operation.createAdmissionOwnerIncarnation = 2;
@@ -468,20 +485,21 @@ test('CREATE delivery receipts bind the live target boot and exact granted attem
     await run(false);
     await run();
     t.equal(deliveries, 6, 'lost acknowledgement leaves the next send eligible');
-    deliver = () => buildDeliveryEnvelope({acknowledged: true}, {...reply, replicaId: 'other'});
+    deliver = () => buildDeliveryEnvelope({acknowledged: true}, {...reply, createWorkerReceipt: worker(), replicaId: 'other'});
     await run();
     await run();
     t.equal(deliveries, 8, 'a reply for another replica cannot establish custody');
     deliver = () => {
+      const response = confirmed();
       boot += 1;
-      return buildDeliveryEnvelope({acknowledged: true}, reply);
+      return response;
     };
     await run();
     operation.createAdmissionOwnerIncarnation = boot;
     await run();
     t.equal(deliveries, 10, 'an answer spanning a target boot change cannot be reused');
     operation.createAdmissionOwnerIncarnation = boot;
-    deliver = () => buildDeliveryEnvelope({acknowledged: true}, reply);
+    deliver = confirmed;
     await run();
     operation.createAdmissionState = 'ROTATING';
     await run();
@@ -490,6 +508,27 @@ test('CREATE delivery receipts bind the live target boot and exact granted attem
     await run();
     await run();
     t.equal(deliveries, 14, 'missing target incarnation leaves each recovery send eligible');
+
+    boot = operation.createAdmissionOwnerIncarnation = 3;
+    operation.createAdmissionState = 'MATERIALIZED';
+    reply.status = ReplicaOperationResponseStatus.IN_PROGRESS;
+    for (const overrides of [null, {attemptToken: 'provisional'}, {ownerIncarnation: 2},
+      {replicaCreatedAt: 99}, {partitionId: 'other'}]) {
+      deliver = () => buildDeliveryEnvelope({acknowledged: true}, overrides === null ? reply :
+        {...reply, createWorkerReceipt: {...worker(), ...overrides}});
+      const before = deliveries;
+      await run(false);
+      await run();
+      t.equal(deliveries - before, 2, 'IN_PROGRESS without exact live-worker proof permits redrive');
+    }
+    deliver = confirmed;
+    await run(false);
+    const before = deliveries;
+    await run();
+    t.equal(deliveries, before, 'the exact target worker can confirm IN_PROGRESS');
+    endpointAhead = true;
+    await run();
+    t.equal(deliveries, before + 1, 'a newer endpoint invalidates a matching cached NODES boot');
   } finally {
     await coordinator.shutdown();
   }

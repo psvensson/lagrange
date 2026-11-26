@@ -1,8 +1,8 @@
-// The receipt belongs to the dispatched attempt. Cache visibility and a
-// reconstructed admission outcome cannot establish transport acknowledgement.
+// A transport ACK answers the request. Reusing that answer also requires the
+// target's proof of physical worker custody and the current durable grant.
 import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
+import {replicaCreateInstallAuthoritiesEqual} from '../node/replica-create-admission-evidence.js';
 import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../constants/index.js';
-import {resolveTargetNodeIncarnationSnapshot} from './replica-status.js';
 import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
   './replica-operation-constants.js';
 import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
@@ -14,39 +14,47 @@ function clearAcknowledgedCreateInFlight(owner, operationId) {
 
 function currentBoot(owner, targetNodeId) {
   const cache = owner.repository?.systemTableCache;
-  return cache ? resolveTargetNodeIncarnationSnapshot(cache, targetNodeId).bootIncarnation : null;
+  if (!cache || !targetNodeId) return null;
+  const nodeBoot = cache.get('nodes', targetNodeId)?.boot_incarnation;
+  const endpointBoot = cache.get('node_endpoints', `ep-${targetNodeId}-ws`)?.boot_incarnation;
+  return Number.isSafeInteger(nodeBoot) && nodeBoot > 0 && nodeBoot === endpointBoot ? nodeBoot : null;
 }
 
-// Every published CREATE attempt has an immutable admission token and attempt
-// token. Compare the actual wire fields, including the initial pre-grant send.
-function createFence(request, boot, targetNodeId) {
-  if (!Number.isSafeInteger(boot) || boot <= 0 || !request.operationId ||
-      !request.replicaId || !request.createAdmissionToken || !request.createAdmissionAttemptToken ||
-      !Number.isSafeInteger(request.createAdmissionAttemptSeq) || request.createAdmissionAttemptSeq < 1 ||
-      !Number.isSafeInteger(request.createAdmissionWorkflowUpdatedAt)) return null;
-  return JSON.stringify([boot, targetNodeId, request.operationId, request.replicaId,
-    request.partitionId, request.entityType, request.entityId, request.operationType,
-    request.sourceNodeId, request.createAdmissionToken, request.createAdmissionAttemptToken,
-    request.createAdmissionAttemptSeq, request.createAdmissionWorkflowUpdatedAt,
-    request.membershipPublicationEpoch]);
+function workerMatchesRequest(worker, request, targetNodeId, boot) {
+  if (!worker || boot === null ||
+      request.entityType !== UNIFIED_SERVICE_TYPE.PARTITION) return false;
+  const {ownerIncarnation, ...authority} = worker;
+  return ownerIncarnation === boot && replicaCreateInstallAuthoritiesEqual(authority, {
+    operationId: request.operationId, operationType: request.operationType,
+    entityType: request.entityType, entityId: request.entityId, partitionId: request.partitionId,
+    replicaId: request.replicaId, targetNodeId, admissionToken: request.createAdmissionToken,
+    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq,
+    workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt, replicaCreatedAt: worker.replicaCreatedAt,
+  });
+}
+
+function grantMatchesWorker(operation, worker) {
+  return Boolean(worker) &&
+    (operation.createAdmissionState === CREATE_ADMISSION_STATE.ADMITTED ||
+     operation.createAdmissionState === CREATE_ADMISSION_STATE.MATERIALIZED) &&
+    operation.createAdmissionOwnerIncarnation === worker.ownerIncarnation &&
+    operation.createAdmissionReplicaCreatedAt === worker.replicaCreatedAt &&
+    operation.createAdmissionToken === worker.admissionToken &&
+    operation.createAdmissionAttemptToken === worker.attemptToken &&
+    operation.createAdmissionAttemptSeq === worker.attemptSeq &&
+    operation.createAdmissionWorkflowUpdatedAt === worker.workflowUpdatedAt;
 }
 
 async function deliverCreateWithReceipt(owner, operation, targetNodeId, request, routineWake, send) {
   if (request.type !== ReplicaOperationMessageType.CREATE_REPLICA) return send();
   const boot = currentBoot(owner, targetNodeId);
-  const fence = createFence(request, boot, targetNodeId);
   const prior = owner.acknowledgedCreateByOperationId?.get(request.operationId);
-  // Partition admission is claimed by the target. A stale wake may still carry
-  // the pre-claim row or the previous owner's tuple after target restart.
-  const grantMatches = request.entityType !== UNIFIED_SERVICE_TYPE.PARTITION ||
-    (operation.createAdmissionOwnerIncarnation === boot &&
-     operation.createAdmissionToken === request.createAdmissionToken &&
-     operation.createAdmissionAttemptToken === request.createAdmissionAttemptToken &&
-     (operation.createAdmissionState === CREATE_ADMISSION_STATE.ADMITTED ||
-      operation.createAdmissionState === CREATE_ADMISSION_STATE.MATERIALIZED));
+  const grantMatches = grantMatchesWorker(operation, prior?.worker);
   const createPending = operation.workflowStep === WORKFLOW_STEP.SENDING ||
     operation.workflowStep === WORKFLOW_STEP.CREATING;
-  const receiptMatches = fence !== null && prior?.fence === fence;
+  const receiptMatches = workerMatchesRequest(prior?.worker, request, targetNodeId, boot) &&
+    prior.sourceNodeId === request.sourceNodeId &&
+    prior.membershipPublicationEpoch === request.membershipPublicationEpoch;
   if (routineWake && createPending && grantMatches && receiptMatches) {
     return prior.delivery;
   }
@@ -60,14 +68,17 @@ async function deliverCreateWithReceipt(owner, operation, targetNodeId, request,
     priorReceiptStatus: prior ? deliveryAnswerOf(prior.delivery).status : null,
   });
   const reply = deliveryAnswerOf(delivery);
-  if (fence !== null && reply?.success !== false &&
-      isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
+  if (isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) && reply?.success !== false &&
       (reply?.status === ReplicaOperationResponseStatus.INITIATED ||
        reply?.status === ReplicaOperationResponseStatus.IN_PROGRESS) &&
       reply.operationId === request.operationId && reply.replicaId === request.replicaId &&
-      reply.nodeId === targetNodeId && currentBoot(owner, targetNodeId) === boot) {
+      reply.nodeId === targetNodeId && workerMatchesRequest(reply.createWorkerReceipt, request, targetNodeId, boot) &&
+      currentBoot(owner, targetNodeId) === boot) {
     owner.acknowledgedCreateByOperationId ??= new Map();
-    owner.acknowledgedCreateByOperationId.set(request.operationId, {fence, delivery});
+    owner.acknowledgedCreateByOperationId.set(request.operationId, {
+      worker: Object.freeze({...reply.createWorkerReceipt}), delivery,
+      sourceNodeId: request.sourceNodeId, membershipPublicationEpoch: request.membershipPublicationEpoch,
+    });
   }
   return delivery;
 }
