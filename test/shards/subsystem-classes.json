@@ -28,7 +28,7 @@
   "censusSize": 2836,
   "digest": "fnv1a32-6e1f8fa6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-97e264d0",
+  "observationDigest": "fnv1a32-bef50ee9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -15619,6 +15619,7 @@
     },
     "test/partition/partition-cdc-topology-progress-currentness.test.js": {
       "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
         "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
         "src/bootstrap/shared/partition-service-construction.js",
         "src/cdc/cdc-delivery-outcome.js",
@@ -15635,6 +15636,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-committed-peer-address.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/transport/transport-error-codes.js",

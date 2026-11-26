@@ -2,7 +2,7 @@
 // These values explain a refusal; they never decide release, drain, retry,
 // admission, recovery, or deadline policy.
 import {types} from 'node:util';
-import {PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME} from
+import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {participantReleaseGenerationValid} from
   '../partition/partition-participant-release-contract.js';
@@ -73,6 +73,23 @@ function boundedIdentity(value) {
     value : null;
 }
 
+// Only the requesting transport knows the exact recipient of an unanswered INSPECT.
+function inspectTarget(nodeId, replicaId) {
+  const node = boundedIdentity(nodeId);
+  const replica = boundedIdentity(replicaId);
+  return node && replica ? {inspectNodeId: node, inspectReplicaId: replica} : {};
+}
+
+function captureReleaseInspectTarget(request, nodeId) {
+  return request.action === PARTICIPANT_RELEASE_ACTION.INSPECT ?
+    inspectTarget(nodeId, request.replicaId) : {};
+}
+
+function projectedInspectTarget(answer) {
+  return inspectTarget(ownDataField(answer, 'inspectNodeId'),
+    ownDataField(answer, 'inspectReplicaId'));
+}
+
 function releaseDrainGeneration(record) {
   const lifecycle = ownDataField(record, FIELD.LIFECYCLE_INCARNATION);
   const generation = {
@@ -119,6 +136,7 @@ function captureParticipantControlRefusal(answer) {
   const controlBlockedDrain = ownDataField(answer, FIELD.OUTCOME) === DRAIN_PENDING ?
     blockedDrainOf(answer, FIELD.BLOCKED_DRAIN) : null;
   return objectFreeze({
+    ...projectedInspectTarget(answer),
     controlMissingFact: controlRefusalText(answer, FIELD.MISSING_FACT),
     controlPhase: controlRefusalText(answer, FIELD.PHASE),
     controlReason: controlRefusalText(answer, FIELD.REASON),
@@ -140,6 +158,7 @@ function captureParticipantReleaseRecoveryDetail(answer) {
     controlPartitionId,
     controlNodeId: boundedIdentity(ownDataField(answer, FIELD.CONTROL_NODE_ID)),
     controlOutcome,
+    ...projectedInspectTarget(answer),
     controlMissingFact: controlRefusalText(answer, FIELD.CONTROL_MISSING_FACT),
     controlPhase: controlRefusalText(answer, FIELD.CONTROL_PHASE),
     controlReason: controlRefusalText(answer, FIELD.CONTROL_REASON),
@@ -255,6 +274,7 @@ function participantReleaseSeedBudgetObservation(start, terminal, budgetMs) {
 
 export {
   controlRefusalText as releaseDiagnosticText,
+  captureReleaseInspectTarget,
   captureParticipantControlRefusal,
   captureParticipantReleaseRecoveryDetail,
   captureParticipantReleaseDiagnosticTrigger,

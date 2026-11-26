@@ -5,7 +5,7 @@ import {AddressManager} from '../address/address-manager.js';
 import {deliveryTransportOf, deliveryAnswerOf, classifyThrownDeliveryError, isDeliveredTransportDeliveryOutcome,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
-import {participantReleaseClockMeasured, participantReleaseSafeClockInteger, releaseDiagnosticText,
+import {participantReleaseClockMeasured, participantReleaseSafeClockInteger, releaseDiagnosticText, captureReleaseInspectTarget,
   readParticipantReleaseClock} from
   './participant-release-diagnostic-observation.js';
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
@@ -86,6 +86,7 @@ function participantReleaseRequestBudget(owner, deadlineAtMs, ceilingAtMs) {
 function observationUnavailable(request, nodeId, reason = null) {
   return releaseAnswer(OUTCOME.UNAVAILABLE, request,
     {missingFact: MISSING_FACT.REPLICA_RELEASE_REPLY, owner: nodeId,
+      ...captureReleaseInspectTarget(request, nodeId),
       ...(reason === null ? {} : {reason}), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
 }
 
@@ -150,12 +151,10 @@ async function askParticipantRelease(owner, nodeId, request, trace, phase = requ
     if (trace) recordReleaseHop(trace, phase, {messageId: delivery.messageId ?? null, nodeId,
       elapsedMs: performance.now() - start, deliveryState: delivery.deliveryState,
       reasonCode: delivery.reasonCode});
-    return prepared.observation &&
+    const reason = prepared.observation &&
       delivery.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
-      observationUnavailable(prepared.request, nodeId, delivery.reasonCode) :
-      releaseAnswer(OUTCOME.UNAVAILABLE, prepared.request,
-        {missingFact: MISSING_FACT.REPLICA_RELEASE_REPLY, owner: nodeId,
-          reason: String(error?.message ?? error), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
+      delivery.reasonCode : String(error?.message ?? error);
+    return observationUnavailable(prepared.request, nodeId, reason);
   }
 }
 

@@ -7,6 +7,7 @@ import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {captureParticipantReleaseRecoveryDetail} from '../../src/node/participant-release-diagnostic-observation.js';
 import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -924,6 +925,34 @@ test('registered dependent release retains control expiry before nested client d
     });
   }, undefined, {timeSource: clock});
 });
+
+test('unanswered control INSPECT retains its addressed replica through recovery reporting', () =>
+  fixture(async ({service, controlService, controlHandler, transport, release}) => {
+    const original = transport.deliver;
+    let refused = 0;
+    transport.deliver = function(address, payload, options) {
+      if (payload.partitionId === CONTROL_PARTITION && payload.action === RELEASE_ACTION.INSPECT) {
+        assert.equal(options.targetNodeId, controlHandler.nodeId);
+        assert.equal(payload.replicaId, controlService.replicaId);
+        refused++;
+        throw new Error('control INSPECT link closed');
+      }
+      return original.call(this, address, payload, options);
+    };
+    try {
+      const answer = await release();
+      assert.ok(refused > 0);
+      assert.equal(answer.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
+      const detail = captureParticipantReleaseRecoveryDetail(answer);
+      assert.equal(detail.controlMissingFact, MISSING_FACT.REPLICA_RELEASE_REPLY);
+      assert.equal(detail.controlPhase, RELEASE_ACTION.INSPECT);
+      assert.equal(detail.inspectNodeId, controlHandler.nodeId);
+      assert.equal(detail.inspectReplicaId, controlService.replicaId);
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+    } finally {
+      transport.deliver = original;
+    }
+  }, undefined, {remoteControl: true}));
 
 test('registered dependent release retains delivered control refusal after current leader loss', () =>
   fixture(async ({service, controlService, controlHandler, transport, release}) => {
