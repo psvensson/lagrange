@@ -1,0 +1,245 @@
+{
+  "sourceCommit": "43afb11b612e7eca7f52ea7efeda7a712b21c3ae",
+  "host": "tv-dator",
+  "scope": "Four logical processes on one managed host. Actual owner kill and same-job successor grants. Terminal SUCCEEDED and subsequent public DML remain unobserved in the witness interval.",
+  "observations": [
+    {
+      "publishedBefore": [
+        {
+          "node_id": "3cba4a1c-290e-4735-af37-8a2a9aeca714",
+          "address": "127.0.0.1",
+          "port": 53365
+        },
+        {
+          "node_id": "932fe293-4585-48d3-acef-1dec7dc55d51",
+          "address": "127.0.0.1",
+          "port": 53364
+        }
+      ]
+    },
+    {
+      "lostNode": "3cba4a1c-290e-4735-af37-8a2a9aeca714",
+      "running": {
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "status": "RUNNING",
+        "ownerId": "schema-worker-9278e2cf-266c-42d3-9391-3a704269a6c3",
+        "fence": 1,
+        "lease": 1795721276647,
+        "version": 6
+      }
+    },
+    {
+      "retainedAfterExit": {
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "status": "RUNNING",
+        "ownerId": "schema-worker-9278e2cf-266c-42d3-9391-3a704269a6c3",
+        "fence": 1,
+        "lease": 1795721276647,
+        "version": 6
+      },
+      "observedAt": 1795721247053
+    },
+    {
+      "partitionId": "schema_operations-p1",
+      "leaderChanged": false,
+      "priorLeader": "schema_operations-p1-r1",
+      "priorTerm": 1,
+      "leader": "schema_operations-p1-r1",
+      "term": 1
+    },
+    {
+      "partitionId": "replica_operations-p1",
+      "leaderChanged": false,
+      "priorLeader": "replica_operations-p1-r1",
+      "priorTerm": 1,
+      "leader": "replica_operations-p1-r1",
+      "term": 1
+    },
+    {
+      "partitionId": "services-p1",
+      "leaderChanged": false,
+      "priorLeader": "services-p1-r1",
+      "priorTerm": 1,
+      "leader": "services-p1-r1",
+      "term": 1
+    },
+    {
+      "partitionId": "tables-p1",
+      "leaderChanged": true,
+      "priorLeader": "replace-replica-8560118c3462bcc0336463478b7a22db",
+      "priorTerm": 2,
+      "leader": "tables-p1-r1",
+      "term": 3
+    },
+    {
+      "partitionId": "partitions-p1",
+      "leaderChanged": true,
+      "priorLeader": "replace-replica-10e9c2fc124f65df82db00a2eec6294b",
+      "priorTerm": 2,
+      "leader": "partitions-p1-r1",
+      "term": 4
+    },
+    {
+      "partitionId": "nodes-p1",
+      "leaderChanged": false,
+      "priorLeader": "nodes-p1-r1",
+      "priorTerm": 1,
+      "leader": "nodes-p1-r1",
+      "term": 1
+    },
+    {
+      "successorNode": "5df94d66-d6c8-43eb-8ab1-9d0c9206c4b4",
+      "next": {
+        "ownerId": "schema-worker-af6b0bbc-5361-40bd-bbff-8caf8722f394",
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "key": "global.wire_owner_loss_orders",
+        "fence": 2,
+        "at": 1795721276818
+      },
+      "claim": {
+        "ownerId": "schema-worker-af6b0bbc-5361-40bd-bbff-8caf8722f394",
+        "fence": 2,
+        "lease": 1795721306651,
+        "at": 1795721276683
+      }
+    }
+  ],
+  "onTerminalWaitExpiry": [
+    {
+      "nodeId": "5df94d66-d6c8-43eb-8ab1-9d0c9206c4b4",
+      "grants": [
+        {
+          "ownerId": "schema-worker-af6b0bbc-5361-40bd-bbff-8caf8722f394",
+          "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+          "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+          "key": "global.wire_owner_loss_orders",
+          "fence": 2,
+          "at": 1795721276818
+        },
+        {
+          "ownerId": "schema-worker-af6b0bbc-5361-40bd-bbff-8caf8722f394",
+          "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+          "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+          "key": "global.wire_owner_loss_orders",
+          "fence": 7,
+          "at": 1795721406317
+        }
+      ],
+      "claims": [
+        {
+          "ownerId": "schema-worker-af6b0bbc-5361-40bd-bbff-8caf8722f394",
+          "fence": 2,
+          "lease": 1795721306651,
+          "at": 1795721276683
+        },
+        {
+          "ownerId": "schema-worker-af6b0bbc-5361-40bd-bbff-8caf8722f394",
+          "fence": 7,
+          "lease": 1795721436368,
+          "at": 1795721406548
+        }
+      ],
+      "barrier": {
+        "jobId": "schema-job-3f73314ae44bd3770c7285bd3ce2556b",
+        "tableId": "tbl-3f73314ae44bd3770c7285bd3ce2556b",
+        "partitionId": "tbl-3f73314ae44bd3770c7285bd3ce2556b-p1",
+        "ownerId": "schema-worker-af6b0bbc-5361-40bd-bbff-8caf8722f394"
+      },
+      "attemptCount": 6,
+      "attempts": [
+        {
+          "number": 1,
+          "fence": 2,
+          "stage": "executor threw",
+          "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "Timed out waiting for routable partition service for partition tbl-3f73314ae44bd3770c7285bd3ce2556b-p1"
+          }
+        },
+        {
+          "number": 6,
+          "fence": 7,
+          "stage": "executor entered"
+        }
+      ],
+      "pending": [
+        {
+          "fence": 2,
+          "at": 1795721306905,
+          "cause": {
+            "code": "INTERNAL_ERROR",
+            "message": "Timed out waiting for routable partition service for partition tbl-3f73314ae44bd3770c7285bd3ce2556b-p1"
+          },
+          "outcome": {
+            "state": "pending",
+            "nextAction": "retry",
+            "reasons": [
+              "schema_replica_convergence_pending"
+            ]
+          }
+        },
+        {
+          "fence": 6,
+          "at": 1795721404599,
+          "cause": {
+            "code": "INTERNAL_ERROR",
+            "message": "Timed out waiting for routable partition service for partition tbl-3f73314ae44bd3770c7285bd3ce2556b-p1"
+          },
+          "outcome": {
+            "state": "pending",
+            "nextAction": "retry",
+            "reasons": [
+              "schema_replica_convergence_pending"
+            ]
+          }
+        }
+      ],
+      "provisioning": [
+        {
+          "fence": 2,
+          "at": 1795721276850,
+          "provisionerWired": true,
+          "requested": 3,
+          "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "Timed out waiting for routable partition service for partition tbl-3f73314ae44bd3770c7285bd3ce2556b-p1"
+          }
+        },
+        {
+          "fence": 7,
+          "at": 1795721406347,
+          "provisionerWired": true,
+          "requested": 3
+        }
+      ]
+    },
+    {
+      "nodeId": "932fe293-4585-48d3-acef-1dec7dc55d51",
+      "grants": [],
+      "claims": [],
+      "attemptCount": 0,
+      "attempts": [],
+      "pending": [],
+      "provisioning": []
+    },
+    {
+      "nodeId": "3aa3ae8e-f8b2-45a8-9682-adab073c376b",
+      "grants": [],
+      "claims": [],
+      "attemptCount": 0,
+      "attempts": [],
+      "pending": [],
+      "provisioning": []
+    }
+  ],
+  "reportSha256": {
+    "lagrange-1922-grant-inventory-tv-dator.log": "b9b521474576bd57bde6aa4763d38aa2c840d439cbea55f52ccb467eefe20340",
+    "lagrange-embedded-cluster-7gF30D-3aa3ae8e-f8b2-45a8-9682-adab073c376b-owner-loss.log": "f6b7de188c4418f2eaaec3a0bc9833530eeb6c576bb7da8671fa73607423a50c",
+    "lagrange-embedded-cluster-7gF30D-3cba4a1c-290e-4735-af37-8a2a9aeca714-owner-loss.log": "94e297d08c1dbca55c5a5a9db35679260a1a0f075c297bf3482262a74d5ddd46",
+    "lagrange-embedded-cluster-7gF30D-5df94d66-d6c8-43eb-8ab1-9d0c9206c4b4-owner-loss.log": "4bc139c6786e96763942d7beb253813f5d93470b15acb7b9f1a01cc88ff638e6",
+    "lagrange-embedded-cluster-7gF30D-932fe293-4585-48d3-acef-1dec7dc55d51-owner-loss.log": "6e8adef60d212afa1ac0c66bbdd58eec82daedf7e3551823756d56471b89fb8a"
+  }
+}
