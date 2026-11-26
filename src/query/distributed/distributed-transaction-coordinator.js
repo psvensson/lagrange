@@ -483,27 +483,25 @@ class DistributedTransactionCoordinator {
 
   async markWriteOperationResult(sessionId, operationId, result, options = {}) {
     const tx = this.transactionsBySession.get(sessionId);
-    if (!tx) return;
-    const operation = tx.writeOperations.find(
+    const operation = tx?.writeOperations.find(
       (entry) => entry.operationId === operationId,
     );
     if (!operation) return;
-    operation.status =
-      result?.success === true ?
-        WRITE_OPERATION_STATUS.SUCCEEDED :
-        WRITE_OPERATION_STATUS.FAILED;
+    const succeeded = result?.success === true;
+    operation.status = succeeded ?
+      WRITE_OPERATION_STATUS.SUCCEEDED :
+      WRITE_OPERATION_STATUS.FAILED;
     operation.retryCount = Number.isInteger(result?.retryCount) ?
       result.retryCount :
       0;
-    operation.lastError =
-      result?.success === true ?
-        null :
-        result?.error || QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
+    operation.lastError = succeeded ?
+      null :
+      result?.error || QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
     operation.updatedAt = this.now();
     tx.updatedAt = operation.updatedAt;
     this.noteMetadataMutation?.(tx);
     const persistPromise = this.persistWriteOperationRecord(tx, operation);
-    if (options?.deferPersistenceAwait === true) {
+    if (options.deferPersistenceAwait === true) {
       this.enqueueDeferredWriteOperationPersist(tx, persistPromise);
       return;
     }
