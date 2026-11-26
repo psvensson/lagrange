@@ -69,6 +69,7 @@ const PARTITIONS_SCHEMA = {
       notNull: true,
       defaultValue: 1,
     },
+    {name: 'split_descriptor_attempt', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'replica_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 3},
     {name: 'size_bytes', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'leader_node_id', type: COLUMN_TYPE.TEXT},

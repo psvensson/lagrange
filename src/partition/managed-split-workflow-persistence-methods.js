@@ -396,31 +396,34 @@ class ManagedSplitWorkflowPersistenceMethods {
       return;
     }
 
-    if (leftExists !== rightExists) {
-      // A prior attempt crashed between the two child inserts. The
-      // survivor is unroutable (the epoch never promoted) and carries no
-      // data, so remove it and let this attempt re-insert both rows —
-      // wedging the split forever on a phantom child is worse.
-      const orphanPartitionId = leftExists ?
-        leftPartitionId :
-        rightPartitionId;
-      await this.deletePartitionMetadata(orphanPartitionId);
-      await this.insertPartitionMetadataAtomically(
-        leftPartitionMetadata,
-        rightPartitionMetadata,
-        assertEffectAllowed,
-      );
-      return;
+    for (const [expected, existing] of [
+      [leftPartitionMetadata, leftExistingPartition],
+      [rightPartitionMetadata, rightExistingPartition],
+    ]) {
+      assertEffectAllowed?.();
+      if (!existing) {
+        await this.insertPartitionMetadata(expected);
+        continue;
+      }
+      this.assertExistingChildPartitionMetadataMatches(expected, existing);
+      const previous = existing.split_descriptor_attempt;
+      const next = expected.split_descriptor_attempt;
+      if (!Number.isSafeInteger(previous) || previous < 1 ||
+          !Number.isSafeInteger(next) || next < previous) {
+        throw Object.assign(new Error('Invalid split child descriptor ownership'), {
+          code: 'split_child_descriptor_owner_invalid', partitionId: expected.partition_id,
+        });
+      }
+      if (previous === next) continue;
+      const acquired = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.PARTITIONS,
+        whereClause: {table_id: expected.table_id, partition_version: expected.partition_version,
+          split_descriptor_attempt: previous, partition_id: expected.partition_id},
+        data: {split_descriptor_attempt: next},
+      }, this.buildManagedSplitMutationOptions());
+      this.assertSplitEpochMutationEffect(acquired, {workflowId: expected.partition_id});
     }
-
-    this.assertExistingChildPartitionMetadataMatches(
-      leftPartitionMetadata,
-      leftExistingPartition,
-    );
-    this.assertExistingChildPartitionMetadataMatches(
-      rightPartitionMetadata,
-      rightExistingPartition,
-    );
   }
 
   /**
@@ -536,6 +539,24 @@ class ManagedSplitWorkflowPersistenceMethods {
       tableName: TABLES.PARTITIONS,
       row: partitionMetadata,
     }, this.buildManagedSplitMutationOptions());
+  }
+
+  async finalizeAbortedSplitChild(workflow, partitionId) {
+    const {tableId, workflowId} = workflow;
+    const workflowAttempt = workflow.metadata?.workflowAttempt;
+    if (!tableId || !workflowId || !Number.isSafeInteger(workflowAttempt) || workflowAttempt < 1) {
+      throw Object.assign(new Error('Invalid terminal split descriptor identity'), {
+        code: 'split_child_descriptor_owner_invalid',
+      });
+    }
+    const splitDescriptorIntent = {action: 'finalizeChild', tableId, partitionId,
+      workflowId, workflowAttempt};
+    return this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+      tableName: TABLES.PARTITIONS,
+      whereClause: {table_id: tableId, split_descriptor_attempt: workflowAttempt,
+        partition_id: partitionId},
+    }, {...this.buildManagedSplitMutationOptions(), splitDescriptorIntent});
   }
 
   /**

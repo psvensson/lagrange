@@ -360,8 +360,7 @@ test('split cutover sets partition_count to target + sibling count ' +
   );
 });
 
-test('ensureChildPartitionMetadata removes an orphaned single child ' +
-  'from a crashed attempt and re-inserts both children', async (t) => {
+test('split retry adopts a matching child and inserts only its missing peer', async (t) => {
   const partitionInfos = {
     'users-p-left': {
       partition_id: 'users-p-left',
@@ -370,30 +369,34 @@ test('ensureChildPartitionMetadata removes an orphaned single child ' +
       partition_key_start: null,
       partition_key_end: 'm',
       partition_version: 2,
+      partition_key_type: 'TEXT',
+      split_descriptor_attempt: 4,
       replica_count: 3,
       size_bytes: 0,
       state: 'NORMAL',
     },
   };
-  const deleteCalls = [];
+  const acquisitions = [];
   const insertCalls = [];
   const {workflow} = buildWorkflow({
     transactionCoordinator: createTransactionCoordinator(),
     getPartitionInfo: (partitionId) => partitionInfos[partitionId] || null,
     cdcIntegrationService: {
-      async updateSystemTableRow() {
+      async updateSystemTableRow(_tableName, where, data) {
+        acquisitions.push({where, data});
+        const row = partitionInfos[where.partition_id];
+        if (!Object.entries(where).every(([field, value]) => row[field] === value)) {
+          return {success: true, affectedRows: 0};
+        }
+        Object.assign(row, data);
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow(_tableName, row) {
         insertCalls.push(row.partition_id);
         partitionInfos[row.partition_id] = {...row};
-        return {success: true};
-      },
-      async deleteSystemTableRow(_tableName, whereClause) {
-        deleteCalls.push(whereClause.partition_id);
-        delete partitionInfos[whereClause.partition_id];
         return {success: true, affectedRows: 1};
       },
+
     },
   });
 
@@ -404,6 +407,8 @@ test('ensureChildPartitionMetadata removes an orphaned single child ' +
     partition_key_start: keyStart,
     partition_key_end: keyEnd,
     partition_version: 2,
+    partition_key_type: 'TEXT',
+    split_descriptor_attempt: 8,
     replica_count: 3,
     size_bytes: 0,
     state: 'NORMAL',
@@ -414,17 +419,18 @@ test('ensureChildPartitionMetadata removes an orphaned single child ' +
     rightPartitionMetadata: childRow('users-p-right', 'm', null),
   });
 
-  t.same(
-    deleteCalls,
-    ['users-p-left'],
-    'the orphaned survivor must be deleted, not wedged behind a ' +
-    'terminal inconsistency error',
-  );
-  t.same(
-    insertCalls.sort(),
-    ['users-p-left', 'users-p-right'],
-    'both children must be re-inserted after the orphan cleanup',
-  );
+  t.same(acquisitions, [{
+    where: {table_id: 'tbl-users', partition_version: 2, split_descriptor_attempt: 4,
+      partition_id: 'users-p-left'},
+    data: {split_descriptor_attempt: 8},
+  }]);
+  t.same(insertCalls, ['users-p-right']);
+  t.equal(partitionInfos['users-p-left'].split_descriptor_attempt, 8);
+  await t.rejects(workflow.ensureChildPartitionMetadata({
+    leftPartitionMetadata: {...childRow('users-p-left', null, 'm'), split_descriptor_attempt: 4},
+    rightPartitionMetadata: {...childRow('users-p-right', 'm', null), split_descriptor_attempt: 4},
+  }), {code: 'split_child_descriptor_owner_invalid'});
+  t.equal(acquisitions.length, 1, 'an old attempt cannot acquire the successor row');
   t.ok(
     partitionInfos['users-p-left'] && partitionInfos['users-p-right'],
     'both child rows must exist after recovery',

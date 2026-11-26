@@ -152,6 +152,12 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
         if (sql.trim().toUpperCase().startsWith(SELECT)) {
           return {success: true, rows: db.prepare(sql).all(...params)};
         }
+        // A delayed request across owner loss has not reached SQLite yet.
+        // Keep its actual SQL and bound values independent of later submissions.
+        if (store.holdSubmission?.({writer, sql, params})) {
+          store.applyHeldSubmission = () => applyWrite(store, {writer, sql, params});
+          throw new Error(SUBMIT_FAILED);
+        }
         return submitWrite(store, writer, sql, params);
       },
     };

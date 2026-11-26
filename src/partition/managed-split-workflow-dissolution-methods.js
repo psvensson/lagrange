@@ -490,7 +490,7 @@ class ManagedSplitWorkflowDissolutionMethods {
           );
           await assertWorkflowRecordHeld(this, workflowId,
             ABORTED_RECORD_STATES);
-          await this.deletePartitionMetadata(childPartitionId);
+          await this.finalizeAbortedSplitChild(workflow, childPartitionId);
           this.groupRetirementRedrive.settle(workflowId, childPartitionId);
         } catch (error) {
           this.logger.warn(MANAGED_SPLIT_LOG_MSG.CHILD_TEARDOWN_FAILED, {
