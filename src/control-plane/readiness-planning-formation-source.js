@@ -46,40 +46,42 @@ function readSharedNodeRows(service) {
   }
 }
 
-function readFormationBootstrapOwnerKey(service, cachedRows = null) {
-  const rows = arrayIsArray(cachedRows) ?
-    cachedRows :
-    readSharedNodeRows(service);
+function isJoiningNodeRow(row) {
+  const status = readOwnDataValue(row, 'status');
+  return typeof status === 'string' && stringToLowerCase(status) === NODE_STATE.JOINING;
+}
+
+function readFormationBootstrapOwnerKey(service) {
+  const rows = readSharedNodeRows(service);
   for (let index = 0; index < rows.length; index++) {
-    const status = readOwnDataValue(rows[index], 'status');
-    const ownerKey = readOwnerKey(rows[index]);
-    if (typeof status === 'string' &&
-      stringToLowerCase(status) === NODE_STATE.JOINING &&
-      hasReadinessLiveTransportEvidence(ownerKey, service?.messageRouter)) {
-      return ownerKey;
-    }
+    const row = rows[index];
+    if (!isJoiningNodeRow(row)) continue;
+    const ownerKey = readOwnerKey(row);
+    if (hasReadinessLiveTransportEvidence(ownerKey, service?.messageRouter)) return ownerKey;
   }
   return '';
 }
 
-function readFormationEpochKey(service, cachedRows = null) {
-  const rows = arrayIsArray(cachedRows) ?
-    cachedRows :
-    readSharedNodeRows(service);
+function connectedFormationOwnerKey(service, joiningOwnerKeys) {
+  for (let index = 0; index < joiningOwnerKeys.length; index++) {
+    const key = joiningOwnerKeys[index];
+    if (hasReadinessLiveTransportEvidence(key, service?.messageRouter)) return key;
+  }
+  return '';
+}
+
+function readFormationEpochKey(joiningOwnerKeys) {
   const formationOwnerKeys = [];
-  for (let index = 0; index < rows.length; index++) {
-    const status = readOwnDataValue(rows[index], 'status');
-    const ownerKey = readOwnerKey(rows[index]);
-    if (typeof status === 'string' &&
-      stringToLowerCase(status) === NODE_STATE.JOINING && ownerKey) {
-      appendArrayValue(formationOwnerKeys, ownerKey);
-    }
+  for (let index = 0; index < joiningOwnerKeys.length; index++) {
+    if (joiningOwnerKeys[index]) appendArrayValue(formationOwnerKeys, joiningOwnerKeys[index]);
   }
   arraySort(formationOwnerKeys);
   return encodeSignatureValues(formationOwnerKeys);
 }
 
 export {
+  connectedFormationOwnerKey,
+  isJoiningNodeRow,
   readSharedNodeRows,
   readFormationBootstrapOwnerKey,
   readFormationEpochKey,

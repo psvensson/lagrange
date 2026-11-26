@@ -326,32 +326,56 @@ async (t) => {
       stringStartsWith(entry.reason, 'host-ineligible: thermal_unmeasurable')));
 });
 
-test('the pinned image resolves per host by content identity across image stores; absent ' +
-  'is image_unavailable with no pull attempt', async () => {
-  const layers = ['sha256:' + 'e'.repeat(64)];
-  const content = contentIdentityOf(layers);
-  const registryRef = `psvensson/lagrange@sha256:${'1'.repeat(64)}`;
-  const manifestId = `sha256:${'c'.repeat(64)}`;
-  const configId = `sha256:${'f'.repeat(64)}`;
+test('pin by the requested reference and its config, including loaded hosts before the anchor', async () => {
+  const digest = (char) => `sha256:${char.repeat(64)}`;
+  const layers = [digest('e')];
+  const contentIdentity = contentIdentityOf(layers);
+  const registryRef = `psvensson/lagrange@${digest('1')}`;
+  const config = digest('f');
+  const manifest = digest('c');
+  const intermediate = digest('0');
+  const loadedManifest = digest('b');
+  const inspect = (id, digests = []) =>
+    `${id}|${JSON.stringify(digests)}|${JSON.stringify(layers)}\n__exit_code=0`;
+  const missing = 'Error: No such image: requested\n__exit_code=1';
+  const archive = (id) => JSON.stringify([{Config: `blobs/sha256/${id.slice(7)}`}]) + '\n__exit_code=0';
   const {sshRun, calls} = createScriptedSsh([
-    [/docker info --format/u, (_command, host) => (host === '10.0.0.2' ?
-      'overlay2|[]' : 'overlayfs|[["driver-type","io.containerd.snapshotter.v1"]]')],
-    [/docker image inspect/u, (_command, host) => {
-      if (host === '10.0.0.3') return `${configId}|[]|["sha256:${'0'.repeat(64)}"]\n__exit_code=0`;
-      return host === '10.0.0.2' ?
-        `${configId}|[]|${JSON.stringify(layers)}\n__exit_code=0` :
-        `${manifestId}|${JSON.stringify([registryRef])}|${JSON.stringify(layers)}\n__exit_code=0`;
-    }]]);
-  const resolved = await resolvePinnedImage({hosts: [{ip: '10.0.0.1'}, {ip: '10.0.0.2'}],
-    contentIdentity: content, registryRef, sshRun, opts: {}});
-  assert.equal(resolved['10.0.0.1'].runRef, registryRef);
-  assert.equal(resolved['10.0.0.1'].imageStore, 'containerd');
-  assert.equal(resolved['10.0.0.2'].runRef, configId);
-  assert.equal(resolved['10.0.0.2'].imageStore, 'overlay2');
-  assert.equal(resolved['10.0.0.2'].provenance, `loaded:${configId}`);
-  await assert.rejects(resolvePinnedImage({hosts: [{ip: '10.0.0.3'}], contentIdentity: content,
-    registryRef, sshRun, opts: {}}), (error) => error.code === 'image_unavailable' &&
-    error.diagnostic.reason === 'absent');
+    [/docker info --format/u, (_, host) => host === 'overlay' ? 'overlay2|[]' :
+      'overlayfs|[["driver-type","io.containerd.snapshotter.v1"]]'],
+    [/docker image inspect/u, (command, host) => {
+      if (command.includes(registryRef) || command.includes('local:final')) {
+        if (host === 'different') return inspect(intermediate);
+        return host === 'anchor' ? inspect(manifest, [registryRef]) : missing;
+      }
+      if (host === 'overlay' && command.includes(config)) return inspect(config);
+      if (command.includes(intermediate)) return inspect(intermediate);
+      if (command.includes(loadedManifest)) return inspect(loadedManifest);
+      throw new Error(command);
+    }],
+    [/docker image ls/u, `${intermediate}\n${loadedManifest}\n__exit_code=0`],
+    [/docker image save/u, (command, host) => {
+      if (host === 'ambiguous') return archive(config);
+      if (host === 'unverified') return '[]\n__exit_code=0';
+      return archive(command.includes(intermediate) ? intermediate : config);
+    }],
+  ]);
+  const resolve = (ref, ...ips) => resolvePinnedImage({hosts: ips.map((ip) => ({ip})),
+    registryRef: ref, contentIdentity, sshRun, opts: {}});
+  const resolved = await resolve(registryRef, 'overlay', 'loaded', 'anchor');
+  assert.equal(resolved.anchor.runRef, registryRef);
+  assert.equal(resolved.overlay.runRef, config);
+  assert.equal(resolved.loaded.runRef, loadedManifest);
+  assert.equal(resolved.loaded.configDigest, config);
+  assert.equal(resolved.loaded.provenance, `loaded:${loadedManifest}`);
+  const tagged = await resolve('local:final', 'anchor');
+  assert.equal(tagged.anchor.runRef, manifest, 'freeze the tag to its actual local image');
+  assert.equal(calls.some((call) => call.host === 'anchor' && /docker image ls/u.test(call.command)), false);
+  const refusal = (reason) => (error) => error.code === 'image_unavailable' &&
+    error.diagnostic.reason === reason;
+  await assert.rejects(resolve(registryRef, 'loaded'), refusal('reference_absent'));
+  await assert.rejects(resolve('local:final', 'anchor', 'different'), refusal('reference_config_mismatch'));
+  await assert.rejects(resolve(registryRef, 'anchor', 'ambiguous'), refusal('ambiguous_config'));
+  await assert.rejects(resolve(registryRef, 'anchor', 'unverified'), refusal('config_unverified'));
   assert.equal(arraySome(calls, (call) => /docker pull/u.test(call.command)), false);
 });
 

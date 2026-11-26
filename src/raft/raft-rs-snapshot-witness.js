@@ -1,3 +1,4 @@
+import {pruneCompactedStatementOutcomeEffectsIn} from '../partition/partition-mirror-effect-retention.js';
 // Durable snapshot witness and proof-gated committed-prefix compaction for
 // `RaftRsDurableStore` (SN1 / F5). Persists the folded `maxCommittedHlc`
 // witness inside `_raft_rs_snapshot.data` (canonical base64 JSON) and removes
@@ -25,27 +26,6 @@ const HLC_RADIX = 10;
 // connection's cache. putSnapshot, the one writer of that row (compaction, an
 // installed or staged snapshot, a Ready's snapshot), forgets it.
 const SNAPSHOT_INDEX_FACT = 'raft-rs-snapshot-index';
-const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
-const SELECT_OUTCOME_EFFECTS_TABLE_PRESENT_SQL =
-  'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?';
-const DELETE_OUTCOME_EFFECTS_UP_TO_SQL =
-  'DELETE FROM _partition_statement_outcome_effects WHERE log_index > 0 AND log_index <= ?';
-
-function pruneCompactedStatementOutcomeEffectsIn(db, exactToIndex) {
-  const statements = sqliteConnectionState(db);
-  const tablePresent = statements.committedFact(
-    STATEMENT_OUTCOME_EFFECTS_TABLE,
-    STATEMENT_OUTCOME_EFFECTS_TABLE,
-    () => statements
-      .statement(SELECT_OUTCOME_EFFECTS_TABLE_PRESENT_SQL)
-      .get(STATEMENT_OUTCOME_EFFECTS_TABLE) !== undefined,
-  );
-  if (!tablePresent) {
-    return;
-  }
-  statements.runNonApplication(DELETE_OUTCOME_EFFECTS_UP_TO_SQL, exactToIndex);
-}
-
 function refusal(outcome) {
   return Object.freeze({outcome, changed: false});
 }

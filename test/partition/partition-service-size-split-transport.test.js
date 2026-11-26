@@ -1,3 +1,4 @@
+import {admittedMirrorSource, sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
 /**
  * Unit tests for PartitionService.
  * Tests SQLite-backed Raft group for data storage.
@@ -543,17 +544,13 @@ test('PartitionService - queues source writes during split backfill and suppress
 test('PartitionService - starts split replication workflow and marks cutover active',
   async (t) => {
     const advanceCalls = [];
-    const partition = new PartitionService(withFoundingStamp({
-      partitionId: 'users-source',
-      tableId: 'tbl-users',
-      tableName: 'users',
-      replicaId: 'users-source-r1',
-      replicaIds: ['users-source-r1'],
-      dbPath: ':memory:',
-    }));
+    const partition = await admittedMirrorSource(t, 'users-source', [
+      {name: 'id', type: 'TEXT', primaryKey: true}, {name: 'name', type: 'TEXT'},
+    ]);
 
     partition.sqlQueryEngine = {
       managedSplitWorkflow: {
+        reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
         async acknowledgeSourceParticipant(_workflowId, ack) {
           const cutoverApplied =
             ack[PARTICIPANT_ACK_FIELD.STATUS] ===
@@ -593,6 +590,7 @@ test('PartitionService - starts split replication workflow and marks cutover act
       tableId: 'tbl-users',
       tableName: 'users',
       transitionMetadata: {
+        workflowAttempt: 1, workflowFenceToken: 1,
         [PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN]: 'id',
         [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID]: 'users-source',
         [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]: 'm',

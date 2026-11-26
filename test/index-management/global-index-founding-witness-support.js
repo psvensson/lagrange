@@ -172,7 +172,21 @@ function createGatewayHandleForDbAndCache(db, cache, txGateway, {ownsDb = true} 
     },
   };
 
+  // The harness stores schema_operations in its catalog SQLite DB. Expose
+  // that same store through the production local-leader read contract.
+  const schemaLeader = {
+    partitionId: 'schema_operations-p1', isLeader: true, leadershipTenure: {},
+    writeTraffic: {getSnapshot: () => ({committedWrites:
+      db.prepare('SELECT total_changes() AS n').get().n})},
+    async executeLocalQuery(sql, params) {
+      return {success: true, rows: db.prepare(sql).all(...params), rowSetComplete: true,
+        partitionId: this.partitionId};
+    },
+  };
   const cdcService = {
+    resolveSystemTablePartitionIds: () => [schemaLeader.partitionId],
+    hostedReplicaOwner: {hostedPartitionReplicas: (id) =>
+      id === schemaLeader.partitionId ? [schemaLeader] : []},
     insertSystemTableRow: (tableName, data) => gateway.insertSystemTableRow(tableName, data),
     updateSystemTableRow: (tableName, whereClause, data) =>
       gateway.updateSystemTableRow(tableName, whereClause, data),

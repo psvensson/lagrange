@@ -3,6 +3,8 @@
 // file-size relief). The service owns the open database handle and schema;
 // this module owns only the DDL.
 
+import {isDeepStrictEqual} from 'node:util';
+import {BOOTSTRAP_MEMBERSHIP_SOURCE} from '../raft/raft-committed-membership-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   generateCreateIndexSQL,
@@ -79,7 +81,39 @@ function quoteSqliteIdentifier(identifier) {
     PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE;
 }
 
+export const NODES_SCHEMA_UNSUPPORTED = 'NODES_SCHEMA_UNSUPPORTED';
+
+function refuseNodesSchema(source) {
+  throw Object.assign(new Error(`${NODES_SCHEMA_UNSUPPORTED}: unsupported NODES schema in ${source}`), {
+    code: NODES_SCHEMA_UNSUPPORTED, source,
+  });
+}
+
+function openNodesTable(service) {
+  const current = getSchemaByTableName(SYSTEM_TABLE_NAME.NODES);
+  const declared = service.schema;
+  if (!isDeepStrictEqual(declared, current)) refuseNodesSchema('catalog');
+
+  service.db.transaction(() => {
+    const existing = service.db.prepare('SELECT 1 FROM sqlite_schema WHERE name = ? COLLATE NOCASE')
+      .get(current.tableName);
+    if (!existing) {
+      if (service.bootstrapMembership?.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD) {
+        refuseNodesSchema('sqlite');
+      }
+      createTableAndIndexes(service);
+    }
+    const observation = readPartitionServiceTableSchemaIn(service.db, current);
+    if (observation.state !== PARTITION_TABLE_OBSERVATION.COMPLETE) refuseNodesSchema('sqlite');
+  }).immediate();
+}
+
 function createPartitionServiceTable(service) {
+  if (service.tableName === SYSTEM_TABLE_NAME.NODES) openNodesTable(service);
+  else createTableAndIndexes(service);
+}
+
+function createTableAndIndexes(service) {
   if (!service.schema || !service.schema.columns) {
     return;
   }

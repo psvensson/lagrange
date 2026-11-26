@@ -179,4 +179,4 @@ function canonicalizeSchemaProvisioningIntent(ast = {}, options = {}) {
   });
 }
 
-export {canonicalizeSchemaProvisioningIntent};
+export {canonicalizeSchemaProvisioningIntent, resolveIntentTableIdentity};

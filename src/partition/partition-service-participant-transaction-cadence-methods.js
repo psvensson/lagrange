@@ -1,3 +1,4 @@
+import {redriveFailedMirrorRelease} from './partition-mirror-custody-lifecycle.js';
 // The service façade for the current participant hold cadence. The volatile
 // session/durable PREPARED owner performs the hold sweep; durability fitness
 // and snapshot cadence retain the same tick and lifecycle.
@@ -86,6 +87,7 @@ const PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS = Object.freeze(
     this.preparedStateHoldTimer = this.timeSource.setInterval(() => {
       const nowMs = this.timeSource.now();
       this.enforcePreparedStateHoldTimeouts(nowMs);
+      redriveFailedMirrorRelease(this);
       this.enforceLeaderDurabilityFitness?.(nowMs);
       const appliedIndex = readOpenPartitionAppliedIndex(this);
       if (appliedIndex === null ||

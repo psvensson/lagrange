@@ -742,8 +742,10 @@ async function createSchemaStatement(client, statement, provisioning) {
   }
 }
 
-async function createSchema(client, provisioning) {
+async function createSchema(client, provisioning, presentTables = new Set()) {
   for (const statement of CREATE_SCHEMA) {
+    const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1];
+    if (presentTables.has(table)) continue;
     await createSchemaStatement(client, statement, provisioning);
   }
 }
@@ -924,29 +926,24 @@ async function prepareDataset(
       await loadDataset(client, dataset);
       return evidence();
     }
-    const existingTables = [];
+    const presentTables = new Set();
+    let preservedCohort = false;
     for (const table of DROP_TABLES) {
-      if (await tableExists(client, table)) existingTables.push(table);
+      const observed = await observeTableState(client, table);
+      if (observed === TABLE_PRESENT) presentTables.add(table);
+      if (observed.state !== OLTP_PROVISIONING_STATE.TABLE_MISSING) preservedCohort = true;
     }
-    if (existingTables.length === ZERO) {
-      await createSchema(client, tables);
-      await validateAllCanonicalTableSchemas(client, lockingReadMode);
-      await loadDataset(client, dataset);
-      return evidence();
+    if (presentTables.size < DROP_TABLES.length) {
+      for (const table of presentTables) await validateCanonicalTableSchema(client, table);
+      await createSchema(client, tables, presentTables);
     }
-    if (existingTables.length === DROP_TABLES.length) {
-      const resetTimings = await resetCanonicalDataset(
-        client, dataset, tables, lockingReadMode,
-      );
-      return Object.freeze({
-        ...evidence(),
-        ...resetTimings,
-      });
+    if (preservedCohort) {
+      const resetTimings = await resetCanonicalDataset(client, dataset, tables, lockingReadMode);
+      return Object.freeze({...evidence(), ...resetTimings});
     }
-    throw schemaMismatchError(
-      `Lagrange OLTP cohort has partial schema (${existingTables.length} of ` +
-        `${DROP_TABLES.length} tables present: ${existingTables.join(', ')})`,
-    );
+    await validateAllCanonicalTableSchemas(client, lockingReadMode);
+    await loadDataset(client, dataset);
+    return evidence();
   } catch (error) {
     throw provisioningFailure(error, evidence());
   } finally {
@@ -1147,6 +1144,7 @@ async function createLagrangeOltpAdapter(options = {}) {
 }
 
 export {
+  CREATE_SCHEMA as LAGRANGE_OLTP_SCHEMA_DDL,
   CANONICAL_REQUIRED_INDEXES,
   CANONICAL_SCHEMA_SHA256,
   CANONICAL_TABLE_COLUMNS,

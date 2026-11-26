@@ -72,6 +72,8 @@ test('barrier wake: a custody whose term start is not applied plans nothing and 
     b.probe.constructions.some((record) => record.pass === pass));
   assert.ok(firstPlanning?.triggers.includes(PLACEMENT_TRIGGER.TERM_START_APPLIED),
     `the first planning pass was woken by applied progress; ${report}`);
+  assert.equal(b.probe.constructions.filter((record) => record.pass === firstPlanning).length, 1,
+    `demand and admission share one partition input read in the first planning pass; ${report}`);
   assert.ok(admitted, `the successor admitted after the barrier opened; ${report}`);
 }));
 

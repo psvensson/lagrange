@@ -402,6 +402,8 @@ function createPartitionSnapshotCadence(options) {
       } catch (error) {
         return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.TICK_FAILED, {
           detail: error?.message,
+          cause: error?.cause?.message,
+          stack: error?.stack,
         });
       }
     },

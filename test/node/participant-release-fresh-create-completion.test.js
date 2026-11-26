@@ -67,7 +67,7 @@ function createHost({clock = createClock(), reply} = {}) {
     messageRouter: {async deliver(address, request, options) {
       const answer = reply(request, delivered.length);
       delivered.push({address, request, options, answer});
-      return buildDeliveryEnvelope({acknowledged: true}, {
+      return buildDeliveryEnvelope({acknowledged: true, messageId: `hop-${delivered.length}`}, {
         [PARTICIPANT_RELEASE_RESULT_FIELD]: answer,
       });
     }},
@@ -75,16 +75,19 @@ function createHost({clock = createClock(), reply} = {}) {
   handler.participantReleaseAuthorizationOwner =
     createParticipantReleaseAuthorizationOwner(handler);
   const recovery = createParticipantReleaseRecovery(handler);
-  return {clock, delivered,
+  const trace = {hops: {}};
+  return {clock, delivered, trace,
     run: (deadlineAtMs = 105, identityExisted = false) =>
       recovery.releaseFreshCreate(PARTITION_ID,
-        {deadlineAtMs, identityExisted, createAdmissionEvidence}),
+        {deadlineAtMs, identityExisted, createAdmissionEvidence, trace}),
     async close() {
       await recovery.shutdown();
       assert.equal(releasedSubscriptions, 2, 'the actual recovery owner releases its subscriptions');
     },
     assertRequests(deadline = 105) {
       assert.ok(delivered.length > 0, 'the real release client delivered an attempt');
+      assert.equal(trace.hops.release.count, delivered.length);
+      assert.equal(trace.hops.release.last.messageId, `hop-${delivered.length}`);
       const first = delivered[0].request;
       assert.match(first.targetBuildDigest, /^[a-f0-9]{64}$/u);
       for (const {address, request, options} of delivered) {

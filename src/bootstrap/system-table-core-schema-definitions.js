@@ -2,6 +2,7 @@
  * Core system table schema definitions.
  */
 
+import {PLACEMENT_RESOURCE_COLUMNS} from '../diagnostics/placement-resource-sample.js';
 import {
   LATENCY_ASSIGNMENT_STATE,
   LATENCY_GROUP_STATE,
@@ -136,13 +137,14 @@ const MESSAGE_GROUPS_SCHEMA = {
  */
 const NODES_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.NODES,
+  // Render the declared column constraints, including unique node_address.
+  tableConstraints: [],
   columns: [
     {name: 'node_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
     {name: 'node_address', type: COLUMN_TYPE.TEXT, notNull: true, unique: true},
     {name: 'cpu_cores', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'memory_mb', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'disk_gb', type: COLUMN_TYPE.INTEGER, notNull: true},
-    {name: 'cpu_usage_percent', type: COLUMN_TYPE.REAL, defaultValue: 0},
     {name: 'memory_usage_percent', type: COLUMN_TYPE.REAL, defaultValue: 0},
     {name: 'disk_usage_percent', type: COLUMN_TYPE.REAL, defaultValue: 0},
     {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'active\''},
@@ -175,6 +177,7 @@ const NODES_SCHEMA = {
     // written by every registration from the required boot-time value. No
     // default: a row without a declared host reads as HOST_UNDECLARED.
     {name: 'host_id', type: COLUMN_TYPE.TEXT},
+    ...Object.values(PLACEMENT_RESOURCE_COLUMNS).map((name) => ({name, type: COLUMN_TYPE.REAL})),
     {name: 'telemetry_sampled_at', type: COLUMN_TYPE.INTEGER},
     {name: 'telemetry_sample_id', type: COLUMN_TYPE.INTEGER},
   ],

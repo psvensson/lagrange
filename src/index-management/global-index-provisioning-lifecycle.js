@@ -229,7 +229,7 @@ function resolveRecoveredBasePkColumns(record, schemaInfo) {
 
 async function refreshAndCheckStageOwnership(coordinator, indexName, currentGen, indexId) {
   if (coordinator.refreshCatalogRecord) {
-    const refreshed = await coordinator.refreshCatalogRecord(indexName);
+    const refreshed = await coordinator.refreshCatalogRecord(indexName, indexId);
     if (refreshed?.available && !refreshed.row) {
       return {fenced: true, currentRecord: null};
     }

@@ -11,6 +11,10 @@
  *   reporter payload includes budget fields from cache.
  */
 
+import {ResourceDiagnosticsSampler} from '../../src/diagnostics/resource-diagnostics-sampler.js';
+import {
+  createControlPlanePlacementNodeObservationReader, readRemoteHeartbeatObservation,
+} from '../../src/rebalancer/replica-placement-owner-capacity.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -256,7 +260,17 @@ async (t) => {
   initEnv();
 
   let capturedUpdateRow = null;
+  let elapsedMs = 0;
+  const sampler = new ResourceDiagnosticsSampler({
+    nowFn: () => TEST_NOW + elapsedMs,
+    cpuUsageFn: () => ({user: 1500 * elapsedMs, system: 0}),
+    threadCpuUsageFn: () => ({user: 200 * elapsedMs, system: 0}),
+    eventLoopDelayProvider: () => 120,
+    eluFn: () => ({utilization: 0.45}),
+  });
+  elapsedMs = 1000;
   const service = new HeartbeatService({
+    resourceDiagnosticsSampler: sampler,
     bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -282,6 +296,16 @@ async (t) => {
     await service.sendHeartbeat(null, null);
 
     t.ok(capturedUpdateRow, 'should issue a node UPDATE');
+    const readLocal = createControlPlanePlacementNodeObservationReader({
+      localNodeId: TEST_NODE_ID, resourceDiagnosticsSampler: sampler,
+    });
+    const local = readLocal(TEST_NODE_ID, null, TEST_NOW, capturedUpdateRow);
+    const remote = readRemoteHeartbeatObservation(capturedUpdateRow);
+    t.same(remote, local, 'the durable heartbeat UPDATE retains the exact local pressure sample');
+    t.equal(remote.sampledAtMs, TEST_NOW + elapsedMs);
+    t.equal(remote.mainThreadCpuPercent, 20);
+    t.equal(remote.processCpuCores, 1.5);
+    t.equal(remote.eventLoopDelayMs, 120);
     t.equal(
       capturedUpdateRow[COLUMN.STORAGE_BUDGET_BYTES],
       TEST_BUDGET_BYTES,

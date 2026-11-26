@@ -1,3 +1,4 @@
+import {TABLES} from '../constants/index.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   ServicePartitionAccessMetrics,
@@ -62,7 +63,7 @@ function bindSchemaJobGsiCompletionHandler(engine) {
   }
   if (owner?.setSucceededGlobalIndexRecoveryHandler) {
     owner.setSucceededGlobalIndexRecoveryHandler(
-      (intents) => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.({intents}),
+      () => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.(),
     );
   }
 }
@@ -407,6 +408,12 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     calculateQuorumReplicaCount: (replicaCount) =>
       engine.calculateQuorumReplicaCount(replicaCount),
     partitionProvisioner: tablePartitionProvisioner,
+    schemaRecoveryLeaders: () => {
+      const cdc = engine.cdcIntegrationService;
+      const ids = cdc?.resolveSystemTablePartitionIds?.(TABLES.SCHEMA_OPERATIONS) || [];
+      return ids.flatMap((id) => resolveEngineLocalPartitionReplicas(engine, id))
+        .filter((service) => service.isLeader && service.leadershipTenure && !service.isShutdown);
+    },
   });
   bindSchemaJobGsiCompletionHandler(engine);
 

@@ -53,14 +53,14 @@ test('CDC debug - single UPDATE propagation timing', {timeout: 30000}, async (t)
     // Check initial cache state
     const initialNode = systemTableCache.get(TABLES.NODES, seedNodeId);
     t.ok(initialNode, 'seed node in cache');
-    t.comment(`Initial cpu_usage_percent: ${initialNode[COLUMN.CPU_USAGE_PERCENT]}`);
+    t.comment(`Initial host_cpu_utilization_percent: ${initialNode[COLUMN.HOST_CPU_UTILIZATION_PERCENT]}`);
 
     // Register a cache listener to track when the update arrives
     let updateReceivedAt = null;
     const listener = (tableName, operation, record) => {
       if (tableName === TABLES.NODES &&
           record?.[COLUMN.NODE_ID] === seedNodeId &&
-          record?.[COLUMN.CPU_USAGE_PERCENT] === 42) {
+          record?.[COLUMN.HOST_CPU_UTILIZATION_PERCENT] === 42) {
         updateReceivedAt = Date.now();
       }
     };
@@ -69,7 +69,7 @@ test('CDC debug - single UPDATE propagation timing', {timeout: 30000}, async (t)
     // Do the UPDATE
     const beforeUpdate = Date.now();
     const updateResult = await sqlQueryEngine.executeQuery(
-      'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
+      'UPDATE nodes SET host_cpu_utilization_percent = ? WHERE node_id = ?',
       [42, seedNodeId],
     );
     const afterUpdate = Date.now();
@@ -81,7 +81,7 @@ test('CDC debug - single UPDATE propagation timing', {timeout: 30000}, async (t)
     let found = false;
     while (Date.now() - start < 10000) {
       const record = systemTableCache.get(TABLES.NODES, seedNodeId);
-      if (record && record[COLUMN.CPU_USAGE_PERCENT] === 42) {
+      if (record && record[COLUMN.HOST_CPU_UTILIZATION_PERCENT] === 42) {
         found = true;
         break;
       }
@@ -98,7 +98,7 @@ test('CDC debug - single UPDATE propagation timing', {timeout: 30000}, async (t)
 
     // Check the actual value
     const finalNode = systemTableCache.get(TABLES.NODES, seedNodeId);
-    t.comment(`Final cpu_usage_percent: ${finalNode?.[COLUMN.CPU_USAGE_PERCENT]}`);
+    t.comment(`Final host_cpu_utilization_percent: ${finalNode?.[COLUMN.HOST_CPU_UTILIZATION_PERCENT]}`);
 
     systemTableCache.offCacheChange(listener);
   } finally {

@@ -59,8 +59,8 @@ function buildCurrentRetainedCopyPolicy(owner, operation) {
   // Keeping the target out of the saturation filter cannot grant a slot.
   const {ordered, repairWaitingSourceNodeIds, inputsByPartition} =
     owner.preparePassOrderedCandidates(
-      nodeInput, busy, new Set(), owner.readStorageExcludedTargets(nodeInput, owner.now()),
-      promotedVoterReplicaIdsByPartition(census));
+      nodeInput, owner.readPassPartitionInputs(busy, promotedVoterReplicaIdsByPartition(census)),
+      new Set(), owner.readStorageExcludedTargets(nodeInput, owner.now()));
   const candidate = ordered.find((entry) => entry.partitionId === operation.partitionId &&
     entry.move.type === operation.type && entry.move.targetNodeId === operation.targetNodeId &&
     entry.move.copySourceNodeId === operation.copySourceNodeId &&

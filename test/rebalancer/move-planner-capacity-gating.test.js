@@ -104,9 +104,9 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('filters out nodes denied by admission service',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
 
       const decisions = {
@@ -142,9 +142,9 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('fails closed when admission service owner is absent ' +
     'for active planning', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
-      {node_id: 'n3', cpu_usage_percent: 30},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
+      {node_id: 'n3', host_cpu_utilization_percent: 30},
     ];
 
     const planner = new MovePlanner({
@@ -172,9 +172,9 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('degradedReason is insufficient_capacity when capacity ' +
     'filtering causes shortfall', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
-      {node_id: 'n3', cpu_usage_percent: 30},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
+      {node_id: 'n3', host_cpu_utilization_percent: 30},
     ];
 
     const decisions = {
@@ -207,8 +207,8 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('degradedReason is insufficient_nodes when not enough ' +
     'ready nodes regardless of capacity', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
     ];
 
     const planner = new MovePlanner({
@@ -235,9 +235,9 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('degradedReason is null when placement is not degraded',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
 
       const planner = new MovePlanner({
@@ -264,10 +264,10 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('capacityDiagnostics includes rejection counts by reason',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
-        {node_id: 'n4', cpu_usage_percent: 40},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
+        {node_id: 'n4', host_cpu_utilization_percent: 40},
       ];
 
       const decisions = {
@@ -316,7 +316,7 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('fails closed when accounting owner is absent for ' +
     'active planning', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
     ];
 
     const planner = new MovePlanner({
@@ -341,9 +341,9 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('quorum/odd replica count preserved despite capacity ' +
     'filtering', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
-      {node_id: 'n3', cpu_usage_percent: 30},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
+      {node_id: 'n3', host_cpu_utilization_percent: 30},
     ];
 
     // All nodes pass capacity
@@ -377,9 +377,9 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('sortNodesBySuitability uses disk as tie-breaker',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 50,
+        {node_id: 'n1', host_cpu_utilization_percent: 50,
           disk_usage_percent: 80},
-        {node_id: 'n2', cpu_usage_percent: 50,
+        {node_id: 'n2', host_cpu_utilization_percent: 50,
           disk_usage_percent: 20},
       ];
 
@@ -404,8 +404,8 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('admission error on a node rejects it instead of fail-open',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
       ];
 
       const errorAdmission = {
@@ -445,8 +445,8 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('accounting unavailable admission error has explicit capacity ' +
     'diagnostic and degraded reason', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
     ];
     const unavailableAdmission = {
       checkAdd: async () => {
@@ -482,7 +482,7 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('critical system partition planning propagates critical admission mode',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
       ];
       const calls = [];
       const planner = new MovePlanner({
@@ -525,7 +525,7 @@ test('MovePlanner capacity gating', async (t) => {
         entityId: 'control_plane_publications-p1',
         entityType: REBALANCER_ENTITY_TYPE.PARTITION,
         moveStateProvider: makeMoveStateProvider([
-          {node_id: 'n1', cpu_usage_percent: 10},
+          {node_id: 'n1', host_cpu_utilization_percent: 10},
         ]),
         storageAdmissionService: {
           async checkAdd(options = {}) {
@@ -572,9 +572,9 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('message group placement filters by capacity',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
 
       const decisions = {
@@ -669,8 +669,8 @@ test('MovePlanner capacity gating', async (t) => {
   await t.test('all nodes denied produces empty placement with ' +
     'insufficient_capacity', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
     ];
 
     const decisions = {

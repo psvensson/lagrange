@@ -30,7 +30,7 @@ import {
   buildIndexDatasetSchema,
 } from '../../src/index-management/global-index-dataset-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {IndexService} from '../../src/index-management/index-service.js';
+import {SchemaProvisioningJobOwner} from '../../src/query/schema-provisioning-job-owner.js';
 import {
   createRestartCacheAndGatewayFromGateway,
   createSeededSchemaAwareGateway,
@@ -1451,12 +1451,10 @@ test('Post-SUCCEEDED unavailable participant retains active state, skips histori
 
   const restart = createRestartCacheAndGatewayFromGateway(env.gateway, env.partitionServices);
   const recoveredCalls = [];
-  const origProtoComplete = IndexService.prototype.completeRecoveredGlobalIndexProvisioning;
-  IndexService.prototype.completeRecoveredGlobalIndexProvisioning = async function spyComplete(
-    intent,
-  ) {
-    if (intent?.globalIndex?.indexName) recoveredCalls.push(intent.globalIndex.indexName);
-    return origProtoComplete.call(this, intent);
+  const findIntent = SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent;
+  SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = function(dataset, generation) {
+    recoveredCalls.push(dataset);
+    return findIntent.call(this, dataset, generation);
   };
   let engine2;
   try {
@@ -1475,8 +1473,9 @@ test('Post-SUCCEEDED unavailable participant retains active state, skips histori
     ).get('idx_users_email');
     t.not(blockedRow?.state, GLOBAL_INDEX_STATE.FAILED, 'Transient unavailability retains active state');
     t.not(blockedRow?.state, GLOBAL_INDEX_STATE.READ_WRITE);
-    t.equal(recoveredCalls.includes('idx_old_ready'), false, 'Startup skips already READ_WRITE job');
-    t.equal(recoveredCalls.includes('idx_old_dropped'), false, 'Startup skips dropped historical job');
+    t.ok(recoveredCalls.includes('__idx_users_idx_users_email'), 'Active index reached the lookup');
+    t.equal(recoveredCalls.some((dataset) => dataset.endsWith('_idx_old_ready')), false, 'Startup skips already READ_WRITE job');
+    t.equal(recoveredCalls.some((dataset) => dataset.endsWith('_idx_old_dropped')), false, 'Startup skips dropped historical job');
 
     blockParticipant = false;
     const recovered = await waitForCondition(() => {
@@ -1491,7 +1490,7 @@ test('Post-SUCCEEDED unavailable participant retains active state, skips histori
     t.equal(selectRes.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
     t.same(selectRes.rows, env.oracleDb.prepare(selectSql).all('zoe@example.com'));
   } finally {
-    IndexService.prototype.completeRecoveredGlobalIndexProvisioning = origProtoComplete;
+    SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = findIntent;
     idxReplica.handleRemoteQuery = origHandleRemote;
     if (engine2) await engine2.shutdown();
   }

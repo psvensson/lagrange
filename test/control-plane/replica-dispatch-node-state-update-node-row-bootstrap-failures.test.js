@@ -212,7 +212,7 @@ test('ReplicaDispatchService NODE_STATE_UPDATE uses injected control-plane ' +
     cpu_cores: 8,
     memory_mb: 16384,
     disk_gb: 500,
-    cpu_usage_percent: 10,
+    host_cpu_utilization_percent: 10,
     memory_usage_percent: 20,
     disk_usage_percent: 30,
     status: SERVICE_STATUS.ACTIVE,

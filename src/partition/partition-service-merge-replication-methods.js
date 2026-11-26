@@ -1,3 +1,4 @@
+import {reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {ERRORS, SQL} from '../constants/index.js';
 import {forwardSourceReplicationStart} from './managed-source-replication-start-delivery.js';
 import {
@@ -34,12 +35,6 @@ import {
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
 import {
-  MIRROR_RETENTION_CUSTODY_ACTION,
-  pruneSettledMirrorOutcomeEffects,
-  releaseSourceMirrorRetentionCustody,
-  replicateSourceMirrorRetentionCustody,
-} from './partition-committed-statement-outcome.js';
-import {
   buildReplayCursorCheckpoint,
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
@@ -50,7 +45,6 @@ import {
 } from './partition-service-source-replication-start-methods.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-const MERGE_CUSTODY_FAMILY = 'merge';
 /**
  * Failure acknowledgement per local phase at the moment a merge
  * replication run fails. The owner aborts the merge fail-safe on any of
@@ -72,17 +66,6 @@ const MERGE_FAILURE_ACK_STATUS_BY_PHASE = Object.freeze(new Map([
   ],
 ]));
 
-async function authorizeMergeSnapshotStart(owner, metadata, options) {
-  if (options.startAuthorized === true) return;
-  const start = await owner.emitMergeSourceAck(
-    metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED);
-  const accepted = start?.result === PARTICIPANT_ACK_RESULT.ACCEPTED;
-  const duplicate = start?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
-  if (!accepted && !duplicate) {
-    throw new Error(
-      PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
-  }
-}
 
 function mergeHandleAcceptsAfterWrite(owner, mergeReplication) {
   const metadata = mergeReplication?.metadata;
@@ -96,11 +79,6 @@ async function runMergeBackfillPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_BACKFILLING) return;
   handle.snapshotBarrierIndex = resolveSnapshotBarrierIndex(owner);
   handle.replayWatermarkIndex = handle.snapshotBarrierIndex;
-  await replicateSourceMirrorRetentionCustody(owner, handle, {
-    action: MIRROR_RETENTION_CUSTODY_ACTION.PIN,
-    barrierIndex: handle.snapshotBarrierIndex ?? 0,
-    family: MERGE_CUSTODY_FAMILY,
-  });
   const snapshot = owner.openSplitSnapshotDatabase();
   try {
     await owner.backfillMergeSnapshot(snapshot, metadata);
@@ -114,11 +92,7 @@ async function runMergeCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_CATCHUP) return;
   await owner.flushMergeReplicationQueue();
   const settledWatermark = handle.replayWatermarkIndex;
-  await replicateSourceMirrorRetentionCustody(owner, handle, {
-    action: MIRROR_RETENTION_CUSTODY_ACTION.PIN,
-    barrierIndex: settledWatermark ?? handle.snapshotBarrierIndex ?? 0,
-    family: MERGE_CUSTODY_FAMILY,
-  });
+
   const catchupAck = await owner.emitMergeSourceAck(
     metadata,
     MERGE_ACK_STATUS.CATCHUP_READY,
@@ -128,18 +102,9 @@ async function runMergeCatchupPhase(owner, handle, metadata) {
       settledWatermark,
     ),
   );
-  const ackAccepted = catchupAck?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
-    catchupAck?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
-  if (ackAccepted) {
-    handle.catchupCheckpointAccepted = true;
-  }
   if (catchupAck?.mergeCutoverApplied !== true) {
     await owner.waitForMergeCutoverActivation(metadata);
   }
-  pruneSettledMirrorOutcomeEffects(owner, settledWatermark, {
-    metadata,
-    family: MERGE_CUSTODY_FAMILY,
-  });
   handle.phase = PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
 }
 
@@ -161,15 +126,11 @@ async function runMergeCutoverPhase(owner, handle, metadata) {
       ),
     },
   );
-  handle.terminal =
-    mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
+  // This source can quiesce while the other source is still draining.
+  // Only terminal dissolution can discharge the retained group obligation.
+  handle.terminal = mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
     mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
-  if (handle.terminal) {
-    await releaseSourceMirrorRetentionCustody(owner, handle, {
-      barrierIndex: settledWatermark ?? 0,
-      family: MERGE_CUSTODY_FAMILY,
-    });
-  }
+  if (handle.terminal) await reconcileFailedMirrorCustody(owner);
 }
 
 class PartitionServiceMergeReplicationMethods {
@@ -194,8 +155,6 @@ class PartitionServiceMergeReplicationMethods {
    */
   async handleMergeReplicationRunFailure(metadata, error,
     mergeReplication = this.mergeReplication) {
-    const preCutoverFailure = mergeReplication?.phase !==
-      PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
     const failureAckStatus = this.resolveMergeFailureAckStatus();
     if (this.mergeReplication === mergeReplication) {
       mergeReplication.lastError = error.message;
@@ -221,11 +180,7 @@ class PartitionServiceMergeReplicationMethods {
         },
       );
     }
-    if (preCutoverFailure) {
-      await releaseSourceMirrorRetentionCustody(this, mergeReplication || metadata, {
-        family: MERGE_CUSTODY_FAMILY,
-      });
-    }
+    await reconcileFailedMirrorCustody(this);
   }
 
   /**
@@ -280,10 +235,10 @@ class PartitionServiceMergeReplicationMethods {
    * @return {Promise<void>}
    * @private
    */
-  async runMergeReplicationWorkflow(options = {}) {
+  async runMergeReplicationWorkflow() {
     const mergeReplication = this.mergeReplication;
     const metadata = mergeReplication?.metadata || null;
-    if (!metadata) {
+    if (!metadata || !mergeReplication.authorized) {
       throw new Error(
         PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED,
       );
@@ -293,7 +248,7 @@ class PartitionServiceMergeReplicationMethods {
       targetPartitionId: metadata.targetPartitionId,
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
-    await authorizeMergeSnapshotStart(this, metadata, options);
+
     await runMergeBackfillPhase(this, mergeReplication, metadata);
     await runMergeCatchupPhase(this, mergeReplication, metadata);
     await runMergeCutoverPhase(this, mergeReplication, metadata);

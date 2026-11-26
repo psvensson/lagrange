@@ -296,7 +296,7 @@ function createParticipantReleaseRecovery(handler) {
       const {answer, completed, outcome, retryAfterMs} =
         await completeParticipantRelease(handler, {partitionId,
           targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
-          deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep});
+          deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep, trace: options.trace});
       if (completed) return answer;
       const error = new Error(RELEASE_RECOVERY_ERROR.FRESH_FAILED +
         JSON.stringify({partitionId, answer}));

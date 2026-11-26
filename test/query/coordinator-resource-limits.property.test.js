@@ -27,33 +27,6 @@ function createMockPartition(data) {
   };
 }
 
-/**
- * Create a mock system cache that wraps a partition map.
- * @param {Map} partitions - Partition map.
- * @return {Object} Mock system cache.
- */
-function createMockSystemCache(partitions) {
-  return {
-    get: (tableName, id) => {
-      if (tableName === 'partitions') {
-        return partitions.get(id) || null;
-      }
-      return null;
-    },
-    getAll: (tableName) => {
-      if (tableName === 'partitions') {
-        return Array.from(partitions.values());
-      }
-      return [];
-    },
-    filter: (tableName, predicate) => {
-      if (tableName === 'partitions') {
-        return Array.from(partitions.values()).filter(predicate);
-      }
-      return [];
-    },
-  };
-}
 
 /**
  * Create a coordinator with speculative execution disabled for fast tests.
@@ -62,7 +35,7 @@ function createMockSystemCache(partitions) {
  */
 function createFastCoordinator(partitions) {
   const coordinator = new ParallelQueryCoordinator({
-    systemCache: createMockSystemCache(partitions),
+    partitionQueryExecutor: (sql, id, params) => partitions.get(id).executeQuery(sql, params),
   });
   // Disable speculative execution to avoid interval timers
   coordinator.speculativeExecutionEnabled = false;
