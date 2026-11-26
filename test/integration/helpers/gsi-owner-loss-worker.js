@@ -1,7 +1,12 @@
-// Only the named index loses its submitting process. A short caller budget
-// detaches the public request; real schema execution continues in background.
-import {createTimeoutBudget} from '../../../src/control-plane/timeout-budget.js';
+// Observe the named index's real finalizer at the accepted terminal write.
+import assert from 'node:assert/strict';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {createHash} from 'node:crypto';
+import {setTimeout as delay} from 'node:timers/promises';
 import {SchemaProvisioningJobOwner} from '../../../src/query/schema-provisioning-job-owner.js';
+import {SchemaProvisioningJobRepository} from '../../../src/query/schema-provisioning-job-repository.js';
+import {QUERY_OPERATION} from '../../../src/query/query-constants.js';
+import {getGlobalIndexDatasetName} from '../../../src/index-management/global-index-dataset-manager.js';
 import {GlobalIndexLifecycleCoordinator} from
   '../../../src/index-management/global-index-lifecycle-coordinator.js';
 import {registerEmbeddedWorkerOperations} from './embedded-node-worker.js';
@@ -12,11 +17,12 @@ import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE} fro
   '../../../src/raft/raft-committed-membership-constants.js';
 
 let target;
+const finalization = new AsyncLocalStorage();
 let repository;
 let warm = false;
 let cut;
+let firstTerminalAttemptNs;
 let completed;
-const permitTerminalCheckpoint = Promise.withResolvers();
 const discover = SchemaProvisioningJobOwner.prototype.readNonterminalRows;
 SchemaProvisioningJobOwner.prototype.readNonterminalRows = async function(...args) {
   const result = await discover.apply(this, args);
@@ -29,7 +35,9 @@ SchemaProvisioningJobOwner.prototype.readNonterminalRows = async function(...arg
 const progress = {};
 const findIntent = SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent;
 SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = async function(dataset, generation) {
-  if (!target || !dataset.endsWith('_' + target)) return findIntent.call(this, dataset, generation);
+  if (!target || dataset !== target.dataset || generation !== target.generation) {
+    return findIntent.call(this, dataset, generation);
+  }
   const lookup = progress.lookup = {dataset, generation, state: 'entered'};
   try {
     const intent = await findIntent.call(this, dataset, generation);
@@ -44,7 +52,7 @@ SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = async func
 };
 const complete = GlobalIndexLifecycleCoordinator.prototype.completeRecoveredProvisioning;
 GlobalIndexLifecycleCoordinator.prototype.completeRecoveredProvisioning = async function(intent) {
-  if (!target || intent.indexName !== target) return complete.call(this, intent);
+  if (!matchesTarget(intent)) return complete.call(this, intent);
   const attempt = progress.recovery = {indexId: intent.indexId, state: 'entered'};
   try {
     const result = await complete.call(this, intent);
@@ -57,52 +65,132 @@ GlobalIndexLifecycleCoordinator.prototype.completeRecoveredProvisioning = async 
   }
 };
 
-const submit = SchemaProvisioningJobOwner.prototype.execute;
-SchemaProvisioningJobOwner.prototype.execute = function(ast, options, executor) {
-  if (target && options.globalIndex?.indexName === target) {
-    options = {...options, timeoutBudget: createTimeoutBudget({configuredBudgetMs: 1})};
-  }
-  return submit.call(this, ast, options, executor);
+function matchesTarget(index) {
+  return Boolean(target && index?.tableName === target.tableName && index.indexName === target.indexName &&
+    index.indexId === target.indexId && index.generation === target.generation);
+}
+
+const finalize = SchemaProvisioningJobOwner.prototype.completeExecutedJob;
+SchemaProvisioningJobOwner.prototype.completeExecutedJob = function(intent, owned, result, options) {
+  if (!matchesTarget(intent.globalIndex)) return finalize.call(this, intent, owned, result, options);
+  const scope = {intent, result, repository: this.repository, ownerId: this.ownerId, fenceToken: owned.fenceToken};
+  return finalization.run(scope, () => finalize.call(this, intent, owned, result, options));
 };
 
-const notify = SchemaProvisioningJobOwner.prototype.notifyBackgroundSucceeded;
-SchemaProvisioningJobOwner.prototype.notifyBackgroundSucceeded = async function(intent, outcome, options) {
-  if (target && intent.globalIndex?.indexName === target) {
-    const row = await this.repository.findByTableIdentity(intent.tableIdentityKey);
-    const persisted = JSON.parse(row.normalized_ddl);
-    const result = JSON.parse(row.result_json);
-    cut = {status: row.status, jobId: row.job_id, dataset: row.table_id,
-      partitions: persisted.partitions, result: {tableId: result.tableId, partitionId: result.partitionId,
-        contractState: result.contractState, requested: result.requestedReplicaCount,
-        nextAction: result.nextAction, converged: result.fullReplicaCountConverged,
-        routable: result.routableReplicaCount, committed: result.committedReplicaCount},
-      indexId: intent.globalIndex.indexId, generation: intent.globalIndex.generation,
-      background: options.background, registeredCallback: this.retryCompletionHandlers.has(row.job_id)};
-    // Parent verifies the cut and kills this process before forwarding the callback.
-    await new Promise(() => {});
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function describeAcceptedWrite(scope, candidate, context, accepted, before, row) {
+  const {intent, ownerId, fenceToken} = scope;
+  const previous = context.previousWorkflow;
+  const version = previous.rowVersion;
+  assert.ok(Number.isSafeInteger(version) && version > 0);
+  assert.ok(typeof ownerId === 'string' && ownerId.length > 0 && Number.isSafeInteger(fenceToken) && fenceToken > 0);
+  assert.equal(context.expectedOwnerId, ownerId);
+  assert.equal(context.expectedFenceToken, fenceToken);
+  for (const workflow of [previous, candidate, accepted.workflow]) {
+    assert.equal(workflow.workflowId, intent.jobId);
+    assert.equal(workflow.ownerKey, intent.ownerKey);
+    assert.equal(workflow.workflowOwnerId, ownerId);
+    assert.equal(workflow.fenceToken, fenceToken);
   }
-  return notify.call(this, intent, outcome, options);
+  for (const stored of [before, row]) {
+    assert.equal(stored.job_id, intent.jobId);
+    assert.equal(stored.workflow_id, intent.workflowId);
+    assert.equal(stored.table_identity_key, intent.tableIdentityKey);
+    assert.equal(stored.owner_key, intent.ownerKey);
+    assert.equal(stored.workflow_owner_id, ownerId);
+    assert.equal(Number(stored.workflow_fence_token), fenceToken);
+    assert.equal(stored.normalized_ddl, intent.normalizedDdl);
+    assert.equal(stored.intent_hash, intent.intentHash);
+  }
+  assert.equal(sha256(row.normalized_ddl), intent.intentHash);
+  assert.equal(previous.status, 'RUNNING');
+  assert.equal(before.status, previous.status);
+  assert.equal(Number(before.row_version), version);
+  assert.equal(accepted.workflow.status, 'SUCCEEDED');
+  assert.equal(accepted.workflow.step, 'SUCCEEDED');
+  assert.equal(row.status, 'SUCCEEDED');
+  assert.equal(row.current_step, 'SUCCEEDED');
+  assert.equal(accepted.workflow.rowVersion, version + 1);
+  assert.equal(Number(row.row_version), version + 1);
+  const resultSha256 = sha256(row.result_json);
+  for (const result of [scope.result, candidate.result, accepted.workflow.result]) {
+    assert.equal(sha256(JSON.stringify(result)), resultSha256);
+  }
+  const persisted = JSON.parse(row.normalized_ddl);
+  const result = JSON.parse(row.result_json);
+  assert.ok(matchesTarget(persisted.globalIndex));
+  assert.equal(persisted.tableId, target.dataset);
+  assert.equal(persisted.tableName, target.dataset);
+  assert.equal(row.table_id, target.dataset);
+  assert.equal(result.tableId, row.table_id);
+  assert.equal(result.partitionId, intent.partitionId);
+  assert.equal(persisted.partitions[0].partitionId, result.partitionId);
+  // Generic CREATE TABLE takeover wraps the native completion summary; the
+  // GSI executor returns that summary directly with the same outer identities.
+  let summary = result;
+  if (result.operation !== undefined) {
+    assert.equal(result.operation, QUERY_OPERATION.CREATE_TABLE);
+    summary = result.provisioningSummary;
+    assert.equal(summary.contractState, result.contractState);
+    assert.equal(summary.nextAction, result.nextAction);
+    assert.equal(summary.requestedReplicaCount, result.requestedReplicaCount);
+    assert.equal(summary.committedReplicaCount, result.committedReplicaCount);
+  }
+  return {status: row.status, previousStatus: before.status, jobId: row.job_id,
+    workflowId: row.workflow_id, dataset: row.table_id, partitions: persisted.partitions,
+    result: {tableId: result.tableId, partitionId: result.partitionId, contractState: result.contractState,
+      requested: summary.requestedReplicaCount, nextAction: result.nextAction,
+      converged: summary.fullReplicaCountConverged, routable: summary.routableReplicaCount,
+      committed: summary.committedReplicaCount}, resultSha256, indexId: persisted.globalIndex.indexId,
+    generation: persisted.globalIndex.generation, ownerId, fenceToken, previousRowVersion: version,
+    rowVersion: accepted.workflow.rowVersion, expiresNs: target.expiresNs.toString()};
+}
+
+const persist = SchemaProvisioningJobRepository.prototype.persistWorkflowCandidate;
+SchemaProvisioningJobRepository.prototype.persistWorkflowCandidate = async function(candidate, context) {
+  const scope = finalization.getStore();
+  if (cut || this !== scope?.repository || candidate.status !== 'SUCCEEDED' ||
+      candidate.workflowId !== scope.intent.workflowId) return persist.call(this, candidate, context);
+  const before = this.rowsByJobId.get(candidate.workflowId);
+  const accepted = await persist.call(this, candidate, context);
+  if (accepted.accepted !== true) return accepted;
+  // The repository records the acknowledged row (or matching durable readback)
+  // before it returns. Only this finalizer's accepted transition can arm the cut.
+  try {
+    const row = this.rowsByJobId.get(candidate.workflowId);
+    cut = describeAcceptedWrite(scope, candidate, context, accepted, before, row);
+    let remaining;
+    while ((remaining = target.expiresNs - process.hrtime.bigint()) > 0n) {
+      await delay(Math.ceil(Number(remaining) / 1e6));
+    }
+  } catch (error) {
+    progress.terminal = {state: 'cut rejected', error: error.message};
+  }
+  return accepted;
 };
 
-// All embedded workers and their parent run on one host. Capture the start
-// of the actual terminal checkpoint on its monotonic clock, and expose it
-// only after the production catalog update returns successfully.
+// All embedded workers and their parent share the host's monotonic clock.
+// Publish the first attempt immediately. A qualifying completion is observable
+// only after its original update returns successfully.
 const update = GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord;
 GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord = async function(checkpoint) {
-  const record = this.catalog.get(target);
-  if (record && record.index_id === checkpoint.indexId && checkpoint.state === 'READ_WRITE') {
-    // Hold only the final write. Discovery, lease expiry, and backfill keep
-    // their ordinary schedules; the parent never calls a recovery entrypoint.
-    await permitTerminalCheckpoint.promise;
-  }
-  const transition = record && record.index_id === checkpoint.indexId &&
-    record.state === 'BACKFILLING' && checkpoint.state === 'READ_WRITE' &&
-    checkpoint.backfill_total_rows === 2 ?
+  const record = this.catalog.get(target?.indexName);
+  const sameIndex = record && target && record.table_name === target.tableName &&
+    record.index_id === target.indexId && record.index_generation === target.generation &&
+    record.index_id === checkpoint.indexId;
+  const attempt = sameIndex && checkpoint.state === 'READ_WRITE' ?
     {indexId: record.index_id, generation: record.index_generation,
       priorState: record.state, rows: checkpoint.backfill_total_rows,
       startedNs: process.hrtime.bigint().toString()} : null;
+  if (attempt) firstTerminalAttemptNs ??= attempt.startedNs;
   const result = await update.call(this, checkpoint);
-  if (transition) completed = transition;
+  if (attempt?.priorState === 'BACKFILLING' && attempt.rows === 2 &&
+      (!completed || BigInt(attempt.startedNs) < BigInt(completed.startedNs))) {
+    completed = attempt;
+  }
   return result;
 };
 
@@ -125,12 +213,18 @@ async function observeMembership(replica) {
 }
 
 registerEmbeddedWorkerOperations({
-  armIndexLoss: ({indexName}) => { target = indexName; },
+  armIndexLoss: ({tableName, indexName, generation, holdMs}) => {
+    assert.ok(!target && typeof tableName === 'string' && tableName && typeof indexName === 'string' && indexName);
+    assert.ok(Number.isSafeInteger(generation) && generation > 0);
+    assert.ok(Number.isSafeInteger(holdMs) && holdMs > 0 && holdMs <= 2147483647);
+    target = {tableName, indexName, generation, indexId: `${indexName}-gen${generation}`,
+      dataset: getGlobalIndexDatasetName(tableName, indexName),
+      expiresNs: process.hrtime.bigint() + BigInt(holdMs) * 1000000n};
+  },
   indexMembership: ({partitionIds}) => {
     const owner = repository.gateway.resolveCdcIntegrationService().hostedReplicaOwner;
     const hosted = partitionIds.flatMap((id) => owner.hostedPartitionReplicas(id));
     return Promise.all(hosted.map(observeMembership));
   },
-  permitIndexTerminalWrite: () => permitTerminalCheckpoint.resolve(),
-  indexLossTrace: () => ({warm, cut, progress, completed}),
+  indexLossTrace: () => ({warm, cut, progress, firstTerminalAttemptNs, completed}),
 });
