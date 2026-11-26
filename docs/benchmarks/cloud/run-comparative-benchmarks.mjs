@@ -67,7 +67,7 @@ import {
   plannedLabLocks,
   readLabHolderRecords,
   releaseLabBenchmarkHosts,
-  selectLabBenchmarkHosts,
+  selectLabBenchmarkHosts as selectEligibleLabHosts,
 } from '../../../test/distributed/harness/comparative-benchmark-lab-hosts.js';
 import {
   createRemoteWorkloadRunner,
@@ -173,6 +173,9 @@ Options:
                                 hold (sha256 of its ordered RootFS diff_ids; the same on
                                 containerd and overlay2 stores); --lagrange-image is then
                                 its registry provenance
+  --lab-data-order <ips>        Order the selected lab data hosts (first is the seed)
+  --lagrange-facts-stride <1|4> Diagnostic Lagrange smoke: poll repeat positive replication facts
+                                every N readiness attempts; keep every scheduled SQL refresh
   --lagrange-version <v>        Product version the image must report (needed for a digest)
   --lagrange-revision <sha>     org.opencontainers.image.revision the image must carry
   --raw-observations <path>     Append-only record store
@@ -202,10 +205,10 @@ const VALUE_FLAGS = Object.freeze({
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
   '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
   [LOAD_GENERATOR_FLAG]: 'loadGeneratorName', '--client-node': 'clientNode',
-  '--lagrange-version': 'lagrangeVersion',
+  '--lagrange-version': 'lagrangeVersion', '--lab-data-order': 'labDataOrder',
   '--lagrange-image-digest': 'lagrangeImageDigest',
   '--lagrange-image-content': 'lagrangeImageContent',
-  '--lagrange-revision': 'lagrangeRevision',
+  '--lagrange-revision': 'lagrangeRevision', '--lagrange-facts-stride': 'factsStride',
   '--vm-image-family': 'vmImageFamily', '--vm-image-project': 'vmImageProject',
   '--vm-boot-disk-size': 'vmBootDiskSize', '--vm-boot-disk-type': 'vmBootDiskType',
   '--vm-firewall-allow': 'vmFirewallAllow',
@@ -242,6 +245,11 @@ function validateCliOptions(opts) {
       JSON.stringify(opts.loadGeneratorName));
   }
   if (!PROFILES[opts.profile]) throw new UsageError(`unknown profile ${opts.profile}`);
+  if (opts.factsStride !== undefined && (!['1', '4'].includes(opts.factsStride) ||
+      opts.targetsRaw !== 'lagrange' || opts.profile !== 'smoke')) {
+    throw new UsageError('--lagrange-facts-stride requires 1 or 4 and a Lagrange-only smoke run');
+  }
+  if (opts.labDataOrder && opts.executionTarget !== TARGET.LAB) throw new UsageError('--lab-data-order requires lab');
   if (opts.provision) validateProvisionOptions(opts);
 }
 
@@ -425,6 +433,7 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
   const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
   const checkoutProvenance = await resolveCheckoutLagrangeProvenance(opts, manifest);
   const deployOpts = {executionTarget: opts.executionTarget,
+    readiness: {factsStride: Number(opts.factsStride ?? 1)},
     lagrangeImage: opts.lagrangeImage, lagrangeImageDigest: opts.lagrangeImageDigest || null,
     storageRoot: opts.storageRoot || null,
     lagrangeVersion: checkoutProvenance.lagrangeVersion,
@@ -574,6 +583,18 @@ async function provisionGcpHosts({opts, manifest, dataHostCount}) {
       sshCommand: ['ssh', ...sshOptions(opts)]})});
 }
 
+function selectLabBenchmarkHosts(selection, order) {
+  const hosts = selectEligibleLabHosts(selection);
+  if (!order) return hosts;
+  const data = hosts.filter((host) => host.role === 'data');
+  const ips = list(order);
+  if (ips.length !== data.length || !data.every((host) => ips.includes(host.ip))) {
+    throw new UsageError('--lab-data-order must contain exactly the selected data hosts');
+  }
+  return [...ips.map((ip) => data.find((host) => host.ip === ip)),
+    ...hosts.filter((host) => host.role !== 'data')];
+}
+
 async function runLabCampaign({opts, manifest, dataHostCount}) {
   const state = await loadState({allowMissing: false});
   const {requirement, fleet} = await discoverLabFleet(state);
@@ -582,7 +603,7 @@ async function runLabCampaign({opts, manifest, dataHostCount}) {
   const loadGeneratorRequirement = measureLoadGeneratorRequirement(REPO_ROOT);
   const hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
     nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement,
-    loadGeneratorName: opts.loadGeneratorName});
+    loadGeneratorName: opts.loadGeneratorName}, opts.labDataOrder);
   const budgetMs = manifest.campaignBudgetMinutes * MS_PER_MINUTE;
   const sessions = await holdLabBenchmarkHosts({hosts, campaignId: manifest.campaignId,
     waitMs: Number(opts.lockWaitMinutes) * MS_PER_MINUTE, expectedMs: budgetMs});
@@ -619,7 +640,7 @@ async function dryRunPlan({opts, manifest, dataHostCount}) {
     loadGeneratorRequirement = measureLoadGeneratorRequirement(REPO_ROOT);
     hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
       nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement,
-      loadGeneratorName: opts.loadGeneratorName});
+      loadGeneratorName: opts.loadGeneratorName}, opts.labDataOrder);
   } else {
     hosts = gcpHosts(opts, dataHostCount);
   }

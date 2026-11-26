@@ -359,6 +359,39 @@ describe('readiness summary and canonical history outcome accounting', () => {
       assert.equal(ready.evidence.sampling.factsChecks, 4);
     });
 
+  it('defers repeat positive facts but forces refresh at attempt 15 and fresh quiet polls', async () => {
+    const {ctx, now, sshRun} = createStageObservationContext();
+    let attempt = 1;
+    const facts = [];
+    const batches = [];
+    const lanes = [];
+    Object.assign(ctx.budget, {factsStride: 4, attempts: 17, stablePolls: 3});
+    ctx.sleep = async () => { attempt++; };
+    ctx.sshRun = async (host, opts, command, timeout) => {
+      if (command.includes('/management/v1/facts')) {
+        facts.push(attempt);
+        return JSON.stringify({facts: {topology: {state: 'observed',
+          underReplicatedPartitionCount: 1}}}) + '\nhttp_status=200';
+      }
+      if (command.includes('/api/admin/control-snapshot')) lanes.push(attempt);
+      return sshRun(host, opts, command, timeout);
+    };
+    const roles = [1, 2, 3].map((n) => ({host: `10.166.0.1${n}`,
+      nodeId: `00000000-0000-4000-8000-00000000000${n}`}));
+    const query = createSystemTableQueryStub(now);
+    const ready = await clusterReady(ctx, 'lagrange-system-tables', (sql) => {
+      if (sql.includes('FROM services')) {
+        batches.push(attempt);
+        if (attempt === 1) return [];
+      }
+      return query(sql);
+    }, roles);
+    assert.deepEqual(facts, [2, 6, 10, 14, 15]);
+    assert.deepEqual(batches, [1, 15, 16, 17]);
+    assert.deepEqual(lanes, [1, 15, 16, 17].flatMap((n) => Array(3).fill(n)));
+    assert.equal(ready.evidence.sampling.factsDeferred, 9);
+  });
+
   it('retains the observed under-replication and probe costs on facts exhaustion', async () => {
     const {ctx, now, sshRun} = createStageObservationContext();
     let attempt = 1;
