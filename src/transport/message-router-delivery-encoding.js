@@ -83,6 +83,7 @@ function encodeDeliveryMessage(envelope, lifetime) {
   if (!isRecord(envelope)) throw invalidEncoding();
   const prepared = durationPayload(lifetime, envelope.payload, field);
   const {bytes, offset} = encodeDurationFrame(envelope, prepared, field);
+  let stampedRemainingMs;
   const stamp = () => {
     // Re-run the owner's native-target/currentness guard after complete body
     // serialization and UTF-8 conversion. It may change only the named scalar.
@@ -97,11 +98,12 @@ function encodeDeliveryMessage(envelope, lifetime) {
     // callback has not run. Only fixed-size scalar/framing work follows the
     // duration cut; post-handoff compression/masking belongs to socket custody.
     lifetime.remainingMs();
+    stampedRemainingMs = remaining;
     // No padding reaches the wire: even an event at the existing payload
     // boundary keeps the original JSON byte domain. This view copies no body.
     return bufferView(bytes, 0, offset + encoded.length + FRAME_SUFFIX.length);
   };
-  return {stamp};
+  return {stamp, get stampedRemainingMs() { return stampedRemainingMs; }};
 }
 
 export {encodeDeliveryMessage};

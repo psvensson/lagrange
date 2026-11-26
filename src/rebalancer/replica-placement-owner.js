@@ -36,7 +36,8 @@ import {COLLABORATOR, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID, invalidColla
 import {PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY,
   PLACEMENT_DEFICIT_KIND, PLACEMENT_DISPATCH_HOLD, PLACEMENT_OUTCOME, PLACEMENT_TRIGGER} from
   './replica-placement-owner-constants.js';
-import {PLACEMENT_DEFICIT_STATE, buildPartitionReplicaRows, evaluatePartitionDeficit,
+import {PLACEMENT_DEFICIT_STATE, buildDeficitContext, buildPartitionReplicaRows, evaluateDeficitContext,
+  evaluatePartitionDeficit,
   readPlacementNodeInputs} from './replica-placement-owner-deficits.js';
 import {canAdmitRemoveUnderPass} from './replica-placement-owner-remove.js';
 import {PLACEMENT_PASS_CHECKPOINT as CHECKPOINT, beginPlacementPass, completePass,
@@ -575,28 +576,31 @@ class ReplicaPlacementOwner {
     return inputsByPartition;
   }
 
-  evaluatePassPartition(partitionId, input, {
-    eligibility, saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker,
-  }) {
+  evaluatePassPartition(partitionId, input, targetInputs, previousContext, retainContext) {
     const {replicationFactor, replicaRows, isBusy} = input;
-    const evaluation = evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
-      eligibility, saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker});
-    return {partitionId, isBusy, evaluation};
+    const context = previousContext ? {...previousContext, ...targetInputs} :
+      buildDeficitContext({partitionId, replicationFactor, replicaRows, ...targetInputs});
+    const evaluation = evaluateDeficitContext(context);
+    const entry = {partitionId, isBusy, evaluation};
+    if (retainContext && evaluation.state !== PLACEMENT_DEFICIT_STATE.NONE) {
+      entry.deficitContext = context;
+    }
+    return entry;
   }
 
   evaluatePassPartitions(inputsByPartition, nodeInput, saturatedTargetNodeIds,
-    storageExcludedTargets, targetCapacityRanker = null, preliminary = null) {
+    storageExcludedTargets, targetCapacityRanker = null, preliminary = null, retainContext = false) {
     const targetInputs = {eligibility: nodeInput.eligibility, saturatedTargetNodeIds,
       storageExcludedTargets, targetCapacityRanker};
     if (preliminary) {
-      // Both NONE exits precede target selection. Replica rows and eligibility
-      // belong to this synchronous planning turn, including its budget decision.
+      // Only this synchronous budget turn shares replica and membership inputs.
+      // Target saturation, exclusions and ranking always come from the final pass.
       return preliminary.map((entry) => entry.evaluation.state === PLACEMENT_DEFICIT_STATE.NONE ?
         entry : this.evaluatePassPartition(entry.partitionId, inputsByPartition.get(entry.partitionId),
-          targetInputs));
+          targetInputs, entry.deficitContext));
     }
     return Array.from(inputsByPartition, ([partitionId, input]) =>
-      this.evaluatePassPartition(partitionId, input, targetInputs));
+      this.evaluatePassPartition(partitionId, input, targetInputs, null, retainContext));
   }
 
   resolveStatementSourceNodeId(candidate, inputsByPartition) {
@@ -792,7 +796,7 @@ class ReplicaPlacementOwner {
     const inputsByPartition = this.readPassPartitionInputs(busyPartitions, promotedByPartition,
       pass.decisionDiagnostics);
     const preliminary = this.evaluatePassPartitions(inputsByPartition, nodeInput, new Set(),
-      storageExcludedTargets);
+      storageExcludedTargets, null, null, true);
     const {waitingBySource, waitingByTarget} = computeCopyWaitingDemand(preliminary,
       nodeInput.formation, nodeInput.eligibility.eligibleNodeIds, storageExcludedTargets);
     const budgetSnapshot = this.adaptiveBudgetController ?

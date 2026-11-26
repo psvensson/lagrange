@@ -1,3 +1,6 @@
+import {beginCdcDeliveryInvocation} from '../../src/cdc/cdc-delivery-invocation.js';
+import {CDC_DELIVERY_REMAINING_MS, prepareCdcDeliveryMessage} from '../../src/cdc/cdc-delivery-budget.js';
+import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from '../../src/topology/latency-topology-constants.js';
 import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -19,6 +22,53 @@ function sendCounts(f, ws) {
   return socketEvidence(f.router, CDC_ROUTER_TEST.PEER,
     f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER), ws).applicationSendReturned;
 }
+
+test('socket CDC timing counts disjoint live partition grants across adjacent returned sends',
+  {timeout: CASE_TIMEOUT_MS}, async (t) => {
+    const f = await cdcRouterFixture(t);
+    const peer = await controlledCdcPeer(f);
+    const connection = f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER);
+    let at = 0;
+    t.mock.method(performance, 'now', () => at);
+    const pending = [];
+    const grants = [];
+    function send(partition) {
+      const context = beginCdcDeliveryInvocation({owner: f.delivery.owner, activeCdcInvocation: null}, () => true);
+      grants.push(context);
+      const id = 'range-' + grants.length;
+      pending.push(f.router.sendMessage(connection, CDC_ROUTER_TEST.ADDRESS, id,
+        {type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH, events: [{sourcePartition: partition}]},
+        CDC_ROUTER_TEST.PEER, id, CDC_ROUTER_TEST.BUDGET_MS, {deliveryContext: context,
+          prepareDeliveryMessage: prepareCdcDeliveryMessage, deliveryDurationField: CDC_DELIVERY_REMAINING_MS}));
+    }
+    try {
+      send('a');
+      at += 3;
+      send('b');
+      send('c');
+      send('c');
+      f.router.sendRaw(peer.accepted, {type: ROUTER_MESSAGE_TYPE.PING, pingId: 'urgent'});
+      send('d');
+      at += 13;
+      send('e');
+      const snapshot = socketEvidence(f.router, CDC_ROUTER_TEST.PEER, connection, peer.accepted);
+      const counts = snapshot.partialCdcRangeSendReturned;
+      assert.equal(counts.identifiedRanges, 6);
+      assert.equal(counts.disjointPairs, 1);
+      assert.equal(counts.intervalMsLe[3], 1);
+      assert.equal(Object.values(counts.pairMinSlackMsLe).reduce((a, b) => a + b), 1);
+      assert.equal(counts.nearbyControl, 1);
+      assert.equal(peer.writes.length, 6);
+      for (const write of peer.writes) {
+        await write.handedOff;
+        peer.ack(write.frame.messageId);
+        write.release();
+      }
+      await Promise.all(pending);
+    } finally {
+      for (const grant of grants) grant.finish();
+    }
+  });
 
 test('socket evidence separates the actual ACK and service response to an incoming request',
   {timeout: CASE_TIMEOUT_MS}, async (t) => {

@@ -498,7 +498,10 @@ function evaluateVoterSpreadOrSurplus(context, requiredHosts) {
  *   {state: WAITING, waiting}.
  */
 function evaluatePartitionDeficit(input) {
-  const context = buildDeficitContext(input);
+  return evaluateDeficitContext(buildDeficitContext(input));
+}
+
+function evaluateDeficitContext(context) {
   const {voterRows, learnerRows, live, liveLearners, eligibility, replicationFactor} = context;
   const deadLearner = learnerRows.find((r) => !liveLearners.includes(r));
   if (deadLearner !== undefined) return learnerRetirementDeficit(context, deadLearner);
@@ -529,6 +532,8 @@ function repairSourceNodeIdsOf(evaluations) {
 
 export {
   PLACEMENT_DEFICIT_STATE,
+  buildDeficitContext,
+  evaluateDeficitContext,
   buildPartitionReplicaRows,
   buildPlacementNodeEligibility,
   evaluatePartitionDeficit,
