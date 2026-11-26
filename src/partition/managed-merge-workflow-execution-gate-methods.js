@@ -56,7 +56,9 @@ async function buildAcceptedMergeAckOutcome(owner, workflow, workflowId,
     mergeCutoverApplied = await owner.applyMergeCutoverIfReady(workflowId);
   }
   if (ackStatus === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED) {
-    await owner.finalizeMergeDissolutionIfReady(workflowId);
+    const terminalCustody = await owner.finalizeMergeDissolutionEvidence(workflowId);
+    return {...ackResult, mergeCutoverApplied, mergeSourcesRetired: Boolean(terminalCustody),
+      ...(terminalCustody ? {terminalCustody} : {})};
   }
   return {...ackResult, mergeCutoverApplied};
 }

@@ -1,3 +1,5 @@
+import {classifyPlacementPressure} from '../rebalancer/replica-placement-adaptive-budget.js';
+import {readRemoteHeartbeatObservation} from '../rebalancer/replica-placement-owner-capacity.js';
 import {COLUMN} from '../constants/index.js';
 
 function buildNodeHeartbeatWriteDecision(
@@ -62,7 +64,7 @@ function buildNodeHeartbeatStructuralSignature(updateRow) {
 }
 
 function bucketNodeHeartbeatUsagePercent(value, options = {}) {
-  const numeric = Number(value);
+  const numeric = value;
   if (!Number.isFinite(numeric)) {
     return null;
   }
@@ -70,9 +72,13 @@ function bucketNodeHeartbeatUsagePercent(value, options = {}) {
   return Math.floor(numeric / bucketSize);
 }
 
+function heartbeatPlacementPressureReason(row) {
+  return classifyPlacementPressure(readRemoteHeartbeatObservation(row)).reason;
+}
+
 function buildNodeHeartbeatUtilizationSignature(updateRow, options = {}) {
   return JSON.stringify({
-    cpuUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.cpu_usage_percent, options),
+    cpuUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.host_cpu_utilization_percent, options),
     memoryUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.memory_usage_percent, options),
     diskUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.disk_usage_percent, options),
   });
@@ -147,6 +153,9 @@ function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
       state: options.writeDecisionState.STRUCTURAL_CHANGED,
       elapsedMs,
     });
+  }
+  if (options.lastPlacementPressureReason !== heartbeatPlacementPressureReason(updateRow)) {
+    return Object.freeze({state: options.writeDecisionState.UTILIZATION_CHANGED, elapsedMs});
   }
   if (elapsedMs < options.nodeMetadataMinUpdateIntervalMs) {
     return Object.freeze({
@@ -414,6 +423,7 @@ export {
   advanceMemoryTrendState,
   buildNodeHeartbeatStructuralSignature,
   buildNodeHeartbeatUtilizationSignature,
+  heartbeatPlacementPressureReason,
   incrementHistogramEntry,
   isQuietModeActive,
   normalizeHeartbeatPublicationDiagnostics,

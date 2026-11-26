@@ -46,7 +46,7 @@ function createNode(nodeId, overrides = {}) {
   return {
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
-    cpu_usage_percent: overrides.cpu || 0,
+    host_cpu_utilization_percent: overrides.cpu || 0,
     memory_usage_percent: overrides.memory || 0,
     disk_usage_percent: overrides.disk || 0,
     latency_group_id: overrides.latencyGroupId,
@@ -222,6 +222,21 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
       );
       t.same(result.targetNodes, [NODE_1, NODE_3]);
     });
+
+  await t.test('missing CPU evidence cannot give a candidate an idle-host score', (t) => {
+    const missing = createNode(NODE_2, {memory: 50});
+    missing.host_cpu_utilization_percent = null;
+    const {scoreResult} = buildPlacementOwnerDecision({
+      candidateNodes: [missing, createNode(NODE_1, {cpu: 90, memory: 10})],
+      targetCount: 1, scoreProfile: PLACEMENT_OWNER_SCORE_PROFILE.LOAD,
+      placementPolicy: PLACEMENT_OWNER_POLICY.PARTITION_SPREAD,
+    });
+    t.same(scoreResult.rankedNodeIds, [NODE_1, NODE_2]);
+    for (const {dimensions} of scoreResult.scoreVector) {
+      t.notOk(dimensions.some(({dimension}) => dimension === PLACEMENT_OWNER_SCORE_DIMENSION.CPU_LOAD));
+    }
+    t.end();
+  });
 
   await t.test('overloaded candidates rank behind lower load candidates',
     async (t) => {

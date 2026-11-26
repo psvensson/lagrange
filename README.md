@@ -54,7 +54,7 @@ Lagrange is **not** a good fit for:
 
 Lagrange is experimental alpha software under active development:
 
-- **Version Status:** Version `0.3.3` is the latest tagged GitHub release. Version `0.4.0` is the active development source on the `main` branch.
+- Run `npm view lagrange-server version` to see the published npm version. Release notes and tagged sources are available on the [GitHub releases page](https://github.com/psvensson/lagrange/releases).
 - **Comparison Integrity:** No comparative performance result is currently published. Every comparative result published before 2026-11-01 was withdrawn after an evidence audit (timeouts counted as successes, non-canonical workloads, constant phase/byte values, synthesised quantiles); the records are retained as forensic evidence behind an append-only invalidation ledger. The [comparative benchmark overview](docs/benchmarks/README.md) shows the admission status of every advertised claim.
 - **Integrated Storage:** Lagrange provides its own partitioned SQLite and Raft consensus storage layer; it is not a compute proxy installed on top of existing external databases.
 
@@ -77,7 +77,22 @@ See [Current Capabilities and Limitations](docs/current-capabilities-and-limitat
 
 ## Try it
 
-Run the end-to-end account-summary demonstration (requires Node.js 22.12 or newer):
+### Install from npm
+
+With Node.js 22.12 or newer, run these commands in an empty directory to install the published package and check the node configuration.
+
+```bash
+npm init -y
+npm install lagrange-server
+npx lagrange --version
+NODE_HOST_ID=demo-host npx lagrange --dry-run --data-dir ./lagrange-data
+```
+
+The dry run prints `Dry run completed`. The installed package supplies both the `lagrange` and `lagrange-admin` commands.
+
+### Run the account-summary demonstration from source
+
+In a separate directory, clone the repository and run the demonstration.
 
 ```bash
 git clone https://github.com/psvensson/lagrange

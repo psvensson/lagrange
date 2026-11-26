@@ -61,11 +61,12 @@ async function publishLedgerLeader(cache, leader) {
  */
 function ensureLeaderPlacementOwnerSink(leader) {
   if (leader && !leader.rebalancerLeadershipSink) {
-    leader.rebalancerLeadershipSink = {
-      isLeader: true,
+    leader.setRebalancerLeadershipSink({
+      isLeader: false,
+      setLeader(isLeader) { this.isLeader = isLeader; },
       now: () => (leader.timeSource ? leader.timeSource.now() : Date.now()),
       adaptiveBudgetController: createAdaptivePlacementBudgetController(),
-    };
+    });
   }
 }
 

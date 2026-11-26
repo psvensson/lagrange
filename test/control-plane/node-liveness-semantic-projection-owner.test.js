@@ -2,7 +2,8 @@ import {readFileSync} from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 
-import {TABLES} from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {
   NODE_LIVENESS_SEMANTIC_STATE,
   NodeLivenessSemanticProjectionOwner,
@@ -870,6 +871,35 @@ test('nested hostile caller rows cannot execute or rotate shared liveness eviden
   t.end();
 });
 
+test('liveness projections reuse the admitted shared row while time and source changes stay live', (t) => {
+  const {owner, row, timeSource} = buildOwnerFixture();
+  t.teardown(() => owner.shutdown());
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, row);
+  const nodeId = row.node_id;
+  owner.readNodeEvidence = () => ({nodeRow: cache.getShared(TABLES.NODES, nodeId)});
+  const project = () => owner.projectNodeLivenessFromEvidence(
+    nodeId, owner.readNodeEvidence(), timeSource.now());
+  t.equal(project().readyNow, true);
+  const firstSnapshot = owner.projectedEvidenceRowByNodeId.get(nodeId);
+  const generation = owner.getNodeLivenessGeneration(nodeId);
+  t.equal(project().readyNow, true);
+  t.equal(owner.projectedEvidenceRowByNodeId.get(nodeId), firstSnapshot,
+    'a second real cache read reuses the same admitted row');
+  t.equal(owner.getNodeLivenessGeneration(nodeId), generation);
+  timeSource.advance(14);
+  t.equal(project().leaseSemantics.state, NODE_LIVENESS_SEMANTIC_STATE.EXPIRED,
+    'a frozen row cannot keep its lease valid past the deadline');
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
+    ...row, last_heartbeat: timeSource.now(), ready_lease_expires_at: timeSource.now() + 13,
+  });
+  owner.recordNodeSourceChange(nodeId);
+  t.equal(project().readyNow, true, 'the replacement heartbeat renews the lease');
+  t.not(owner.projectedEvidenceRowByNodeId.get(nodeId), firstSnapshot,
+    'row replacement obtains a new strict snapshot');
+  t.end();
+});
+
 test('nested source rows are admitted before becoming the shared comparison snapshot', (t) => {
   const fixture = buildOwnerFixture();
   t.teardown(() => fixture.owner.shutdown());
@@ -890,6 +920,9 @@ test('nested source rows are admitted before becoming the shared comparison snap
   t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).readyNow, true,
     'the retained row is an admitted snapshot, not a mutable caller alias');
   t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation);
+  t.equal(fixture.owner.projectNodeLivenessFromEvidence('node-a', {nodeRow: valid}, NOW_MS)
+    .leaseSemantics.state, NODE_LIVENESS_SEMANTIC_STATE.CLEARED,
+  'resubmitting the same mutable row observes its changed contents');
   t.end();
 });
 

@@ -26,7 +26,6 @@ test('split terminal lifecycle: dissolution clears the durable ' +
 'transition row and emits SPLIT_COMPLETED exactly at terminal',
 async (t) => {
   const updateCalls = [];
-  const deleteCalls = [];
   const completionPayloads = [];
   const removedReplicas = [];
   const partitionRows = [
@@ -35,10 +34,23 @@ async (t) => {
     {partition_id: 'users-p-right', partition_version: 2, state: 'NORMAL'},
     {partition_id: 'users-p3', partition_version: 1, state: 'NORMAL'},
   ];
+  const store = openRecordStore({partitions: partitionRows});
+  t.teardown(() => store.db.close());
+  const cdc = store.cdcFor('terminal-lifecycle');
+  const update = cdc.updateSystemTableRow.bind(cdc);
+  cdc.updateSystemTableRow = async (tableName, whereClause, data, options) => {
+    const result = await update(tableName, whereClause, data, options);
+    updateCalls.push({tableName, whereClause, data, options});
+    return result;
+  };
   const {workflow} = buildWorkflow({
-    updateCalls,
+    cdcIntegrationService: cdc,
     topologyAdapter: null,
-    listTablePartitionRows: () => partitionRows,
+    getTableInfo: () => store.tablesRow(),
+    listTableInfos: () => [store.tablesRow()],
+    getPartitionInfo: (id) => store.partitionRow(id),
+    parsePartitionTransition,
+    listTablePartitionRows: () => store.partitionIds().map((id) => store.partitionRow(id)),
     listPartitionServiceRows: (partitionId) => ([
       {replica_id: `${partitionId}-r1`, node_id: 'node-a'},
     ]),
@@ -49,20 +61,8 @@ async (t) => {
     splitCompletionListener: (payload) => {
       completionPayloads.push(payload);
     },
-    cdcIntegrationService: {
-      async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
-        updateCalls.push({tableName, whereClause, data, options: updateOptions});
-        return {success: true, affectedRows: 1};
-      },
-      async insertSystemTableRow() {
-        return {success: true};
-      },
-      async deleteSystemTableRow(tableName, whereClause) {
-        deleteCalls.push({tableName, whereClause});
-        return {success: true, affectedRows: 1};
-      },
-    },
   });
+  readAuthoritativelyFrom(workflow, store);
   const workflowId = 'split-terminal-lifecycle';
   const record = {
     workflowId,
@@ -128,6 +128,9 @@ async (t) => {
     PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
     'the source catch-up ack must drive the durable cutover',
   );
+  t.equal(store.tablesRow().partition_transition_state,
+    PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+    'the authoritative record carries the cutover before source cleanup');
   const cutoverUpdate = updateCalls.find((entry) =>
     entry.tableName === TABLES.TABLES &&
     entry.data.partition_transition_state ===
@@ -156,9 +159,8 @@ async (t) => {
     'the retired source raft group must receive a replica removal',
   );
   t.ok(
-    deleteCalls.some((entry) =>
-      entry.tableName === TABLES.PARTITIONS &&
-      entry.whereClause?.partition_id === 'users-p1'),
+    store.partitionDeletesBy('terminal-lifecycle').includes('users-p1') &&
+      store.partitionRow('users-p1') === null,
     'the retired source partition descriptor must be deleted',
   );
 
@@ -210,16 +212,7 @@ async (t) => {
 
   // A second split of the same table is now admissible: the durable row
   // carries no transition state, so the admission gate sees a clean table.
-  const secondSplitTableInfo = {
-    table_id: 'tbl-users',
-    table_name: 'users',
-    partition_key: 'id',
-    active_partition_version: 2,
-    partition_transition_state: terminalClear.data
-      .partition_transition_state,
-    partition_transition_metadata: terminalClear.data
-      .partition_transition_metadata,
-  };
+  const secondSplitTableInfo = store.tablesRow();
   t.equal(
     secondSplitTableInfo.partition_transition_state,
     null,

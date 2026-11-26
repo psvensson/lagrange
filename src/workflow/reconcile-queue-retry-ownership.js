@@ -1,5 +1,6 @@
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
+  createExhaustedCompletionError,
   mergeWorkItemCompletionWaiters,
   rejectWorkItemCompletionWaiters,
 } from './owner-key-reconcile-completion.js';
@@ -277,8 +278,9 @@ function recordExhausted(queue, ownerKey, item, retryState, overrides = {}) {
   queue._retryableDrainExhaustedCount++;
   rejectWorkItemCompletionWaiters(
     item,
-    error || new Error(exhaustedState.errorMessage),
+    createExhaustedCompletionError(exhaustedState, error),
   );
+  item.completionWaiters = [];
   pushFailureSample(queue, exhaustedState);
   queue.emit(RETRY_EXHAUSTED, exhaustedState);
   logExhausted(queue, exhaustedState);

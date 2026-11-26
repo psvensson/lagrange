@@ -2,6 +2,8 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {CONTROL_PLANE_OPERATION_HANDOFF_MODE, ControlPlaneField} from
+  '../../src/control-plane/control-plane-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
   ERRORS,
@@ -299,6 +301,7 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       updated_at: now,
       steps_history: '[]',
     };
+    const dispatchOptions = [];
     let dispatchCalls = 0;
     let authoritativeReadCalls = 0;
 
@@ -327,9 +330,10 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
             return null;
           },
         },
-        async dispatchOperation() {
+        async dispatchOperation(operation, options) {
+          dispatchOptions.push(options);
           dispatchCalls += 1;
-          return {success: false};
+          return {success: dispatchCalls > 1};
         },
         isOperationLocallyOwned() {
           return true;
@@ -376,6 +380,40 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
         0,
         'visibility lag should not record one dropped dispatch failure signature',
       );
+      scheduled[0].callback();
+      await Promise.all(service.operationDispatchQueues.map((queue) => queue.awaitCurrentWorkIdle()));
+      t.equal(dispatchOptions[1]?.routineCreateRearmWake, true,
+        'the cache-visibility retry reaches the workflow receipt check through the owner queue');
+      t.same(dispatchOptions[1].dispatchWake,
+        {reasons: [RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY], handoffMode: null});
+
+      const id = operationRow.operation_id;
+      service.deferOperationDispatchRetry(id, service.buildReplicaOperationVisibilityLagError(id), operationRow);
+      const transportError = Object.assign(new Error(ERRORS.WRITE_CUTOVER_PAUSED), {
+        failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED, deferRetry: true,
+      });
+      service.deferOperationDispatchRetry(id, transportError, operationRow);
+      service.operationDispatchDeferredRetries.get(id).timeoutHandle.callback();
+      await Promise.all(service.operationDispatchQueues.map((queue) => queue.awaitCurrentWorkIdle()));
+      t.notOk(dispatchOptions[2]?.routineCreateRearmWake,
+        'a mixed retry retains explicit recovery even when visibility also lagged');
+
+      const creating = {...operationRow, workflow_step: WORKFLOW_STEP.CREATING, status: 'creating'};
+      for (const [mode, reusable] of [
+        [CONTROL_PLANE_OPERATION_HANDOFF_MODE.INITIAL_DISPATCH, true],
+        [CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME, false],
+      ]) {
+        await service.handleReplicaOperationDispatch({
+          [ControlPlaneField.OPERATION_ID]: creating.operation_id,
+          [ControlPlaneField.OPERATION_ROW]: creating,
+          [ControlPlaneField.HANDOFF_MODE]: mode,
+        });
+        await Promise.all(service.operationDispatchQueues.map((queue) => queue.awaitCurrentWorkIdle()));
+        t.equal(dispatchOptions.at(-1)?.routineCreateRearmWake === true, reusable,
+          `the remote ${mode} ingress preserves its delivery intent`);
+        t.same(dispatchOptions.at(-1).dispatchWake,
+          {reasons: [RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST], handoffMode: mode});
+      }
     } finally {
       service.stop();
     }

@@ -356,7 +356,7 @@ class NodeJoiningReadySignalReadiness
     const capabilities = this.getNodeCapabilities();
     const stats = await nodeService.getNodeStats();
     const heartbeatPayload = {
-      cpu: {count: stats.cpu?.count, usagePercent: stats.cpu?.usagePercent},
+      cpu: {count: stats.cpu?.count},
       memory: {
         totalBytes: stats.memory?.totalBytes,
         usagePercent: stats.memory?.usagePercent,

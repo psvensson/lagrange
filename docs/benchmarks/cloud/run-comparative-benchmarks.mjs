@@ -117,7 +117,9 @@ import {
 import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
-import {runtimeBuildProvenance} from '../../../src/diagnostics/runtime-build-provenance.js';
+import {measureCheckoutSourceFingerprint} from '../../../src/diagnostics/runtime-content-fingerprint.js';
+import {localRevisionSourceFingerprint} from
+  '../../../test/distributed/harness/comparative-benchmark-revision-source.js';
 import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
 import {discoverFleet, fleetRequirement} from '../../../scripts/lab/probe.js';
 import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
@@ -169,10 +171,9 @@ Options:
   --lagrange-image <ref>        Lagrange image (default: ${LAGRANGE_IMAGE_DEFAULT});
                                 publishable runs need repo@sha256:<digest>
   --lagrange-image-content <sha256>
-                                The Lagrange image content identity every data host must
-                                hold (sha256 of its ordered RootFS diff_ids; the same on
-                                containerd and overlay2 stores); --lagrange-image is then
-                                its registry provenance
+                                SHA256 of the ordered RootFS diff_ids. At least one data
+                                host must resolve --lagrange-image. Every host must hold
+                                that exact image config and match the layer digest.
   --lagrange-version <v>        Product version the image must report (needed for a digest)
   --lagrange-revision <sha>     org.opencontainers.image.revision the image must carry
   --raw-observations <path>     Append-only record store
@@ -402,17 +403,25 @@ async function resolveCheckoutLagrangeProvenance(opts, manifest) {
   }
   const tagMatch = SEMVER_IMAGE_TAG_PATTERN.exec(String(opts.lagrangeImage || ''));
   const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'));
-  const buildProv = !opts.lagrangeSrcFingerprint ?
-    await runtimeBuildProvenance() : null;
   const lagrangeVersion = opts.lagrangeVersion || (tagMatch ? tagMatch[1] : pkg.version) || null;
   const lagrangeSrcFingerprint = opts.lagrangeSrcFingerprint ||
-    buildProv?.content?.shortSourceFingerprint || null;
+    await measureCheckoutSourceFingerprint(REPO_ROOT);
   if (!lagrangeVersion || !SOURCE_FINGERPRINT_PATTERN.test(String(lagrangeSrcFingerprint || ''))) {
     throw deploymentFailure(
       DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
       'Lagrange campaign requires verified checkout version and source fingerprint provenance',
       {lagrangeVersion, lagrangeSrcFingerprint},
     );
+  }
+  if (opts.lagrangeRevision) {
+    const revisionFingerprint = localRevisionSourceFingerprint(REPO_ROOT, opts.lagrangeRevision);
+    if (revisionFingerprint ? revisionFingerprint !== lagrangeSrcFingerprint :
+      !opts.lagrangeSrcFingerprint) {
+      throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+        revisionFingerprint ? 'requested image revision contradicts expected source fingerprint' :
+          'external image revision requires an explicit source fingerprint',
+        {revision: opts.lagrangeRevision, revisionFingerprint, lagrangeSrcFingerprint});
+    }
   }
   return {lagrangeVersion, lagrangeSrcFingerprint};
 }
@@ -423,14 +432,13 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
   // The semantic proof journey runs here, on the controller; PostgreSQL admits
   // the controller's address (as the data host sees it) next to the load generator.
   const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
-  const checkoutProvenance = await resolveCheckoutLagrangeProvenance(opts, manifest);
   const deployOpts = {executionTarget: opts.executionTarget,
     lagrangeImage: opts.lagrangeImage, lagrangeImageDigest: opts.lagrangeImageDigest || null,
     storageRoot: opts.storageRoot || null,
-    lagrangeVersion: checkoutProvenance.lagrangeVersion,
+    lagrangeVersion: opts.lagrangeVersion,
     lagrangeRevision: opts.lagrangeRevision || null,
     lagrangeImageContent: opts.lagrangeImageContent || null,
-    lagrangeSrcFingerprint: checkoutProvenance.lagrangeSrcFingerprint,
+    lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint,
     lagrangeImageByHost: pinned ? Object.fromEntries(Object.entries(pinned).map(
       ([ip, entry]) => [ip, entry.runRef])) : null,
     proofClientIps: controllerIp ? [controllerIp] : []};
@@ -705,6 +713,7 @@ async function main() {
   }
   const manifest = buildComparativeCampaignManifest({campaignId: opts.campaignId,
     profile: PROFILES[opts.profile], targets: opts.targets});
+  Object.assign(opts, await resolveCheckoutLagrangeProvenance(opts, manifest));
   const dataHostCount = dataHostCountOf(manifest.targets);
   if (opts.dryRun) {
     const plan = await dryRunPlan({opts, manifest, dataHostCount});

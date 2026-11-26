@@ -1,3 +1,4 @@
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from '../transport/transport-semantic-outcome.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {isReroutableWriteError} from '../constants/errors.js';
 import {
@@ -24,6 +25,11 @@ const {
 } = QUERY_EXECUTOR_SHARED;
 
 const CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    id: 'system_closed_target_widen',
+    when: Object.freeze({isSystemTableWrite: true, isTargetConnectionClosed: true}),
+    state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE,
+  }),
   Object.freeze({
     id: 'priority_deferred_widen_to_recovery_candidate',
     when: Object.freeze({
@@ -74,6 +80,7 @@ function evaluateControlPlaneWriteRetryDecision(facts = {}) {
     isPriorityControlPlaneWrite: facts.isPriorityControlPlaneWrite === true,
     isRetryable: facts.isRetryable === true,
     isDeferredFailure: facts.isDeferredFailure === true,
+    isTargetConnectionClosed: facts.isTargetConnectionClosed === true,
     isRemovalFencedFailure: facts.isRemovalFencedFailure === true,
   });
   const matchedRule = CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE.find((rule) =>
@@ -526,6 +533,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
    * @param {string} partitionId
    * @param {Object} failure
    * @param {boolean} forRead
+   * @param {Object|null} transport - Observed delivery outcome.
    * @return {{state:string}}
    * @private
    */
@@ -533,6 +541,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     partitionId,
     failure,
     forRead = false,
+    transport = null,
   ) {
     const retryAfterMs = normalizeParticipantRetryAfterMs(
       failure?.retryAfterMs,
@@ -565,6 +574,10 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     return this.buildControlPlaneWriteRetryDecision(
       evaluateControlPlaneWriteRetryDecision({
         isSystemTableWrite,
+        // Reconnect debt belongs to this address. Only the transport can
+        // establish its closure; a participant refusal cannot widen via this rule.
+        isTargetConnectionClosed: transport?.reasonCode ===
+          TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED,
         isPriorityControlPlaneWrite,
         isRetryable,
         isDeferredFailure,

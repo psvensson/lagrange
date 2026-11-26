@@ -1,5 +1,5 @@
-import {RealTimeSource} from '../time/time-source.js';
 import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
+import {RealTimeSource} from '../time/time-source.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   applySuccessfulCandidateAffinity,
@@ -163,20 +163,6 @@ function createRecoveryReadDelivery(executor, options = {}) {
   });
   const pending = new Map();
   const issued = new Map();
-  let ticketIssuer = null;
-
-  function bindTicketIssuer(issueTicketFn) {
-    ticketIssuer = issueTicketFn || null;
-  }
-
-  function mintBoundTicket(ticket) {
-    const peer = capturePeerConnectionSnapshot(router, ticket.serviceInfo?.nodeId, ticket.peer);
-    if (ticketIssuer) {
-      return ticketIssuer({...ticket, peer});
-    }
-    return Object.freeze({...ticket, peer});
-  }
-
   function cancelSupersededRoute(address, record) {
     pending.delete(address);
     record.controller.abort(new Error(READ_ROUTE_SUPERSEDED_ERROR));
@@ -199,27 +185,25 @@ function createRecoveryReadDelivery(executor, options = {}) {
     return !previous || !currentIn(previous, [candidate]);
   }
 
-  function start(ticket, routerOptions) {
-    const {address, serviceInfo, request} = ticket;
+  function start(ticket, admission) {
+    const {address, serviceInfo} = ticket;
     const existing = pending.get(address);
     if (existing && currentIn(existing.ticket, [serviceInfo])) return existing.completion;
     if (existing) cancelSupersededRoute(address, existing);
     const controller = new AbortController();
-    const boundTicket = mintBoundTicket(ticket);
     const deliverySignal = globalThis.AbortSignal.any([signal, controller.signal]);
-    ticket.submit?.();
-    const completion = router.deliver(
-      address, request, {...routerOptions, signal: deliverySignal},
-    ).then((delivery) => ({ticket: boundTicket, delivery}),
+    const {ticket: boundTicket, completion: reply} = admission.submit(
+      ticket, ticket.submit, deliverySignal);
+    const completion = reply.then((delivery) => ({ticket: boundTicket, delivery}),
       (error) => ({ticket: boundTicket, error}));
     pending.set(address, {controller, ticket: boundTicket, completion, probed: false});
     issued.set(address, {address, serviceInfo, peer: boundTicket.peer});
     return completion;
   }
 
-  async function select(ticket, routerOptions, candidateQueue, probeMs) {
+  async function select(ticket, admission, candidateQueue, probeMs) {
     signal.throwIfAborted();
-    start(ticket, routerOptions);
+    start(ticket, admission);
     let timer;
     const events = candidateQueue.flatMap(({address}) => {
       const record = pending.get(address);
@@ -245,7 +229,6 @@ function createRecoveryReadDelivery(executor, options = {}) {
   }
 
   return {
-    bindTicketIssuer,
     select,
     reconcile,
     currentIn,
@@ -255,7 +238,7 @@ function createRecoveryReadDelivery(executor, options = {}) {
     hasUnstarted: (candidates, mayRetry) => candidates.some((candidate) =>
       !pending.has(candidate.address) && canSelect(candidate, mayRetry)),
     throwIfAborted: () => signal.throwIfAborted(),
-    async redirect({origin, address, request, routerOptions, submit,
+    async redirect({origin, address, request, admission, submit,
       resolveRoutes, redirectCandidate}) {
       const initial = resolveRoutes();
       const target = redirectCandidate(address, initial);
@@ -268,7 +251,7 @@ function createRecoveryReadDelivery(executor, options = {}) {
         request,
         serviceInfo: target,
         submit,
-      }, routerOptions);
+      }, admission);
       signal.throwIfAborted();
       pending.delete(address);
       return {
@@ -312,12 +295,11 @@ function resolveDirectRedirectTarget({
 async function deliverLeaderRedirect({
   readDelivery,
   invocation,
-  messageRouter,
   origin,
   address,
   participantNodeId = null,
   request,
-  routerOptions,
+  admission,
   submit,
   redirectCandidate,
 }) {
@@ -326,7 +308,7 @@ async function deliverLeaderRedirect({
       origin,
       address,
       request,
-      routerOptions,
+      admission,
       submit,
       resolveRoutes: () => invocation.resolveRoutes(),
       redirectCandidate,
@@ -342,19 +324,15 @@ async function deliverLeaderRedirect({
   if (!resolvedTarget) {
     return RECOVERY_REDIRECT_REFUSED;
   }
-  const redirectTicket = invocation.issueTicket({
+  const {ticket, completion} = admission.submit({
     address,
     hadRoutableTarget: resolvedTarget.hadRoutableTarget,
     isRedirect: true,
     originTicket: origin,
     request,
     serviceInfo: resolvedTarget.serviceInfo,
-  });
-  const delivery = await messageRouter.deliver(address, request, routerOptions);
-  return {
-    delivery,
-    ticket: redirectTicket,
-  };
+  }, submit);
+  return {delivery: await completion, ticket};
 }
 
 function resolveRedirectFailureMessage(redirectResponse) {
@@ -365,22 +343,21 @@ function resolveRedirectFailureMessage(redirectResponse) {
 }
 
 function handleFailedRedirectResponse(context, redirectAddress,
-  redirectParticipantNodeId, redirectResponse) {
+  redirectParticipantNodeId, redirectResponse, redirectUnknownDecision, transport) {
   const {
     candidateIndex, candidateState, executor, followRetryDecision, forRead,
     isLeaderPinnedDelivery, partitionId, recordCandidateFailure, response,
-    unknownOutcome, widenWriteCandidate,
+    widenWriteCandidate,
   } = context;
   candidateState.markAttemptedAddress?.(redirectAddress);
   const redirectFailureMessage = resolveRedirectFailureMessage(redirectResponse);
-  const redirectUnknownDecision = unknownOutcome.observeAnswer(redirectResponse);
   if (redirectUnknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
     recordCandidateFailure(
       redirectFailureMessage, redirectResponse, redirectParticipantNodeId, redirectAddress);
     return {action: REDIRECT_STEP_ACTION.RETURN, useLastFailure: true};
   }
   const redirectRetryDecision = executor.resolveControlPlaneWriteRetryDecision(
-    partitionId, redirectResponse, forRead);
+    partitionId, redirectResponse, forRead, transport);
   recordCandidateFailure(
     redirectFailureMessage, redirectResponse, redirectParticipantNodeId, redirectAddress);
   if (redirectRetryDecision.state !== CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE) {
@@ -402,32 +379,28 @@ async function executePartitionLeaderRedirectAttempt(context) {
     buildDeadlineSpentFailureResult, buildLastFailureResult, buildRequest,
     buildRouterDeliveryOptions, candidateEligibility, candidateIndex, candidateQueue,
     candidateState, executionOptions, executor, forRead, invocation,
-    markRecoverySubmission, onRedirectSubmissionState, params, partitionId,
+    markRecoverySubmission, params, partitionId,
     readDelivery, recordCandidateFailure, response, serviceInfo, sql,
-    targetRetryTracker, unknownOutcome,
+    targetRetryTracker,
   } = context;
   executor.logger.debug(QUERY_LOG_MSG.FOLLOWING_LEADER_REDIRECT, {
     fromAddress: address, leaderAddress: response.leaderAddress, partitionId,
   });
   const redirectAddress = response.leaderAddress;
-  if (!readDelivery && targetRetryTracker &&
+  if (!readDelivery &&
       targetRetryTracker.getRemainingDelayMs(redirectAddress) > 0) {
     if (targetRetryTracker.hasImmediateCandidateAfter(
       candidateQueue, candidateIndex, attemptedAddresses,
     )) {
       return {action: REDIRECT_STEP_ACTION.CONTINUE};
     }
-    if (!(await targetRetryTracker.awaitTargetReady(redirectAddress))) {
-      return {action: REDIRECT_STEP_ACTION.RETURN, result: buildDeadlineSpentFailureResult()};
-    }
   }
-  const redirectRouterOptions = buildRouterDeliveryOptions(
-    candidateQueue, candidateIndex, attemptedAddresses);
-  if (redirectRouterOptions === null) {
+  const admission = await invocation.prepareSubmission(redirectAddress,
+    targetRetryTracker, () => buildRouterDeliveryOptions(
+      candidateQueue, candidateIndex, attemptedAddresses));
+  if (admission === null) {
     return {action: REDIRECT_STEP_ACTION.RETURN, result: buildDeadlineSpentFailureResult()};
   }
-  onRedirectSubmissionState(true);
-  unknownOutcome.recordDelivery();
   const redirectedFromAddress = address;
   const redirectParticipantNodeId = resolveRedirectParticipantNodeId(
     redirectAddress, serviceInfo?.nodeId);
@@ -438,13 +411,12 @@ async function executePartitionLeaderRedirectAttempt(context) {
   const nextServiceInfo = {nodeId: redirectParticipantNodeId, address: redirectAddress};
   context.onRedirectTargetSelected?.(redirectAddress, nextServiceInfo);
   const redirectOutcome = await deliverLeaderRedirect({
-    address: redirectAddress, invocation, messageRouter: executor.messageRouter,
+    address: redirectAddress, invocation,
     origin: activeTicket, participantNodeId: redirectParticipantNodeId, readDelivery,
     redirectCandidate: candidateEligibility.redirectCandidate, request: redirectRequest,
-    routerOptions: redirectRouterOptions, submit: markRecoverySubmission,
+    admission, submit: markRecoverySubmission,
   });
   if (redirectOutcome === RECOVERY_REDIRECT_REFUSED) {
-    onRedirectSubmissionState(false);
     recordCandidateFailure(
       READ_ROUTE_SUPERSEDED_ERROR, ROUTE_SUPERSEDED_FAILURE,
       redirectParticipantNodeId, redirectAddress);
@@ -454,10 +426,6 @@ async function executePartitionLeaderRedirectAttempt(context) {
     };
   }
   const redirectDelivery = redirectOutcome.delivery;
-  if (redirectDelivery) {
-    unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
-  }
-  onRedirectSubmissionState(false);
   const redirectCompletion = invocation.completeDelivery({
     delivery: redirectDelivery,
     error: redirectOutcome.error ?? null,
@@ -477,6 +445,9 @@ async function executePartitionLeaderRedirectAttempt(context) {
       serviceInfo: nextServiceInfo, shouldRecheckRoutes: Boolean(readDelivery),
     };
   }
+  if (redirectCompletion.settledFailure) {
+    return {action: REDIRECT_STEP_ACTION.RETURN, result: redirectCompletion.settledFailure};
+  }
   if (redirectCompletion.accepted) {
     targetRetryTracker?.clearTarget(redirectAddress);
     applySuccessfulCandidateAffinity(
@@ -486,10 +457,12 @@ async function executePartitionLeaderRedirectAttempt(context) {
       result: invocation.finalizeAcceptedResult(redirectCompletion.completedResult),
     };
   }
+  const unknownDecision = context.unknownOutcome.observeAnswer(redirectCompletion.response);
   await candidateState.handleRedirectTransportNoHandler(
     redirectDelivery, nextServiceInfo, redirectAddress, candidateIndex);
   const failureStep = handleFailedRedirectResponse(
-    context, redirectAddress, redirectParticipantNodeId, redirectCompletion.response);
+    context, redirectAddress, redirectParticipantNodeId, redirectCompletion.response, unknownDecision,
+    deliveryTransportOf(redirectDelivery));
   return {
     ...failureStep, address: redirectAddress,
     ...(failureStep.useLastFailure ? {result: buildLastFailureResult()} : {}),

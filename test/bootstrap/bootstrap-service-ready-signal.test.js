@@ -83,7 +83,7 @@ test('BootstrapService waits for local query transport readiness before publishi
     });
     NodeService.getInstance = () => ({
       getNodeStats: async () => ({
-        cpu: {count: 4, usagePercent: 10},
+        cpu: {count: 4},
         memory: {totalBytes: 1024, usagePercent: 20},
         diskGb: 100,
         diskUsagePercent: 30,
@@ -166,7 +166,7 @@ test('BootstrapService keeps seed JOINING during control-plane registration and 
     };
     NodeService.getInstance = () => ({
       getNodeStats: async () => ({
-        cpu: {count: 4, usagePercent: 10},
+        cpu: {count: 4},
         memory: {totalBytes: 1024, usagePercent: 20},
         diskGb: 100,
         diskUsagePercent: 30,

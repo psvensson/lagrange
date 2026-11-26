@@ -6,6 +6,7 @@
 // Nullable insert-result contract (TX1 0.0.14): lastInsertRowid is retained
 // only for INSERT/REPLACE without DO UPDATE that changed >= 1 row.
 
+import {detectCommittedStatementOutcomeFormat} from './partition-committed-statement-format.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE, PARTITION_COMMITTED_COMMAND_OUTCOME,
@@ -24,7 +25,7 @@ import {admitCommittedCommand, committedCommandRefusalResult} from
   './partition-committed-command-admission.js';
 import {buildDurableCommitWitness} from './partition-write-kernel.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
-  retainedStoreTableExistsIn, isStoredInteger, isStoredNullableText,
+  isStoredInteger, isStoredNullableText,
   isStoredNullableInteger} from './partition-retained-store-observation.js';
 import {
   PARTITION_STATEMENT_REFUSAL_CODE, refusalLayerFieldOf,
@@ -36,17 +37,13 @@ import {
   STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
   applyMirrorRetentionCustodyCommand,
   partitionOwesDurableMirrorEffects,
-  pruneSettledMirrorOutcomeEffects,
   readCapturedRowEffectsIn,
-  readDurableMirrorRetentionBarrierIn,
   readDurableMirrorRetentionCustodyIn,
   reconcileCommittedStatementMirrorEffects,
   registerMirrorRetentionRaftHooks,
   releaseSourceMirrorRetentionCustody,
   replicateSourceMirrorRetentionCustody,
   resolveActiveMirrorRetentionBarrierIndex,
-  resolveActiveMirrorRetentionCustody,
-  resolveLeaderMirrorRetentionStamp,
 } from './partition-mirror-effect-retention.js';
 
 const NO_COMMITTED_STATEMENT_KEY = null;
@@ -83,6 +80,7 @@ function isCensusRowValid(row) {
     isStoredInteger(row.term, 1n) && isStoredNullableInteger(row.changes, 0n) &&
     isStoredNullableInteger(row.last_insert_rowid) &&
     isStoredNullableText(row.failure_code) && isStoredNullableText(row.failure_message) &&
+    (row.mirror_effect_required === 0n || row.mirror_effect_required === 1n) &&
     isCensusOwnerIdentityValid(row);
 }
 
@@ -103,45 +101,8 @@ function readCommittedStatementCensusIn(db) {
     lastInsertRowid: row.last_insert_rowid === null ? null : String(row.last_insert_rowid),
     ownerResultText: row.owner_result_text,
     commandDigest: row.command_digest,
+    mirrorEffectRequired: row.mirror_effect_required === 1n,
   }));
-}
-
-const RETAINED_STORE_FORMAT_REFUSALS = Object.freeze(new Set(
-  Object.values(RETAINED_STORE_ERROR)));
-
-function outcomeTableFormatIn(db) {
-  const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
-  if (!retainedStoreTableExistsIn(db, sql.TABLE)) {
-    return PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT;
-  }
-  try {
-    readRetainedStoreRowsIn(db, {table: sql.TABLE, select: sql.FORMAT_PROBE,
-      create: sql.CREATE_TABLE});
-    return PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT;
-  } catch (error) {
-    if (RETAINED_STORE_FORMAT_REFUSALS.has(error?.code)) {
-      return PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED;
-    }
-    throw error;
-  }
-}
-
-/**
- * The one table-format decision, read-only (no DDL): ABSENT when the store
- * holds no outcome table, CURRENT when the table is the owner's definition
- * (CREATE_TABLE, by the cold census's own rule), UNSUPPORTED for any other
- * definition (a store of another format).
- * @param {Object} db - The partition's opened database.
- * @return {{outcome: string, columns: Array<string>}} Frozen decision; the
- *   outcome is a PARTITION_COMMITTED_STATEMENT_FORMAT value, the columns what
- *   the table holds (for the refusal).
- */
-function detectCommittedStatementOutcomeFormat(db) {
-  const outcome = db.transaction(() => outcomeTableFormatIn(db))();
-  const columns = Object.freeze(db
-    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
-    .all().map((column) => column.name));
-  return Object.freeze({outcome, columns});
 }
 
 /**
@@ -207,6 +168,7 @@ function readCommittedStatementOutcomeIn(db, entryKey) {
     ...(capturedEffects === null ?
       {} :
       {
+        mirrorEffectRequired: row.mirror_effect_required,
         affectedRows: capturedEffects.affectedRows,
         ...(capturedEffects.mutationKind === null ?
           {} :
@@ -358,6 +320,7 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
   command = null}) {
   assertOwnerIdentity(entryKey, ownerResultText, commandDigest);
   const state = sqliteConnectionState(service.db);
+  const captureEffects = Boolean(result?.typedEffects) && partitionOwesDurableMirrorEffects(service);
   const insert = state.statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
   insert.run(
     entryKey, outcome, index, term,
@@ -365,7 +328,8 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
     error === null ? null : String(error.message),
     result === null ? null : result.changes,
     result === null ? null : result.lastInsertRowid,
-    ownerResultText, commandDigest);
+    ownerResultText, commandDigest, Number(captureEffects && result.changes > 0));
+  if (!captureEffects) return;
   reconcileCommittedStatementMirrorEffects(
     service, state, entryKey, index, result, command,
   );
@@ -630,15 +594,14 @@ export {
   committedStatementEntryKey, committedStatementOutcomeFormatError,
   detectCommittedStatementOutcomeFormat, isCommittedStatementKeyed,
   ownerCommandPrelude, partitionOwesDurableMirrorEffects,
-  pruneSettledMirrorOutcomeEffects, readCommittedStatementCensusIn,
-  readDurableMirrorRetentionBarrierIn, readDurableMirrorRetentionCustodyIn,
+  readCommittedStatementCensusIn,
+  readDurableMirrorRetentionCustodyIn,
   readSettledOwnerCommandIn, answerSettledStatement,
   createCommittedStatementOutcomeTable, isDeterministicStatementFailure,
   readCommittedStatementOutcome, reconcileCommittedStatementMirrorEffects,
   recordCommittedStatementOutcome, registerMirrorRetentionRaftHooks,
   releaseSourceMirrorRetentionCustody, replicateSourceMirrorRetentionCustody,
-  resolveActiveMirrorRetentionBarrierIndex, resolveActiveMirrorRetentionCustody,
-  resolveLeaderMirrorRetentionStamp,
+  resolveActiveMirrorRetentionBarrierIndex,
   settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
   settleRecordedCommittedStatement, statementEnvironmentFailure,
   trackPendingOwnerCommand,

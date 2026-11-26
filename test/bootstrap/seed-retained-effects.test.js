@@ -321,10 +321,11 @@ test('participant, origin, generation and statement outcomes are one observed ex
       REASON.OUTCOME],
     ['zero changed rows', `UPDATE ${OUTCOMES} SET changes = 0`, REASON.OUTCOME],
     ['lost insert identity', `UPDATE ${OUTCOMES} SET last_insert_rowid = NULL`, REASON.OUTCOME],
+    ['unexpected mirror obligation', `UPDATE ${OUTCOMES} SET mirror_effect_required = 1`, REASON.OUTCOME],
     ['foreign owner result', `UPDATE ${OUTCOMES} SET owner_result_text = '{}', ` +
       'command_digest = \'foreign\'', REASON.OUTCOME],
-    ['stray outcome', `INSERT INTO ${OUTCOMES} (entry_key, outcome, log_index, term) ` +
-      `VALUES ('stray', '${OUTCOME.APPLIED}', 1, 3)`, REASON.OUTCOME],
+    ['stray outcome', `INSERT INTO ${OUTCOMES} (entry_key, outcome, log_index, term, mirror_effect_required) ` +
+      `VALUES ('stray', '${OUTCOME.APPLIED}', 1, 3, 0)`, REASON.OUTCOME],
     ['extra generation', `UPDATE ${GENERATION} SET generation = 2`, REASON.GENERATION],
     ['lost origin', `UPDATE ${GENERATION} SET origin_index = NULL, origin_term = NULL`,
       REASON.ORIGIN],

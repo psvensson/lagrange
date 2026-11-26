@@ -1060,18 +1060,21 @@ test('QueryExecutor - executeOnPartition widens user-table and system-table ' +
 
 test('evaluateControlPlaneWriteRetryDecision covers all boolean fact combinations via frozen decision table', (t) => {
   t.ok(Object.isFrozen(CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE));
-  t.equal(CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE.length, 4);
-  for (let mask = 0; mask < 32; mask += 1) {
+  t.equal(CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE.length, 5);
+  for (let mask = 0; mask < 64; mask += 1) {
     const facts = {
       isSystemTableWrite: Boolean(mask & 1),
       isPriorityControlPlaneWrite: Boolean(mask & 2),
       isRetryable: Boolean(mask & 4),
       isDeferredFailure: Boolean(mask & 8),
       isRemovalFencedFailure: Boolean(mask & 16),
+      isTargetConnectionClosed: Boolean(mask & 32),
     };
     const decision = evaluateControlPlaneWriteRetryDecision(facts);
     let expectedState = 'widen_to_recovery_candidate';
-    if (
+    if (facts.isSystemTableWrite && facts.isTargetConnectionClosed) {
+      expectedState = 'widen_to_recovery_candidate';
+    } else if (
       facts.isSystemTableWrite &&
       facts.isDeferredFailure &&
       !facts.isRemovalFencedFailure

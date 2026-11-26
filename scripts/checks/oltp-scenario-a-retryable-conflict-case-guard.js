@@ -143,6 +143,34 @@ const runCaseGuard = async () => {
 
   async function assertLagrangeSessionCommitBoundaries() {
     {
+      const commands = [];
+      const statementError = new Error('statement failed');
+      const cleanupError = new Error('rollback unavailable');
+      let available = false;
+      let executions = 0;
+      const session = createLagrangeSession({async query(sql) {
+        commands.push(sql);
+        if (sql === 'ROLLBACK' && !available) throw cleanupError;
+      }});
+      await assert.rejects(session.transaction(async () => { throw statementError; }), (error) => {
+        assert.deepEqual(error.errors, [statementError, cleanupError]);
+        return true;
+      });
+      const work = async () => { executions++; };
+      await assert.rejects(session.transaction(work), (error) => {
+        assert.match(error.message, /rollback failed before BEGIN/u);
+        assert.equal(error.cause, cleanupError);
+        return true;
+      });
+      assert.deepEqual(commands, ['BEGIN', 'ROLLBACK', 'ROLLBACK']);
+      assert.equal(executions, 0);
+      available = true;
+      await session.transaction(work);
+      assert.deepEqual(commands, ['BEGIN', 'ROLLBACK', 'ROLLBACK', 'ROLLBACK', 'BEGIN', 'COMMIT']);
+      assert.equal(executions, 1);
+    }
+
+    {
       const executed = [];
       const client = {
         async query(sql) {

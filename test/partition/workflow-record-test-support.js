@@ -28,7 +28,7 @@ async function registerFromRecordAsRead(owner, record) {
   const registration = await owner.workflowCoordinator
     .registerWorkflowFromRead({...record, metadata}, row);
   if (!registration.workflow) {
-    throw new Error(`registration refused: ${registration.refusal}`);
+    throw new Error(`registration refused: ${JSON.stringify(registration)}`);
   }
   return registration.workflow;
 }

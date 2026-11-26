@@ -1,3 +1,5 @@
+import {sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
+import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 /**
  * Tests proving PartitionService acts as a source-execution participant
  * that reports typed acknowledgements instead of owning split phase
@@ -248,7 +250,7 @@ async (t) => {
 // runSplitReplicationWorkflow — acknowledgement emission at boundaries
 // ===================================================================
 
-test('runSplitReplicationWorkflow emits snapshot_started, ' +
+test('runSplitReplicationWorkflow emits ' +
   'catchup_ready, and cleanup_completed acknowledgements at each ' +
   'execution boundary (uses ManagedSplitWorkflow as canonical split ' +
   'owner)', async (t) => {
@@ -333,16 +335,16 @@ test('runSplitReplicationWorkflow emits snapshot_started, ' +
     },
   };
 
+  context.splitReplication.authorized = true;
   await runSplitReplicationWorkflow.call(context);
 
   t.same(
     ackStatuses,
     [
-      SPLIT_ACK_STATUS.SNAPSHOT_STARTED,
       SPLIT_ACK_STATUS.CATCHUP_READY,
       SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
     ],
-    'must emit snapshot_started, catchup_ready, and ' +
+    'must emit catchup_ready, and ' +
       'cleanup_completed in order',
   );
 
@@ -366,65 +368,31 @@ test('handleStartSplitReplication sets failed phase using ' +
   'PARTITION_TRANSITION_STATE.FAILED constant instead of magic ' +
   'string (uses ManagedSplitWorkflow as canonical split owner)',
 async (t) => {
-  const mod = await import(
-    '../../src/partition/partition-service.js'
-  );
-  const handleFn =
-    mod.PartitionService.prototype.handleStartSplitReplication;
-
-  const metadata = buildMetadata();
-  const context = {
+  const group = await formAdmittedGroup({
     partitionId: FIXTURE_PARTITION_ID,
-    tableId: FIXTURE_TABLE_ID,
-    tableName: 'users',
-    role: 'leader',
-    // A replica carries its own clock; split replication is stamped on it.
-    timeSource: {now: () => Date.now()},
-    splitReplication: null,
-    splitReplicationRun: null,
-    sqlQueryEngine: {
-      managedSplitWorkflow: {
-        async acknowledgeSourceParticipant() {
-          return {result: 'accepted'};
-        },
-      },
-    },
-    logger: {info() {}, error() {}},
-    normalizeSplitTransitionMetadata(raw) {
-      return mod.PartitionService.prototype
-        .normalizeSplitTransitionMetadata.call(this, raw);
-    },
-    isSameSplitReplication(left, right) {
-      return mod.PartitionService.prototype
-        .isSameSplitReplication.call(this, left, right);
-    },
-    emitSplitSourceAck(meta, status, checkpoint) {
-      return mod.PartitionService.prototype.emitSplitSourceAck.call(
-        this, meta, status, checkpoint);
-    },
-    resolveLeaderAddress() {
-      return null;
-    },
-    async runSplitReplicationWorkflow() {
-      throw new Error('simulated workflow failure');
-    },
-    transport: null,
-  };
-
-  const result = await handleFn.call(context, {
-    transitionMetadata: metadata,
+    members: [['users-r1', 'node-1']],
+    tempPrefix: 'split-source-failed-',
+    budgetMs: 5000,
+    serviceOptions: {tableId: FIXTURE_TABLE_ID, tableName: 'users',
+      schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]}},
   });
-
-  t.ok(result.success, 'must acknowledge the request');
-
-  // Wait for the async workflow to settle
-  await context.splitReplicationRun;
-
-  t.equal(
-    context.splitReplication.phase,
-    PARTITION_TRANSITION_STATE.FAILED,
-    'failed phase must use PARTITION_TRANSITION_STATE.FAILED constant',
-  );
+  try {
+    const [service] = group.services;
+    service.sqlQueryEngine = {managedSplitWorkflow: {
+      reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
+      async acknowledgeSourceParticipant() { return {result: PARTICIPANT_ACK_RESULT.ACCEPTED}; },
+    }};
+    service.backfillSplitSnapshot = async () => { throw new Error('simulated backfill failure'); };
+    const result = await service.handleStartSplitReplication({
+      transitionMetadata: {...buildMetadata(), workflowAttempt: 1, workflowFenceToken: 1},
+    });
+    t.ok(result.success, 'start acknowledges committed source custody');
+    await service.splitReplicationRun;
+    t.equal(service.splitReplication.phase, PARTITION_TRANSITION_STATE.FAILED);
+    t.equal(service.splitReplication.lastError, 'simulated backfill failure');
+  } finally {
+    await group.dispose();
+  }
 });
 
 // ===================================================================

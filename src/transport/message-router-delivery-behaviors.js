@@ -1,3 +1,4 @@
+import {observeRawSend} from './message-router-socket-evidence.js';
 import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 export {sendMessage} from './message-router-ack-delivery.js';
@@ -523,7 +524,9 @@ export async function resolveRecoverableDeliveryError(
 
 export function sendRaw(router, ws, message) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+    const encoded = JSON.stringify(message);
+    ws.send(encoded);
+    observeRawSend(router, ws, message, encoded);
   }
 }
 

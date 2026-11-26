@@ -295,6 +295,10 @@ test('settleConcurrentBatch prevents overlapping probes across attempts, preserv
   let inspectMaxConcurrent = 0;
   const boundaryInFlight = [];
   const {sshRun: rawInspectSsh} = createScriptedSsh([
+    [/control-snapshot/u, http(200, {replicaOperations: {inFlightCount: 0}})],
+    [/management\/v1\/facts/u, http(200, {facts: {topology: {
+      state: 'observed', underReplicatedPartitionCount: 0,
+    }}})],
     [/docker inspect --type container/u, async () => {
       inspectInFlight += 1;
       if (inspectInFlight > inspectMaxConcurrent) inspectMaxConcurrent = inspectInFlight;
@@ -325,7 +329,7 @@ test('settleConcurrentBatch prevents overlapping probes across attempts, preserv
         containerId: `c${idx + 1}`,
         nodeId: `n${idx + 1}`,
       })),
-    }, 'lagrange-system-tables', queryNotReady, []),
+    }, 'lagrange-system-tables', queryNotReady, [{host: HOSTS[0], nodeId: 'n1'}]),
     (error) => error.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
   );
   assert.equal(inspectMaxConcurrent, 3);

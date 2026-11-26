@@ -1107,7 +1107,7 @@ export async function runCorrectionBProductionAssemblyWitness({
     nodeService: {
       getState: () => 'ACTIVE',
       getNodeStats: async () => ({
-        cpu: {count: 4, usagePercent: 10},
+        cpu: {count: 4},
         memory: {totalBytes: 1024, usagePercent: 10},
         diskGb: 10,
         diskUsagePercent: 10,

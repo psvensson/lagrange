@@ -11,7 +11,8 @@ import {
 } from './partition-service-constants.js';
 import {isCommittedCommandType, isCommittedSqlCommandType} from
   './partition-committed-command-admission.js';
-import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
+import {hasObsoleteMirrorCustodyField} from './partition-mirror-custody-codec.js';
+import {MIRROR_RETENTION_CUSTODY_COMMAND_ERROR, PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
 import {
   applyMirrorRetentionCustodyCommand,
@@ -140,10 +141,11 @@ function committedCommandRefusal(service, {command, index, rollback}, refusal) {
 // runs, decided from the command alone. Only a bug or version skew commits
 // one (the admission owner never proposes it; every proposer builds its
 // entry with an entryId); consuming it would drop a committed command, so
-// both refusals fail the application closed with one disposition:
+// each refusal fails the application closed:
 // - an unrecognised type;
 // - an SQL command without an entryId: it has no outcome-row key and no
-//   CDC-obligation key, so its statement never runs.
+//   CDC-obligation key, so its statement never runs;
+// - a SQL or custody entry carrying obsolete mirror-retention fields.
 function committedCommandGate(service, committed) {
   const commandType = committed.command?.type;
   if (!isCommittedCommandType(commandType)) {
@@ -152,6 +154,13 @@ function committedCommandGate(service, committed) {
       code: PARTITION_COMMITTED_COMMAND_ERROR_CODE.UNRECOGNISED,
       outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.UNRECOGNISED,
       reason: PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON.COMMAND_UNKNOWN});
+  }
+  if ((isCommittedSqlCommandType(commandType) ||
+      commandType === PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY) &&
+      hasObsoleteMirrorCustodyField(committed.command)) {
+    const code = MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES;
+    throw committedCommandRefusal(service, committed, {message: code, code, reason: code,
+      outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.CUSTODY_BYTES_REFUSED});
   }
   if (isCommittedSqlCommandType(commandType) &&
       !isCommittedStatementKeyed(committed.command)) {
