@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2810,
+    "ordinary": 2812,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2836,
-  "digest": "fnv1a32-a5b75d5c",
+  "censusSize": 2838,
+  "digest": "fnv1a32-ebd97014",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1904,6 +1904,8 @@
     "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "ordinary",
     "test/raft/raft-rs-backend/peer-identity.test.js": "ordinary",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "ordinary",
+    "test/raft/raft-rs-backend/placement-cure-source-transfer.test.js": "ordinary",
+    "test/raft/raft-rs-backend/placement-cure-transfer-refusals.test.js": "ordinary",
     "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": "ordinary",
     "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "ordinary",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "ordinary",

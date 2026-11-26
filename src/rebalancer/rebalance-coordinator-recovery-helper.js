@@ -102,8 +102,8 @@ function resolvePartitionServiceCureContext(coordinator, service) {
       get logger() {
         return coordinator.logger;
       },
-      get messageRouter() {
-        return coordinator.messageRouter;
+      get cdcIntegrationService() {
+        return coordinator.cdcIntegrationService;
       },
       nodeId: coordinator.nodeId,
       replicaId: service.replicaId,

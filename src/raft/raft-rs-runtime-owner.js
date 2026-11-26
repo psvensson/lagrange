@@ -26,7 +26,7 @@ import {
   reportCoreTrap, reportRuntimeReplaced, reportWaitBoundExceeded,
 } from './raft-rs-runtime-faults.js';
 import {
-  decideLeadershipTransfer, droppedByLeadershipTransfer, leadershipTransferInProgress,
+  decideLeadershipTransfer, droppedByLeadershipTransfer, leadershipTransferInProgress, transferRefusal,
 } from './raft-rs-leadership-transfer.js';
 import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from './raft-rs-ready-loop-constants.js';
 import {RAFT_RS_INITIAL_APPLIED, RAFT_RS_READY_DRAIN_MAX_CYCLES} from './raft-rs-group-constants.js';
@@ -1628,6 +1628,18 @@ function probePeerProgress(group, expectedGeneration, replicaIdentity) {
 // queued turn. The answer is acceptance; completion is the role and leader
 // events the drains announce.
 function transferLeadership(group, expectedGeneration, command) {
+  if (command.admitExecution) {
+    // The host predicate receives neither the command nor the native group.
+    // Observe native authority after it returns, after the inbound drain.
+    const {admitExecution} = command;
+    let eligible = false;
+    try {
+      eligible = admitExecution() === true;
+    } catch {
+      // A failed placement read cannot authorize a transfer.
+    }
+    if (!eligible) return settledTurn(transferRefusal(RUNTIME_REASON.PLACEMENT_WITHDRAWN, true));
+  }
   const observed = readGroupObservation(group, expectedGeneration);
   if (!observed.ok) {
     return settledTurn(observed.result);

@@ -38,11 +38,11 @@ class PartitionServiceLeadershipTransferMethods {
    * @return {Object} The port's turn of its frozen outcome record
    *   (raft-rs-turn-answer.js); NO_CONSENSUS_PORT_ANSWER settled without one.
    */
-  requestLeadershipTransfer(successor) {
+  requestLeadershipTransfer(successor, admitExecution) {
     if (!this.raft) {
       return settledTurn(NO_CONSENSUS_PORT_ANSWER);
     }
-    return this.raft.transferLeadership(successor);
+    return this.raft.transferLeadership(successor, admitExecution);
   }
 }
 

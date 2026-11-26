@@ -251,6 +251,7 @@ const RAFT_PEER_PROGRESS_PROBE_REASON = Object.freeze({
 const RAFT_LEADERSHIP_TRANSFER_SUCCESSOR = Object.freeze({
   NAMED: 'named',
   MOST_CAUGHT_UP: 'most-caught-up',
+  SOURCE_NAMED: 'source-named',
 });
 
 // What transferLeadership answers, decided from the core's own status and
@@ -276,6 +277,8 @@ const RAFT_LEADERSHIP_TRANSFER_REASON = Object.freeze({
   NOT_LEADER: 'not-leader',
   UNKNOWN_SUCCESSOR: 'transfer-unknown-successor',
   WITHOUT_REPLICA_IDENTITY: 'transfer-without-replica-identity',
+  SOURCE_CHANGED: 'transfer-source-changed',
+  PLACEMENT_WITHDRAWN: 'transfer-placement-withdrawn',
   TRANSFER_IN_PROGRESS: 'leadership-transfer-in-progress',
 });
 

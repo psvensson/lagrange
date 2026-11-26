@@ -17,11 +17,8 @@ import {
   reconcileMessageGroupMembershipDebt,
 } from '../../src/rebalancer/rebalance-coordinator-recovery-helper.js';
 import {REBALANCER_PLANNING_GATE_METHODS} from '../../src/rebalancer/rebalancer-planning-gate-methods.js';
-import {
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationReason,
-} from '../../src/rebalancer/replica-operation-constants.js';
+import {pendingTurn, settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
+import {RAFT_LEADERSHIP_TRANSFER_REASON, RAFT_LEADERSHIP_TRANSFER_SUCCESSOR, RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 
 const NOW_MS = 1_000_000;
 const TABLE_ID = 'orders';
@@ -149,10 +146,31 @@ function serviceRows() {
   );
 }
 
-function buildStubRebalancer(state) {
-  const deliveries = [];
+const transferAccepted = {outcome: RAFT_OPERATION_OUTCOME.CORE_OK, reason: RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED};
+
+function localLeaderService(partitionId, replicaId, transfers) {
+  const status = {groupId: partitionId, replicaIdentity: replicaId, role: 'leader', term: 1,
+    configurationKey: 'voters-1-2-3', membershipGenerationIndex: 1, runtimeGeneration: 1,
+    lifecycleIncarnation: replicaId + '-boot-1'};
   return {
-    deliveries,
+    partitionId, replicaId, initialized: true, isLeader: true, isShutdown: false,
+    isMetadataPublicationReady: () => true,
+    raft: {readStatus: () => status},
+    requestLeadershipTransfer(request, admitExecution) {
+      if (!admitExecution()) return settledTurn({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED});
+      transfers.push({partitionId, replicaId, request});
+      return settledTurn(transferAccepted);
+    },
+  };
+}
+
+function buildStubRebalancer(state) {
+  const transfers = [];
+  const services = new Map(state.serviceRows.filter((row) => row.raft_role === 'leader')
+    .map((row) => [row.service_id, localLeaderService(row.partition_id, row.service_id, transfers)]));
+  return {
+    transfers,
+    cdcIntegrationService: {partitionServicesProvider: () => services},
     entityId: P2,
     entityType: 'partition',
     getCurrentReplicas: () =>
@@ -161,12 +179,6 @@ function buildStubRebalancer(state) {
     isShuttingDown: false,
     isStabilized: () => state.stabilized,
     logger: {debug: () => {}, error: () => {}, info: () => {}, warn: () => {}},
-    messageRouter: {
-      deliver: async (target, request, options) => {
-        deliveries.push({options, request, target});
-        return {status: 'completed'};
-      },
-    },
     nodeId: NODE_1,
     replicaId: `${P2}-r1`,
     systemTableCache: {
@@ -193,66 +205,48 @@ function greenStubState() {
 }
 
 test('the orchestrator dispatches after one stable census pass', async (t) => {
-  const [F, R, stepDown] = [
-    ReplicaOperationField,
-    ReplicaOperationReason,
-    ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-  ];
   const stub = buildStubRebalancer(greenStubState());
   const first = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS});
   t.equal(first.state, S.CENSUS_UNSTABLE);
-  t.equal(stub.deliveries.length, 0);
+  t.equal(stub.transfers.length, 0);
   const second = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 1});
   t.equal(second.state, S.DISPATCH_HANDOFF);
-  t.equal(stub.deliveries.length, 2);
-  const [demotion, {request, target, options}] = stub.deliveries;
-  t.equal(demotion.target, `${NODE_1}/service/replica-handler`);
-  t.equal(demotion.options.targetNodeId, NODE_1);
-  t.equal(demotion.request[F.TYPE], stepDown);
-  t.equal(demotion.request[F.REASON], R.REPLACE_SOURCE_LEADER_HANDOFF);
-  t.equal(demotion.request[F.PARTITION_ID], P2);
-  t.equal(demotion.request[F.REPLICA_ID], `${P2}-r1`);
-  t.match(demotion.request[F.OPERATION_ID], /^user-table-leader-spread:.*:demote$/u);
-  t.equal(target, `${NODE_2}/service/replica-handler`);
-  t.equal(options.targetNodeId, NODE_2);
-  t.equal(request[F.TYPE], stepDown);
-  t.equal(request[F.REASON], R.REPLACE_TARGET_LEADER_ELECTION);
-  t.equal(request[F.PARTITION_ID], P2);
-  t.equal(request[F.REPLICA_ID], `${P2}-r2`);
-  t.match(request[F.OPERATION_ID], /^user-table-leader-spread:/u);
+  t.equal(stub.transfers.length, 1);
+  const [{partitionId, replicaId, request}] = stub.transfers;
+  t.equal(partitionId, P2);
+  t.equal(replicaId, P2 + '-r1');
+  t.equal(request.replicaIdentity, P2 + '-r2');
+  t.same(request, {
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.SOURCE_NAMED, replicaIdentity: P2 + '-r2',
+    term: 1, configurationKey: 'voters-1-2-3', membershipGenerationIndex: 1,
+    runtimeGeneration: 1, lifecycleIncarnation: P2 + '-r1-boot-1',
+  });
   t.end();
 });
 
-test('a missing own replicaId skips the demotion leg but still ' +
-  'dispatches the election', async (t) => {
+test('an absent hosted source prevents transfer', async (t) => {
   const stub = buildStubRebalancer(greenStubState());
-  delete stub.replicaId;
+  stub.cdcIntegrationService.partitionServicesProvider().clear();
   await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS});
   await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 1});
-  t.equal(stub.deliveries.length, 1);
-  t.equal(stub.deliveries[0].request[ReplicaOperationField.REASON],
-    ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION);
+  t.equal(stub.transfers.length, 0);
   t.end();
 });
 
-test('a failed demotion leg never blocks the election leg', async (t) => {
+test('source removed from the hosted registry before execution refuses the transfer', async (t) => {
   const stub = buildStubRebalancer(greenStubState());
-  const delivered = [];
-  stub.messageRouter = {
-    deliver: async (target, request, options) => {
-      if (request[ReplicaOperationField.REASON] ===
-          ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF) {
-        throw new Error('local handler unavailable');
-      }
-      delivered.push({options, request, target});
-      return {status: 'completed'};
-    },
+  const source = stub.cdcIntegrationService.partitionServicesProvider().get(P2 + '-r1');
+  const transfer = source.requestLeadershipTransfer.bind(source);
+  let checked = false;
+  source.requestLeadershipTransfer = (request, admit) => {
+    checked = true;
+    stub.cdcIntegrationService.partitionServicesProvider().delete(source.replicaId);
+    return transfer(request, admit);
   };
   await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS});
   await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 1});
-  t.equal(delivered.length, 1);
-  t.equal(delivered[0].request[ReplicaOperationField.REASON],
-    ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION);
+  t.equal(checked, true);
+  t.equal(stub.transfers.length, 0);
   t.end();
 });
 
@@ -264,7 +258,7 @@ test('system-table partitions are outside the cure fence', async (t) => {
   const stub = buildStubRebalancer(state);
   const decision = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS});
   t.equal(decision, null);
-  t.equal(stub.deliveries.length, 0);
+  t.equal(stub.transfers.length, 0);
   t.end();
 });
 
@@ -306,7 +300,7 @@ test('the quiescent cadence pass drives the cure (red-on-revert)', async (t) => 
   const stub = wireCadenceMethods(buildStubRebalancer(greenStubState()), 1000);
   await stub.advanceCheckCadence(false);
   await stub.advanceCheckCadence(false);
-  t.equal(stub.deliveries.length, 2);
+  t.equal(stub.transfers.length, 1);
   t.end();
 });
 
@@ -338,7 +332,7 @@ test('an open actionable gap holds the quiescent cadence flat; a ' +
   );
   await satisfied.advanceCheckCadence(false);
   t.equal(satisfiedBackoffCalls, 1);
-  t.equal(satisfied.deliveries.length, 0);
+  t.equal(satisfied.transfers.length, 0);
   t.end();
 });
 
@@ -376,7 +370,7 @@ test('the priority-spread deferral does not starve the cure', async (t) => {
   const {blocker, stub} = buildGatedStub('control_plane_priority_spread', false);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
-  t.equal(stub.deliveries.length, 2);
+  t.equal(stub.transfers.length, 1);
   t.end();
 });
 
@@ -384,7 +378,7 @@ test('every other planning gate still blocks the cure', async (t) => {
   const {blocker, stub} = buildGatedStub('stabilization', false);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
-  t.equal(stub.deliveries.length, 0);
+  t.equal(stub.transfers.length, 0);
   t.end();
 });
 
@@ -392,7 +386,7 @@ test('transport backpressure still blocks the cure', async (t) => {
   const {blocker, stub} = buildGatedStub('control_plane_priority_spread', true);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
-  t.equal(stub.deliveries.length, 0);
+  t.equal(stub.transfers.length, 0);
   t.end();
 });
 
@@ -455,7 +449,7 @@ async function assertSystemCohortPassOne(t, stubsByPartitionId) {
       t.equal(first.state, S.CENSUS_UNSTABLE);
       unstablePassOneCount += 1;
     }
-    t.equal(stub.deliveries.length, 0);
+    t.equal(stub.transfers.length, 0);
   }
   t.equal(prioritySkippedCount, 7);
   t.equal(anchoredOnSeedCount, 13);
@@ -472,11 +466,11 @@ async function assertSystemCohortPassTwoHandoffs(t, state, stubsByPartitionId) {
     if (second === null) continue;
     if (second.state === S.DISPATCH_HANDOFF) {
       handoffTargetsByNode[second.target.nodeId] += 1;
-      t.equal(stub.deliveries.length, 2);
+      t.equal(stub.transfers.length, 1);
       leaderByPartitionId.set(partitionId, second.target.nodeId);
     } else {
       t.equal(second.state, S.ANCHOR_RETAINED);
-      t.equal(stub.deliveries.length, 0);
+      t.equal(stub.transfers.length, 0);
     }
   }
   t.equal(handoffTargetsByNode[NODE_2], 13);
@@ -503,7 +497,7 @@ async function assertSystemCohortPostHandoffQuiescence(t, state, leaderByPartiti
     const passTwo = await applyUserTableLeaderPlacementCure(settledStub, {nowMs: NOW_MS + 3});
     t.equal(passOne.state, S.SPREAD_SATISFIED);
     t.equal(passTwo.state, S.SPREAD_SATISFIED);
-    t.equal(settledStub.deliveries.length, 0);
+    t.equal(settledStub.transfers.length, 0);
   }
 }
 
@@ -515,7 +509,7 @@ test('46-system-partition cohort deterministically distributes 39 ' +
   const metaStub = buildSystemPartitionRebalancer(state, '_meta-p1', NODE_1);
   const metaDecision = await applyUserTableLeaderPlacementCure(metaStub, {nowMs: NOW_MS});
   t.equal(metaDecision.state, S.ANCHOR_RETAINED);
-  t.equal(metaStub.deliveries.length, 0);
+  t.equal(metaStub.transfers.length, 0);
 
   const inFlightPartitionId = 'artifact_payloads-p1';
   state.operationRows.push({
@@ -529,7 +523,7 @@ test('46-system-partition cohort deterministically distributes 39 ' +
   const inFlightStub = buildSystemPartitionRebalancer(state, inFlightPartitionId, NODE_1);
   const blockedByOwnOp = await applyUserTableLeaderPlacementCure(inFlightStub, {nowMs: NOW_MS});
   t.equal(blockedByOwnOp.state, S.NO_ELIGIBLE_TARGET);
-  t.equal(inFlightStub.deliveries.length, 0);
+  t.equal(inFlightStub.transfers.length, 0);
   state.operationRows.length = 0;
 
   state.operationRows.push({
@@ -551,7 +545,7 @@ test('46-system-partition cohort deterministically distributes 39 ' +
   );
   t.equal(passOneWithUnrelatedPriorityOp.state, S.CENSUS_UNSTABLE);
   t.equal(passTwoWithUnrelatedPriorityOp.state, S.DISPATCH_HANDOFF);
-  t.equal(settledStub.deliveries.length, 2);
+  t.equal(settledStub.transfers.length, 1);
   state.operationRows.length = 0;
 
   const stubsByPartitionId = new Map(state.partitionRows.map((row) => [
@@ -584,7 +578,7 @@ async (t) => {
   const rf2PassTwo = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 1});
   t.equal(rf2PassOne.state, S.NO_ELIGIBLE_TARGET);
   t.equal(rf2PassTwo.state, S.NO_ELIGIBLE_TARGET);
-  t.equal(stub.deliveries.length, 0);
+  t.equal(stub.transfers.length, 0);
 
   for (const row of state.serviceRows) {
     if (row.partition_id === targetPartitionId && row.node_id === NODE_3) {
@@ -594,11 +588,11 @@ async (t) => {
   }
   const rf3PassOne = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 2});
   t.equal(rf3PassOne.state, S.CENSUS_UNSTABLE);
-  t.equal(stub.deliveries.length, 0);
+  t.equal(stub.transfers.length, 0);
   const rf3PassTwo = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 3});
   t.equal(rf3PassTwo.state, S.DISPATCH_HANDOFF);
   t.equal(rf3PassTwo.target.nodeId, NODE_2);
-  t.equal(stub.deliveries.length, 2);
+  t.equal(stub.transfers.length, 1);
   t.end();
 });
 
@@ -677,7 +671,7 @@ test('5-host cluster with RF=3 qualifies once partition reaches 3 active ' +
   const pass2 = await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 1});
   t.equal(pass2.state, S.DISPATCH_HANDOFF);
   t.equal(pass2.target.nodeId, NODE_4);
-  t.equal(stub.deliveries.length, 2);
+  t.equal(stub.transfers.length, 1);
   t.end();
 });
 
@@ -687,15 +681,8 @@ function buildCoordinatorCureFixture(state, partitionIds) {
   let servicesForPartitionCalls = 0;
   let nowMs = NOW_MS;
   const servicesMap = new Map(partitionIds.map((partitionId) => [
-    partitionId,
-    {
-      isLeader: true,
-      isMetadataPublicationReady: () => true,
-      isShutdown: false,
-      partitionId,
-      rebalancer: null,
-      replicaId: `${partitionId}-r1`,
-    },
+    partitionId + '-r1',
+    {...localLeaderService(partitionId, partitionId + '-r1', baseStub.transfers), rebalancer: null},
   ]));
   return {
     ...baseStub,
@@ -749,17 +736,12 @@ test('coordinator pass bounds active handoffs per pass and uses ' +
 
   const pass2 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
   t.equal(pass2.dispatchedCount, MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS);
-  const targetHandoffsPass2 = coordinator.deliveries.filter(
-    (entry) =>
-      entry.request[ReplicaOperationField.REASON] ===
-        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
-  );
-  t.equal(targetHandoffsPass2.length, MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS);
+  t.equal(coordinator.transfers.length, MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS);
   t.equal(coordinator.filterCounts.services, 0);
   t.equal(
     coordinator.filterCounts.partitions,
     5,
-    'one scan per pass, one post-demotion revalidation per handoff, and one full census rebuild ' +
+    'one scan per pass, one execution-time revalidation per handoff, and one full census rebuild ' +
       'between sequential handoffs',
   );
   t.equal(
@@ -770,7 +752,7 @@ test('coordinator pass bounds active handoffs per pass and uses ' +
   t.end();
 });
 
-test('a held STEP_DOWN_REPLICA handoff never blocks subsequent recovery ' +
+test('a held local leadership transfer never blocks subsequent recovery ' +
   'sweeps', async (t) => {
   const state = buildSystemCohortState();
   const coordinator = buildCoordinatorCureFixture(
@@ -778,19 +760,16 @@ test('a held STEP_DOWN_REPLICA handoff never blocks subsequent recovery ' +
     selectNonPrioritySystemIds(state, 6),
   );
   let releaseHeldHandoff = null;
-  coordinator.messageRouter.deliver = (target, request, options) => {
-    coordinator.deliveries.push({options, request, target});
-    if (
-      request[ReplicaOperationField.REASON] ===
-        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION &&
-      !releaseHeldHandoff
-    ) {
-      return new Promise((resolve) => {
-        releaseHeldHandoff = () => resolve({status: 'completed'});
-      });
-    }
-    return Promise.resolve({status: 'completed'});
-  };
+  for (const service of coordinator.cdcIntegrationService.partitionServicesProvider().values()) {
+    const transfer = service.requestLeadershipTransfer.bind(service);
+    service.requestLeadershipTransfer = (request, admit) => {
+      const turn = transfer(request, admit);
+      if (releaseHeldHandoff || turn.result !== transferAccepted) return turn;
+      return pendingTurn(new Promise((resolve) => {
+        releaseHeldHandoff = () => resolve(transferAccepted);
+      }));
+    };
+  }
 
   await reconcileMessageGroupMembershipDebt(coordinator);
   t.equal(coordinator.leaderPlacementCureState.inFlight, false);
@@ -800,7 +779,7 @@ test('a held STEP_DOWN_REPLICA handoff never blocks subsequent recovery ' +
   await Promise.resolve();
   t.equal(coordinator.leaderPlacementCureState.inFlight, true);
   t.equal(typeof releaseHeldHandoff, 'function');
-  const deliveriesWhileHeld = coordinator.deliveries.length;
+  const transfersWhileHeld = coordinator.transfers.length;
 
   let debtSweepsWhileHeld = 0;
   let timeoutSweepsWhileHeld = 0;
@@ -818,7 +797,7 @@ test('a held STEP_DOWN_REPLICA handoff never blocks subsequent recovery ' +
   await reconcileMessageGroupMembershipDebt(coordinator);
   t.equal(timeoutSweepsWhileHeld, 2);
   t.equal(debtSweepsWhileHeld, 2);
-  t.equal(coordinator.deliveries.length, deliveriesWhileHeld);
+  t.equal(coordinator.transfers.length, transfersWhileHeld);
 
   releaseHeldHandoff();
   await coordinator.leaderPlacementCureSweepPromise;

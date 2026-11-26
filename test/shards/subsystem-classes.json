@@ -19,16 +19,16 @@
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 260,
-    "storage-raft": 164,
+    "storage-raft": 166,
     "test-infrastructure": 173,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2836,
-  "digest": "fnv1a32-6e1f8fa6",
+  "censusSize": 2838,
+  "digest": "fnv1a32-a6ab1ebe",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-bef50ee9",
+  "observationDigest": "fnv1a32-a3d84269",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1924,6 +1924,8 @@
     "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/placement-cure-source-transfer.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/placement-cure-transfer-refusals.test.js": "storage-raft",
     "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": "storage-raft",
     "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "storage-raft",
@@ -20551,6 +20553,31 @@
         "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/placement-cure-source-transfer.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/placement-cure-transfer-refusals.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ]
