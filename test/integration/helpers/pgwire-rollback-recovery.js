@@ -73,24 +73,15 @@ export async function witnessPgwireRollbackRecovery({client, engine, partitionSe
     assert.equal(pending.decision, 'ROLLBACK');
     assert.equal(pending.status, 'ROLLING_BACK');
     assert.ok(pending.decision_digest);
-    const firstDrops = dropped;
-    let executions = 0;
-    const work = async () => {
-      executions++;
-      await client.query('INSERT INTO rollback_left (id) VALUES (3)');
-    };
-    mark('later invocation while transport unavailable');
-    await assert.rejects(session.transaction(work), (error) => {
-      evidence.recovery = wireFailure(error);
-      assert.match(error.message, /Previous transaction rollback failed before BEGIN/u);
-      assert.match(error.cause.code, /^[0-9A-Z]{5}$/u);
-      return true;
-    });
-    assert.ok(dropped > firstDrops);
-    assert.equal(executions, 0);
-    assert.equal(tags.filter((tag) => tag === 'BEGIN').length, 1);
-    mark('transport restored and durable settlement');
+    // The first failed wire ROLLBACK has returned and its bound decision
+    // remains owed. Restore the participant before issuing the next request.
+    evidence.transactionId = identity.transactionId;
+    evidence.sessionId = identity.sessionId;
+    evidence.decisionDigest = pending.decision_digest;
+    evidence.disruptedParticipant = identity.transactionId + ':' + participants[1].partitionId;
+    mark('next invocation after restoring participant transport');
     disrupted = false;
+    let executions = 0;
     await session.transaction(async () => {
       const terminal = decision.get(identity.transactionId);
       assert.equal(terminal.status, 'ROLLED_BACK');
@@ -111,13 +102,14 @@ export async function witnessPgwireRollbackRecovery({client, engine, partitionSe
       }
       assert.notEqual(sessions.get(identity.sessionId)?.transactionId, undefined);
       assert.notEqual(sessions.get(identity.sessionId).transactionId, identity.transactionId);
-      await work();
+      executions++;
+      await client.query('INSERT INTO rollback_left (id) VALUES (3)');
     });
     mark('same-connection commit verification');
     assert.equal(executions, 1);
     assert.equal(client.connection.stream, socket);
     assert.deepEqual(tags, ['BEGIN', 'INSERT 0 1', 'INSERT 0 1', 'ROLLBACK', 'BEGIN', 'INSERT 0 1', 'COMMIT']);
-    assert.deepEqual(ready, ['T', 'T', 'T', 'E', 'E', 'E', 'I', 'T', 'T', 'I']);
+    assert.deepEqual(ready, ['T', 'T', 'T', 'E', 'E', 'I', 'T', 'T', 'I']);
     for (const [table, expected] of [[tables[0], [3]], [tables[1], [1]]]) {
       const result = await client.query('SELECT id FROM ' + table + ' ORDER BY id');
       assert.deepEqual(result.rows.map((row) => Number(row.id)), expected);

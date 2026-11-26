@@ -1,18 +1,50 @@
 import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {socketEvidence} from '../../src/transport/message-router-socket-evidence.js';
 import {CDC_COMPLETION} from '../../src/cdc/cdc-delivery-outcome.js';
 import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
 import {createInProcWebSocketPair as canonicalPair, InProcWebSocket as CanonicalSocket} from
   '../../src/transport/inproc-transport.js';
 import {createInProcWebSocketPair as routerPair, InProcWebSocket as RouterSocket} from
   '../../src/transport/message-router-shared-vocabulary.js';
-import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
+import {ROUTER_MESSAGE_TYPE, TRANSPORT_EVENT} from '../../src/constants/transport.js';
 import {CDC_ROUTER_TEST, cdcRouterFixture, controlledCdcPeer, nextTurn, watchSettlement}
   from '../test-helpers/message-router-cdc-fixture.js';
 
 const CASE_TIMEOUT_MS = 2000;
 const PROBE = Object.freeze({type: 'transport-custody-probe'});
+
+function sendCounts(f, ws) {
+  return socketEvidence(f.router, CDC_ROUTER_TEST.PEER,
+    f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER), ws).applicationSendReturned;
+}
+
+test('socket evidence separates the actual ACK and service response to an incoming request',
+  {timeout: CASE_TIMEOUT_MS}, async (t) => {
+    const f = await cdcRouterFixture(t);
+    const peer = await controlledCdcPeer(f);
+    const before = sendCounts(f, peer.accepted);
+    const response = Promise.withResolvers();
+    const bytesByType = new Map();
+    const messageId = 'unhandled-δ';
+    peer.peer.on(TRANSPORT_EVENT.MESSAGE, (raw) => {
+      const frame = JSON.parse(raw.toString());
+      if (frame.messageId !== messageId) return;
+      bytesByType.set(frame.type, Buffer.byteLength(raw));
+      if (frame.type === ROUTER_MESSAGE_TYPE.SERVICE_RESPONSE) response.resolve();
+    });
+    peer.peer.send(JSON.stringify({type: ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE,
+      messageId, targetAddress: CDC_ROUTER_TEST.LOCAL + '/partition/absent',
+      sourceNodeId: CDC_ROUTER_TEST.PEER, payload: {}}));
+    await response.promise;
+    const after = sendCounts(f, peer.accepted);
+    for (const [slot, type] of [['routerControl', ROUTER_MESSAGE_TYPE.ACK],
+      ['serviceResponse', ROUTER_MESSAGE_TYPE.SERVICE_RESPONSE]]) {
+      assert.equal(after[slot].frames - before[slot].frames, 1);
+      assert.equal(after[slot].bytes - before[slot].bytes, bytesByType.get(type));
+    }
+  });
 
 test('router timeout retains the actual write callback, outbound slot and branded CDC child',
   {timeout: CASE_TIMEOUT_MS}, async (t) => {
@@ -27,6 +59,8 @@ test('router timeout retains the actual write callback, outbound slot and brande
       {deliveryContext: context, timeoutMs: CDC_ROUTER_TEST.SHORT_MS});
     const write = await peer.nextWrite(0);
     await write.handedOff;
+    const firstCounts = sendCounts(f, peer.accepted);
+    assert.deepEqual(firstCounts.cdcGrantService, {frames: 1, bytes: Buffer.byteLength(write.bytes)});
     const queue = f.router.getOutboundQueue(CDC_ROUTER_TEST.PEER);
     assert.equal(queue.inFlight, 1, 'the real outbound owner acquired this raw send');
     peer.inbound();
@@ -59,6 +93,10 @@ test('router timeout retains the actual write callback, outbound slot and brande
     await context.cleanup;
     const secondWrite = await peer.nextWrite(1);
     await secondWrite.handedOff;
+    const secondCounts = sendCounts(f, peer.accepted);
+    assert.deepEqual(secondCounts.otherService, {frames: 1, bytes: Buffer.byteLength(secondWrite.bytes)});
+    assert.deepEqual(secondCounts.cdcGrantService, firstCounts.cdcGrantService);
+    assert.equal(firstCounts.otherService.frames, 0, 'an earlier observation keeps its own values');
     assert.equal(closed, 1);
     assert.equal(f.delivery.activeCdcInvocation, null);
     assert.equal(queue.inFlight, 1, 'the successor alone now occupies the slot');
@@ -139,6 +177,7 @@ test('a ws throw after acquisition does not manufacture raw write cleanup',
       {deliveryContext: context, timeoutMs: CDC_ROUTER_TEST.SHORT_MS});
     const write = await peer.nextWrite(0);
     await write.handedOff;
+    assert.deepEqual(sendCounts(f, peer.accepted).cdcGrantService, {frames: 0, bytes: 0});
     f.clock.elapse(CDC_ROUTER_TEST.SHORT_MS);
     f.clock.dispatchDue();
     const refused = await result;

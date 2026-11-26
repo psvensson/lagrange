@@ -1,4 +1,5 @@
-import {observeWriteBoundary, socketEvidence} from './message-router-socket-evidence.js';
+import {observeServiceSendReturned, observeWriteBoundary, socketEvidence} from './message-router-socket-evidence.js';
+import {CDC_DELIVERY_REMAINING_MS} from '../cdc/cdc-delivery-budget.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {assertDeliveryOpen, deliveryAbortReason, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
@@ -162,6 +163,9 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
         observeWriteBoundary(pending, ws, true);
         if (finishWrite(error) && error) pending.reject(error);
       });
+      const lifetime = options.deliveryLifetime;
+      observeServiceSendReturned(ws, bytes, lifetime.context !== undefined ||
+        lifetime.durationField === CDC_DELIVERY_REMAINING_MS);
     } catch (_sendError) {
       // Once ws.send has been entered, a thrown error is not proof that its
       // compression/write child released the encoded copy. The existing close

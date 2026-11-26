@@ -93,6 +93,18 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
           t.comment(`node ${member.nodeId} log copy failed: ${copyError.message}`);
         }
       }
+      if (error.capturePreCrashState) {
+        await Promise.all(cluster.nodes.map(async (member) => {
+          const exitAtFailure = member.channel.exitState();
+          try {
+            const trace = exitAtFailure ? null : await observe(member, 'trace');
+            t.comment(JSON.stringify({nodeId: member.nodeId, exitAtFailure, trace}));
+          } catch (observationError) {
+            t.comment(JSON.stringify({nodeId: member.nodeId, exitAtFailure,
+              exitAfterObservation: member.channel.exitState(), error: observationError.message}));
+          }
+        }));
+      }
       throw error;
     }
   });
@@ -143,7 +155,12 @@ async function proveOwnerLoss(t, cluster) {
   const entered = await Promise.race([
     until(t, 'owner entered provisioning after catalog commit',
       () => traces(members), (rows) => rows.some((row) => row.barrier)),
-    submitted.then((reply) => { throw new Error(`CREATE answered before barrier: ${JSON.stringify(reply)}`); }),
+    submitted.then((reply) => {
+      // Once the socket settles, preserve the state at that boundary even if
+      // the independent barrier poll observes a grant while diagnostics run.
+      throw Object.assign(new Error(`CREATE socket settled before observed barrier: ${JSON.stringify(reply)}`),
+        {capturePreCrashState: true});
+    }),
   ]);
   const [original] = entered.filter((row) => row.barrier);
   assert.equal(entered.filter((row) => row.barrier).length, 1);

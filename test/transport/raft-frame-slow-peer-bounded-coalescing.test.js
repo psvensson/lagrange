@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 
+import {socketEvidence} from '../../src/transport/message-router-socket-evidence.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   CONSENSUS_SEND_REFUSAL,
@@ -196,6 +197,8 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
     const outcomes = await Promise.all(deliveries);
     assert.equal(Buffer.byteLength(writtenFrame), admittedBytes,
       'UTF-8 bytes sent match the reservation made before the flush');
+    const evidence = socketEvidence(sender, 'node-b', sender.nodeConnections.get('node-b'), wsToB);
+    assert.deepEqual(evidence.applicationSendReturned.consensus, {frames: 1, bytes: admittedBytes});
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.equal(settledBeforeFlush, 0,
@@ -541,6 +544,13 @@ test('(c1-incarnation-fence) closing or replacing a connection incarnation ' +
       newDelivery,
       closingDelivery,
     ]);
+
+    const currentConnection = router.nodeConnections.get('peer-b');
+    const oldStats = socketEvidence(router, 'peer-b', currentConnection, wsOld);
+    const newStats = socketEvidence(router, 'peer-b', currentConnection, wsNew);
+    assert.deepEqual(oldStats.applicationSendReturned.consensus, {frames: 0, bytes: 0});
+    assert.equal(newStats.applicationSendReturned.consensus.frames, 1);
+    assert.notEqual(oldStats.attemptedSocketId, newStats.attemptedSocketId);
 
     assert.equal(
       isDeliveredTransportDeliveryOutcome(deliveryTransportOf(outOld1)),

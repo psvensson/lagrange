@@ -524,8 +524,9 @@ export async function resolveRecoverableDeliveryError(
 
 export function sendRaw(router, ws, message) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
-    observeRawSend(router, ws, message);
+    const encoded = JSON.stringify(message);
+    ws.send(encoded);
+    observeRawSend(router, ws, message, encoded);
   }
 }
 
