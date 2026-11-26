@@ -597,46 +597,75 @@ function canonicalReplaceMembershipObservation(value, expected = {}) {
  * @param {string} replicaId - The new replica.
  * @return {Array<string>} Replica identities.
  */
-function replicaIdsOfStamp(stamp, replicaId) {
-  const validation = validateBootstrapMembershipStamp(stamp);
-  if (!validation.valid) {
-    return [];
-  }
-  const canonical = validation.stamp;
-  const named = [];
-  if (canonical.kind === COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED) {
-    const peerIds = uniquePeerIds(canonical.voters, canonical.learners);
-    for (let index = 0; index < peerIds.length; index += 1) {
-      named.push(canonical.identities[peerIds[index]]);
-    }
-  } else {
-    for (let index = 0; index < canonical.founders.length; index += 1) {
-      named.push(canonical.founders[index]);
-    }
-  }
-  let targetNamed = false;
-  for (let index = 0; index < named.length; index += 1) {
-    targetNamed ||= named[index] === replicaId;
-  }
-  const identities = [...named];
-  if (!targetNamed) {
-    identities.push(replicaId);
-  }
+function sortByPeerId(identities) {
+  const sorted = [...identities];
   const compareIdentity = (left, right) => {
     const leftPeer = deriveRaftRsPeerId(left);
     const rightPeer = deriveRaftRsPeerId(right);
     return leftPeer.length - rightPeer.length ||
       (leftPeer < rightPeer ? -1 : leftPeer > rightPeer ? 1 : 0);
   };
-  for (let index = 1; index < identities.length; index += 1) {
-    const current = identities[index];
+  for (let index = 1; index < sorted.length; index += 1) {
+    const current = sorted[index];
     let position = index;
     while (position > 0 &&
-        compareIdentity(identities[position - 1], current) > 0) {
-      identities[position] = identities[position - 1];
+        compareIdentity(sorted[position - 1], current) > 0) {
+      sorted[position] = sorted[position - 1];
       position -= 1;
     }
-    identities[position] = current;
+    sorted[position] = current;
+  }
+  return sorted;
+}
+
+function arrayContainsString(items, target) {
+  for (let index = 0; index < items.length; index += 1) {
+    if (items[index] === target) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function replicaIdsOfCommittedStamp(canonical, replicaId) {
+  const voterIds = [];
+  for (let index = 0; index < canonical.voters.length; index += 1) {
+    const identity = canonical.identities[canonical.voters[index]];
+    if (identity !== canonical.leaderId) {
+      voterIds.push(identity);
+    }
+  }
+  const learnerIds = [];
+  for (let index = 0; index < canonical.learners.length; index += 1) {
+    const identity = canonical.identities[canonical.learners[index]];
+    if (identity !== canonical.leaderId &&
+        !arrayContainsString(voterIds, identity)) {
+      learnerIds.push(identity);
+    }
+  }
+  const ordered = [
+    ...(canonical.leaderId ? [canonical.leaderId] : []),
+    ...sortByPeerId(voterIds),
+    ...sortByPeerId(learnerIds),
+  ];
+  if (!arrayContainsString(ordered, replicaId)) {
+    ordered.push(replicaId);
+  }
+  return ordered;
+}
+
+function replicaIdsOfStamp(stamp, replicaId) {
+  const validation = validateBootstrapMembershipStamp(stamp);
+  if (!validation.valid) {
+    return [];
+  }
+  const canonical = validation.stamp;
+  if (canonical.kind === COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED) {
+    return replicaIdsOfCommittedStamp(canonical, replicaId);
+  }
+  const identities = [...canonical.founders];
+  if (!arrayContainsString(identities, replicaId)) {
+    identities.push(replicaId);
   }
   return identities;
 }

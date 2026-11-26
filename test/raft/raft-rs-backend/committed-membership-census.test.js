@@ -131,6 +131,7 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
     // leader's committed answer, never produces a stamp.
     'src/raft/learner-catch-up-acknowledgement.js',
     'src/rebalancer/committed-membership-bootstrap-read.js',
+    'src/rebalancer/operation-workflow-replace-target-binding.js',
     // The registered learner read's recorder: the repository is the sole
     // decoder/validator of the learner stamp it records (contract
     // message-group-registered-learner-read.md; FreshMG B2 design section 9).
@@ -196,6 +197,7 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     // WP-E: the committed FOUND applier produces and carries the founding
     // GENESIS stamp on the admitted operations' creation steps.
     'src/partition/partition-placement-admission-decision.js',
+    'src/partition/partition-placement-founder-proof.js',
     // R4: the WASM service replica's genesis founding set (see above).
     'src/wasm-service/wasm-service-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
@@ -209,18 +211,15 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/bootstrap/phases/seed-partitions-phase.js',
     // The replacement options builder (snapshot install, release reopen).
     'src/partition/partition-reopen-options.js',
-    // Carriers: the dispatch request, row rehydration (two readers), the
-    // owner-port merge, and placement-admitted CREATE dispatch binding.
-    'src/control-plane/replica-dispatch-readiness-capture.js',
+    // Carriers: row rehydration, the owner-port merge, placement-admitted
+    // CREATE dispatch binding, and retained create admission recovery.
+    'src/node/replica-create-admission-retained-recovery.js',
     'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
     'src/rebalancer/operation-workflow-owner-ports.js',
     'src/rebalancer/operation-workflow-replace-target-binding.js',
+    'src/rebalancer/replica-operation-repository-incomplete-read-methods.js',
     'src/rebalancer/replica-operation-repository-row-methods.js',
-    // Reader (quest fresh-create-release-authority-from-committed-operation):
-    // the answering leader reads the GENESIS founding stamp the provisioning
-    // owner wrote into the committed create operation's first step, as the
-    // fresh-create release authority; it never produces or re-derives one.
-    'src/node/participant-release-authorization-owner.js',
+    'src/rebalancer/replica-status.js',
     // The target: request intake, validation, the partition, the port.
     'src/node/replica-handler-create-admission-methods.js',
     'src/node/replica-handler-create-methods.js',
