@@ -242,28 +242,47 @@ function retireCoveredBatch(
   }
 }
 
-function encodeRemoteCdcEventForWire(event) {
-  const data = event?.data;
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    return event;
+const PRIOR_ROW_DATA_FIELD = 'old_data';
+
+function encodeCdcRowObjectForWire(rowObj) {
+  if (!rowObj || typeof rowObj !== 'object' || Array.isArray(rowObj)) {
+    return null;
   }
-  const columns = Object.keys(data);
-  const values = columns.map((col) => data[col]);
+  const columns = Object.keys(rowObj);
+  const values = columns.map((col) => rowObj[col]);
   if (!values.some((val) => typeof val === 'bigint' || ArrayBuffer.isView(val))) {
-    return event;
+    return null;
   }
-  const typedData = encodeTypedRowSet(columns, [values]);
-  const wireData = {};
-  const encodedRow = typedData.rows[0] || [];
+  const typedRowSet = encodeTypedRowSet(columns, [values]);
+  const wireRow = {};
+  const encodedRow = typedRowSet.rows[0] || [];
   for (let i = 0; i < columns.length; i += 1) {
-    Object.defineProperty(wireData, columns[i], {
+    Object.defineProperty(wireRow, columns[i], {
       value: encodedRow[i + 1],
       enumerable: true,
       configurable: true,
       writable: true,
     });
   }
-  return {...event, data: wireData, typedData};
+  return {wireRow, typedRowSet};
+}
+
+function encodeRemoteCdcEventForWire(event) {
+  const encodedData = encodeCdcRowObjectForWire(event?.data);
+  const encodedPreviousRow = encodeCdcRowObjectForWire(event?.[PRIOR_ROW_DATA_FIELD]);
+  if (!encodedData && !encodedPreviousRow) {
+    return event;
+  }
+  return {
+    ...event,
+    ...(encodedData ? {data: encodedData.wireRow, typedData: encodedData.typedRowSet} : {}),
+    ...(encodedPreviousRow ?
+      {
+        [PRIOR_ROW_DATA_FIELD]: encodedPreviousRow.wireRow,
+        typedPreviousRow: encodedPreviousRow.typedRowSet,
+      } :
+      {}),
+  };
 }
 
 function encodeRemoteCdcEventsForWire(events) {
@@ -271,16 +290,27 @@ function encodeRemoteCdcEventsForWire(events) {
 }
 
 function decodeRemoteCdcEventsFromWire(events) {
-  if (!Array.isArray(events) || !events.some((event) => Boolean(event?.typedData))) {
+  if (!Array.isArray(events) ||
+      !events.some((event) => Boolean(event?.typedData || event?.typedPreviousRow))) {
     return events;
   }
   return events.map((event) => {
-    if (!event?.typedData) return event;
-    const {typedData, ...rest} = event;
-    const [decodedData] = materializeTypedRowSetObjects(typedData, {
-      coerceSafeBigIntToNumber: true,
-    });
-    return {...rest, data: decodedData};
+    if (!event?.typedData && !event?.typedPreviousRow) return event;
+    const {typedData, typedPreviousRow, ...rest} = event;
+    const decoded = {...rest};
+    if (typedData) {
+      const [decodedData] = materializeTypedRowSetObjects(typedData, {
+        coerceSafeBigIntToNumber: true,
+      });
+      decoded.data = decodedData;
+    }
+    if (typedPreviousRow) {
+      const [decodedPreviousRow] = materializeTypedRowSetObjects(typedPreviousRow, {
+        coerceSafeBigIntToNumber: true,
+      });
+      decoded[PRIOR_ROW_DATA_FIELD] = decodedPreviousRow;
+    }
+    return decoded;
   });
 }
 

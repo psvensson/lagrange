@@ -41,7 +41,7 @@ documentClass: generated
 - [managed-split-workflow-topology-bindings.js](managed-split-workflow-topology-bindings.js) - Topology collaborators the ManagedSplitWorkflow owner consumes, in binding order. (importers: few)
 - [managed-split-workflow.js](managed-split-workflow.js) - First-class managed split workflow owner. (importers: many)
 - [managed-workflow-ownership-core.js](managed-workflow-ownership-core.js) - Shared durable workflow-ownership claim core for the split and merge workflow owners. (importers: hub)
-- [managed-workflow-record-changes.js](managed-workflow-record-changes.js) - The change functions of a split or merge workflow's durable record (managed-workflow-record-store.js, owner decision... (importers: few)
+- [managed-workflow-record-changes.js](managed-workflow-record-changes.js) - The change functions of a split or merge workflow's durable record (managed-workflow-record-store.js, owner decision... (importers: many)
 - [managed-workflow-record-coordinator.js](managed-workflow-record-coordinator.js) - Owner contract: Owner: the in-memory registry of the split and merge workflows - a PROJECTION of each workflow's... (importers: few)
 - [managed-workflow-record-store.js](managed-workflow-record-store.js) - Owner contract: Owner: every write of a split or merge workflow's durable record - the table's `tables` row... (importers: many)
 - [managed-workflow-registration-inputs.js](managed-workflow-registration-inputs.js) - Owner contract: Owner: whether a split's or merge's registration may still land on the record it is compared... (importers: few)

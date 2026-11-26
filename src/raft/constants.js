@@ -24,10 +24,11 @@ const RAFT_ELECTION_TIMING = Object.freeze({
   ELECTION_MIN_DEFAULT_MS: 1000,
   ELECTION_MAX_DEFAULT_MS: 3000,
   // Jitter added per replica index to stagger election timeouts.
-  // Must be >= (ELECTION_MAX - ELECTION_MIN) so that replica N's max
-  // timeout is always less than replica N+1's min timeout.
-  // This guarantees lower-indexed replicas always fire first,
-  // preventing re-elections and leadership instability.
+  // In the JS engine this exceeds (ELECTION_MAX - ELECTION_MIN) = 2000ms so
+  // replica N's max timeout is below replica N+1's min timeout; on the native
+  // raft-rs engine where effective max is 2 * effectiveElectionMinMs, 2500ms
+  // staggers replica startup windows without making higher-index windows
+  // strictly disjoint from lower-index windows.
   JITTER_PER_REPLICA_MS: 2500,
 });
 

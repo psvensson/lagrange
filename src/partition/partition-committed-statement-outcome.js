@@ -102,19 +102,21 @@ function isUserTableNameEligibleForMirror(tableName) {
 }
 
 function isTableRowInActiveSourceTransition(service, tableRow) {
-  if (!tableRow) return true;
+  if (!tableRow) return false;
   const state = String(tableRow.partition_transition_state ?? '').toLowerCase();
   if (!ACTIVE_MIRROR_TRANSITION_STATES.has(state)) return false;
   return !isPartitionNamedAsTransitionTargetOnly(service.partitionId, tableRow);
 }
 
+// Every user-table partition replica (leader and followers alike) persists
+// committed statement mirror effects inside the apply transaction so a
+// follower promoted after a crash or split transition start has all committed
+// row effects regardless of when its local system-table cache observed the
+// transition row.
 function partitionOwesDurableMirrorEffects(service, tableName = service?.tableName) {
   if (!service) return false;
   if (hasActiveVolatileMirrorHandle(service)) return true;
-  if (!isUserTableNameEligibleForMirror(tableName)) return false;
-  return isTableRowInActiveSourceTransition(
-    service, resolveTableRowForMirrorEffects(service, tableName),
-  );
+  return isUserTableNameEligibleForMirror(tableName);
 }
 
 // The same identity is used by apply, replay answers and cold observation.
@@ -479,14 +481,24 @@ function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
   throw error;
 }
 
+const IDLE_MIRROR_EFFECT_RETENTION_WINDOW = 1_000;
+
 function reconcileCommittedStatementMirrorEffects(service, state, entryKey, index, result) {
-  if (!result?.typedEffects) return;
-  if (partitionOwesDurableMirrorEffects(service)) {
-    persistCapturedRowEffectsIn(
-      service, state, entryKey, index, result.mutationKind, result.typedEffects,
-    );
-  } else if (capturedRowEffectsTableExistsIn(service.db)) {
-    state.runNonApplication(STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_ALL);
+  if (!result?.typedEffects || !partitionOwesDurableMirrorEffects(service)) return;
+  persistCapturedRowEffectsIn(
+    service, state, entryKey, index, result.mutationKind, result.typedEffects,
+  );
+  if (!hasActiveVolatileMirrorHandle(service) &&
+      !isTableRowInActiveSourceTransition(
+        service, resolveTableRowForMirrorEffects(service, service?.tableName),
+      )) {
+    const retentionFloor = Number(index) - IDLE_MIRROR_EFFECT_RETENTION_WINDOW;
+    if (Number.isSafeInteger(retentionFloor) && retentionFloor > 0) {
+      state.runNonApplication(
+        STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_THROUGH_LOG_INDEX,
+        retentionFloor,
+      );
+    }
   }
 }
 

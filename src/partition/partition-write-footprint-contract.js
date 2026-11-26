@@ -97,23 +97,26 @@ function isScalarPkValue(value) {
     (typeof value === TYPE_BIGINT && BigInt.asIntN(SQLITE_INT64_BITS, value) === value);
 }
 
+const CANONICAL_INT64_TEXT_RE = /^-?[1-9]\d{15,18}$/u;
+
 function isCanonicalPkScalar(value) {
   if (typeof value === TYPE_NUMBER) return Number.isSafeInteger(value);
   if (typeof value === TYPE_BIGINT) return BigInt.asIntN(SQLITE_INT64_BITS, value) === value;
   if (typeof value !== TYPE_STRING || value.length === NUM_ZERO) return false;
   if (!SQLITE_NUMERIC_TEXT_RE.test(value)) return true;
   const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && String(parsed) === value;
+  if (Number.isSafeInteger(parsed) && String(parsed) === value) return true;
+  if (!CANONICAL_INT64_TEXT_RE.test(value)) return false;
+  const bigVal = BigInt(value);
+  return BigInt.asIntN(SQLITE_INT64_BITS, bigVal) === bigVal &&
+    (bigVal < MIN_SAFE_PK_BIGINT || bigVal > MAX_SAFE_PK_BIGINT);
 }
 
 function normalizePkScalar(value) {
   if (typeof value === TYPE_NUMBER) return Object.is(value, -0) ? NUM_ZERO : value;
-  if (typeof value === TYPE_BIGINT &&
-      value >= MIN_SAFE_PK_BIGINT &&
-      value <= MAX_SAFE_PK_BIGINT) {
-    return Number(value);
-  }
-  return value;
+  if (typeof value !== TYPE_BIGINT) return value;
+  return value >= MIN_SAFE_PK_BIGINT && value <= MAX_SAFE_PK_BIGINT ?
+    Number(value) : value.toString();
 }
 
 function encodeCanonicalPkTupleKey(tuple) {

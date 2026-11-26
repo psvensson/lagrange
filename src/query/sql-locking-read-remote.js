@@ -254,12 +254,24 @@ function bindServicePartitionId(service, partitionId) {
  * @param {Object} params - Reservation parameters.
  * @return {Promise<{mode: string, result: Object}>}
  */
+const MIN_SAFE_REMOTE_PK_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_REMOTE_PK_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+function normalizeRemoteReservationPkValue(value) {
+  if (typeof value !== 'bigint') return value;
+  return value >= MIN_SAFE_REMOTE_PK_BIGINT && value <= MAX_SAFE_REMOTE_PK_BIGINT ?
+    Number(value) :
+    value.toString();
+}
+
 export async function acquireAuthoritativePartitionReservation(engine, params) {
   const {partitionId} = params;
   const {service} = resolvePartitionServiceEntry(engine, partitionId);
   const rpcPayload = {
     tableName: params.tableName,
-    pkValues: params.pkValues,
+    pkValues: Array.isArray(params.pkValues) ?
+      params.pkValues.map(normalizeRemoteReservationPkValue) :
+      params.pkValues,
     transactionId: params.transactionId,
     sessionId: params.sessionId,
     participantId: `${params.transactionId}:${partitionId}`,

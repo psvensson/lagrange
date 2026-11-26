@@ -30,7 +30,7 @@ function drainPendingWriteOperationPersists(tx) {
       tx.pendingWriteOperationPersists.length === 0) {
     return Promise.resolve();
   }
-  return Promise.all(tx.pendingWriteOperationPersists.splice(0));
+  return Promise.allSettled(tx.pendingWriteOperationPersists.splice(0));
 }
 
 function settledCycleRollbacksOf(coordinator) {
@@ -174,16 +174,14 @@ const distributedTransactionStatementMethods = {
         deferPersistence: true,
       });
       const tx = this.transactionsBySession.get(sessionId);
-      const [persistSettled, writeSettled] = await Promise.allSettled([
-        Promise.all([
-          persistActivePromise,
-          drainPendingWriteOperationPersists(tx),
-        ]),
+      const [activePersistSettled, , writeSettled] = await Promise.allSettled([
+        persistActivePromise,
+        drainPendingWriteOperationPersists(tx),
         Promise.resolve().then(() =>
           executeWrite(tx ? statementTransactionIdentityOf(tx) : null)),
       ]);
-      if (persistSettled.status === SETTLED_STATUS_REJECTED) {
-        throw persistSettled.reason;
+      if (activePersistSettled.status === SETTLED_STATUS_REJECTED) {
+        throw activePersistSettled.reason;
       }
       if (writeSettled.status === SETTLED_STATUS_REJECTED) {
         throw writeSettled.reason;

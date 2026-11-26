@@ -380,4 +380,15 @@ test('bootProvenance is preserved after the window and verified against expected
       false,
       'mismatched bootedSrcFingerprint fails closed immediately after nodeReady before formation',
     );
+    for (const invalidExpected of [null, '', 'sha256:not-a-64-hex-digest']) {
+      const badLedger = createContainerLedger();
+      const badSsh = createScriptedSsh(lagrangeHealthyRules(badLedger, {hosts: HOSTS}));
+      await assert.rejects(
+        deployers.deployLagrangeCluster(input(badSsh.sshRun, {
+          opts: {...OPTS, lagrangeSrcFingerprint: invalidExpected},
+        })),
+        (error) => error.code === 'identity_unverified',
+        `explicit invalid lagrangeSrcFingerprint (${JSON.stringify(invalidExpected)}) must fail closed`,
+      );
+    }
   });

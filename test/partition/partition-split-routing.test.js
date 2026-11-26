@@ -22,6 +22,20 @@ import {
   handleRemoteLiveQueryCdcSubscribe,
 } from '../../src/partition/partition-live-query-cdc-remote.js';
 import {
+  acknowledgementChange,
+} from '../../src/partition/managed-workflow-record-changes.js';
+import {
+  buildLockingReadCommand,
+  isPinnedLockingReadCommand,
+} from '../../src/partition/partition-locking-read-command.js';
+import {
+  assertStatementWriteFootprintConformance,
+  extractStatementWriteFootprint,
+} from '../../src/partition/partition-write-footprint-contract.js';
+import {
+  QueryGroup,
+} from '../../src/live-query/live-query-group.js';
+import {
   acquireDbForUpdateReservation,
   releaseDbPartitionTransactionReservations,
 } from '../../src/partition/partition-locking-read-store.js';
@@ -993,3 +1007,118 @@ test('committed row-lock check with BLOB/BigInt typedParams, remote live-query C
       LoggingService.resetInstance();
     }
   });
+
+test(
+  'L9-RETENTION-1, V9-1, V9-2: duplicate CATCHUP_READY advances checkpoint, ' +
+  'and BigInt live-query + locking-read serialize cleanly',
+  async (t) => {
+    const owner = {now: () => 5000, workflowOwnerId: 'owner-1', workflowLeaseMs: 30000};
+    const initialRecord = {
+      workflowId: 'wf-split-1',
+      status: 'SPLIT_CATCHUP',
+      fenceToken: 1,
+      metadata: {attempt: 1},
+      participants: new Map([
+        ['source:p1', {
+          participantKey: 'source:p1',
+          status: 'CATCHUP_READY',
+          fenceToken: 1,
+          acknowledgedAt: 4000,
+          updatedAt: 4000,
+          checkpoint: {sourceLogIndex: 100, replayWatermarkIndex: 100},
+        }],
+      ]),
+    };
+    const advanceChange = acknowledgementChange(
+      owner,
+      {
+        participantKey: 'source:p1',
+        status: 'CATCHUP_READY',
+        fenceToken: 1,
+        checkpoint: {sourceLogIndex: 125, replayWatermarkIndex: 125},
+      },
+      null,
+    );
+    const advancedOutcome = advanceChange(initialRecord);
+    t.equal(
+      advancedOutcome.reason,
+      undefined,
+      'advancing checkpoint on CATCHUP_READY is not rejected as DUPLICATE',
+    );
+    t.same(
+      advancedOutcome.participants.get('source:p1').checkpoint,
+      {sourceLogIndex: 125, replayWatermarkIndex: 125},
+      'durable checkpoint advances to the newer replay watermark',
+    );
+    const sameCheckpointOutcome = advanceChange(advancedOutcome);
+    t.equal(
+      sameCheckpointOutcome.reason,
+      'duplicate',
+      'identical checkpoint on already-acknowledged CATCHUP_READY remains DUPLICATE',
+    );
+
+    const sentPayloads = [];
+    const group = new QueryGroup({
+      queryId: 'q-bigint-1',
+      parsedQuery: {
+        type: 'SELECT',
+        table: 'exact_items',
+        columns: [{type: 'STAR', star: true}],
+        where: null,
+      },
+      sql: 'SELECT * FROM exact_items',
+    });
+    group.addClient({
+      id: 'client-1',
+      send(rawJson) {
+        sentPayloads.push(JSON.parse(rawJson));
+      },
+    });
+    group.partitionFrontiers.set('p1', 10);
+    const cdcResult = await group.handleCDCEvent(
+      {
+        operation: 'INSERT',
+        tableName: 'exact_items',
+        logIndex: 11,
+        sequenceNumber: 11,
+        data: {id: 'row-big', big_int: 9007199254740993n, small_int: 42n},
+      },
+      'p1',
+    );
+    t.ok(cdcResult, 'Tier-1 CDC evaluation returns delta result');
+    t.equal(sentPayloads.length, 1, 'client receives serialized live-query notification');
+    t.equal(sentPayloads[0].row.big_int, '9007199254740993');
+    t.equal(sentPayloads[0].row.small_int, 42);
+    t.equal(group.partitionFrontiers.get('p1'), 11);
+
+    const reservationCmd = buildLockingReadCommand(
+      {
+        partitionId: 'p1',
+        replicaId: 'r1',
+        hlcClock: {now: () => '1000-0'},
+        timeSource: {now: () => 1000},
+      },
+      {
+        op: 'ACQUIRE',
+        tableName: 'exact_items',
+        pkValues: [9007199254740993n],
+        transactionId: 'tx-big-1',
+        sessionId: 'sess-1',
+      },
+    );
+    t.ok(reservationCmd, 'locking-read command builds for BigInt primary key');
+    t.doesNotThrow(() => JSON.stringify(reservationCmd));
+    t.same(reservationCmd.reservation.pkValues, ['9007199254740993']);
+    t.equal(isPinnedLockingReadCommand(reservationCmd), true);
+
+    const footprint = extractStatementWriteFootprint({
+      sql: 'UPDATE exact_items SET ratio = 1.0 WHERE id = ?',
+      params: [9007199254740993n],
+      pkCols: ['id'],
+      allCols: ['id', 'ratio'],
+    });
+    t.equal(footprint.scoped, true);
+    t.doesNotThrow(() => JSON.stringify(footprint));
+    t.doesNotThrow(() => assertStatementWriteFootprintConformance(footprint));
+  },
+);

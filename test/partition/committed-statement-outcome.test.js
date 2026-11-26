@@ -1169,3 +1169,56 @@ test('durable split effects: committed writes retain canonical affectedRows and 
     );
   });
 });
+
+test('L9-RETENTION-2: follower with stale inactive system-table cache still persists durable mirror effects',
+  {timeout: TEST_TIMEOUT_MS}, async () => {
+    const partitionId = 'outcome-follower-stale-cache';
+    const userTableName = 'user_orders';
+    await withPartition(partitionId, async ({open}) => {
+      const staleCache = {
+        get(table, key) {
+          if (table === 'tables' && key === userTableName) {
+            return {
+              table_name: userTableName,
+              partition_transition_state: 'active',
+              partition_transition_metadata: null,
+            };
+          }
+          return null;
+        },
+      };
+      const follower = await open();
+      follower.tableName = userTableName;
+      follower.systemTableCache = staleCache;
+      follower.db.exec(
+        `CREATE TABLE IF NOT EXISTS ${userTableName} ` +
+        '(group_id TEXT PRIMARY KEY, representative_node_id TEXT)',
+      );
+      const seedWrite = await follower.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.INSERT,
+        sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
+        params: ['follower-seed', 'node-0'],
+        entryId: 'entry-follower-stale-seed',
+      });
+      assert.equal(seedWrite.success, true);
+      const firstWrite = await follower.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.INSERT,
+        sql: `INSERT INTO ${userTableName} (group_id, representative_node_id) VALUES (?, ?)`,
+        params: ['follower-a', 'node-1'],
+        entryId: 'entry-follower-stale-1',
+      });
+      assert.equal(firstWrite.success, true);
+      const secondWrite = await follower.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.UPDATE,
+        sql: `UPDATE ${userTableName} SET representative_node_id = ? WHERE group_id = ?`,
+        params: ['node-2', 'follower-a'],
+        entryId: 'entry-follower-stale-2',
+      });
+      assert.equal(secondWrite.success, true);
+      const deltas = loadDurableDeltasBehindWatermark(follower, seedWrite.logIndex);
+      assert.equal(deltas.length, 2, 'follower persists durable mirror effects despite inactive table cache');
+      assert.equal(deltas[0].entryId, 'entry-follower-stale-1');
+      assert.equal(deltas[1].entryId, 'entry-follower-stale-2');
+      assert.equal(deltas[1].affectedRows?.[0]?.representative_node_id, 'node-2');
+    });
+  });

@@ -230,7 +230,11 @@ function resolveTelemetryColumns(telemetry, source) {
       columns[column] = telemetry[column];
     }
   }
-  return {...columns, ...resolveStorageBudgetColumns(telemetry, source)};
+  return {
+    ...columns,
+    ...resolveStorageBudgetColumns(telemetry, source),
+    ...extractTelemetrySampleMeta(telemetry),
+  };
 }
 
 function extractTelemetrySampleMeta(telemetry) {

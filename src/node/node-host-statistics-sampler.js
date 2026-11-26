@@ -9,16 +9,18 @@ const MEM_AVAILABLE_KB_PATTERN = /^MemAvailable:\s+(\d+)\s+kB$/mu;
 const BYTES_PER_KIB = 1024;
 const LINUX_PLATFORM = 'linux';
 
-function readLinuxMemAvailableBytes(totalMemory, osFreeMemoryBytes) {
+export function readLinuxMemAvailableBytes(totalMemory, osFreeMemoryBytes, meminfoContent = null) {
   try {
-    const content = fs.readFileSync(PROC_MEMINFO_PATH, STRING.ENCODING_UTF8);
+    const content = typeof meminfoContent === 'string' ?
+      meminfoContent :
+      fs.readFileSync(PROC_MEMINFO_PATH, STRING.ENCODING_UTF8);
     const match = MEM_AVAILABLE_KB_PATTERN.exec(content);
     if (!match) return osFreeMemoryBytes;
     const availableBytes = Number(match[1]) * BYTES_PER_KIB;
-    if (!Number.isFinite(availableBytes) || availableBytes <= 0) {
+    if (!Number.isFinite(availableBytes) || availableBytes < 0) {
       return osFreeMemoryBytes;
     }
-    return Math.min(totalMemory, Math.max(osFreeMemoryBytes, availableBytes));
+    return Math.min(totalMemory, availableBytes);
   } catch {
     return osFreeMemoryBytes;
   }

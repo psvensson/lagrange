@@ -1015,7 +1015,7 @@
   "src/wasm-service/wasm-writer-state.js::Function 'validateSlot'#1": 18,
   "src/wasm-service/wasm-writer-state.js::Method 'classify'#1": 13,
   "src/workflow/operation-lane.js::Method 'resolveOwnerKey'#1": 16,
-  "src/workflow/workflow-participant-ack-methods.js::Async method 'acknowledgeParticipant'#1": 17,
+  "src/workflow/workflow-participant-ack-methods.js::Async method 'acknowledgeParticipant'#1": 16,
   "test/admin/admin-control-snapshot-publication-convergence-recovery-readiness-test-cases.js::Async arrow function#1": 17,
   "test/admin/admin-websocket-api-control-snapshot-query.test.js::Async arrow function#1": 14,
   "test/admin/admin-websocket-api-http-and-debug-routes.test.js::Async arrow function#1": 15,

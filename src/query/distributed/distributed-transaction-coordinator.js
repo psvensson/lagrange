@@ -481,26 +481,33 @@ class DistributedTransactionCoordinator {
     }
   }
 
-  async markWriteOperationResult(sessionId, operationId, result, options = {}) {
-    const tx = this.transactionsBySession.get(sessionId);
-    const operation = tx?.writeOperations.find(
-      (entry) => entry.operationId === operationId,
-    );
-    if (!operation) return;
+  applyWriteOperationOutcome(operation, result, nowMs) {
     const succeeded = result?.success === true;
+    const reportedError = typeof result?.error === 'string' && result.error.length > 0 ?
+      result.error :
+      QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
     operation.status = succeeded ?
       WRITE_OPERATION_STATUS.SUCCEEDED :
       WRITE_OPERATION_STATUS.FAILED;
     operation.retryCount = Number.isInteger(result?.retryCount) ?
       result.retryCount :
       0;
-    operation.lastError = succeeded ?
-      null :
-      result?.error || QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
-    operation.updatedAt = this.now();
+    operation.lastError = succeeded ? null : reportedError;
+    operation.updatedAt = nowMs;
+  }
+
+  async markWriteOperationResult(sessionId, operationId, result, options = {}) {
+    const tx = this.transactionsBySession.get(sessionId);
+    const operation = tx?.writeOperations.find(
+      (entry) => entry.operationId === operationId,
+    );
+    if (!operation) return;
+    this.applyWriteOperationOutcome(operation, result, this.now());
     tx.updatedAt = operation.updatedAt;
     this.noteMetadataMutation?.(tx);
-    const persistPromise = this.persistWriteOperationRecord(tx, operation);
+    const persistPromise = Promise.resolve(
+      this.persistWriteOperationRecord(tx, operation),
+    ).catch(() => {});
     if (options.deferPersistenceAwait === true) {
       this.enqueueDeferredWriteOperationPersist(tx, persistPromise);
       return;

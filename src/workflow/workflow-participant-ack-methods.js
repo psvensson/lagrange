@@ -6,6 +6,36 @@ import {
   readParticipantCurrentStatus,
 } from './workflow-constants.js';
 
+function hasAdvancedCheckpointField(currVal, nextVal) {
+  if (Number.isSafeInteger(nextVal)) {
+    return !Number.isSafeInteger(currVal) || nextVal > currVal;
+  }
+  return nextVal !== undefined && nextVal !== null && nextVal !== currVal;
+}
+
+function hasAdvancedParticipantCheckpoint(current, next) {
+  if (!next || typeof next !== 'object') return false;
+  if (!current || typeof current !== 'object') return true;
+  return Object.entries(next).some(([field, nextVal]) =>
+    hasAdvancedCheckpointField(current[field], nextVal));
+}
+
+function mergeParticipantCheckpoint(current, next) {
+  if (!current || typeof current !== 'object' || typeof next !== 'object') {
+    return next;
+  }
+  const merged = {...current};
+  for (const [field, nextVal] of Object.entries(next)) {
+    const currVal = merged[field];
+    if (Number.isSafeInteger(currVal) && Number.isSafeInteger(nextVal)) {
+      merged[field] = Math.max(currVal, nextVal);
+    } else if (nextVal !== undefined) {
+      merged[field] = nextVal;
+    }
+  }
+  return merged;
+}
+
 /**
  * Participant acknowledgement methods for DurableWorkflowCoordinator:
  * the typed ack path (fence validation, duplicate detection, the
@@ -63,9 +93,10 @@ class WorkflowParticipantAckMethods {
       participant.fenceToken = ackFence;
     }
 
-    // Duplicate detection: same status already acknowledged.
-    if (participant.status === ackStatus &&
-        participant.acknowledgedAt !== undefined) {
+    // Duplicate detection: same status already acknowledged, unless the
+    // acknowledgement advances the durable participant checkpoint.
+    const checkpoint = ack?.[PARTICIPANT_ACK_FIELD.CHECKPOINT];
+    if (this.isDuplicateAckWithoutCheckpointAdvance(participant, ackStatus, checkpoint)) {
       return this.rejectAckDuplicate(
         workflowId, participant, participantKey, ackStatus,
       );
@@ -74,11 +105,12 @@ class WorkflowParticipantAckMethods {
     // Explicit participant transition graph: when wired, reject any
     // (from, to) edge the graph does not declare — the coordinator
     // never silently applies an out-of-graph transition.
-    const graphRejection = this.validateParticipantTransitionGraph(
+    const graphRejection = this.validateAckTransitionOrCheckpointRefresh(
       workflowId,
       participant,
       participantKey,
       ackStatus,
+      checkpoint,
     );
     if (graphRejection) {
       return graphRejection;
@@ -91,9 +123,10 @@ class WorkflowParticipantAckMethods {
     participant.updatedAt = now;
 
     // Persist checkpoint data alongside participant state.
-    const checkpoint = ack?.[PARTICIPANT_ACK_FIELD.CHECKPOINT];
     if (checkpoint !== undefined && checkpoint !== null) {
-      participant.checkpoint = checkpoint;
+      participant.checkpoint = mergeParticipantCheckpoint(
+        participant.checkpoint, checkpoint,
+      );
     }
 
     await this.persistParticipant(participant);
@@ -103,6 +136,24 @@ class WorkflowParticipantAckMethods {
       participantKey,
       acknowledgedAt: now,
     };
+  }
+
+  isDuplicateAckWithoutCheckpointAdvance(participant, ackStatus, checkpoint) {
+    return participant.status === ackStatus &&
+      participant.acknowledgedAt !== undefined &&
+      !hasAdvancedParticipantCheckpoint(participant.checkpoint, checkpoint);
+  }
+
+  validateAckTransitionOrCheckpointRefresh(
+    workflowId, participant, participantKey, ackStatus, checkpoint,
+  ) {
+    if (participant.status === ackStatus &&
+        hasAdvancedParticipantCheckpoint(participant.checkpoint, checkpoint)) {
+      return null;
+    }
+    return this.validateParticipantTransitionGraph(
+      workflowId, participant, participantKey, ackStatus,
+    );
   }
 
   /**

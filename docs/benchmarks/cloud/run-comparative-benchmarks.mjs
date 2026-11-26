@@ -393,21 +393,28 @@ function recordPendingStorageSubdir(pendingStorageByHost, hosts, subDir) {
 }
 
 const SEMVER_IMAGE_TAG_PATTERN = /:(\d+\.\d+\.\d+)$/u;
+const SOURCE_FINGERPRINT_PATTERN = /^(?:sha256:[0-9a-f]{4,64}|[0-9a-f]{16,64})$/u;
 
 async function resolveCheckoutLagrangeProvenance(opts, manifest) {
   if (!manifest.targets.includes(COMPARATIVE_TARGET.LAGRANGE)) {
     return {lagrangeVersion: opts.lagrangeVersion || null,
       lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint || null};
   }
-  const hasSemverTag = SEMVER_IMAGE_TAG_PATTERN.test(String(opts.lagrangeImage || ''));
+  const tagMatch = SEMVER_IMAGE_TAG_PATTERN.exec(String(opts.lagrangeImage || ''));
   const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'));
-  const buildProv = !hasSemverTag && !opts.lagrangeSrcFingerprint ?
+  const buildProv = !opts.lagrangeSrcFingerprint ?
     await runtimeBuildProvenance() : null;
-  return {
-    lagrangeVersion: opts.lagrangeVersion || (!hasSemverTag ? pkg.version : null),
-    lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint ||
-      buildProv?.content?.shortSourceFingerprint || null,
-  };
+  const lagrangeVersion = opts.lagrangeVersion || (tagMatch ? tagMatch[1] : pkg.version) || null;
+  const lagrangeSrcFingerprint = opts.lagrangeSrcFingerprint ||
+    buildProv?.content?.shortSourceFingerprint || null;
+  if (!lagrangeVersion || !SOURCE_FINGERPRINT_PATTERN.test(String(lagrangeSrcFingerprint || ''))) {
+    throw deploymentFailure(
+      DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      'Lagrange campaign requires verified checkout version and source fingerprint provenance',
+      {lagrangeVersion, lagrangeSrcFingerprint},
+    );
+  }
+  return {lagrangeVersion, lagrangeSrcFingerprint};
 }
 
 async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,

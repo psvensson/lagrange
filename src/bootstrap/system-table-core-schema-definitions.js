@@ -175,6 +175,8 @@ const NODES_SCHEMA = {
     // written by every registration from the required boot-time value. No
     // default: a row without a declared host reads as HOST_UNDECLARED.
     {name: 'host_id', type: COLUMN_TYPE.TEXT},
+    {name: 'telemetry_sampled_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'telemetry_sample_id', type: COLUMN_TYPE.INTEGER},
   ],
   indices: [
     {name: 'idx_nodes_address', columns: ['node_address']},

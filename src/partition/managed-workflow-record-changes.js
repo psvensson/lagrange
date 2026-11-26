@@ -371,6 +371,35 @@ function transitionRefusalOf(owner, workflow, transition, isTerminal) {
  * @param {Function|null} isAllowed - (key, from, to) => boolean.
  * @return {Function}
  */
+function hasAdvancedParticipantCheckpoint(currentCheckpoint, nextCheckpoint) {
+  if (!nextCheckpoint || typeof nextCheckpoint !== 'object') return false;
+  if (!currentCheckpoint || typeof currentCheckpoint !== 'object') return true;
+  for (const [field, nextVal] of Object.entries(nextCheckpoint)) {
+    const currVal = currentCheckpoint[field];
+    if (Number.isSafeInteger(nextVal)) {
+      if (!Number.isSafeInteger(currVal) || nextVal > currVal) return true;
+    } else if (nextVal !== undefined && nextVal !== null && nextVal !== currVal) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function mergeParticipantCheckpoint(currentCheckpoint, nextCheckpoint) {
+  if (!nextCheckpoint || typeof nextCheckpoint !== 'object') return currentCheckpoint;
+  if (!currentCheckpoint || typeof currentCheckpoint !== 'object') return {...nextCheckpoint};
+  const merged = {...currentCheckpoint};
+  for (const [field, nextVal] of Object.entries(nextCheckpoint)) {
+    const currVal = currentCheckpoint[field];
+    if (Number.isSafeInteger(currVal) && Number.isSafeInteger(nextVal)) {
+      merged[field] = Math.max(currVal, nextVal);
+    } else if (nextVal !== undefined) {
+      merged[field] = nextVal;
+    }
+  }
+  return merged;
+}
+
 function acknowledgementChange(owner, ack, isAllowed) {
   const key = String(ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]);
   const status = String(ack[PARTICIPANT_ACK_FIELD.STATUS]);
@@ -383,7 +412,8 @@ function acknowledgementChange(owner, ack, isAllowed) {
     }
     const participant = workflow.participants.get(key);
     const rejection = attemptRejectionOf(workflow, ack) ??
-      acknowledgementRejectionOf(participant, key, status, fence, isAllowed);
+      acknowledgementRejectionOf(
+        participant, key, status, fence, isAllowed, checkpoint);
     if (rejection) {
       return refuseRecordChange(rejection,
         {participant: participant ? {...participant} : null, key, status,
@@ -395,7 +425,7 @@ function acknowledgementChange(owner, ack, isAllowed) {
       updatedAt: now,
       ...(fence !== undefined && fence !== null ? {fenceToken: fence} : {}),
       ...(checkpoint !== undefined && checkpoint !== null ?
-        {checkpoint} : {})};
+        {checkpoint: mergeParticipantCheckpoint(participant.checkpoint, checkpoint)} : {})};
     const participants = new Map(workflow.participants);
     participants.set(key, acknowledged);
     return renewLeaseRidingWrite(owner, {...workflow, participants,
@@ -519,18 +549,29 @@ function attemptRejectionOf(workflow, ack) {
     RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH : null;
 }
 
+function isDuplicateAckWithoutCheckpointAdvance(
+  participant, status, checkpoint,
+) {
+  return participant.status === status &&
+    participant.acknowledgedAt !== undefined &&
+    !hasAdvancedParticipantCheckpoint(participant.checkpoint, checkpoint);
+}
+
+function isStaleParticipantFence(participant, fence) {
+  return fence !== undefined && fence !== null &&
+    participant.fenceToken !== undefined && participant.fenceToken !== null &&
+    fence < participant.fenceToken;
+}
+
 function acknowledgementRejectionOf(participant, key, status, fence,
-  isAllowed) {
+  isAllowed, checkpoint = null) {
   if (!participant) {
     return PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND;
   }
-  if (fence !== undefined && fence !== null &&
-      participant.fenceToken !== undefined && participant.fenceToken !== null &&
-      fence < participant.fenceToken) {
+  if (isStaleParticipantFence(participant, fence)) {
     return PARTICIPANT_ACK_RESULT.STALE_FENCE;
   }
-  if (participant.status === status &&
-      participant.acknowledgedAt !== undefined) {
+  if (isDuplicateAckWithoutCheckpointAdvance(participant, status, checkpoint)) {
     return PARTICIPANT_ACK_RESULT.DUPLICATE;
   }
   if (typeof isAllowed === 'function' &&

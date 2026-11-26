@@ -608,6 +608,25 @@ async function readSystemTablesForReady(postQuery, readyCtx) {
   }
 }
 
+const EXPECTED_SRC_FINGERPRINT_PATTERN = /^(?:sha256:[0-9a-f]{4,64}|[0-9a-f]{16,64})$/u;
+
+function resolveExpectedLagrangeSrcFingerprint(opts) {
+  const hasExplicit = Object.hasOwn(opts, 'lagrangeSrcFingerprint') ||
+    Object.hasOwn(opts, 'expectedSrcFingerprint');
+  if (!hasExplicit) return null;
+  const candidate = stringTrim(stringOf(
+    opts.lagrangeSrcFingerprint ?? opts.expectedSrcFingerprint ?? '',
+  ));
+  if (!EXPECTED_SRC_FINGERPRINT_PATTERN.test(candidate)) {
+    throw deploymentFailure(
+      DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `Lagrange deployment requires a valid expectedSrcFingerprint, got ${JSON.stringify(candidate)}`,
+      {expectedSrcFingerprint: candidate},
+    );
+  }
+  return candidate;
+}
+
 async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, roles, nodeReadiness,
   formed, campaignId}) {
   const {sshRun, opts} = ctx;
@@ -640,7 +659,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     await reportedVersions(ctx, inspectedProducts),
     {[NODE_ROLE]: {imageRef: image, contentIdentity: opts.lagrangeImageContent ?? null,
       versionPattern: versionPatternOf(image, ctx.expectedVersion),
-      expectedSrcFingerprint: opts.lagrangeSrcFingerprint || opts.expectedSrcFingerprint || null,
+      expectedSrcFingerprint: resolveExpectedLagrangeSrcFingerprint(opts),
       expectedGitCommit: opts.expectedGitCommit || null}});
   assertExpectedLagrangeRevision(products, opts.lagrangeRevision);
   const membership = await membershipReady(ctx, seedHost, hosts.length);

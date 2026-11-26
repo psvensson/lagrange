@@ -54,6 +54,16 @@ function resolveOptionalNonNegativeInt(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+const MIN_SAFE_RESERVATION_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_RESERVATION_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+function normalizeReservationPkValue(value) {
+  if (typeof value !== 'bigint') return value;
+  return value >= MIN_SAFE_RESERVATION_BIGINT && value <= MAX_SAFE_RESERVATION_BIGINT ?
+    Number(value) :
+    value.toString();
+}
+
 function normalizeAcquirePayload(input) {
   if (!hasValidAcquireInputs(input)) {
     return null;
@@ -65,7 +75,7 @@ function normalizeAcquirePayload(input) {
     op: LOCKING_READ_PARTITION_OP.ACQUIRE,
     partitionId: input.partitionId,
     tableName: input.tableName,
-    pkValues: [...input.pkValues],
+    pkValues: input.pkValues.map(normalizeReservationPkValue),
     rowKey: isNonEmptyString(input.rowKey) ? input.rowKey : null,
     transactionId: input.transactionId,
     sessionId: isNonEmptyString(input.sessionId) ? input.sessionId : null,

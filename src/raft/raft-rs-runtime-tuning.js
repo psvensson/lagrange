@@ -187,6 +187,9 @@ function describeEffectiveRaftRsTiming(timing = {}) {
     deriveEffectiveTickParameters(timing);
   const effectiveHeartbeatMs = heartbeatTick * derivedTickMs;
   const effectiveElectionMinMs = electionTick * derivedTickMs;
+  // Native raft-rs randomizes election timeout in [electionTick, 2 * electionTick),
+  // so the effective window width equals effectiveElectionMinMs (1000ms + 2500ms * i
+  // at default jitter) rather than a fixed 2000ms span.
   const effectiveElectionMaxMs =
     NATIVE_ELECTION_MAX_MULTIPLIER * electionTick * derivedTickMs;
   const effective = Object.freeze({
@@ -246,6 +249,9 @@ function describeCreatedCoreTiming({
   const {heartbeatTick, electionTick} = createdCoreTuning;
   const effectiveHeartbeatMs = heartbeatTick * derivedTickMs;
   const effectiveElectionMinMs = electionTick * derivedTickMs;
+  // Native raft-rs randomizes election timeout in [electionTick, 2 * electionTick),
+  // so the effective window width equals effectiveElectionMinMs (1000ms + 2500ms * i
+  // at default jitter) rather than a fixed 2000ms span.
   const effectiveElectionMaxMs =
     NATIVE_ELECTION_MAX_MULTIPLIER * electionTick * derivedTickMs;
   const effective = Object.freeze({

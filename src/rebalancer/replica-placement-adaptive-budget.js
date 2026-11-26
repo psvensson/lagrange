@@ -224,12 +224,6 @@ function isSingleCoreCpuQueueCongested(observation, thresholds) {
     isMetricStrictlyAbove(observation.transferQueueDelayMs, 0);
 }
 
-function isHostCpuLightlyLoaded(observation, thresholds) {
-  if (!isFiniteMetric(observation?.cpuUsagePercent)) return false;
-  const cpuUsage = Number(observation.cpuUsagePercent);
-  return cpuUsage > 0 && cpuUsage < thresholds.healthySingleCoreCpuPercent / 2;
-}
-
 function hasDirectQueueOrStageSensor(observation) {
   if (!observation || typeof observation !== 'object') return false;
   const directQueueSensors = [
@@ -245,7 +239,6 @@ function hasDirectQueueOrStageSensor(observation) {
 }
 
 function isEventLoopCongested(observation, thresholds) {
-  if (isHostCpuLightlyLoaded(observation, thresholds)) return false;
   if (isMetricAtOrAbove(observation.eventLoopDelayMs, thresholds.congestionEventLoopDelayMs)) {
     return true;
   }

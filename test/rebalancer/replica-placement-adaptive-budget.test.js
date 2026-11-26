@@ -39,6 +39,10 @@ import {PLACEMENT_FORMATION_STATE, PLACEMENT_REFUSAL} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
 import {createControlPlanePlacementNodeObservationReader, readRemoteHeartbeatObservation} from
   '../../src/rebalancer/replica-placement-owner-capacity.js';
+import {NodeLifecyclePublication} from
+  '../../src/control-plane/node-lifecycle-publication.js';
+import {readLinuxMemAvailableBytes} from
+  '../../src/node/node-host-statistics-sampler.js';
 import {applyRebalanceCoordinatorOperationCreationSupportMethods} from
   '../../src/rebalancer/rebalance-coordinator-operation-creation-support.js';
 import {ResourceDiagnosticsSampler} from '../../src/diagnostics/resource-diagnostics-sampler.js';
@@ -769,31 +773,22 @@ test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without 
       {nowMs, notifyOnRecovery: false},
     );
     const nodeAuthority = {
-      subscribe: () => () => {},
-      scheduleRefresh: () => {},
+      subscribe: () => () => {}, scheduleRefresh: () => {},
       answerCommittedNodes: () => ({
-        state: 'ready',
-        epoch: {publicationEpoch: 4},
+        state: 'ready', epoch: {publicationEpoch: 4},
         nodeRows: cache.getAll(TABLES.NODES),
         formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 4},
       }),
     };
     const owner = createReplicaPlacementOwner({
-      nodeId: 'n1',
-      ledgerPartitionService: ledger.service,
-      nodeAuthority,
-      systemTableCache: cache,
-      now: () => nowMs,
-      logger: ledger.service.logger,
-      admitPlacement: ledger.admitPlacement,
-      releasePlacementHold: ledger.releasePlacementHold,
+      nodeId: 'n1', ledgerPartitionService: ledger.service, nodeAuthority,
+      systemTableCache: cache, now: () => nowMs, logger: ledger.service.logger,
+      admitPlacement: ledger.admitPlacement, releasePlacementHold: ledger.releasePlacementHold,
       adaptiveBudgetController: controller,
     });
     owner.setLeader(true);
     await owner.awaitCurrentWorkIdle();
 
-    // Pass 1: n2 is memory-excluded (98% used), n3's target budget was reduced 2 -> 1,
-    // so exactly 1 operation is admitted onto n3 and 0 onto n2:
     let rows = ledger.db
       .prepare('SELECT operation_id, partition_id, target_node_id FROM replica_operations ORDER BY rowid')
       .all();
@@ -801,7 +796,6 @@ test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without 
     assert.equal(rows[0].target_node_id, 'n3');
     assert.equal(controller.getTargetBudget('n3'), 1);
 
-    // Now invoke createPartitionOperationViaPlacementAdmission on a coordinator wired to owner:
     class TestCoordinator {
       constructor() {
         this.nodeId = 'n1';
@@ -812,46 +806,29 @@ test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without 
         this.controlPlaneReadinessService = {
           answerCommittedNodes: () => nodeAuthority.answerCommittedNodes(),
         };
-        this.submitPlacementPayload = (payload) =>
-          Promise.resolve(ledger.admitPlacement(payload));
+        this.submitPlacementPayload = (payload) => Promise.resolve(ledger.admitPlacement(payload));
       }
       assertNativePlacementAliasProof() {}
     }
     applyRebalanceCoordinatorOperationCreationSupportMethods(TestCoordinator);
     const coordinator = new TestCoordinator();
 
-    const rejectedMove = {
-      type: OperationType.ADD,
-      nodeId: 'n3',
-      copySourceNodeId: 'n1',
-    };
+    const rejectedMove = {type: OperationType.ADD, nodeId: 'n3', copySourceNodeId: 'n1'};
     await assert.rejects(
       () => coordinator.createPartitionOperationViaPlacementAdmission({
-        partitionId: 'tables-p1',
-        entityType: 'partition',
-        entityId: 'tables-p1',
-        sourceNodeId: 'n1',
-        normalizedMoveType: OperationType.ADD,
-        move: rejectedMove,
-        requestedMove: rejectedMove,
+        partitionId: 'tables-p1', entityType: 'partition', entityId: 'tables-p1',
+        sourceNodeId: 'n1', normalizedMoveType: OperationType.ADD,
+        move: rejectedMove, requestedMove: rejectedMove,
       }),
       (err) => err.code === PLACEMENT_REFUSAL.TARGET_AT_CAPACITY &&
         err.placementResult?.occupancy?.targetLimit === 1 &&
         err.placementResult?.occupancy?.targetOccupancy === 1,
-      'fresh coordinator request receives adaptive kTgt=1 and is refused with TARGET_AT_CAPACITY',
     );
 
-    // 4. Item 4: When memory-constrained n2 recovers in a TABLES.NODES heartbeat update
-    // (without ServeEligibilityOwner emitting any eligibility change), handleCacheChange
-    // feeds the heartbeat observation into adaptiveBudgetController, which wakes
-    // ReplicaPlacementOwner (TARGET_CAPACITY_CHANGED) and admits waiting partitions onto n2:
     nowMs += 1_000;
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
-      ...nodeRow('n2', 'h2'),
-      [COLUMN.LAST_HEARTBEAT]: nowMs,
-      memory_mb: 2048,
-      memory_usage_percent: 25,
-      cpu_usage_percent: 15,
+      ...nodeRow('n2', 'h2'), [COLUMN.LAST_HEARTBEAT]: nowMs,
+      memory_mb: 2048, memory_usage_percent: 25, cpu_usage_percent: 15,
     });
     await owner.awaitCurrentWorkIdle();
 
@@ -1036,59 +1013,39 @@ test('Finding 3: Distributed Leader vs Follower Active-Owner Admission + Leaders
       'Follower B never treats its own inactive ReplicaPlacementOwner as the active owner',
     );
 
-    const freshMoveToN1 = {
-      type: OperationType.ADD,
-      nodeId: 'n1',
-      copySourceNodeId: 'n2',
-    };
+    const freshMoveToN1 = {type: OperationType.ADD, nodeId: 'n1', copySourceNodeId: 'n2'};
     await assert.rejects(
       () => coordinatorB.createPartitionOperationViaPlacementAdmission({
-        partitionId: 'indices-p1',
-        entityType: 'partition',
-        entityId: 'indices-p1',
-        sourceNodeId: 'n2',
-        normalizedMoveType: OperationType.ADD,
-        move: freshMoveToN1,
-        requestedMove: freshMoveToN1,
+        partitionId: 'indices-p1', entityType: 'partition', entityId: 'indices-p1',
+        sourceNodeId: 'n2', normalizedMoveType: OperationType.ADD,
+        move: freshMoveToN1, requestedMove: freshMoveToN1,
       }),
       (err) => err.code === PLACEMENT_REFUSAL.TARGET_AT_CAPACITY &&
         err.placementResult?.occupancy?.targetLimit === 1 &&
         err.placementResult?.occupancy?.targetOccupancy === 1 &&
         err.admissionResult?.allowed === false,
-      'Follower B queries Node A active placement owner via PLACEMENT_REPAIR_PREPARE_TYPE, gets kTgt=1, and is refused with TARGET_AT_CAPACITY',
     );
     assert.equal(prepareRequestsSeenOnLeaderA.length, 1);
     assert.equal(prepareRequestsSeenOnLeaderA[0].move.targetNodeId, 'n1');
     assert.equal(admittedPayloadsSeen.length, 1);
     assert.equal(admittedPayloadsSeen[0].body.kTgt, 1);
 
-    // Clear n3 occupancy so an ADD onto n3 can be admitted, and verify an uncertain
-    // command (OUTCOME_UNKNOWN) on Follower B retains its original frozen statement bytes
-    // across retry and across a leadership transition to Node B!
     ledgerA.db.prepare('DELETE FROM replica_operations WHERE target_node_id = ?').run('n3');
-
     failNextAdmitWithUnknown = true;
     const moveToN3 = {
-      type: OperationType.ADD,
-      nodeId: 'n3',
-      copySourceNodeId: 'n2',
+      type: OperationType.ADD, nodeId: 'n3', copySourceNodeId: 'n2',
       operationIntentId: 'intent-add-indices-n3',
     };
     await assert.rejects(
       () => coordinatorB.createPartitionOperationViaPlacementAdmission({
-        partitionId: 'indices-p1',
-        entityType: 'partition',
-        entityId: 'indices-p1',
-        sourceNodeId: 'n2',
-        normalizedMoveType: OperationType.ADD,
-        move: moveToN3,
-        requestedMove: moveToN3,
+        partitionId: 'indices-p1', entityType: 'partition', entityId: 'indices-p1',
+        sourceNodeId: 'n2', normalizedMoveType: OperationType.ADD,
+        move: moveToN3, requestedMove: moveToN3,
       }),
       (err) => err.admissionAnswer?.failureCode ===
         PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN &&
         err.admissionAnswer?.[RETAINED_PLACEMENT_ATTEMPT] === true &&
         err.admissionResult === undefined,
-      'Uncertain placement attempt (OUTCOME_UNKNOWN) does NOT set admissionResult.allowed=false so provisioning cannot switch to an alternate target while the first attempt may have committed',
     );
     assert.equal(prepareRequestsSeenOnLeaderA.length, 2);
     assert.equal(admittedPayloadsSeen.length, 2);
@@ -1096,20 +1053,16 @@ test('Finding 3: Distributed Leader vs Follower Active-Owner Admission + Leaders
     assert.equal(firstUncertainPayload.body.kSrc, 6);
     assert.equal(firstUncertainPayload.body.kTgt, 2);
 
-    // Transition leadership from Node A to Node B, and shrink controllerB's soft budgets
-    // (source 6 -> 4, target 2 -> 1) so any fresh rebuild would produce different kSrc/kTgt:
     ownerA.setLeader(false);
     ledgerA.service.isLeader = false;
     followerLedgerServiceB.isLeader = true;
     ownerB.isLeader = true;
     controllerB.recordObservation(
-      'n2',
-      healthyObs(nowMs, {eventLoopDelayMs: 140, congestionEpochId: 'n2-cong'}),
+      'n2', healthyObs(nowMs, {eventLoopDelayMs: 140, congestionEpochId: 'n2-cong'}),
       {nowMs, notifyOnRecovery: false},
     );
     controllerB.recordObservation(
-      'n3',
-      healthyObs(nowMs, {writeLatencyMs: 220, congestionEpochId: 'n3-cong'}),
+      'n3', healthyObs(nowMs, {writeLatencyMs: 220, congestionEpochId: 'n3-cong'}),
       {nowMs, notifyOnRecovery: false},
     );
     coordinatorB.submitPlacementPayload = async (payload) => {
@@ -1118,68 +1071,37 @@ test('Finding 3: Distributed Leader vs Follower Active-Owner Admission + Leaders
     };
 
     const replayedOperation = await coordinatorB.createPartitionOperationViaPlacementAdmission({
-      partitionId: 'indices-p1',
-      entityType: 'partition',
-      entityId: 'indices-p1',
-      sourceNodeId: 'n2',
-      normalizedMoveType: OperationType.ADD,
-      move: moveToN3,
-      requestedMove: moveToN3,
+      partitionId: 'indices-p1', entityType: 'partition', entityId: 'indices-p1',
+      sourceNodeId: 'n2', normalizedMoveType: OperationType.ADD,
+      move: moveToN3, requestedMove: moveToN3,
     });
     assert.ok(replayedOperation?.operationId);
-    assert.equal(
-      prepareRequestsSeenOnLeaderA.length,
-      2,
-      'Retained uncertain attempt replay does not re-run prepareFreshPlacement',
-    );
+    assert.equal(prepareRequestsSeenOnLeaderA.length, 2);
     assert.equal(admittedPayloadsSeen.length, 3);
     assert.equal(admittedPayloadsSeen[2].entryId, firstUncertainPayload.entryId);
-    assert.deepEqual(
-      admittedPayloadsSeen[2].body,
-      firstUncertainPayload.body,
-      'Retained uncertain attempt replays exact original frozen statement bytes across leadership transition',
-    );
+    assert.deepEqual(admittedPayloadsSeen[2].body, firstUncertainPayload.body);
 
-    // Verify that when NO active local owner and NO remote ledger route exist,
-    // createPartitionOperationViaPlacementAdmission fails closed with PLACEMENT_LEDGER_LEADER_UNAVAILABLE
-    // before building or retaining any un-authored statement:
     followerLedgerServiceB.isLeader = false;
     ownerB.isLeader = false;
     let routeAvailable = false;
-    const unroutedCache = {
+    const isRouteTable = (tName) => tName === TABLES.PARTITIONS || tName === TABLES.SERVICES;
+    coordinatorB.systemTableCache = {
       ...cache,
-      getAll(tableName) {
-        if (!routeAvailable && (tableName === TABLES.PARTITIONS || tableName === TABLES.SERVICES)) {
-          return [];
-        }
-        return cache.getAll(tableName);
-      },
+      getAll: (tName) => (!routeAvailable && isRouteTable(tName)) ? [] : cache.getAll(tName),
     };
-    coordinatorB.systemTableCache = unroutedCache;
     const unroutedMove = {
-      type: OperationType.ADD,
-      nodeId: 'n3',
-      copySourceNodeId: 'n2',
+      type: OperationType.ADD, nodeId: 'n3', copySourceNodeId: 'n2',
       operationIntentId: 'intent-unrouted-must-not-retain',
     };
     await assert.rejects(
       () => coordinatorB.createPartitionOperationViaPlacementAdmission({
-        partitionId: 'config-p1',
-        entityType: 'partition',
-        entityId: 'config-p1',
-        sourceNodeId: 'n2',
-        normalizedMoveType: OperationType.ADD,
-        move: unroutedMove,
-        requestedMove: unroutedMove,
+        partitionId: 'config-p1', entityType: 'partition', entityId: 'config-p1',
+        sourceNodeId: 'n2', normalizedMoveType: OperationType.ADD,
+        move: unroutedMove, requestedMove: unroutedMove,
       }),
       (err) => err.code === 'PLACEMENT_LEDGER_LEADER_UNAVAILABLE',
-      'Fails closed when neither active local placement owner nor remote ledger route is available',
     );
-    assert.equal(
-      coordinatorB.uncertainPlacementAdmissionAttempts.size,
-      0,
-      'No un-authored statement is constructed or retained when placement owner authority is unreachable',
-    );
+    assert.equal(coordinatorB.uncertainPlacementAdmissionAttempts.size, 0);
     routeAvailable = true;
   } finally {
     ledgerA.db.close();
@@ -1467,13 +1389,11 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   let multiSnap = evalMulti(3);
   assert.equal(multiSnap.targetDecisions.get('n2').action, ACTION.DECREASE);
   assert.equal(multiSnap.targetBudgetOf('n2'), 2);
-
   const cachedSampleAtMs = nowMs + 5_000;
   for (const hbAtMs of [cachedSampleAtMs, cachedSampleAtMs + 5_000]) {
     nowMs = hbAtMs;
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
-      node_id: 'n2', last_heartbeat: nowMs,
-      telemetry_sampled_at: cachedSampleAtMs, telemetry_sample_id: 102,
+      node_id: 'n2', last_heartbeat: nowMs, telemetry_sampled_at: cachedSampleAtMs, telemetry_sample_id: 102,
       boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 25,
     });
     multiSnap = evalMulti(2);
@@ -1488,4 +1408,74 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   multiSnap = evalMulti(2);
   assert.equal(multiSnap.targetDecisions.get('n2').action, ACTION.INCREASE);
   assert.equal(multiSnap.targetBudgetOf('n2'), 3);
+});
+test('A10-1, A9-2, A9-3: multicore low normalized CPU never vetoes measured event-loop congestion', () => {
+  const config = normalizeWindowConfig({
+    initialLimit: 6, minLimit: 1, maxLimit: 8,
+    minAdjustIntervalMs: 1_000, requiredHealthySamplesAfterDecrease: 2,
+  });
+  const baseObs = {
+    sampledAtMs: NOW_MS, sampleId: 501, congestionEpochId: 501, bootIncarnation: 1,
+    cpuUsagePercent: 18, singleCoreCpuPercent: 108, eventLoopDelayMs: 120,
+    eventLoopUtilizationPercent: 95, availableMemoryBytes: 4096 * 1024 * 1024,
+  };
+  const ctx = {occupancy: 6, waitingDemandCount: 3, nowMs: NOW_MS, expectedBootIncarnation: 1};
+  const severeDecision = decideAdaptiveResourceWindow(null, baseObs, ctx, config);
+  assert.equal(severeDecision.action, ACTION.DECREASE);
+  assert.equal(severeDecision.reason, REASON.EVENT_LOOP_CONGESTION);
+  assert.equal(severeDecision.limit, 4);
+  const highEluDecision = decideAdaptiveResourceWindow(
+    null, {...baseObs, sampleId: 502, congestionEpochId: 502, eventLoopDelayMs: 30}, ctx, config,
+  );
+  assert.equal(highEluDecision.action, ACTION.DECREASE);
+  assert.equal(highEluDecision.reason, REASON.EVENT_LOOP_CONGESTION);
+  assert.equal(highEluDecision.limit, 4);
+  const healthyMulticoreDecision = decideAdaptiveResourceWindow(
+    null,
+    {
+      ...baseObs, sampleId: 503, congestionEpochId: 503,
+      singleCoreCpuPercent: 54, eventLoopDelayMs: 10, eventLoopUtilizationPercent: 30,
+    },
+    ctx,
+    config,
+  );
+  assert.equal(healthyMulticoreDecision.action, ACTION.INCREASE);
+  assert.equal(healthyMulticoreDecision.reason, REASON.HEALTHY_BUDGET_CONSTRAINED_DEMAND);
+  assert.equal(healthyMulticoreDecision.limit, 7);
+
+  const existingRow = {
+    [COLUMN.NODE_ID]: 'n2', [COLUMN.NODE_ADDRESS]: '127.0.0.1:9102', [COLUMN.HOST_ID]: 'h2',
+    [COLUMN.CPU_CORES]: 6, [COLUMN.MEMORY_MB]: 8192, [COLUMN.DISK_GB]: 100,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE, [COLUMN.CONNECTION_STATE]: 'ready',
+    [COLUMN.LAST_HEARTBEAT]: NOW_MS - 5_000, [COLUMN.BOOT_INCARNATION]: 1,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: NOW_MS + LEASE_MS, [COLUMN.CREATED_AT]: NOW_MS - 60_000,
+  };
+  const publication = new NodeLifecyclePublication({
+    gateway: {},
+    leaseAuthority: {
+      readyLeaseMs: LEASE_MS, renewalIntervalMs: 5_000,
+      holdsLiveLease: () => true, grant: (atMs) => atMs + LEASE_MS,
+    },
+    now: () => NOW_MS,
+  });
+  const plan = publication.planPublication(
+    {
+      nodeId: 'n2', nodeAddress: '127.0.0.1:9102', state: 'ready', heartbeatAt: NOW_MS,
+      telemetry: {
+        cpu_usage_percent: 22, memory_usage_percent: 40, disk_usage_percent: 15,
+        telemetry_sampled_at: NOW_MS - 500, telemetry_sample_id: 77,
+      },
+    },
+    existingRow,
+    1,
+  );
+  assert.equal(plan.update.telemetry_sampled_at, NOW_MS - 500);
+  assert.equal(plan.update.telemetry_sample_id, 77);
+  assert.equal(plan.expectedRow.telemetry_sampled_at, NOW_MS - 500);
+  assert.equal(plan.expectedRow.telemetry_sample_id, 77);
+
+  const totalBytes = 8 * 1024 * 1024 * 1024;
+  const highOsFreeBytes = 512 * 1024 * 1024;
+  assert.equal(readLinuxMemAvailableBytes(totalBytes, highOsFreeBytes, 'MemTotal: 8388608 kB\nMemAvailable: 16384 kB\n'), 16384 * 1024);
+  assert.equal(readLinuxMemAvailableBytes(totalBytes, highOsFreeBytes, 'MemTotal: 8388608 kB\nMemAvailable: 0 kB\n'), 0);
 });

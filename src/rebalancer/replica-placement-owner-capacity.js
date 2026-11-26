@@ -54,6 +54,10 @@ function incrementWaitingMapCount(waitingMap, nodeId) {
   }
 }
 
+// Before final target selection, a learner deficit has not yet chosen one
+// target node; attribute potential waiting demand to every eligible non-source
+// target so budget evaluation accounts for candidate target pressure prior to
+// final placement feasibility and slot reservation.
 function recordLearnerDeficitTargets(
   waitingByTarget,
   copySourceNodeId,
@@ -438,6 +442,8 @@ function readLocalDiagnosticsObservation(resourceDiagnosticsSampler, nodeRow, no
     ...(sampleId !== null ? {sampleId, congestionEpochId: sampleId} : {}),
     bootIncarnation: nodeRow ? nodeRow[COLUMN.BOOT_INCARNATION] : null,
     cpuUsagePercent: proc.cpuPercent,
+    ...(hasExplicitFiniteMetric(proc.singleCoreCpuPercent) ?
+      {singleCoreCpuPercent: proc.singleCoreCpuPercent} : {}),
     eventLoopDelayMs: proc.eventLoopDelayMs,
     eventLoopUtilizationPercent: proc.eventLoopUtilizationPercent,
     ...(availableMemoryBytes !== undefined ? {availableMemoryBytes} : {}),
