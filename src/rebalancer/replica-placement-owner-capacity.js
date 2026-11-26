@@ -121,12 +121,13 @@ function computeCopyWaitingDemand(
   return {waitingBySource, waitingByTarget};
 }
 
-function summarizeCopyOccupancy(census) {
+function summarizeCopyOccupancy(census, diagnostics) {
   const copies = census.filter(isOccupyingCopy);
   const bySource = new Map();
   const byTarget = new Map();
   let unrecordedSourceCopies = 0;
   for (const row of copies) {
+    diagnostics?.recordActiveCopy(row);
     if (row.copySourceNodeId === null) {
       unrecordedSourceCopies += 1;
     } else {
@@ -182,11 +183,13 @@ function decideCopyCapacity(
   const sourceOcc = occupancy.unrecordedSourceCopies +
     (occupancy.bySource.get(candidate.move.copySourceNodeId) ?? 0);
   const targetOcc = occupancy.byTarget.get(candidate.move.targetNodeId) ?? 0;
+  const sourceAllowed = kSrcForClass === null ? null : sourceOcc < kSrcForClass;
+  const targetAllowed = targetOcc < kTgt;
   return Object.freeze({
     partitionId: candidate.partitionId, placementClass: candidate.placementClass,
     repair: candidate.repair, sourceNodeId: candidate.move.copySourceNodeId,
     targetNodeId: candidate.move.targetNodeId, sourceOcc, targetOcc, kSrc, kSrcForClass, kTgt,
-    allowed: kSrcForClass !== null && sourceOcc < kSrcForClass && targetOcc < kTgt,
+    sourceAllowed, targetAllowed, allowed: sourceAllowed === true && targetAllowed,
   });
 }
 
@@ -221,18 +224,22 @@ function classifyNodeStorageExclusion(identity) {
   return null;
 }
 
-function buildPassOrderedCandidates(evaluations, inputsByPartition, formation) {
+function buildPassOrderedCandidates(evaluations, inputsByPartition, formation, diagnostics) {
   const repairWaitingSourceNodeIds = repairSourceNodeIdsOf(
     evaluations.filter((e) => !e.isBusy).map((e) => e.evaluation),
   );
   const admissible = [];
   const formationWaiting = [];
   for (const {partitionId, evaluation} of evaluations) {
-    if (evaluation.state !== PLACEMENT_DEFICIT_STATE.CANDIDATE) continue;
+    if (evaluation.state !== PLACEMENT_DEFICIT_STATE.CANDIDATE) {
+      diagnostics?.recordEvaluation(partitionId, evaluation, null);
+      continue;
+    }
     const waitReason = formationWaitingReasonOf(
       evaluation.candidate.placementClass,
       formation,
     );
+    diagnostics?.recordEvaluation(partitionId, evaluation, waitReason);
     if (waitReason === null) admissible.push(evaluation.candidate);
     else formationWaiting.push({partitionId, reason: waitReason});
   }

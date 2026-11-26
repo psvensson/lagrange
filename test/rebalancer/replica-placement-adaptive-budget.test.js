@@ -532,6 +532,57 @@ test('Scenario 1, 2, 7 & 9: ReplicaPlacementOwner isolates slow destination from
   }
 });
 
+test('one placement pass distinguishes admissions sharing a copy source and class', async () => {
+  const ids = ['tbl-a-p1', 'tbl-b-p1'];
+  const nodeRows = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
+  const cache = createSimpleSystemCache(ids.map((id) => seededPartitionRow(id, 'n1')),
+    ids.flatMap((id) => seededServiceRows(id, 'n1')));
+  const ledger = createRealSqlLedgerHarness(cache, 'n1', () => NOW_MS);
+  const controller = createAdaptivePlacementBudgetController({
+    sourceWindow: {initialLimit: 1, minLimit: 1, maxLimit: 1},
+  });
+  for (const row of nodeRows) {
+    controller.recordObservation(row[COLUMN.NODE_ID], healthyObs(NOW_MS),
+      {nowMs: NOW_MS, notifyOnRecovery: false});
+  }
+  const owner = createReplicaPlacementOwner({
+    nodeId: 'n1', ledgerPartitionService: ledger.service, systemTableCache: cache,
+    nodeAuthority: {
+      subscribe: () => () => {}, scheduleRefresh: () => {},
+      answerCommittedNodes: () => ({state: 'ready', nodeRows, epoch: {publicationEpoch: 1},
+        formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 1}}),
+    },
+    now: () => NOW_MS, logger: ledger.service.logger,
+    admitPlacement: ledger.admitPlacement, releasePlacementHold: ledger.releasePlacementHold,
+    adaptiveBudgetController: controller,
+  });
+  try {
+    owner.setLeader(true);
+    await owner.awaitCurrentWorkIdle();
+    const decision = owner.lastPlacementDecision;
+    const rows = ledger.db.prepare('SELECT partition_id FROM replica_operations').all();
+    assert.equal(rows.length, 1);
+    const [admitted] = rows;
+    const blockedId = ids.find((id) => id !== admitted.partition_id);
+    const blocked = decision.partitions[blockedId];
+    const accepted = decision.partitions[admitted.partition_id];
+    assert.equal(decision.evaluatedAtMs, NOW_MS);
+    assert.equal(decision.omittedPartitionCount, 0);
+    assert.equal(blocked.placementClass, accepted.placementClass);
+    assert.equal(blocked.copyCheck.sourceNodeId, 'n1');
+    assert.equal(blocked.copyCheck.kSrc, 1);
+    assert.equal(blocked.copyCheck.sourceOcc, 1);
+    assert.equal(blocked.copyCheck.sourceAllowed, false);
+    assert.equal(blocked.disposition, 'capacity_denied');
+    assert.ok(accepted.disposition === 'ADMITTED' || accepted.busy);
+    assert.equal(accepted.sourceNodeId ?? decision.activeCopies.find(
+      (copy) => copy.partitionId === admitted.partition_id)?.sourceNodeId, 'n1');
+  } finally {
+    owner.shutdown();
+    ledger.db.close();
+  }
+});
+
 test('Scenario 8: leadership change with uncertain admission reconstructs occupancy and replays exact retained statement with its original recorded adaptive limits', async () => {
   const nowMs = NOW_MS;
   const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
