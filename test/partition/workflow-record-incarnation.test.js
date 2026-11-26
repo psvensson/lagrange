@@ -359,6 +359,57 @@ for (const family of Object.keys(FAMILY)) {
     t.equal(successor.workflowId, 'successor');
   });
 
+  test(`${family}: only the current source fence may authorize terminal release`, async (t) => {
+    const store = spec.store();
+    const workflow = owner(spec, store, {name: 'A', clock: {now: 1000}});
+    const {workflowId} = await spec.start(workflow);
+    await authorizeSources(workflow, store, t, false);
+    const oldFence = store.metadata().workflowFenceToken;
+    const claim = await workflow.workflowCoordinator.claimWorkflow(workflowId);
+    t.equal(claim.accepted, true);
+    await authorizeSources(workflow, store, t, true);
+    const cleanup = spec.toClear.at(-1);
+    const metaBeforeCutover = store.metadata();
+    for (const fence of [undefined, metaBeforeCutover.workflowFenceToken + 1]) {
+      const failed = await spec.acknowledge(workflow, workflowId, {
+        participantKey: cleanup.key, status: family === 'split' ?
+          SPLIT_ACK_STATUS.BACKFILL_FAILED : MERGE_ACK_STATUS.BACKFILL_FAILED,
+        attempt: metaBeforeCutover.workflowAttempt, fenceToken: fence});
+      t.equal(failed.result, 'stale_fence');
+      t.same(store.metadata(), metaBeforeCutover, 'unauthorized failure cannot terminate the attempt');
+    }
+    await deliver(spec, workflow, store, [...spec.toCutover.filter(({status}) =>
+      status !== 'snapshot_started'), ...spec.toClear.filter(({status}) => status !== cleanup.status)]);
+    const row = store.tablesRow();
+    const meta = store.metadata();
+    const source = spec.sources.at(-1);
+    const fences = meta.mirrorCustodyGrants.filter((grant) => grant.partitionId === source)
+      .map((grant) => grant.fence);
+    t.same(fences, [oldFence, meta.workflowFenceToken]);
+    const ack = {participantKey: cleanup.key, status: cleanup.status, attempt: meta.workflowAttempt};
+    for (const offered of [ack, {...ack, fenceToken: oldFence},
+      {...ack, fenceToken: meta.workflowFenceToken + 1}]) {
+      const result = await spec.acknowledge(workflow, workflowId, offered);
+      t.equal(result.result, 'stale_fence');
+      t.same(store.tablesRow(), row, 'refusal preserves grants, participant and generation');
+    }
+    const result = await spec.acknowledge(workflow, workflowId,
+      {...ack, fenceToken: meta.workflowFenceToken});
+    t.equal(result.result, 'accepted');
+    t.same(store.metadata().mirrorCustodyGrants, meta.mirrorCustodyGrants.map((grant) =>
+      grant.partitionId === source ? {...grant, release: true} : grant),
+    'terminal source decision retains every grant and authorizes only this source');
+    const terminal = store.tablesRow();
+    for (const offered of [ack, {...ack, fenceToken: oldFence},
+      {...ack, fenceToken: meta.workflowFenceToken + 1}]) {
+      t.equal((await spec.acknowledge(workflow, workflowId, offered)).result, 'stale_fence',
+        'repeated status still requires the exact fence');
+    }
+    t.equal((await spec.acknowledge(workflow, workflowId, {...ack,
+      fenceToken: meta.workflowFenceToken})).result, 'duplicate');
+    t.same(store.tablesRow(), terminal, 'redelivery preserves the committed release decision');
+  });
+
   test(`V6-A1 ${family}: a registration derived from a read taken before a ` +
     'whole competing workflow ran to its clear is refused and does nothing',
   async (t) => {

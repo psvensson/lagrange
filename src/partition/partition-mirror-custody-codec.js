@@ -15,6 +15,12 @@ export const MIRROR_CUSTODY_FORMAT = 'partition-mirror-custody/1';
 const ordinal = (value) => Number.isSafeInteger(value) && value >= 0;
 const positiveOrdinal = (value) => Number.isSafeInteger(value) && value > 0;
 
+export function hasObsoleteMirrorCustodyField(command) {
+  return Object.hasOwn(command, 'mirrorRetentionBarrierIndex') ||
+    Object.hasOwn(command, 'mirrorRetentionRelease') ||
+    Object.hasOwn(command, 'mirrorRetentionCustody');
+}
+
 export function validMirrorCustody(value) {
   return value !== null && typeof value === 'object' && value.format === MIRROR_CUSTODY_FORMAT &&
     Object.keys(value).length === 7 &&
@@ -63,6 +69,7 @@ export function decodeMirrorReplayRecord(row) {
     if (!positiveOrdinal(row.log_index) ||
         !PARTITION_COMMITTED_SQL_COMMAND_TYPES.includes(command?.type) ||
         command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||
+        hasObsoleteMirrorCustodyField(command) ||
         typeof command.entryId !== 'string' || command.entryId.length === 0 ||
         row.entry_key !== `entry:${command.entryId}` ||
         typeof command.sql !== 'string' || command.sql.trim().length === 0) {

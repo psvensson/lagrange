@@ -5,6 +5,7 @@ import {TABLES} from '../constants/tables.js';
 import {materializeTypedRowSetObjects} from '../query/sql-value-codec.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
   MIRROR_RETENTION_BARRIER_ENTRY_KEY,
   MIRROR_RETENTION_BARRIER_KIND,
   MIRROR_RETENTION_CUSTODY_ACTION,
@@ -20,7 +21,7 @@ import {
   PARTITION_SERVICE_OPERATION,
 } from './partition-service-constants.js';
 import {MIRROR_CUSTODY_FORMAT, decodeMirrorCustodyRow, decodeMirrorReplayRecord,
-  canAssumeMirrorCustody, sameMirrorCustody, validMirrorCustody}
+  canAssumeMirrorCustody, hasObsoleteMirrorCustodyField, sameMirrorCustody, validMirrorCustody}
   from './partition-mirror-custody-codec.js';
 
 const mirrorRetentionRaftHooks = {
@@ -118,7 +119,25 @@ function persistCapturedRowEffectsIn(
   );
 }
 
+// Outcome rows survive effect pruning. Only the range still owed by this
+// checkpoint or replay cursor requires a matching retained effect.
+export function assertMirrorReplayCoverageIn(db, watermark) {
+  const effectsPresent = capturedRowEffectsTableExistsIn(db);
+  const missing = db.prepare(
+    `SELECT o.entry_key FROM ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} o ` +
+    'WHERE o.mirror_effect_required = 1 AND o.log_index > ? ' +
+    (effectsPresent ? `AND NOT EXISTS (SELECT 1 FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} e ` +
+      'WHERE e.entry_key = o.entry_key AND e.log_index = o.log_index) ' : '') +
+    'LIMIT 1',
+  ).get(watermark);
+  if (missing) {
+    throw Object.assign(new TypeError(`Missing retained mirror effect for ${missing.entry_key}`),
+      {code: MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES});
+  }
+}
+
 function readMirrorReplayCommandsIn(db, watermark) {
+  assertMirrorReplayCoverageIn(db, watermark);
   if (!capturedRowEffectsTableExistsIn(db)) return [];
   return sqliteConnectionState(db).statement(
     'SELECT entry_key, log_index, typed_effects_json FROM _partition_statement_outcome_effects ' +
@@ -190,7 +209,6 @@ function pruneEffectsThroughFloorIn(state, floorIndex) {
 function reconcileCommittedStatementMirrorEffects(
   service, state, entryKey, index, result, command,
 ) {
-  if (!result?.typedEffects || !partitionOwesDurableMirrorEffects(service)) return;
   persistCapturedRowEffectsIn(
     service, state, entryKey, index, result.mutationKind, result.typedEffects, command,
   );
@@ -209,7 +227,7 @@ function isPinnedMirrorRetentionCustodyCommand(command) {
       command.action !== MIRROR_RETENTION_CUSTODY_ACTION.RELEASE) {
     return false;
   }
-  return validMirrorCustody(command.custody);
+  return !hasObsoleteMirrorCustodyField(command) && validMirrorCustody(command.custody);
 }
 
 // One monotonically increasing release acknowledgement per source database.

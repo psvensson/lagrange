@@ -315,6 +315,9 @@ class ReplicaPlacementOwner {
   }
   notify(trigger) {
     if (!this.isLeader) return;
+    if (Object.hasOwn(PLACEMENT_TRIGGER, trigger)) {
+      this.observation.triggerNotifications[trigger]++;
+    }
     this.pendingTriggers.add(trigger);
     this.drainQueue();
   }
@@ -552,17 +555,28 @@ class ReplicaPlacementOwner {
     return inputsByPartition;
   }
 
+  evaluatePassPartition(partitionId, input, {
+    eligibility, saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker,
+  }) {
+    const {replicationFactor, replicaRows, isBusy} = input;
+    const evaluation = evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
+      eligibility, saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker});
+    return {partitionId, isBusy, evaluation};
+  }
+
   evaluatePassPartitions(inputsByPartition, nodeInput, saturatedTargetNodeIds,
-    storageExcludedTargets, targetCapacityRanker = null) {
-    const evaluations = [];
-    for (const [partitionId, {replicationFactor, replicaRows, isBusy}] of inputsByPartition) {
-      const evaluation = evaluatePartitionDeficit({
-        partitionId, replicationFactor, replicaRows, eligibility: nodeInput.eligibility,
-        saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker,
-      });
-      evaluations.push({partitionId, isBusy, evaluation});
+    storageExcludedTargets, targetCapacityRanker = null, preliminary = null) {
+    const targetInputs = {eligibility: nodeInput.eligibility, saturatedTargetNodeIds,
+      storageExcludedTargets, targetCapacityRanker};
+    if (preliminary) {
+      // Both NONE exits precede target selection. Replica rows and eligibility
+      // belong to this synchronous planning turn, including its budget decision.
+      return preliminary.map((entry) => entry.evaluation.state === PLACEMENT_DEFICIT_STATE.NONE ?
+        entry : this.evaluatePassPartition(entry.partitionId, inputsByPartition.get(entry.partitionId),
+          targetInputs));
     }
-    return evaluations;
+    return Array.from(inputsByPartition, ([partitionId, input]) =>
+      this.evaluatePassPartition(partitionId, input, targetInputs));
   }
 
   resolveStatementSourceNodeId(candidate, inputsByPartition) {
@@ -601,10 +615,10 @@ class ReplicaPlacementOwner {
   }
 
   preparePassOrderedCandidates(nodeInput, inputsByPartition, saturatedTargets,
-    storageExcludedTargets, targetCapacityRanker = null, diagnostics) {
+    storageExcludedTargets, targetCapacityRanker = null, diagnostics, preliminary = null) {
     const evaluations = this.evaluatePassPartitions(inputsByPartition, nodeInput,
       saturatedTargets, storageExcludedTargets,
-      targetCapacityRanker);
+      targetCapacityRanker, preliminary);
     return buildPassOrderedCandidates(evaluations, inputsByPartition, nodeInput.formation, diagnostics);
   }
 
@@ -773,7 +787,7 @@ class ReplicaPlacementOwner {
     const targetCapacityRanker = buildTargetCapacityRanker(budgetSnapshot,
       nodeInput.eligibility.eligibleNodeIds);
     const prepared = this.preparePassOrderedCandidates(nodeInput, inputsByPartition,
-      saturatedTargets, effectiveExcludedTargets, targetCapacityRanker, pass.decisionDiagnostics);
+      saturatedTargets, effectiveExcludedTargets, targetCapacityRanker, pass.decisionDiagnostics, preliminary);
     recordPassEvaluations(pass, prepared);
     return this.admitOrderedCandidates({
       ordered: prepared.ordered, inputsByPartition: prepared.inputsByPartition,
@@ -816,7 +830,10 @@ class ReplicaPlacementOwner {
       this.placementResyncAdmissions += resyncAdmissionsOf(pass, triggers);
       if (pass.custody === this.custody || this.custody === null) {
         if (pass.decisionDiagnostics && pass.custody === this.custody) {
-          this.lastPlacementDecision = pass.decisionDiagnostics.snapshot;
+          this.lastPlacementDecision = {...pass.decisionDiagnostics.snapshot,
+            triggerNotifications: {...this.observation.triggerNotifications},
+            passesByTrigger: {...this.observation.passesByTrigger},
+          };
         }
         this.lastPassSnapshot = Object.freeze({...placementPassSnapshot(pass,
           PLACEMENT_CLEARING_TRIGGER), ...this.blockedAttempts.snapshot()});

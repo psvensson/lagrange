@@ -1,5 +1,8 @@
+import {assertMirrorReplayCoverageIn} from '../partition/partition-mirror-effect-retention.js';
 import {assertAppliedMirrorEffect, decodeMirrorCustodyRow, decodeMirrorReplayRecord} from '../partition/partition-mirror-custody-codec.js';
-import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
+import {detectCommittedStatementOutcomeFormat} from '../partition/partition-committed-statement-format.js';
+import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, PARTITION_COMMITTED_STATEMENT_FORMAT,
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
   '../partition/partition-committed-statement-outcome-constants.js';
 // Application and durable partition table policy for raft-rs replica-image
 // checkpoints (SN1 / F5). Separates partition state-machine payloads (which
@@ -107,6 +110,7 @@ function validatePinnedReplayRows(db) {
     .get(MIRROR_RETENTION_BARRIER_ENTRY_KEY);
   if (!pin) return false;
   const custody = decodeMirrorCustodyRow(pin);
+  assertMirrorReplayCoverageIn(db, custody.barrierIndex);
   const rows = db.prepare(
     'SELECT e.entry_key, e.log_index, e.mutation_kind, e.typed_effects_json, ' +
     'o.outcome, o.log_index AS outcome_index, o.changes ' +
@@ -184,7 +188,9 @@ function validateRaftRsPayloadTables(payloadDb, descriptor) {
     .map(({name}) => name)
     .filter((name) => !name.startsWith('sqlite_'));
   if (descriptor.entity?.kind === ENTITY_TYPE.PARTITION) {
-    if (!tables.includes(RAFT_RS_PEER_TABLE)) {
+    if (!tables.includes(RAFT_RS_PEER_TABLE) ||
+        detectCommittedStatementOutcomeFormat(payloadDb).outcome ===
+          PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
       return false;
     }
     if (tables.some((name) => name.startsWith(RAFT_INTERNAL_TABLE_PREFIX)) ||

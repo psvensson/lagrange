@@ -17,6 +17,7 @@ import {
   GlobalIndexLifecycleCoordinator,
   parseGlobalIndexDdl,
 } from './global-index-lifecycle-coordinator.js';
+import {getGlobalIndexDatasetName} from './global-index-dataset-manager.js';
 import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
 import {isTransientGlobalIndexError} from './global-index-catalog-contract.js';
 import {buildProductionCoordinatorOptions} from './global-index-production-wiring.js';
@@ -446,29 +447,25 @@ const indexServiceGlobalMethods = {
    * @param {Object} [options={}]
    * @return {Promise<Array>}
    */
-  async recoverIncompleteGlobalIndexesFromSchemaJobs(options = {}) {
-    const jobOwner =
-      this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
-    if (!jobOwner?.listSucceededGlobalIndexIntents) {
-      return [];
-    }
-    if (!this.initialized && this.initialize) {
-      await this.initialize({skipSchemaJobRecovery: true});
-    }
+  async recoverIncompleteGlobalIndexesFromSchemaJobs() {
+    const jobOwner = this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
+    if (!jobOwner || this.shuttingDown) return [];
+    if (!this.initialized) await this.initialize({skipSchemaJobRecovery: true});
     const incompleteNames = collectIncompleteGlobalIndexNames(this);
-    if (incompleteNames.size === 0) {
-      return [];
+    const outcomes = [];
+    for (const name of incompleteNames) {
+      if (this.shuttingDown) break;
+      const coordinator = this.getGlobalIndexCoordinator();
+      const record = coordinator.catalog.get(name);
+      if (!record || !INCOMPLETE_GSI_STATES.has(record.state)) continue;
+      const datasetName = getGlobalIndexDatasetName(record.table_name, name);
+      const intent = await jobOwner.findSucceededGlobalIndexIntent(
+        datasetName, record.index_generation);
+      if (isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent)) {
+        outcomes.push(await this.completeRecoveredGlobalIndexProvisioning(intent));
+      }
     }
-    const coordinator = this.getGlobalIndexCoordinator();
-    const intents = Array.isArray(options?.intents) ?
-      options.intents :
-      await jobOwner.listSucceededGlobalIndexIntents();
-    const matchingIntents = intents.filter(
-      (intent) => isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent),
-    );
-    return Promise.all(
-      matchingIntents.map((intent) => this.completeRecoveredGlobalIndexProvisioning(intent)),
-    );
+    return outcomes;
   },
 
   /**

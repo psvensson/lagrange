@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
+import {copyFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {managedSleep} from '../../src/test-helpers/managed-timers.js';
@@ -151,7 +152,18 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
     assert.ok(claim && claim.at >= running.lease && claim.lease > claim.at);
     t.comment(JSON.stringify({successorNode: successor.nodeId, next, claim}));
     const finished = await until(t, 'successor committed terminal transition',
-      () => traces(survivors), (rows) => rows.some((row) => row.completed));
+      () => traces(survivors), (rows) => rows.some((row) => row.completed)).catch((error) => {
+      for (const member of members) {
+        const retainedPath = `${cluster.rootDir}-${member.nodeId}-owner-loss.log`;
+        try {
+          copyFileSync(member.logPath, retainedPath);
+          t.comment(`node ${member.nodeId} log: ${retainedPath}`);
+        } catch (copyError) {
+          t.comment(`node ${member.nodeId} log copy failed: ${copyError.message}`);
+        }
+      }
+      throw error;
+    });
     const winner = finished.find((row) => row.completed);
     assert.equal(winner.nodeId, successor.nodeId);
     assert.deepEqual([winner.completed.jobId, winner.completed.tableId, winner.completed.ownerId,

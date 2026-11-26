@@ -16,10 +16,6 @@ const SELECT_BY_IDENTITY =
 const SELECT_NONTERMINAL =
   `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
   'WHERE status NOT IN (\'SUCCEEDED\', \'FAILED\')';
-const SELECT_SUCCEEDED =
-  `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
-  'WHERE status = \'SUCCEEDED\'';
-
 const WRITE_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
   deliveryPriority: 'critical',
@@ -300,9 +296,6 @@ class SchemaProvisioningJobRepository {
     return this.readSchemaJobRows(SELECT_NONTERMINAL);
   }
 
-  listSucceededRows() {
-    return this.readSchemaJobRows(SELECT_SUCCEEDED);
-  }
 }
 
 export {

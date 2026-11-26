@@ -1,3 +1,5 @@
+import {admitCommittedCommand, PARTITION_COMMITTED_COMMAND_ORIGIN} from
+  '../../src/partition/partition-committed-command-admission.js';
 import {sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
 import {replicateSourceMirrorRetentionCustody} from '../../src/partition/partition-mirror-effect-retention.js';
 import {
@@ -1130,11 +1132,43 @@ test('durable custody refuses scalar, unversioned and incomplete identities', ()
   const decode = (value) => decodeMirrorCustodyRow({entry_key: '__mirror_retention_barrier__',
     log_index: 0, mutation_kind: 'PINNED', typed_effects_json: JSON.stringify(value)});
   assert.deepEqual(decode(custody), custody);
+  const origin = PARTITION_COMMITTED_COMMAND_ORIGIN.MIRROR_RETENTION_OWNER;
+  for (const action of ['PIN', 'RELEASE']) {
+    const command = {type: PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY,
+      action, entryId: 'custody-test', partitionId: 'orders-p1', custody};
+    assert.equal(admitCommittedCommand(command, {origin}).admitted, true);
+    for (const [field, value] of Object.entries({mirrorRetentionBarrierIndex: 8,
+      mirrorRetentionRelease: true, mirrorRetentionCustody: custody})) {
+      const refusal = admitCommittedCommand({...command, [field]: value}, {origin});
+      assert.equal(refusal.admitted, false);
+      assert.equal(refusal.code, 'mirror_retention_custody_bytes_invalid');
+    }
+  }
   for (const invalid of [8, {...custody, format: undefined}, {...custody, barrierIndex: '8'},
     {...custody, workflowFenceToken: null}, {...custody, workflowAttempt: -1}]) {
     assert.throws(() => decode(invalid), {code: 'mirror_retention_custody_bytes_invalid'});
   }
 });
+
+test('obsolete custody bytes in a committed entry refuse apply before mutation',
+  {timeout: TEST_TIMEOUT_MS}, async () => {
+    const partitionId = 'mixed-custody';
+    const custody = {format: MIRROR_CUSTODY_FORMAT, barrierIndex: 0, family: 'split',
+      workflowId: 'split-orders', workflowAttempt: 1, workflowFenceToken: 1, targetPartitionVersion: 2};
+    for (const entry of [unkeyedInsert(), {type: PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY,
+      partitionId, action: 'PIN', custody}]) {
+      await withPartition(partitionId, async ({dbPath, open}) => {
+        const service = await open();
+        const before = unkeyedStateOf(service, dbPath, partitionId);
+        await turnChainValue(service.raft.propose({...entry, entryId: 'mixed', mirrorRetentionBarrierIndex: 0}));
+        const status = service.raft.readStatus();
+        assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE);
+        assert.equal(status.failure?.detail?.code, 'mirror_retention_custody_bytes_invalid');
+        assert.deepEqual(unkeyedStateOf(service, dbPath, partitionId), before);
+        assert.equal(readDurableMirrorRetentionCustodyIn(service.db), null);
+      });
+    }
+  });
 
 test(
   'L9-RETENTION-2: complete source retention lifecycle on the same partition covers ' +

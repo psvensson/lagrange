@@ -25,7 +25,7 @@ import {
   SCHEMA_PROVISIONING_OPERATION,
   SCHEMA_PROVISIONING_REASON,
 } from './schema-provisioning-job-constants.js';
-import {canonicalizeSchemaProvisioningIntent} from
+import {canonicalizeSchemaProvisioningIntent, resolveIntentTableIdentity} from
   './schema-provisioning-intent.js';
 import {QUERY_ERROR_CODE, QUERY_LOG_MSG} from './query-constants.js';
 import {isTerminalSchemaWriteRejection, rowToWorkflow, serializeWorkflow} from
@@ -798,30 +798,12 @@ class SchemaProvisioningJobOwner {
     );
   }
 
-  async listSucceededGlobalIndexIntents() {
-    const rows = await this.repository.listSucceededRows();
-    const intents = [];
-    for (const row of rows) {
-      const intent = recoverIntentFromRow(row);
-      if (intent?.globalIndex?.indexName) {
-        intents.push(intent);
-      }
-    }
-    return intents;
-  }
-
-  async resumeSucceededGlobalIndexContinuations(intents) {
-    if (this.shuttingDown) return [];
-    if (intents.length === 0) return [];
-    if (this.onResumeSucceededGlobalIndexIntents) {
-      return this.onResumeSucceededGlobalIndexIntents(intents);
-    }
-    if (!this.onBackgroundJobSucceeded) return [];
-    return Promise.all(intents.map((intent) => {
-      const row = this.repository.rowsByJobId?.get(intent.jobId);
-      const outcome = row ? this.buildOutcome(this.refreshWorkflowFromRow(row)) : null;
-      return this.onBackgroundJobSucceeded(intent, outcome);
-    }));
+  async findSucceededGlobalIndexIntent(datasetName, generation) {
+    const {tableIdentityKey} = resolveIntentTableIdentity(
+      {tableName: datasetName}, {globalIndex: {generation}});
+    const row = await this.repository.findByTableIdentity(tableIdentityKey);
+    return row?.status === SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED ?
+      recoverIntentFromRow(row) : null;
   }
 
   scheduleDiscovery(read, resume, delayMs) {

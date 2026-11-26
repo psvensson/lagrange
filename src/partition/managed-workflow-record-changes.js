@@ -1,5 +1,5 @@
-import {buildMergeSourceParticipantKey, MERGE_ACK_STATUS} from './merge-ack-constants.js';
-import {SPLIT_PARTICIPANT_PREFIX, SPLIT_ACK_STATUS} from './split-ack-constants.js';
+import {buildMergeSourceParticipantKey, MERGE_ACK_FAILURE_STATUSES, MERGE_ACK_STATUS} from './merge-ack-constants.js';
+import {SPLIT_PARTICIPANT_PREFIX, SPLIT_ACK_FAILURE_STATUSES, SPLIT_ACK_STATUS} from './split-ack-constants.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 /**
@@ -391,7 +391,7 @@ function acknowledgementChange(owner, ack, isAllowed) {
     const participant = workflow.participants.get(key);
     const rejection = attemptRejectionOf(workflow, ack) ??
       acknowledgementRejectionOf(
-        participant, key, status, fence, isAllowed, checkpoint);
+        participant, key, status, fence, isAllowed, checkpoint, workflow.fenceToken);
     if (rejection) {
       return refuseRecordChange(rejection,
         {participant: participant ? {...participant} : null, key, status,
@@ -570,9 +570,16 @@ function isStaleParticipantFence(participant, fence) {
 }
 
 function acknowledgementRejectionOf(participant, key, status, fence,
-  isAllowed, checkpoint = null) {
+  isAllowed, checkpoint, workflowFence) {
   if (!participant) {
     return PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND;
+  }
+  const mayEndSource = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED ||
+    status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED ||
+    SPLIT_ACK_FAILURE_STATUSES.has(status) || MERGE_ACK_FAILURE_STATUSES.has(status);
+  if (mayEndSource && (!Number.isSafeInteger(fence) || fence <= 0 ||
+      fence !== workflowFence || fence !== participant.fenceToken)) {
+    return PARTICIPANT_ACK_RESULT.STALE_FENCE;
   }
   if (isStaleParticipantFence(participant, fence)) {
     return PARTICIPANT_ACK_RESULT.STALE_FENCE;

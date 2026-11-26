@@ -15,6 +15,26 @@ let repository;
 let target;
 let barrier;
 let completed;
+const attempts = [];
+const pending = [];
+const provisioning = [];
+let attemptCount = 0;
+
+// Keep the initial observation and the current one across arbitrarily many retries.
+function retain(history, entry) {
+  if (history.length < 2) history.push(entry);
+  else history[1] = entry;
+}
+
+function describe(value) {
+  const summary = value?.provisioningSummary ?? value;
+  return {state: value?.contractState, nextAction: value?.nextAction,
+    code: value?.code ?? value?.errorCode, message: value?.message ?? value?.error,
+    reasons: value?.detail?.reasons ?? summary?.reasonCodes,
+    admissionReason: value?.placementResult?.reason, entryId: value?.entryId,
+    requested: summary?.requestedReplicaCount, committed: summary?.committedReplicaCount,
+    routable: summary?.routableReplicaCount, minimum: summary?.minimumRoutableReplicaCount};
+}
 const release = Promise.withResolvers();
 
 const initialize = PartitionService.prototype.initialize;
@@ -34,7 +54,7 @@ const claim = SchemaProvisioningJobOwner.prototype.claimOwnership;
 SchemaProvisioningJobOwner.prototype.claimOwnership = async function(workflow, fence) {
   const answer = await claim.call(this, workflow, fence);
   if (workflow.workflowId === trackedJobId && answer.accepted) {
-    claims.push({ownerId: answer.workflow.workflowOwnerId, fence: answer.workflow.fenceToken,
+    retain(claims, {ownerId: answer.workflow.workflowOwnerId, fence: answer.workflow.fenceToken,
       lease: answer.workflow.leaseExpiresAt, at: Date.now()});
   }
   return answer;
@@ -45,21 +65,56 @@ SchemaProvisioningJobOwner.prototype.executeJob = function(intent, executor, opt
   if (intent.tableName !== target) return execute.call(this, intent, executor, options);
   repository = this.repository;
   trackedJobId = intent.workflowId;
-  return execute.call(this, intent, (job) => {
-    grants.push({ownerId: this.ownerId, jobId: job.jobId, tableId: job.tableId,
-      key: intent.tableIdentityKey, fence: job.ownerFenceToken, at: Date.now()});
-    return executor(job);
-  }, options);
+  return execute.call(this, intent, executor, options);
+};
+
+const perform = TableCreationService.prototype.executeDurableSchemaProvisioningJob;
+TableCreationService.prototype.executeDurableSchemaProvisioningJob = async function(ast, job, ...args) {
+  if (job.tableName !== target) return perform.call(this, ast, job, ...args);
+  const grant = {ownerId: this.schemaProvisioningJobOwner.ownerId, jobId: job.jobId,
+    tableId: job.tableId, key: job.tableIdentityKey, fence: job.ownerFenceToken, at: Date.now()};
+  retain(grants, grant);
+  const attempt = {number: ++attemptCount, fence: grant.fence, stage: 'executor entered'};
+  retain(attempts, attempt);
+  try {
+    const result = await perform.call(this, ast, job, ...args);
+    attempt.stage = 'executor returned';
+    attempt.result = describe(result);
+    return result;
+  } catch (error) {
+    attempt.stage = 'executor threw';
+    attempt.error = describe(error);
+    throw error;
+  }
+};
+
+const defer = SchemaProvisioningJobOwner.prototype.transitionPendingForRetry;
+SchemaProvisioningJobOwner.prototype.transitionPendingForRetry = async function(intent, executor, workflow, error) {
+  if (intent.tableName !== target) return defer.call(this, intent, executor, workflow, error);
+  const observation = {fence: workflow.fenceToken, at: Date.now(), cause: describe(error)};
+  retain(pending, observation);
+  const result = await defer.call(this, intent, executor, workflow, error);
+  observation.outcome = describe(result);
+  return result;
 };
 
 const provision = TableCreationService.prototype.provisionInitialPartition;
 TableCreationService.prototype.provisionInitialPartition = async function(context) {
-  if (context.tableName === target) {
-    barrier = {jobId: context.schemaJobId, tableId: context.tableId, partitionId: context.partitionId,
-      ownerId: this.schemaProvisioningJobOwner.ownerId};
-    await release.promise;
+  if (context.tableName !== target) return provision.call(this, context);
+  barrier = {jobId: context.schemaJobId, tableId: context.tableId, partitionId: context.partitionId,
+    ownerId: this.schemaProvisioningJobOwner.ownerId};
+  await release.promise;
+  const call = {fence: context.schemaOwnerFenceToken, at: Date.now(),
+    provisionerWired: typeof this.partitionProvisioner === 'function', requested: context.replicaCount};
+  retain(provisioning, call);
+  try {
+    const result = await provision.call(this, context);
+    call.result = describe(result);
+    return result;
+  } catch (error) {
+    call.error = describe(error);
+    throw error;
   }
-  return provision.call(this, context);
 };
 
 const terminal = SchemaProvisioningJobOwner.prototype.transitionTerminal;
@@ -74,7 +129,7 @@ SchemaProvisioningJobOwner.prototype.transitionTerminal = async function(intent,
 
 registerEmbeddedWorkerOperations({
   arm: ({tableName}) => { target = tableName; },
-  trace: () => ({grants, claims, barrier, completed}),
+  trace: () => ({grants, claims, barrier, completed, attemptCount, attempts, pending, provisioning}),
   release: () => release.resolve(),
   job: async ({key}) => {
     let row;

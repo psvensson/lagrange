@@ -38,7 +38,7 @@ import {
   decideAdaptiveResourceWindow,
   normalizeWindowConfig,
 } from '../../src/rebalancer/replica-placement-adaptive-budget.js';
-import {PLACEMENT_FORMATION_STATE, PLACEMENT_REFUSAL} from
+import {PLACEMENT_FORMATION_STATE, PLACEMENT_REFUSAL, PLACEMENT_TRIGGER} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
 import {createControlPlanePlacementNodeObservationReader, readRemoteHeartbeatObservation} from
   '../../src/rebalancer/replica-placement-owner-capacity.js';
@@ -535,8 +535,20 @@ test('Scenario 1, 2, 7 & 9: ReplicaPlacementOwner isolates slow destination from
 test('one placement pass distinguishes admissions sharing a copy source and class', async () => {
   const ids = ['tbl-a-p1', 'tbl-b-p1'];
   const nodeRows = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
-  const cache = createSimpleSystemCache(ids.map((id) => seededPartitionRow(id, 'n1')),
-    ids.flatMap((id) => seededServiceRows(id, 'n1')));
+  const settled = 'tbl-settled-p1';
+  const waiting = 'tbl-no-source-p1';
+  const catchingUp = 'tbl-catching-up-p1';
+  const spread = seededServiceRows(settled).map((row, i) => ({
+    ...row, [COLUMN.NODE_ID]: nodeRows[i][COLUMN.NODE_ID],
+  }));
+  const learners = seededServiceRows(catchingUp).map((row, i) => ({
+    ...row, [COLUMN.NODE_ID]: nodeRows[i][COLUMN.NODE_ID],
+    [COLUMN.RAFT_ROLE]: i === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.LEARNER,
+    caught_up: false,
+  }));
+  const cache = createSimpleSystemCache(
+    [...ids, settled, waiting, catchingUp].map((id) => seededPartitionRow(id)),
+    [...ids.flatMap((id) => seededServiceRows(id)), ...spread, ...learners]);
   const ledger = createRealSqlLedgerHarness(cache, 'n1', () => NOW_MS);
   const controller = createAdaptivePlacementBudgetController({
     sourceWindow: {initialLimit: 1, minLimit: 1, maxLimit: 1},
@@ -556,10 +568,44 @@ test('one placement pass distinguishes admissions sharing a copy source and clas
     admitPlacement: ledger.admitPlacement, releasePlacementHold: ledger.releasePlacementHold,
     adaptiveBudgetController: controller,
   });
+  const calls = [];
+  const comparisons = [];
+  const evaluate = owner.evaluatePassPartition.bind(owner);
+  owner.evaluatePassPartition = (id, ...rest) => {
+    calls.push(id);
+    return evaluate(id, ...rest);
+  };
+  const prepare = owner.preparePassOrderedCandidates.bind(owner);
+  owner.preparePassOrderedCandidates = (nodes, inputs, saturated, excluded, rank, diagnostics, preliminary) => {
+    const start = calls.length;
+    const actual = prepare(nodes, inputs, saturated, excluded, rank, diagnostics, preliminary);
+    const after = calls.length;
+    const reference = prepare(nodes, inputs, saturated, excluded, rank);
+    comparisons.push({actual, reference, evaluated: calls.slice(start, after),
+      referenceEvaluated: calls.slice(after)});
+    return actual;
+  };
   try {
     owner.setLeader(true);
     await owner.awaitCurrentWorkIdle();
+    // Two cache notifications during one drain create one additional pass for that trigger.
+    const before = owner.lastPlacementDecision;
+    owner.notify(PLACEMENT_TRIGGER.RESYNC);
+    for (let i = 0; i < 2; i++) {
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, spread[0]);
+    }
+    await owner.awaitCurrentWorkIdle();
     const decision = owner.lastPlacementDecision;
+    assert.equal(decision.triggerNotifications.SERVICES_CHANGED - before.triggerNotifications.SERVICES_CHANGED, 2);
+    assert.equal(decision.passesByTrigger.SERVICES_CHANGED - before.passesByTrigger.SERVICES_CHANGED, 1);
+    assert.ok(comparisons.length > 0);
+    for (const {actual, reference, evaluated, referenceEvaluated} of comparisons) {
+      assert.deepEqual(actual, reference);
+      assert.ok(referenceEvaluated.includes(settled));
+      assert.ok(referenceEvaluated.includes(catchingUp));
+      assert.ok(evaluated.includes(waiting));
+      assert.deepEqual(evaluated, referenceEvaluated.filter((id) => id !== settled && id !== catchingUp));
+    }
     const rows = ledger.db.prepare('SELECT partition_id FROM replica_operations').all();
     assert.equal(rows.length, 1);
     const [admitted] = rows;
