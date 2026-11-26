@@ -779,14 +779,7 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
   const startedAt = clock();
   const tableReadyAt = {};
   const readiness = await readinessOf(ctx, component, async (pollContext) => {
-    const [tables, snapshots] = await settleConcurrentBatch(
-      [
-        () => readSystemTables(query, ctx, pollContext),
-        () => controlSnapshots(ctx, nodeRoles, pollContext),
-      ],
-      (runProbe) => runProbe(),
-      ctx.settleInFlight ?? null,
-    );
+    const tables = await readSystemTables(query, ctx, pollContext);
     const now = clock();
     recordTableRoutability(tableReadyAt, tables, {
       requiredTables,
@@ -801,9 +794,12 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
       requiredTables,
       now,
     });
-    const lane = evaluateLagrangeServeLane({
-      snapshots,
-    });
+    const shouldInspectServeLane = verdict.ready || (pollContext?.attempt ?? 1) <= 1;
+    const lane = shouldInspectServeLane ?
+      evaluateLagrangeServeLane({
+        snapshots: await controlSnapshots(ctx, nodeRoles, pollContext),
+      }) :
+      {ready: false, denials: []};
     const routing = verdict.ready && lane.ready ?
       await tableRoutingDenials(query, requiredTables, ctx, pollContext) : [];
     const denials = [...verdict.denials, ...lane.denials, ...routing];
