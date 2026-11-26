@@ -85,6 +85,23 @@ const {
 
 const SERVICE_SHUTDOWN = 'partition_service_shutdown';
 
+function resolveElectionTimeoutReplicaIds(service) {
+  const stamp = service?.bootstrapMembership;
+  const replicaIds = Array.isArray(service?.replicaIds) ? service.replicaIds : [];
+  if (Array.isArray(stamp?.founders) && stamp.founders.length > 0) {
+    return stamp.founders;
+  }
+  const leaderId = stamp?.leaderId;
+  if (typeof leaderId === 'string' && leaderId.length > 0 &&
+      service.replicaId !== leaderId) {
+    const others = replicaIds.filter(
+      (id) => id !== leaderId && id !== service.replicaId,
+    );
+    return [leaderId, ...others, service.replicaId];
+  }
+  return replicaIds;
+}
+
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
    * Resolve the current raft term when a live raft instance exists; the
@@ -292,7 +309,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     const tickIntervalMs = config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS);
     const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
       replicaId: this.replicaId,
-      replicaIds: this.replicaIds,
+      replicaIds: resolveElectionTimeoutReplicaIds(this),
       baseElectionMinMs,
       baseElectionMaxMs,
       electionJitterPerReplicaMs:
@@ -566,7 +583,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     const {electionMinMs, electionMaxMs, jitterMs} =
       computeReplicaElectionTimeouts({
         replicaId: this.replicaId,
-        replicaIds: this.replicaIds,
+        replicaIds: resolveElectionTimeoutReplicaIds(this),
         baseElectionMinMs,
         baseElectionMaxMs,
         electionJitterPerReplicaMs:
