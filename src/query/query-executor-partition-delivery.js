@@ -81,9 +81,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   ) {
     assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameLatencyGroup);
     const executionOptions = withWriteEntryIdentity(deliveryOptions, forRead);
+    const resolveNowMs = () => (this.nowFn ? this.nowFn() : this.timeSource.now());
     const unknownOutcome = createUnknownOutcomeRedelivery({
       entryId: executionOptions?.entryId ?? null, forRead,
-      now: () => (typeof this.nowFn === 'function' ? this.nowFn() : Date.now()),
+      now: resolveNowMs,
     });
     const cancellationToken = executionOptions?.cancellationToken || null;
     const failedTable = normalizeParticipantFailureString(executionOptions?.tableName);
@@ -183,7 +184,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         ),
       });
       const targetRetryTracker = createPartitionTargetRetryTracker({
-        now: () => this.nowFn(),
+        now: resolveNowMs,
         defaultRetryDelayMs: this.leaderRetryDelayMs,
         waitForRetryBudget,
       });

@@ -1352,8 +1352,9 @@ test('unknown-outcome-real-delivery-loop-progression: unresolved write after los
     const executor = new QueryExecutor({
       controlPlaneReadinessService: eligibility, messageRouter: router,
       nodeId: 'node-1', systemCache: cache, leaderRetryDelayMs: 10, queryTimeoutMs: 15_000,
-      nowFn: () => simulatedNowMs,
+      ...(followerBehavior === 'redirect-to-a' ? {nowFn: () => simulatedNowMs} : {}),
     });
+    executor.timeSource = {now: () => simulatedNowMs};
     executor.delay = async (ms) => {
       waitedDelays.push(ms);
       simulatedNowMs += ms;

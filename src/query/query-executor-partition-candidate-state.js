@@ -296,6 +296,7 @@ function createPartitionTargetRetryTracker({
   }
 
   function creditElapsedWaitMs(waitedMs) {
+    if (deferrals.size === 0) return;
     const nowMs = now();
     const numericWaited = Number.isFinite(waitedMs) && waitedMs > 0 ?
       Math.floor(waitedMs) : 0;

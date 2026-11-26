@@ -779,8 +779,14 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
   const startedAt = clock();
   const tableReadyAt = {};
   const readiness = await readinessOf(ctx, component, async (pollContext) => {
-    const tables = await readSystemTables(query, ctx, pollContext);
-    const snapshots = await controlSnapshots(ctx, nodeRoles, pollContext);
+    const [tables, snapshots] = await settleConcurrentBatch(
+      [
+        () => readSystemTables(query, ctx, pollContext),
+        () => controlSnapshots(ctx, nodeRoles, pollContext),
+      ],
+      (runProbe) => runProbe(),
+      ctx.settleInFlight ?? null,
+    );
     const now = clock();
     recordTableRoutability(tableReadyAt, tables, {
       requiredTables,
