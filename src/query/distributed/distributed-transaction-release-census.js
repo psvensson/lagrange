@@ -9,7 +9,7 @@ import {
 } from '../../constants/transactions.js';
 import {readParticipantSet} from './distributed-transaction-participant-manifest.js';
 import {decisionRecordOfRow, RECORDED_DECISION_STATE} from './distributed-transaction-decision-record.js';
-import {readTransactionSchemaEnforcement, TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
+import {readTransactionSchemaInventory, TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
   './distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
@@ -28,7 +28,6 @@ const TRANSACTION_RELEASE_CENSUS_STATE = Object.freeze({
 });
 const REQUIRED_COLUMNS = Object.freeze(['transaction_id', 'session_id', 'transaction_epoch',
   'participant_set_text', 'participant_set_state', 'decision', 'decision_text', 'decision_digest']);
-const CENSUS_SCHEMA_SQL = 'PRAGMA table_info(sql_transactions)';
 const CENSUS_ROWS_SQL = 'SELECT * FROM sql_transactions ORDER BY transaction_id';
 
 function censusResult(state, rowGenerationDigest = null, legacy = [], recoverable = [],
@@ -126,7 +125,7 @@ function isValidCurrentSchemaTransactionRow(row, pairs, record) {
 
 function readTransactionReleaseCensus(database) {
   try {
-    const enforcement = readTransactionSchemaEnforcement(database);
+    const {enforcement, byName} = readTransactionSchemaInventory(database);
     if (![TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED,
       TRANSACTION_SCHEMA_ENFORCEMENT_STATE.REQUIRED].includes(enforcement.state)) {
       return censusResult(TRANSACTION_RELEASE_CENSUS_STATE.UNAVAILABLE, null, [], [], enforcement);
@@ -134,8 +133,7 @@ function readTransactionReleaseCensus(database) {
     const postOriginEnforced =
       enforcement.state === TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED &&
       readPartitionWriteOrigin(database) !== null;
-    const columns = new Set(database.prepare(CENSUS_SCHEMA_SQL).all().map((row) => row.name));
-    if (!REQUIRED_COLUMNS.every((name) => columns.has(name))) {
+    if (!REQUIRED_COLUMNS.every((name) => byName.has(name))) {
       return censusResult(TRANSACTION_RELEASE_CENSUS_STATE.UNAVAILABLE, null, [], [], enforcement);
     }
     const allRows = database.prepare(CENSUS_ROWS_SQL).all();

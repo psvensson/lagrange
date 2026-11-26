@@ -549,6 +549,8 @@ async function withFoundingPlacementEnvironment(callback) {
       autoStartDistributedTransactionRecovery: false,
       migrationAutoWire: false,
     });
+    // This founding fixture hosts exactly one placement node.
+    engine.tableCreationService.defaultReplicaCount = 1;
     engine.setRebalanceCoordinator(coordinator);
 
     try {

@@ -1,0 +1,53 @@
+{
+  "campaignId": "bench-control-c0a-three-1658",
+  "purpose": "Historical product control on the same physical hosts and harness as the 3d1 candidate.",
+  "productCommit": "c0a6dcc12b5debf5b7fb3be6dfb06c80ca762a38",
+  "harnessCommit": "3d18262898fcfe563eec949f069345d3256c53dc",
+  "imageRepoDigest": "lagrange@sha256:58a0686fe872237146bf6ad8dc22c0695da4b724aa12346f8439260b01f91292",
+  "hostFingerprints": {
+    "192.168.86.34": "1f3a6abe92b2e978",
+    "192.168.86.32": "1f3a6abe92b2e978",
+    "192.168.86.41": "1f3a6abe92b2e978"
+  },
+  "formationBudgetSeconds": 240,
+  "readiness": "exhausted",
+  "lastCensusEndedAtMs": 1795712891834,
+  "belowRf3AtLastCensus": 13,
+  "physicalAttempt": {
+    "runId": "bench-control-c0a-three-1658-r001",
+    "claimKey": "lagrange/scenarioA/smoke/5/1",
+    "targetId": "lagrange",
+    "state": "product-failure",
+    "failureCode": "readiness_exhausted",
+    "closureComplete": true
+  },
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "workload": {
+    "offered": 100,
+    "issued": 0,
+    "unissued": 100,
+    "attempts": 0,
+    "committed": 0,
+    "terminalFailures": {
+      "product_error": 0,
+      "correctness_failure": 0,
+      "transport_failure": 0,
+      "harness_fault": 0
+    }
+  },
+  "inputSha256": {
+    "bench-control-c0a-three-1658-deadline-census.ndjson": "30a103bffbe41dd113723aaeef920bc6fe83eea585b666c496d2e2ce1ff1041a",
+    "bench-control-c0a-three-1658-decision-samples.ndjson": "05bd8db161b41e27b9728d748cabe96d9886e6c24e3dab6d65fa8eb731fb30f5",
+    "bench-control-c0a-three-1658-formation.ndjson": "0ae815897960a6d9756e0dc002e234481fb9795c9203655abfc98c782bcbc281",
+    "bench-control-c0a-three-1658-node1-tcp.ndjson.gz": "5c139b0663ba805f6cce2a3fe2f0f5b7289ca3606952228bc3385ef71e207f7f",
+    "bench-control-c0a-three-1658-node1.log.gz": "c44a4eaf137f1331041b0abb889acf188659d193ff295e9ae4721594731fc887",
+    "bench-control-c0a-three-1658-node2-tcp.ndjson.gz": "c55f1cfff4b0dae000ea5707323824164db22b487278d71ce94a3b1a910443e3",
+    "bench-control-c0a-three-1658-node2.log.gz": "fa3793356204b1d1741af9c644dfd6858b91cd3d54f8909efae3709b5868660a",
+    "bench-control-c0a-three-1658-node3-tcp.ndjson.gz": "1bd12006a9dd47cdb752eda7a87eb0dfef03980202e6b9195edea03351e14b6f",
+    "bench-control-c0a-three-1658-node3.log.gz": "77e72cabb29127970365105a64bede04cd85e4e89ddb27a50cc4b2a608ab86ee",
+    "bench-control-c0a-three-1658-raw.ndjson": "0e014e93f83f4c7b6e0ee4de1dd49c3cbd5199c39d3ab5c0c951edfafe225a79",
+    "comparative-campaign-bench-control-c0a-three-1658.json": "7770c12eac6f5285512fd56c6d36bbcd7ac3006b97840960fed95a7137e241bf"
+  },
+  "recordedDeadlineAtMs": 1795712896604
+}

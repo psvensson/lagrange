@@ -1078,6 +1078,7 @@ test('Production construction 8 (3C): interrupted GSI creation after metadata co
       migrationAutoWire: false,
     });
     engine1.setRebalanceCoordinator(coordinator);
+    engine1.tableCreationService.defaultReplicaCount = 1;
     engine1.tableCreationService.schemaProvisioningJobOwner.ownerId = 'crashed-engine';
 
     let signalCrashPoint;
@@ -1129,6 +1130,7 @@ test('Production construction 8 (3C): interrupted GSI creation after metadata co
     );
     const initialJobId = preRecoverySchemaOp.job_id;
     const persistedIntent = JSON.parse(preRecoverySchemaOp.normalized_ddl);
+    t.equal(persistedIntent.partitions[0].replicaCount, 1);
     t.equal(persistedIntent.tableId, '__idx_users_idx_users_email');
     t.equal(persistedIntent.partitions?.[0]?.partitionId, '__gsi_users_idx_users_email_p0');
 
@@ -1150,6 +1152,7 @@ test('Production construction 8 (3C): interrupted GSI creation after metadata co
     });
     engine2.setRebalanceCoordinator(coordinator);
     const futureNow = () => Date.now() + 60000;
+    engine2.tableCreationService.defaultReplicaCount = 3;
     engine2.tableCreationService.schemaProvisioningJobOwner.ownerId = 'restarted-engine';
     engine2.tableCreationService.schemaProvisioningJobOwner.now = futureNow;
     engine2.tableCreationService.schemaProvisioningJobOwner.workflowCoordinator.now = futureNow;
@@ -1173,6 +1176,8 @@ test('Production construction 8 (3C): interrupted GSI creation after metadata co
       const postRecoveryOp = gateway.db.prepare(
         'SELECT * FROM schema_operations WHERE job_id = ?',
       ).get(initialJobId);
+      t.equal(JSON.parse(postRecoveryOp.result_json).requestedReplicaCount, 1,
+        'takeover keeps the recorded RF1 generation after the local default changes to RF3');
       t.equal(postRecoveryOp.status, 'SUCCEEDED', 'Recovered schema_operations job reached SUCCEEDED');
       t.equal(postRecoveryOp.table_id, '__idx_users_idx_users_email');
 
@@ -1409,6 +1414,7 @@ test('Production construction 10 (4B): crash immediately after schema job SUCCEE
       migrationAutoWire: false,
     });
     engine1.setRebalanceCoordinator(coordinator);
+    engine1.tableCreationService.defaultReplicaCount = 1;
     engine1.tableCreationService.schemaProvisioningJobOwner.ownerId = 'crashed-after-succeeded';
     engine1.tableCreationService.schemaProvisioningJobOwner.retryAfterMs = 30;
 
@@ -1613,5 +1619,30 @@ test('fresh GSI retains a returned pending grant and founds the exact durable pa
     t.ok(await waitForCondition(() => gateway.db.prepare(
       'SELECT state FROM indices WHERE index_id = ?').get(result.indexId)?.state ===
       GLOBAL_INDEX_STATE.READ_WRITE, 3000, 15));
+  });
+});
+
+test('fresh public GSI carries the table default into its durable intent and first grant', async (t) => {
+  await withFoundingPlacementEnvironment(async ({engine, gateway}) => {
+    engine.tableCreationService.defaultReplicaCount = 3;
+    const grants = [];
+    engine.provisionInitialTablePartition = async (grant) => {
+      grants.push(grant.replicaCount);
+      return {contractState: 'pending', nextAction: 'wait', requestedReplicaCount: grant.replicaCount,
+        committedReplicaCount: 0, routableReplicaCount: 0, minimumRoutableReplicaCount: 1};
+    };
+    const owner = engine.tableCreationService.schemaProvisioningJobOwner;
+    owner.retrySetTimeoutFn = () => ({});
+    owner.retryClearTimeoutFn = () => {};
+    const result = await engine.executeQuery('CREATE GLOBAL INDEX idx_rf ON users (email)');
+    t.equal(result.deferred, true);
+    const job = gateway.db.prepare('SELECT normalized_ddl FROM schema_operations WHERE job_id = ?')
+      .get(result.jobId);
+    const [partition] = JSON.parse(job.normalized_ddl).partitions;
+    t.equal(partition.replicaCount, 3);
+    const catalog = gateway.db.prepare('SELECT replica_count FROM partitions WHERE partition_id = ?')
+      .get(partition.partitionId);
+    t.equal(catalog.replica_count, 3);
+    t.same(grants, [3]);
   });
 });

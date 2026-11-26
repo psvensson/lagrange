@@ -6,21 +6,13 @@ import {GlobalIndexLifecycleCoordinator} from
   '../../../src/index-management/global-index-lifecycle-coordinator.js';
 import {registerEmbeddedWorkerOperations} from './embedded-node-worker.js';
 
-import {PartitionService} from '../../../src/partition/partition-service.js';
-import {readPartitionReplicaMembership} from
+import {readPartitionCommittedMembership} from
   '../../../src/partition/partition-service-raft-membership-administration.js';
-import {getGlobalIndexDatasetName} from '../../../src/index-management/global-index-dataset-manager.js';
-
-let targetDataset;
-const datasetReplicas = new Map();
-const initializePartition = PartitionService.prototype.initialize;
-PartitionService.prototype.initialize = async function(...args) {
-  const result = await initializePartition.apply(this, args);
-  if (targetDataset && this.tableName === targetDataset) datasetReplicas.set(this.replicaId, this);
-  return result;
-};
+import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../../../src/raft/raft-committed-membership-constants.js';
 
 let target;
+let repository;
 let warm = false;
 let cut;
 let completed;
@@ -28,6 +20,7 @@ const permitTerminalCheckpoint = Promise.withResolvers();
 const discover = SchemaProvisioningJobOwner.prototype.readNonterminalRows;
 SchemaProvisioningJobOwner.prototype.readNonterminalRows = async function(...args) {
   const result = await discover.apply(this, args);
+  repository = this.repository;
   warm = true;
   return result;
 };
@@ -79,8 +72,9 @@ SchemaProvisioningJobOwner.prototype.notifyBackgroundSucceeded = async function(
     const persisted = JSON.parse(row.normalized_ddl);
     const result = JSON.parse(row.result_json);
     cut = {status: row.status, jobId: row.job_id, dataset: row.table_id,
-      partitions: persisted.partitions, result: {partitionId: result.partitionId,
+      partitions: persisted.partitions, result: {tableId: result.tableId, partitionId: result.partitionId,
         contractState: result.contractState, requested: result.requestedReplicaCount,
+        nextAction: result.nextAction, converged: result.fullReplicaCountConverged,
         routable: result.routableReplicaCount, committed: result.committedReplicaCount},
       indexId: intent.globalIndex.indexId, generation: intent.globalIndex.generation,
       background: options.background, registeredCallback: this.retryCompletionHandlers.has(row.job_id)};
@@ -112,18 +106,30 @@ GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord = async function(
   return result;
 };
 
+async function observeMembership(replica) {
+  // The leader's read also refuses an unapplied configuration change. Each
+  // follower reports its own applied configuration through the witness read.
+  const leaderRead = replica.isLeader === true;
+  const purpose = leaderRead ? COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
+    COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
+  const answer = await readPartitionCommittedMembership(replica, purpose);
+  const local = {partitionId: replica.partitionId, replicaId: replica.replicaId, leaderRead};
+  if (answer?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
+    return {...local, refusal: answer?.reason ?? 'no committed answer'};
+  }
+  return {...local, term: answer.term, leaderReplicaId: answer.leaderId,
+    configurationKey: answer.configurationKey, generation: answer.membershipGenerationIndex,
+    gateOpen: answer.gateOpen, appliedIndex: answer.appliedIndex, commitIndex: answer.commitIndex,
+    voterReplicaIds: answer.voters.map((id) => answer.identities[id]),
+    outgoingVoters: answer.votersOutgoing, nextLearners: answer.learnersNext};
+}
+
 registerEmbeddedWorkerOperations({
-  armIndexLoss: ({tableName, indexName}) => {
-    target = indexName;
-    targetDataset = getGlobalIndexDatasetName(tableName, indexName);
-  },
-  indexMembership: async ({partitionId}) => {
-    const facts = [];
-    for (const replica of datasetReplicas.values()) {
-      if (replica.partitionId !== partitionId || replica.isShutdown) continue;
-      facts.push(await readPartitionReplicaMembership(replica, replica.replicaId));
-    }
-    return facts;
+  armIndexLoss: ({indexName}) => { target = indexName; },
+  indexMembership: ({partitionIds}) => {
+    const owner = repository.gateway.resolveCdcIntegrationService().hostedReplicaOwner;
+    const hosted = partitionIds.flatMap((id) => owner.hostedPartitionReplicas(id));
+    return Promise.all(hosted.map(observeMembership));
   },
   permitIndexTerminalWrite: () => permitTerminalCheckpoint.resolve(),
   indexLossTrace: () => ({warm, cut, progress, completed}),

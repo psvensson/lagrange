@@ -20,11 +20,13 @@ async function observe(member, op, args) {
   return reply.value;
 }
 
-async function until(t, description, read, accepts, budgetMs = 90000) {
+async function until(t, description, read, accepts, budgetMs = 90000, signal) {
   const deadline = Date.now() + scaleByMachineFactor(budgetMs);
   let last;
   do {
+    signal?.throwIfAborted();
     last = await read();
+    signal?.throwIfAborted();
     if (accepts(last)) return last;
     await managedSleep(t, 250);
   } while (Date.now() < deadline);
@@ -93,15 +95,16 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
           t.comment(`node ${member.nodeId} log copy failed: ${copyError.message}`);
         }
       }
-      if (error.capturePreCrashState) {
+      if (error.socketObservation) {
+        t.comment(JSON.stringify(error.socketObservation));
         await Promise.all(cluster.nodes.map(async (member) => {
-          const exitAtFailure = member.channel.exitState();
+          const requestedAt = Date.now();
           try {
-            const trace = exitAtFailure ? null : await observe(member, 'trace');
-            t.comment(JSON.stringify({nodeId: member.nodeId, exitAtFailure, trace}));
+            const trace = await observe(member, 'trace');
+            t.comment(JSON.stringify({nodeId: member.nodeId, requestedAt, observedAt: Date.now(), trace}));
           } catch (observationError) {
-            t.comment(JSON.stringify({nodeId: member.nodeId, exitAtFailure,
-              exitAfterObservation: member.channel.exitState(), error: observationError.message}));
+            t.comment(JSON.stringify({nodeId: member.nodeId, requestedAt, observedAt: Date.now(),
+              observedExit: member.channel.exitState(), error: observationError.message}));
           }
         }));
       }
@@ -152,16 +155,19 @@ async function proveOwnerLoss(t, cluster) {
     .then(() => ({success: true, at: Date.now()}), (error) => ({
       code: error.code, detail: error.detail, message: error.message, at: Date.now(),
     }));
+  const barrierPoll = new AbortController();
   const entered = await Promise.race([
     until(t, 'owner entered provisioning after catalog commit',
-      () => traces(members), (rows) => rows.some((row) => row.barrier)),
+      () => traces(members), (rows) => rows.some((row) => row.barrier), undefined, barrierPoll.signal),
     submitted.then((reply) => {
-      // Once the socket settles, preserve the state at that boundary even if
-      // the independent barrier poll observes a grant while diagnostics run.
+      if (barrierPoll.signal.aborted) return;
+      const socketObservation = {reply, capturedAt: Date.now(), submittingEndpoint: endpoint,
+        children: members.map((member) => ({nodeId: member.nodeId, observedExit: member.channel.exitState()}))};
+      barrierPoll.abort();
       throw Object.assign(new Error(`CREATE socket settled before observed barrier: ${JSON.stringify(reply)}`),
-        {capturePreCrashState: true});
+        {socketObservation});
     }),
-  ]);
+  ]).finally(() => barrierPoll.abort());
   const [original] = entered.filter((row) => row.barrier);
   assert.equal(entered.filter((row) => row.barrier).length, 1);
   const {ownerId, jobId, tableId, partitionId} = original.barrier;
