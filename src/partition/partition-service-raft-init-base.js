@@ -85,19 +85,29 @@ const {
 
 const SERVICE_SHUTDOWN = 'partition_service_shutdown';
 
+function resolvePrimaryElectionReplicaId(service, stamp, replicaIds) {
+  if (typeof stamp?.leaderId === 'string' && stamp.leaderId.length > 0) {
+    return stamp.leaderId;
+  }
+  if (typeof service?.leaderId === 'string' && replicaIds.includes(service.leaderId)) {
+    return service.leaderId;
+  }
+  const founderId = `${service?.partitionId}-r1`;
+  return replicaIds.includes(founderId) ? founderId : null;
+}
+
 function resolveElectionTimeoutReplicaIds(service) {
   const stamp = service?.bootstrapMembership;
   const replicaIds = Array.isArray(service?.replicaIds) ? service.replicaIds : [];
   if (Array.isArray(stamp?.founders) && stamp.founders.length > 0) {
     return stamp.founders;
   }
-  const leaderId = stamp?.leaderId;
-  if (typeof leaderId === 'string' && leaderId.length > 0 &&
-      service.replicaId !== leaderId) {
+  const primaryId = resolvePrimaryElectionReplicaId(service, stamp, replicaIds);
+  if (primaryId && service.replicaId !== primaryId) {
     const others = replicaIds.filter(
-      (id) => id !== leaderId && id !== service.replicaId,
+      (id) => id !== primaryId && id !== service.replicaId,
     );
-    return [leaderId, ...others, service.replicaId];
+    return [primaryId, ...others, service.replicaId];
   }
   return replicaIds;
 }
