@@ -91,7 +91,7 @@ function members(workflow) {
 // One owner's production options over the shared store; `sent` records
 // every START it sends; `partitions` (optional) is its view of the
 // partitions rows (default: live).
-function common(store, {name, clock, logger, sent, start, partitions}) {
+function common(store, {name, clock, logger, sent, start, partitions, workflowOwnerId}) {
   const view = openView(store);
   const rowOf = (id) => (partitions ? partitions.find((row) =>
     row.partition_id === id) ?? null : store.partitionRow(id));
@@ -101,7 +101,7 @@ function common(store, {name, clock, logger, sent, start, partitions}) {
     sent.push(args[0]);
     return start ? start(...args) : undefined;
   };
-  return {cdcIntegrationService: store.cdcFor(name),
+  return {workflowOwnerId: workflowOwnerId ?? `owner-${name}`, cdcIntegrationService: store.cdcFor(name),
     getTableInfo: () => view.row(), listTableInfos: () => view.list(),
     getPartitionInfo: rowOf, logger: logger ?? QUIET,
     now: () => clock.now, listTablePartitionRows: rows,
