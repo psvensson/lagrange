@@ -11,10 +11,11 @@ const workerPath = fileURLToPath(new URL('./helpers/gsi-owner-loss-worker.js', i
 const indexName = 'email_warm_loss';
 const table = 'users_warm_loss';
 
-async function waitForTrace(t, members, accepts) {
+async function waitForTrace(t, stage, members, accepts, signal) {
   const deadline = Date.now() + scaleByMachineFactor(120000);
   let traces;
   do {
+    signal?.throwIfAborted();
     traces = await Promise.all(members.map(async (member) => {
       const reply = await member.channel.request('indexLossTrace');
       assert.ok(reply.ok, JSON.stringify(reply.error));
@@ -23,7 +24,7 @@ async function waitForTrace(t, members, accepts) {
     if (accepts(traces)) return traces;
     await managedSleep(t, 100);
   } while (Date.now() < deadline);
-  assert.fail(JSON.stringify(traces));
+  assert.fail(`${stage}: last worker traces ${JSON.stringify(traces)}`);
 }
 
 test('warm survivors backfill an existing global index after the schema callback owner is killed',
@@ -45,33 +46,46 @@ test('warm survivors backfill an existing global index after the schema callback
     for (const [id, email] of [['a', 'first'], ['b', 'second']]) {
       await query(issuer, `INSERT INTO ${table} (id, email) VALUES (?, ?)`, [id, email]);
     }
-    await waitForTrace(t, members, (traces) => traces.every((row) => row.warm));
+    await waitForTrace(t, 'setup: READY discovery', members, (traces) => traces.every((row) => row.warm));
     for (const node of members) {
       assert.ok((await node.channel.request('armIndexLoss', {indexName})).ok);
     }
-    const submission = issuer.query(sessions.get(issuer), `CREATE GLOBAL INDEX ${indexName} ON ${table} (email)`)
-      .catch((error) => ({error: error.message}));
-    const traces = await waitForTrace(t, members, (rows) => rows.some((row) => row.cut));
+    const stopPolling = new AbortController();
+    const submission = query(issuer, `CREATE GLOBAL INDEX ${indexName} ON ${table} (email)`);
+    const atCut = waitForTrace(t, 'pre-kill: SUCCEEDED before callback enqueue', members,
+      (rows) => rows.some((row) => row.cut), stopPolling.signal);
+    // A fulfilled CREATE can detach while the schema job is still running.
+    // A rejected public outcome or IPC failure before the cut ends this wait.
+    const traces = await Promise.race([atCut, submission.then(() => atCut)])
+      .finally(() => stopPolling.abort());
     const cuts = traces.filter((row) => row.cut);
     assert.equal(cuts.length, 1);
     assert.ok(traces.every((row) => !row.completed));
     const [{nodeId, cut}] = cuts;
     assert.deepEqual([cut.status, cut.background, cut.registeredCallback], ['SUCCEEDED', true, true]);
+    t.comment(JSON.stringify({stage: 'pre-kill callback cut', nodeId, cut}));
     const owner = members.find((node) => node.nodeId === nodeId);
     const survivors = members.filter((node) => node !== owner);
-    const observed = survivors[0];
     const catalogSql = 'SELECT index_id, state, backfill_total_rows FROM indices WHERE index_name = ?';
-    const creating = await readUntil(t, observed, sessions.get(observed), catalogSql, [indexName],
-      (rows) => rows.some((r) => r.index_id === cut.indexId && r.state === 'CREATING'));
-    assert.equal(creating.rows.length, 1);
     const exited = once(owner.child, 'exit');
     assert.ok(owner.child.kill('SIGKILL'));
     assert.deepEqual(await exited, [null, 'SIGKILL']);
-    // Observe the already-running owners only: no restart, CREATE, startup
-    // activation, status-driven resume, or client query until queue completion.
-    const final = await waitForTrace(t, survivors, (rows) => rows.some((row) => row.completed));
+    const confirmedExitNs = process.hrtime.bigint();
+    t.comment(JSON.stringify({stage: 'SIGKILL confirmed', nodeId, indexId: cut.indexId}));
+    // All processes held terminal writes before the submission. The same
+    // generation must still be incomplete after the OS confirms owner death.
+    const observer = survivors[0];
+    await readUntil(t, observer, sessions.get(observer), catalogSql, [indexName],
+      (rows) => rows.length === 1 && rows[0].index_id === cut.indexId &&
+        ['CREATING', 'WRITE_ONLY', 'BACKFILLING'].includes(rows[0].state));
+    await Promise.all(survivors.map(async (node) =>
+      assert.ok((await node.channel.request('permitIndexTerminalWrite')).ok)));
+    const final = await waitForTrace(t, 'post-kill: two-row terminal checkpoint', survivors, (rows) => rows.some((row) => row.completed));
     const winner = final.find((row) => row.completed);
-    assert.deepEqual(winner.completed, {indexId: cut.indexId, generation: cut.generation, dataset: cut.dataset});
+    const {startedNs, ...checkpoint} = winner.completed;
+    assert.ok(BigInt(startedNs) > confirmedExitNs, 'terminal checkpoint began after confirmed SIGKILL');
+    assert.deepEqual(checkpoint, {indexId: cut.indexId, generation: cut.generation,
+      priorState: 'BACKFILLING', rows: 2});
     const node = survivors.find((member) => member.nodeId === winner.nodeId);
     await readUntil(t, node, sessions.get(node), catalogSql, [indexName],
       (rows) => rows.length === 1 && rows[0].index_id === cut.indexId &&
@@ -79,5 +93,4 @@ test('warm survivors backfill an existing global index after the schema callback
     const indexed = fulfilledRows(await query(node,
       `SELECT email, __base_pk_id FROM ${cut.dataset} ORDER BY email`));
     assert.deepEqual(indexed, [{email: 'first', __base_pk_id: 'a'}, {email: 'second', __base_pk_id: 'b'}]);
-    await submission;
   });

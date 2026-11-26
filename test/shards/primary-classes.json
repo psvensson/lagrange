@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2454,
+    "unit": 2455,
     "integration": 135,
     "bootstrap": 234,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2830,
-  "digest": "fnv1a32-94ab3050",
+  "censusSize": 2831,
+  "digest": "fnv1a32-7cdef16a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1806,6 +1806,7 @@
     "test/query/transaction-review-adversarial.test.js": "unit",
     "test/query/transaction-schema-enforcement.test.js": "unit",
     "test/query/transaction-session-reads.test.js": "unit",
+    "test/query/transaction-stale-read-order-allocation.test.js": "unit",
     "test/query/tx-metadata-pgwire-and-result-representation.test.js": "unit",
     "test/query/unknown-outcome-redelivery-budget.test.js": "unit",
     "test/query/unknown-outcome-same-entry.test.js": "unit",

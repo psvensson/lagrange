@@ -530,7 +530,10 @@ function sourceStartAuthorizationChange(owner, ack, isAllowed, authorization) {
       return {...workflow, metadata: {...workflow.metadata, mirrorCustodyGrants: grant ? grants :
         [...grants, {partitionId, fence, acquired: false}]}};
     }
-    if (!grant || workflow.metadata.mirrorExecutionEnded || grant.release || (authorization.confirmationOnly && !grant.acquired)) {
+    const historicalConfirmation = authorization.confirmationOnly && !authorization.requireExecutable;
+    if (!grant || (authorization.confirmationOnly && !grant.acquired) ||
+        (!historicalConfirmation && (workflow.metadata.mirrorExecutionEnded || grant.release ||
+          (authorization.requireExecutable && !authorization.executableStates.has(workflow.status))))) {
       return refuseRecordChange(PARTICIPANT_ACK_RESULT.INVALID_TRANSITION, {key, status, fence});
     }
     const next = applySourceStartAuthorization(

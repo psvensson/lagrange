@@ -77,6 +77,7 @@ function splitStartAuthorization(start, options = {}) {
     executableStates: SPLIT_EXECUTABLE_STATES,
     startedStatuses: SPLIT_STARTED_STATUSES,
     confirmationOnly: options.confirmationOnly === true,
+    requireExecutable: options.requireExecutable === true,
     matches: (workflow) => matchesIdentity(workflow, start) &&
       workflow.metadata[FIELD.PRIMARY_KEY_COLUMN] === start.primaryKeyColumn &&
       workflow.metadata[FIELD.SOURCE_PARTITION_ID] === start.sourcePartitionId &&
@@ -96,6 +97,7 @@ function mergeStartAuthorization(start, options = {}) {
     executableStates: MERGE_EXECUTABLE_STATES,
     startedStatuses: MERGE_STARTED_STATUSES,
     confirmationOnly: options.confirmationOnly === true,
+    requireExecutable: options.requireExecutable === true,
     matches: (workflow) => matchesIdentity(workflow, start) &&
       workflow.metadata[FIELD.PRIMARY_KEY_COLUMN] === start.primaryKeyColumn &&
       workflow.metadata[FIELD.TARGET_PARTITION_VERSION] ===
@@ -115,7 +117,8 @@ async function acknowledgeSourceStartAtRecordTurn(coordinator, workflowId, ack,
   return coordinator.authorizeParticipantStart(
     workflowId, ack, buildAuthorization({...startContext.metadata, participantKey: ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY],
       tableId: startContext.tableId, tableName: startContext.tableName},
-    {confirmationOnly: startContext.confirmationOnly === true}));
+    {confirmationOnly: startContext.confirmationOnly === true,
+      requireExecutable: startContext.requireExecutable === true}));
 }
 
 export {

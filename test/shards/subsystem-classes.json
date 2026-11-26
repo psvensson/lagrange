@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 27,
     "placement-rebalance": 313,
-    "query-sql": 227,
+    "query-sql": 228,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2830,
-  "digest": "fnv1a32-06c05832",
+  "censusSize": 2831,
+  "digest": "fnv1a32-8cc995db",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-931efeee",
+  "observationDigest": "fnv1a32-e00b958e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1825,6 +1825,7 @@
     "test/query/transaction-review-adversarial.test.js": "query-sql",
     "test/query/transaction-schema-enforcement.test.js": "query-sql",
     "test/query/transaction-session-reads.test.js": "query-sql",
+    "test/query/transaction-stale-read-order-allocation.test.js": "query-sql",
     "test/query/tx-metadata-pgwire-and-result-representation.test.js": "query-sql",
     "test/query/unknown-outcome-redelivery-budget.test.js": "query-sql",
     "test/query/unknown-outcome-same-entry.test.js": "query-sql",
@@ -19072,6 +19073,35 @@
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
         "test/test-helpers/transaction-persistence-gateway.js"
+      ]
+    },
+    "test/query/transaction-stale-read-order-allocation.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-boundary-representation.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/query/tx-metadata-pgwire-and-result-representation.test.js": {

@@ -283,7 +283,7 @@ class PartitionServiceSourceReplicationStartMethods {
       }
       const started = await acknowledgeCommittedStart(
         () => this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED),
-        () => workflow.confirmSplitReplicationStart(metadata, this.tableId, this.tableName),
+        () => workflow.confirmSplitReplicationStart(metadata, this.tableId, this.tableName, {requireExecutable: true}),
       );
       if (!started || this.isShutdown ||
           this.role !== RaftRole.LEADER || this.splitReplication !== handle) {
@@ -390,7 +390,7 @@ class PartitionServiceSourceReplicationStartMethods {
       }
       const started = await acknowledgeCommittedStart(
         () => this.emitMergeSourceAck(metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED),
-        () => workflow.confirmMergeReplicationStart(this.partitionId, metadata, this.tableId, this.tableName),
+        () => workflow.confirmMergeReplicationStart(this.partitionId, metadata, this.tableId, this.tableName, {requireExecutable: true}),
       );
       if (!started || this.isShutdown ||
           this.role !== RaftRole.LEADER || this.mergeReplication !== handle) {

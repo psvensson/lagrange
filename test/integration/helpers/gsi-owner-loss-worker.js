@@ -10,11 +10,44 @@ let target;
 let warm = false;
 let cut;
 let completed;
+const permitTerminalCheckpoint = Promise.withResolvers();
 const discover = SchemaProvisioningJobOwner.prototype.readNonterminalRows;
 SchemaProvisioningJobOwner.prototype.readNonterminalRows = async function(...args) {
   const result = await discover.apply(this, args);
   warm = true;
   return result;
+};
+
+// Retain the last observation at each handoff; trace requests only read it.
+const progress = {};
+const findIntent = SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent;
+SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = async function(dataset, generation) {
+  if (!target || !dataset.endsWith('_' + target)) return findIntent.call(this, dataset, generation);
+  const lookup = progress.lookup = {dataset, generation, state: 'entered'};
+  try {
+    const intent = await findIntent.call(this, dataset, generation);
+    lookup.state = intent ? 'matched' : 'absent';
+    lookup.jobId = intent?.jobId;
+    return intent;
+  } catch (error) {
+    lookup.state = 'failed';
+    lookup.error = error.message;
+    throw error;
+  }
+};
+const complete = GlobalIndexLifecycleCoordinator.prototype.completeRecoveredProvisioning;
+GlobalIndexLifecycleCoordinator.prototype.completeRecoveredProvisioning = async function(intent) {
+  if (!target || intent.indexName !== target) return complete.call(this, intent);
+  const attempt = progress.recovery = {indexId: intent.indexId, state: 'entered'};
+  try {
+    const result = await complete.call(this, intent);
+    attempt.state = result?.fenced ? 'fenced' : result?.deferred ? 'deferred' : 'returned';
+    return result;
+  } catch (error) {
+    attempt.state = 'failed';
+    attempt.error = error.message;
+    throw error;
+  }
 };
 
 const submit = SchemaProvisioningJobOwner.prototype.execute;
@@ -38,16 +71,30 @@ SchemaProvisioningJobOwner.prototype.notifyBackgroundSucceeded = async function(
   return notify.call(this, intent, outcome, options);
 };
 
-const complete = GlobalIndexLifecycleCoordinator.prototype.completeRecoveredProvisioning;
-GlobalIndexLifecycleCoordinator.prototype.completeRecoveredProvisioning = async function(intent) {
-  const result = await complete.call(this, intent);
-  if (target && intent.indexName === target && !result?.fenced && !result?.deferred) {
-    completed = {indexId: intent.indexId, generation: intent.generation, dataset: intent.tableId};
+// All embedded workers and their parent run on one host. Capture the start
+// of the actual terminal checkpoint on its monotonic clock, and expose it
+// only after the production catalog update returns successfully.
+const update = GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord;
+GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord = async function(checkpoint) {
+  const record = this.catalog.get(target);
+  if (record && record.index_id === checkpoint.indexId && checkpoint.state === 'READ_WRITE') {
+    // Hold only the final write. Discovery, lease expiry, and backfill keep
+    // their ordinary schedules; the parent never calls a recovery entrypoint.
+    await permitTerminalCheckpoint.promise;
   }
+  const transition = record && record.index_id === checkpoint.indexId &&
+    record.state === 'BACKFILLING' && checkpoint.state === 'READ_WRITE' &&
+    checkpoint.backfill_total_rows === 2 ?
+    {indexId: record.index_id, generation: record.index_generation,
+      priorState: record.state, rows: checkpoint.backfill_total_rows,
+      startedNs: process.hrtime.bigint().toString()} : null;
+  const result = await update.call(this, checkpoint);
+  if (transition) completed = transition;
   return result;
 };
 
 registerEmbeddedWorkerOperations({
   armIndexLoss: ({indexName}) => { target = indexName; },
-  indexLossTrace: () => ({warm, cut, completed}),
+  permitIndexTerminalWrite: () => permitTerminalCheckpoint.resolve(),
+  indexLossTrace: () => ({warm, cut, progress, completed}),
 });

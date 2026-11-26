@@ -12,7 +12,7 @@ import {scalePasswordPgwire} from './helpers/public-binding-seam-harness.js';
 const tableName = 'wire_owner_loss_orders';
 const ports = createPortAllocator(import.meta.url);
 const workerPath = fileURLToPath(new URL('./helpers/schema-owner-loss-worker.js', import.meta.url));
-const metadata = ['schema_operations-p1', 'services-p1', 'tables-p1', 'partitions-p1', 'nodes-p1'];
+const metadata = ['schema_operations-p1', 'replica_operations-p1', 'services-p1', 'tables-p1', 'partitions-p1', 'nodes-p1'];
 
 async function observe(member, op, args) {
   const reply = await member.channel.request(op, args);
@@ -55,6 +55,23 @@ function quorum(rows, id, required, excludedVoterNodeId) {
   return null;
 }
 
+function hasMetadataQuorums(rows, excludedNodeId) {
+  return metadata.every((id) => quorum(rows, id, 2, excludedNodeId));
+}
+
+test('owner loss requires surviving voters for the provisioning ledger', async () => {
+  const rows = ['schema_operations', 'services', 'tables', 'partitions', 'nodes', 'replica_operations']
+    .flatMap((table) => ['owner', 'survivor-a', 'survivor-b'].map((nodeId) => ({
+      partitionId: table + '-p1', nodeId, replicaId: nodeId, leaderReplicaId: 'owner',
+      isLeader: nodeId === 'owner', voterReplicaIds: ['owner', 'survivor-a', 'survivor-b'],
+      votersOutgoingReplicaIds: [], term: 1, gateOpen: true,
+    })));
+  assert.ok(hasMetadataQuorums(rows, 'owner'));
+  const missingLedgerVoter = rows.filter((row) =>
+    row.partitionId !== 'replica_operations-p1' || row.nodeId !== 'survivor-b');
+  assert.equal(hasMetadataQuorums(missingLedgerVoter, 'owner'), false);
+});
+
 async function traces(members) {
   return Promise.all(members.map(async (member) => ({
     nodeId: member.nodeId, ...await observe(member, 'trace'),
@@ -82,7 +99,7 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
     const endpointSql = 'SELECT node_id, address, port FROM service_endpoints WHERE service_id = ? AND protocol = ?';
     const endpointParams = ['sys-postgres-wire', 'postgresql'];
     await until(t, 'RF3 metadata ready before CREATE', () => memberships(members, metadata),
-      (rows) => metadata.every((id) => quorum(rows, id, 2)));
+      (rows) => hasMetadataQuorums(rows));
     const [endpoint] = await until(t, 'published PG-wire listener',
       () => cluster.seedQueryRows(endpointSql, endpointParams), (rows) => rows.length > 0);
     await Promise.all(members.map((member) => observe(member, 'arm', {tableName})));
@@ -111,7 +128,7 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
     assert.ok(grant);
     const before = await until(t, 'surviving majority for each committed RF3 metadata group',
       () => memberships(members, metadata),
-      (rows) => metadata.every((id) => quorum(rows, id, 2, owner.nodeId)));
+      (rows) => hasMetadataQuorums(rows, owner.nodeId));
     // Only the original process remains held. Successor work runs unmodified.
     await Promise.all(survivors.map((member) => observe(member, 'release')));
     const observer = survivors[0];
@@ -134,7 +151,7 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
 
     t.comment(JSON.stringify({retainedAfterExit: retained, observedAt: Date.now()}));
     const after = await until(t, 'live metadata quorum after owner loss',
-      () => memberships(survivors, metadata), (rows) => metadata.every((id) => quorum(rows, id, 2)));
+      () => memberships(survivors, metadata), (rows) => hasMetadataQuorums(rows));
     for (const id of metadata) {
       const prior = quorum(before, id, 2, owner.nodeId);
       const current = quorum(after, id, 2);

@@ -178,8 +178,8 @@ async function runRecoveredGsiProvisioningOnce(indexService, context) {
   const coordinator = indexService.getGlobalIndexCoordinator();
   let intent = context.intent;
   if (!intent) {
-    const observed = await coordinator.refreshCatalogRecord(context.name);
-    if (!observed.available) return null;
+    const observed = await coordinator.refreshCatalogRecord(context.name, context.indexId);
+    if (!observed.available || !observed.row) return null;
     const record = coordinator.catalog.get(context.name);
     if (!record || !INCOMPLETE_GSI_STATES.has(record.state) ||
         record.index_id !== context.indexId) return null;

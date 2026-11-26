@@ -1,5 +1,5 @@
 import {admittedMirrorSource, sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
-import {redriveFailedMirrorRelease} from '../../src/partition/partition-mirror-custody-lifecycle.js';
+import {reconcileFailedMirrorCustody, redriveFailedMirrorRelease} from '../../src/partition/partition-mirror-custody-lifecycle.js';
 import {readDurableMirrorRetentionCustodyIn, replicateSourceMirrorRetentionCustody} from '../../src/partition/partition-mirror-effect-retention.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
@@ -163,8 +163,8 @@ function buildOwner(store, source, startDelivery) {
   return workflow;
 }
 
-async function registerRealStartAuthorization(source, family, metadata, children = []) {
-  const store = openRecordStore({partitions: [
+async function registerRealStartAuthorization(source, family, metadata, {children = [], recordStore} = {}) {
+  const store = recordStore ?? openRecordStore({partitions: [
     {partition_id: SOURCE},
     {partition_id: 'users-p2'},
     ...children,
@@ -439,7 +439,7 @@ test('a stopped split replays the same durable checkpoint when the final child r
   await resumeFixtureParticipantAdmission(source);
   await resumeFixtureParticipantAdmission(target);
   const {workflow, store, metadata} = await registerRealStartAuthorization(source,
-    'split', plan, plan.targetPartitionIds.map((partition_id) => ({partition_id, partition_version: 2})));
+    'split', plan, {children: plan.targetPartitionIds.map((partition_id) => ({partition_id, partition_version: 2}))});
   const project = () => source.systemTableCache.applySystemTableChange(
     'tables', 'UPDATE', store.tablesRow());
   project();
@@ -585,6 +585,9 @@ test('an accepted split START whose answer is lost stays on its durable ' +
     acceptedMetadata, 'tbl-users', 'users');
   t.equal(answerLossConfirmation, true,
     'confirmation-only still proves the previously accepted START answer');
+
+  t.equal(await workflow.confirmSplitReplicationStart(acceptedMetadata, 'tbl-users', 'users',
+    {requireExecutable: true}), false, 'lost local ACK cannot authorize work after durable cancellation');
 
   const terminalEvents = [];
   const terminalSource = await buildSource(t, terminalEvents);
@@ -925,13 +928,28 @@ test('terminal quiesced predecessors admit reset workflow numbering and a ' +
   t.equal(source.splitReplication.quiesced, true,
     'the replacement split explicitly quiesces before another family starts');
 
+  t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowId, split.metadata.workflowId,
+    'a failed local run still owes its original grant');
+  await split.workflow.persistExecutionFailure(split.metadata.workflowId, new Error('split cancelled'));
+  const pendingClear = await rejectionOf(() => split.workflow.workflowCoordinator.clearWorkflowRecord(
+    split.metadata.workflowId, new Set([PARTITION_TRANSITION_STATE.FAILED])));
+  t.equal(pendingClear?.refusal?.reason, 'source-mirror-release-pending',
+    'the exact terminal record still holds the predecessor until release');
+  await reconcileFailedMirrorCustody(source);
+  t.equal(readDurableMirrorRetentionCustodyIn(source.db), null, 'split release committed');
+  t.same(split.store.metadata().mirrorCustodyGrants, [], 'split release acknowledged');
+  await split.workflow.workflowCoordinator.clearWorkflowRecord(split.metadata.workflowId,
+    new Set([PARTITION_TRANSITION_STATE.FAILED]));
+
   source.backfillMergeSnapshot = async () => {
     events.push('merge-successor-snapshot');
     throw new Error('finish the merge successor');
   };
   const merge = await registerRealStartAuthorization(source, 'merge',
     mergeMetadata({workflowId: 'merge-after-finished-split',
-      workflowAttempt: 0, workflowFenceToken: 0}));
+      workflowAttempt: 0, workflowFenceToken: 0}), {recordStore: split.store});
+  t.ok(merge.metadata.workflowAttempt > split.metadata.workflowAttempt,
+    'registration mints the next attempt from the same table generation');
   const mergeResponse = await source.handleStartMergeReplication({
     tableId: 'tbl-users', tableName: 'users',
     transitionMetadata: merge.metadata,
@@ -942,13 +960,22 @@ test('terminal quiesced predecessors admit reset workflow numbering and a ' +
   t.equal(source.splitReplication, null,
     'accepted cross-family START consumes the terminal split predecessor');
 
+  await merge.workflow.runSerializedOwnerStep(SOURCE, async () => {});
+  t.equal(recordSnapshot(merge.store).state, PARTITION_TRANSITION_STATE.FAILED,
+    'the merge failure acknowledgement reached its durable abort');
+  await reconcileFailedMirrorCustody(source);
+  t.equal(readDurableMirrorRetentionCustodyIn(source.db), null, 'merge release committed');
+  t.same(merge.store.metadata().mirrorCustodyGrants, [], 'merge release acknowledged');
+  await merge.workflow.workflowCoordinator.clearWorkflowRecord(merge.metadata.workflowId,
+    new Set([PARTITION_TRANSITION_STATE.FAILED]));
+
   source.applySplitSnapshotBatch = async () => {
     events.push('split-after-merge-snapshot');
     throw new Error('finish the reverse-family successor');
   };
   const reverseSplit = await registerRealStartAuthorization(source, 'split',
     splitMetadata({workflowId: 'split-after-finished-merge',
-      workflowAttempt: 0, workflowFenceToken: 0}));
+      workflowAttempt: 0, workflowFenceToken: 0}), {recordStore: split.store});
   const reverseResponse = await source.handleStartSplitReplication({
     tableId: 'tbl-users', tableName: 'users',
     transitionMetadata: reverseSplit.metadata,

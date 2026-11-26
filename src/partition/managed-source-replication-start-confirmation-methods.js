@@ -47,23 +47,23 @@ class ManagedSourceReplicationStartConfirmationMethods {
     return accepted(result);
   }
 
-  async confirmSplitReplicationStart(metadata, tableId, tableName) {
+  async confirmSplitReplicationStart(metadata, tableId, tableName, {requireExecutable = false} = {}) {
     const result = await this.acknowledgeSourceParticipant(
       metadata[FIELD.WORKFLOW_ID],
       startAck(SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
         SPLIT_ACK_STATUS.SNAPSHOT_STARTED, metadata, this.now()),
-      {metadata, tableId, tableName, confirmationOnly: true},
+      {metadata, tableId, tableName, confirmationOnly: true, requireExecutable},
     );
     return accepted(result);
   }
 
   async confirmMergeReplicationStart(sourcePartitionId, metadata, tableId,
-    tableName) {
+    tableName, {requireExecutable = false} = {}) {
     const result = await this.acknowledgeMergeSourceParticipant(
       metadata[FIELD.WORKFLOW_ID],
       startAck(buildMergeSourceParticipantKey(sourcePartitionId),
         MERGE_ACK_STATUS.SNAPSHOT_STARTED, metadata, this.now()),
-      {metadata, tableId, tableName, confirmationOnly: true},
+      {metadata, tableId, tableName, confirmationOnly: true, requireExecutable},
     );
     return accepted(result);
   }

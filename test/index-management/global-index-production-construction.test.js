@@ -1443,6 +1443,24 @@ test('Production construction 10 (4B): crash immediately after schema job SUCCEE
     t.equal(createdReplicas.length, 1, 'GSI replica was founded before crash');
 
     const restart = createRestartCacheAndGatewayFromGateway(gateway, partitionServices);
+    const version = () => restart.cache.getTableMutationVersion(TABLES.INDICES);
+    let falseEmptyVersion;
+    let deliveredWrongId = false;
+    const read = restart.gateway.readRows.bind(restart.gateway);
+    restart.gateway.readRows = (table, sql, params, options) => {
+      if (falseEmptyVersion === undefined && table === TABLES.INDICES &&
+          sql === 'SELECT * FROM indices WHERE index_name = ?' && params[0] === 'idx_users_email') {
+        falseEmptyVersion = version();
+        return {success: true, rows: []};
+      }
+      if (!deliveredWrongId && table === TABLES.INDICES &&
+          sql === 'SELECT * FROM indices WHERE index_name = ?' && params[0] === 'idx_users_email') {
+        deliveredWrongId = true;
+        return {success: true, rows: [{...crashedIndex, index_id: 'retired-generation',
+          state: GLOBAL_INDEX_STATE.READ_WRITE}]};
+      }
+      return read(table, sql, params, options);
+    };
     const engine2 = new SQLQueryEngine({
       nodeId: 'test-node',
       systemCache: restart.cache,
@@ -1455,8 +1473,28 @@ test('Production construction 10 (4B): crash immediately after schema job SUCCEE
       autoStartDistributedTransactionRecovery: true,
       migrationAutoWire: false,
     });
+    const recoveryOwner = engine2.tableCreationService.schemaProvisioningJobOwner;
+    const timers = [];
+    recoveryOwner.retrySetTimeoutFn = (callback) => { const timer = {callback}; timers.push(timer); return timer; };
+    recoveryOwner.retryClearTimeoutFn = () => {};
     engine2.setRebalanceCoordinator(coordinator);
     try {
+      await engine2.tableCreationService.resumeDurableProvisioningJobs();
+      await recoveryOwner.indexRecovery;
+      t.type(falseEmptyVersion, 'number', 'one successful but empty catalog point read was delivered');
+      t.equal(version(), falseEmptyVersion, 'no intervening index catalog update');
+      t.equal(gateway.db.prepare('SELECT state FROM indices WHERE index_id = ?').get(initialIndexId).state,
+        GLOBAL_INDEX_STATE.CREATING, 'empty result did not authorize completion');
+      t.equal(timers.length, 1, 'the shared inventory timer owns the next wake');
+      timers[0].callback();
+      await new Promise((resolve) => setImmediate(resolve));
+      await recoveryOwner.indexRecovery;
+      t.equal(deliveredWrongId, true, 'next read returned a terminal row of a different incarnation');
+      t.equal(version(), falseEmptyVersion, 'catalog projection did not change between attempts');
+      t.equal(engine2.indexService.getGlobalIndexCoordinator().catalog.get('idx_users_email').index_id,
+        initialIndexId, 'older terminal row cannot replace the pending generation');
+      t.equal(timers.length, 2, 'same timer rearmed once');
+      timers[1].callback();
       const recovered = await waitForCondition(() => {
         const row = gateway.db.prepare(
           'SELECT * FROM indices WHERE index_name = ?',

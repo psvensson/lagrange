@@ -1144,6 +1144,7 @@ async function createLagrangeOltpAdapter(options = {}) {
 }
 
 export {
+  CREATE_SCHEMA as LAGRANGE_OLTP_SCHEMA_DDL,
   CANONICAL_REQUIRED_INDEXES,
   CANONICAL_SCHEMA_SHA256,
   CANONICAL_TABLE_COLUMNS,

@@ -619,6 +619,22 @@ function inspectRetainedPreparedObligations(service) {
   })));
 }
 
+function committedGenerationsAreDisjoint(service, baseGen, currentGen, candidate) {
+  const rows = readOrReconstructGenerationHistoryRange(service.db, baseGen, currentGen,
+    (opsText) => extractOperationsRowKeyFootprint(service, operationsOf(opsText)));
+  return rows.length === currentGen - baseGen &&
+    areGenerationRowsDisjointFromCandidate(rows, baseGen, candidate);
+}
+
+function sessionReadDependenciesCurrent(service, session, generation) {
+  if (session.generationBase === generation ||
+      (!session.hasUnscopedRead && session.readKeyCount === 0)) return true;
+  if (session.hasUnscopedRead || !isSessionSchemaCurrent(service, session)) return false;
+  const reads = getSessionReadDependencySnapshot(session);
+  return committedGenerationsAreDisjoint(service, session.generationBase, generation,
+    normalizeTransactionFootprint(null, false, reads));
+}
+
 function canAdvanceCommittedValidationText(service, validationText, operationsFootprint) {
   hydrateDurablePreparedAndCommittedState(service);
   const decoded = decodeParticipantValidationForService(service, validationText);
@@ -633,11 +649,9 @@ function canAdvanceCommittedValidationText(service, validationText, operationsFo
   }
   const candidate = normalizeTransactionFootprint(
     operationsFootprint.rowKeys, operationsFootprint.hasUnscopedWrite, decoded.readDependencies);
-  const rows = readOrReconstructGenerationHistoryRange(service.db, baseGen, currentGen,
-    (opsText) => extractOperationsRowKeyFootprint(service, operationsOf(opsText)));
-  if (rows.length !== currentGen - baseGen) return false;
+  const disjoint = committedGenerationsAreDisjoint(service, baseGen, currentGen, candidate);
   hydrateCommittedHistoryFromStore(service, baseGen, currentGen);
-  return areGenerationRowsDisjointFromCandidate(rows, baseGen, candidate);
+  return disjoint;
 }
 
 function recordCommittedAutocommitRowKeys(service, command, generation) {
@@ -786,7 +800,7 @@ export {
   canAdvanceRowKeySessionGeneration, canRebaseEmptyWaitingSession,
   checkAndRecordSessionRowKey, classifyPartitionPrepareReservation, clearPreparedParticipantRowKeys,
   discardParticipantSessions, endParticipantSession, extractOperationsRowKeyFootprint,
-  findParticipantSession, getRetainedRowKeyHistoryStats, hasParticipantSession,
+  sessionReadDependenciesCurrent, findParticipantSession, getRetainedRowKeyHistoryStats, hasParticipantSession,
   inspectRetainedPreparedObligations, isRowKeyConcurrencyEnabled,
   listActiveParticipantSessions, notifyRowKeySettlementWaiters, openParticipantSession,
   participantRoutingSessionCollision, participantTransactionActive,
