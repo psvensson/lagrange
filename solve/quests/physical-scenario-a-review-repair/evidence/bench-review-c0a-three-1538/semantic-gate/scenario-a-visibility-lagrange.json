@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-visibility-v1",
+  "system": "lagrange",
+  "caseId": "scenario-a-visibility-v1",
+  "caseSha256": "e899e4e3b9f9035682bb389a228b991e5e8b56ad4bd4fdc4c232016dcff2ff6e",
+  "datasetSha256": "e2e0c1b3825cb7af72a18e2917f48b9368c7f357a03f931340e23dc09fdc7ed8",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "snapshot-write-conflict",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-review-c0a-three-1538",
+    "containerId": "cb985593f29fb4ff98a150fdfe5155ec5153ea536bddb0dccc853901c14e13e1",
+    "imageId": "sha256:58a0686fe872237146bf6ad8dc22c0695da4b724aa12346f8439260b01f91292",
+    "endpoint": "192.168.86.34:5432"
+  },
+  "observation": {
+    "initialWriterValue": 0,
+    "initialObserverValue": 0,
+    "writerOwnWriteValue": 137,
+    "observerUncommittedValue": 0,
+    "writerAfterRollbackValue": 0,
+    "observerAfterRollbackValue": 0
+  },
+  "evaluation": {
+    "passed": true,
+    "failures": [],
+    "actual": {
+      "initialWriterValue": 0,
+      "initialObserverValue": 0,
+      "writerOwnWriteValue": 137,
+      "observerUncommittedValue": 0,
+      "writerAfterRollbackValue": 0,
+      "observerAfterRollbackValue": 0
+    },
+    "expected": {
+      "initialValue": 0,
+      "writerOwnWriteValue": 137,
+      "observerUncommittedValue": 0,
+      "writerAfterRollbackValue": 0,
+      "observerAfterRollbackValue": 0
+    },
+    "proofIds": [
+      "forbidden:dirty_read",
+      "isolation:dirtyReadsForbidden",
+      "isolation:readYourOwnWritesRequired"
+    ]
+  },
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-visibility-v1",
+    "system": "lagrange",
+    "status": "passed",
+    "artifactSha256": "ccd2c9e5fb9f83476ab50f18fdd1998e462fa60273e21e7c2756756f09433a24",
+    "proofIds": [
+      "forbidden:dirty_read",
+      "isolation:dirtyReadsForbidden",
+      "isolation:readYourOwnWritesRequired"
+    ]
+  },
+  "artifactSha256": "ccd2c9e5fb9f83476ab50f18fdd1998e462fa60273e21e7c2756756f09433a24"
+}

@@ -1,4 +1,4 @@
-import {reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
+import {isStoppedMirrorWorker, reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   GROUP_RETIREMENT_KIND,
@@ -146,10 +146,12 @@ class PartitionServiceSplitMirrorQueueMethods {
    * @private
    */
   async startOrResumeSplitReplicationFromDurable() {
-    if (this.role !== RaftRole.LEADER ||
-        this.splitReplication ||
-        this.mergeReplication) {
-      return Boolean(this.splitReplication);
+    if (this.isShutdown || this.role !== RaftRole.LEADER || this.mergeReplication) return false;
+    const previous = this.splitReplication;
+    if (previous && !isStoppedMirrorWorker(previous)) {
+      if (previous.terminal || previous.quiescing || previous.phase === PARTITION_TRANSITION_STATE.FAILED) return false;
+      if (previous.startPromise) return (await previous.startPromise)?.success === true;
+      return true;
     }
     const transition = findDurableMirrorTransitionForService(this, {
       activeStates: [
@@ -164,7 +166,8 @@ class PartitionServiceSplitMirrorQueueMethods {
         retiringSourceStatus(GROUP_RETIREMENT_KIND.SPLIT_SOURCE, rawMetadata,
           this.partitionId)),
     });
-    if (!transition) {
+    if (!transition || (previous &&
+        !this.isSameSplitReplication(previous.metadata, transition.metadata))) {
       return false;
     }
     // A source that already finished mirroring is ending with its group
@@ -188,6 +191,7 @@ class PartitionServiceSplitMirrorQueueMethods {
     if (!reconstructed) {
       return false;
     }
+    if (previous) this.splitReplication.predecessors = {split: previous};
     const response = await startSplitReplicationHandleForService(
       this, reconstructed);
     return response.success === true;

@@ -1266,69 +1266,28 @@ test('Logs case survives schema job identity, metadata creation and restart',
       'authoritative catalog does not resolve a case alias');
   });
 
-test('READY recovery retains both unavailable scans and shutdown cancels discovery', async (t) => {
+test('unavailable leader pages retain discovery until storage returns', async (t) => {
   const gateway = createGateway();
+  const clock = createServeRefreshClock();
   const calls = [];
-  const timers = [];
   const service = createService(gateway, calls, {
-    schemaProvisioningRetrySetTimeoutFn(callback) {
-      const timer = {callback, cleared: false};
-      timers.push(timer);
-      return timer;
-    },
-    schemaProvisioningRetryClearTimeoutFn(timer) { timer.cleared = true; },
+    schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+    schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
   });
   t.teardown(() => service.shutdown());
   const owner = service.schemaProvisioningJobOwner;
-  const intent = canonicalizeSchemaProvisioningIntent(createAst(), {});
-  await owner.insertOrAttach(intent);
-  const index = await owner.execute({...createAst(), tableName: 'index_dataset'},
-    {globalIndex: {indexName: 'users_idx'}}, async () => ({contractState: 'ready'}));
-  const continued = [];
-  owner.setSucceededGlobalIndexRecoveryHandler((intents) => {
-    continued.push(...intents.map((item) => item.jobId));
-  });
+  await owner.insertOrAttach(canonicalizeSchemaProvisioningIntent(createAst()));
   const read = gateway.readRows.bind(gateway);
   let available = false;
-  let scans = 0;
-  gateway.readRows = async (table, sql, params, options) => {
-    if (table === TABLES.SCHEMA_OPERATIONS && params.length === 0) {
-      scans++;
-      if (!available) return sql.includes('NOT IN') ? {rows: null} : {success: false, rows: []};
-    }
-    return read(table, sql, params, options);
-  };
-  const engine = Object.assign(Object.create(SQLQueryEngine.prototype), {
-    tableCreationService: service, logger: {warn() {}},
-    transactionCoordinator: {startRecoverySweep() {}},
-    recoverDistributedTransactionStateFromCache() {},
-    async resumeRecoveredDistributedTransactions() {},
-  });
-  await engine.activateDistributedTransactionRecovery();
-  await new Promise((resolve) => setImmediate(resolve));
-  t.equal(timers.length, 2);
-  t.equal(calls.length, 0, 'a cached intent cannot satisfy discovery');
+  gateway.readRows = (...args) => available ? read(...args) : {rows: null};
+  await t.rejects(service.resumeDurableProvisioningJobs(),
+    {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE});
+  t.equal(calls.length, 0);
   available = true;
-  for (const timer of [...timers]) timer.callback();
-  await new Promise((resolve) => setImmediate(resolve));
-  t.equal(scans, 4);
-  t.equal(gateway.rows.get('schema_operations:' + intent.jobId).status, 'SUCCEEDED');
-  t.equal(calls.length, 1, 'recovered without a new CREATE or activation');
-  t.same(continued, [index.jobId], 'succeeded index continuation was rediscovered');
-
-  const periodic = owner.discoveryRetries.get(owner.readNonterminalRows);
-  available = false;
-  periodic.callback();
-  await engine.activateDistributedTransactionRecovery();
-  await new Promise((resolve) => setImmediate(resolve));
-  const outstanding = [...owner.discoveryRetries.values()];
-  t.equal(outstanding.length, 2);
+  await clock.advance(owner.retryAfterMs);
+  t.equal(calls.length, 1);
   await service.shutdown();
-  for (const timer of outstanding) {
-    t.ok(timer.cleared);
-    timer.callback();
-  }
-  t.equal(scans, 6);
+  t.equal(clock.timers.filter((timer) => !timer.cleared).length, 0);
 });
 
 test('a stale executing CREATE takes over only after the durable winner lease expires', async (t) => {
@@ -1395,15 +1354,14 @@ test('a stale executing CREATE takes over only after the durable winner lease ex
   t.equal(gateway.rows.get(key).row_version, completed.row_version);
 });
 
-test('both recovery scans refuse a detached gateway despite a retained intent', async (t) => {
+test('index continuation refuses a detached gateway despite a retained intent', async (t) => {
   const service = createService(createGateway(), []);
   t.teardown(() => service.shutdown());
   const owner = service.schemaProvisioningJobOwner;
   await owner.insertOrAttach(canonicalizeSchemaProvisioningIntent(createAst()));
   service.setControlPlaneSystemTableGateway(null);
   const unavailable = {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE};
-  await t.rejects(service.resumeDurableProvisioningJobs(), unavailable);
-  await t.rejects(owner.listSucceededGlobalIndexIntents(), unavailable);
+  await t.rejects(owner.findSucceededGlobalIndexIntent('users', 1), unavailable);
 });
 
 for (const interruption of ['lost reply', 'expired lease', 'transient refusal']) {
@@ -1530,7 +1488,7 @@ test('READY owner discovers a CREATE accepted during its empty scan and waits fo
   let scans = 0;
   gateway.readRows = async (table, sql, params, options) => {
     const result = await read(table, sql, params, options);
-    if (table === TABLES.SCHEMA_OPERATIONS && sql.includes('NOT IN') && ++scans === 1) {
+    if (table === TABLES.SCHEMA_OPERATIONS && sql.includes('AS recovery_rowid') && params[0] === 'RUNNING' && ++scans === 1) {
       snapshot.resolve();
       await deliver.promise;
     }
@@ -1582,7 +1540,7 @@ test('shutdown during an authoritative recovery scan disarms later execution and
   const read = gateway.readRows.bind(gateway);
   gateway.readRows = async (table, sql, params, options) => {
     const result = await read(table, sql, params, options);
-    if (table === TABLES.SCHEMA_OPERATIONS && sql.includes('NOT IN')) {
+    if (table === TABLES.SCHEMA_OPERATIONS && sql.includes('AS recovery_rowid')) {
       entered.resolve();
       await release.promise;
     }

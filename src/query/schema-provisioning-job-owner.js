@@ -28,7 +28,7 @@ import {
 import {canonicalizeSchemaProvisioningIntent, resolveIntentTableIdentity} from
   './schema-provisioning-intent.js';
 import {QUERY_ERROR_CODE, QUERY_LOG_MSG} from './query-constants.js';
-import {isTerminalSchemaWriteRejection, rowToWorkflow, serializeWorkflow} from
+import {RECOVERY_PAGE_SIZE, isTerminalSchemaWriteRejection, rowToWorkflow, serializeWorkflow} from
   './schema-provisioning-job-repository.js';
 import {
   runAdminActivity,
@@ -354,6 +354,8 @@ class SchemaProvisioningJobOwner {
     this.onResumeSucceededGlobalIndexIntents = options.onResumeSucceededGlobalIndexIntents;
     this.shuttingDown = false;
     this.workflowCoordinator = createWorkflowCoordinator(this, options);
+    this.recoveryLeaders = options.recoveryLeaders;
+    this.inventories = new Map();
     this.discoveryRetries = new Map();
     this.discoveryReads = new Map();
   }
@@ -446,6 +448,7 @@ class SchemaProvisioningJobOwner {
     for (const timer of this.discoveryRetries.values()) this.retryClearTimeoutFn(timer);
     this.discoveryRetries.clear();
     this.discoveryReads.clear();
+    this.inventories.clear();
     this.retryCompletionHandlers.clear();
     for (const workflowId of [...this.retryTimersByWorkflowId.keys()]) {
       this.clearScheduledRetry(workflowId);
@@ -692,6 +695,7 @@ class SchemaProvisioningJobOwner {
       return this.buildOutcome(workflow);
     }
     const claim = await this.claimOwnership(workflow, (workflow.fenceToken || 0) + 1);
+    if (this.shuttingDown) return this.buildOutcome(workflow);
     if (!claim.accepted) {
       return this.reconcileContendedJob(intent, executor);
     }
@@ -706,6 +710,7 @@ class SchemaProvisioningJobOwner {
         status: SCHEMA_PROVISIONING_JOB_STATUS.RUNNING,
         reasonCodes: [SCHEMA_PROVISIONING_REASON.METADATA_PROJECTING],
       }, {markCommitted: false});
+      if (this.shuttingDown) return this.buildOutcome(ownedWorkflow);
       const result = await executor({
         ...intent,
         ownerFenceToken: ownedWorkflow.fenceToken,
@@ -826,20 +831,18 @@ class SchemaProvisioningJobOwner {
     if (active) return active;
     const scan = Promise.resolve().then(async () => {
       if (this.shuttingDown) return [];
-      let rows;
       try {
-        rows = await read.call(this);
+        const rows = await read.call(this);
+        if (this.shuttingDown) return [];
+        // Schedule before execution so a busy workflow cannot hold inventory.
+        const delay = read === this.readNonterminalRows && rows.more ?
+          this.retryAfterMs : this.leaseMs;
+        this.scheduleDiscovery(read, resume, delay);
+        return resume(rows);
       } catch (error) {
         this.scheduleDiscovery(read, resume, this.retryAfterMs);
         throw error;
       }
-      if (this.shuttingDown) return [];
-      // schema_operations does not propagate cache changes. Arm the next
-      // inventory before dispatch so a busy executor cannot stall discovery.
-      if (read === this.readNonterminalRows) {
-        this.scheduleDiscovery(read, resume, this.leaseMs);
-      }
-      return resume(rows);
     }).finally(() => {
       // A timer retains this scan for all activation triggers until it fires.
       // An older execution can settle after the timer started its successor.
@@ -852,18 +855,60 @@ class SchemaProvisioningJobOwner {
   }
 
   async readNonterminalRows() {
-    const rows = await this.repository.listNonterminalRows();
-    return rows.map((row) => ({row, intent: recoverIntentFromRow(row)}));
+    const jobs = [];
+    const leaders = this.recoveryLeaders();
+    const tenures = new Set(leaders.map((leader) => leader.leadershipTenure));
+    for (const tenure of this.inventories.keys()) {
+      if (!tenures.has(tenure)) this.inventories.delete(tenure);
+    }
+    // Both the catalog notification and this missed-wake check feed the
+    // index owner's keyed queue. An index backfill never holds DDL inventory.
+    if (leaders.length && this.onResumeSucceededGlobalIndexIntents && !this.indexRecovery) {
+      this.indexRecovery = Promise.resolve().then(() =>
+        this.shuttingDown ? [] : this.onResumeSucceededGlobalIndexIntents())
+        .catch((error) => this.logger?.warn?.(QUERY_LOG_MSG.SCHEMA_PROVISIONING_RECOVERY_DEFERRED,
+          {error: error.message})).finally(() => { this.indexRecovery = null; });
+    }
+    let more = false;
+    let failure;
+    for (const leader of leaders) {
+      const tenure = leader.leadershipTenure;
+      if (!tenure || this.shuttingDown) continue;
+      let inventory = this.inventories.get(tenure);
+      if (!inventory) this.inventories.set(tenure, inventory = new Map());
+      for (const status of [SCHEMA_PROVISIONING_JOB_STATUS.PENDING,
+        SCHEMA_PROVISIONING_JOB_STATUS.RUNNING]) {
+        const prior = inventory.get(status);
+        const writes = leader.writeTraffic.getSnapshot().committedWrites;
+        if (prior && !prior.cursor && prior.writes === writes) continue;
+        try {
+          const rows = await this.repository.listRecoveryPage(leader, status, prior?.cursor);
+          if (this.shuttingDown || leader.leadershipTenure !== tenure) break;
+          const batch = rows.map((row) => ({row, intent: recoverIntentFromRow(row)}));
+          jobs.push(...batch);
+          const last = rows.at(-1);
+          const cursor = rows.length === RECOVERY_PAGE_SIZE ?
+            {updatedAt: last.updated_at, rowId: last.recovery_rowid} : null;
+          inventory.set(status, {cursor, writes: prior?.cursor ? prior.writes : writes});
+          if (cursor) more = true;
+        } catch (error) {
+          failure = error;
+          more = true;
+        }
+      }
+    }
+    if (failure && !jobs.length) throw failure;
+    return {jobs, more};
+  }
+
+  ownsRecoveryDiscovery() {
+    return !this.shuttingDown && this.discoveryReads.size > 0 &&
+      this.recoveryLeaders().length > 0;
   }
 
   async resumeNonterminal(executor) {
-    const [outcomes] = await Promise.all([
-      this.discover(this.readNonterminalRows,
-        (rows) => this.resumeRows(rows, executor)),
-      this.discover(this.listSucceededGlobalIndexIntents,
-        (intents) => this.resumeSucceededGlobalIndexContinuations(intents)),
-    ]);
-    return outcomes;
+    return this.discover(this.readNonterminalRows, ({jobs}) =>
+      this.resumeRows(jobs, executor));
   }
 
   async resumeRows(rows, executor) {
@@ -875,6 +920,10 @@ class SchemaProvisioningJobOwner {
         intent.ownerKey,
         () => {
           if (this.shuttingDown) return;
+          const cached = this.repository.rowsByJobId.get(row.job_id);
+          if (!cached || Number(row.row_version) >= Number(cached.row_version)) {
+            this.repository.rowsByJobId.set(row.job_id, row);
+          }
           this.refreshWorkflowFromRow(row);
           return this.runJob(
             intent,

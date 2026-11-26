@@ -113,7 +113,7 @@ function validatePinnedReplayRows(db) {
   assertMirrorReplayCoverageIn(db, custody.barrierIndex);
   const rows = db.prepare(
     'SELECT e.entry_key, e.log_index, e.mutation_kind, e.typed_effects_json, ' +
-    'o.outcome, o.log_index AS outcome_index, o.changes ' +
+    'o.outcome, o.log_index AS outcome_index, o.changes, o.mirror_effect_required ' +
     `FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} e ` +
     `LEFT JOIN ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} o ON o.entry_key = e.entry_key ` +
     'WHERE e.entry_key != ? ORDER BY e.log_index',
@@ -126,6 +126,7 @@ function validatePinnedReplayRows(db) {
       outcome: row.outcome,
       logIndex: row.outcome_index,
       changes: row.changes,
+      mirrorEffectRequired: row.mirror_effect_required,
     });
     previousIndex = row.log_index;
   }

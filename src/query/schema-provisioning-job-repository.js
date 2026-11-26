@@ -13,9 +13,7 @@ import {SCHEMA_PROVISIONING_ERROR_CODE, SCHEMA_PROVISIONING_JOB_STATUS} from
 const SELECT_BY_IDENTITY =
   `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
   'WHERE table_identity_key = ? LIMIT 1';
-const SELECT_NONTERMINAL =
-  `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
-  'WHERE status NOT IN (\'SUCCEEDED\', \'FAILED\')';
+const RECOVERY_PAGE_SIZE = 32;
 const WRITE_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
   deliveryPriority: 'critical',
@@ -282,23 +280,29 @@ class SchemaProvisioningJobRepository {
     return {accepted: true, workflow: nextWorkflow};
   }
 
-  async readSchemaJobRows(sql) {
-    if (typeof this.gateway?.readRows !== 'function') throw createPersistenceUnavailableError();
-    const result = await this.gateway.readRows(
-      TABLES.SCHEMA_OPERATIONS, sql, [], TABLE_LIFECYCLE_READ_OPTIONS,
-    );
+  async listRecoveryPage(leader, status, cursor) {
+    // The existing (status, updated_at) SQLite index ends in rowid. Seek
+    // backwards so later appends cannot perpetually extend a pass.
+    const sql = `SELECT *, rowid AS recovery_rowid FROM ${TABLES.SCHEMA_OPERATIONS} ` +
+      'WHERE status = ? ' + (cursor ? 'AND (updated_at, rowid) < (?, ?) ' : '') +
+      `ORDER BY updated_at DESC, rowid DESC LIMIT ${RECOVERY_PAGE_SIZE}`;
+    const params = cursor ? [status, cursor.updatedAt, cursor.rowId] : [status];
+    const result = await leader.executeLocalQuery(sql, params);
+    if (result?.rowSetComplete !== true || result.partitionId !== leader.partitionId) {
+      throw createPersistenceUnavailableError();
+    }
     const rows = authoritativeRows(result);
-    for (const row of rows) this.rowsByJobId.set(row.job_id, row);
+    if (rows.length > RECOVERY_PAGE_SIZE || rows.some((row) => row.status !== status ||
+        !Number.isSafeInteger(row.recovery_rowid) || !Number.isSafeInteger(row.updated_at))) {
+      throw createPersistenceUnavailableError();
+    }
     return rows;
-  }
-
-  listNonterminalRows() {
-    return this.readSchemaJobRows(SELECT_NONTERMINAL);
   }
 
 }
 
 export {
+  RECOVERY_PAGE_SIZE,
   SchemaProvisioningJobRepository,
   isTerminalSchemaWriteRejection,
   rowToWorkflow,

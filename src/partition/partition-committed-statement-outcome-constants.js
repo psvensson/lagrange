@@ -49,7 +49,7 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
     `,
   SELECT_BY_ENTRY_KEY:
     'SELECT outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text, command_digest ' +
+    'changes, last_insert_rowid, owner_result_text, command_digest, mirror_effect_required ' +
     'FROM _partition_statement_outcomes WHERE entry_key = ?',
   SELECT_ALL:
     'SELECT entry_key, outcome, log_index, term, failure_code, failure_message, ' +

@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-scenario-a-durability",
+  "system": "lagrange",
+  "caseId": "scenario-a-durable-commit-v1",
+  "caseSha256": "169fa5c75abf7a79d7302553ca3684b408ff3dd570e733250c0c802777c977ff",
+  "datasetSha256": "c910f54f6c8fcaa11da7a22cebe9da838d7b2017cee58cfd4078a5624df72769",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "snapshot-write-conflict",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-review-c0a-three-1538",
+    "containerId": "cb985593f29fb4ff98a150fdfe5155ec5153ea536bddb0dccc853901c14e13e1",
+    "imageId": "sha256:58a0686fe872237146bf6ad8dc22c0695da4b724aa12346f8439260b01f91292",
+    "endpoint": "192.168.86.34:5432"
+  },
+  "operation": {
+    "kind": "payment",
+    "phase": "measurement",
+    "workerId": 1,
+    "sequence": 2,
+    "warehouseId": 1,
+    "districtId": 1,
+    "customerWarehouseId": 1,
+    "customerDistrictId": 1,
+    "customerId": 5,
+    "amountCents": 23207
+  },
+  "retryEvidence": {
+    "policyId": "scenario-a-retry-v2",
+    "attempts": 1,
+    "retries": 0,
+    "retryDelayMs": 0,
+    "failures": [],
+    "intendedIssueTimeMs": 1795708159805,
+    "completedAtMs": 1795708162397,
+    "requestClockElapsedMs": 2592
+  },
+  "paymentBeforeRestart": {
+    "warehouseYtdCents": 23207,
+    "districtYtdCents": 23207,
+    "customerBalanceCents": -23207,
+    "customerYtdPaymentCents": 23207,
+    "customerPaymentCount": 1,
+    "historyCount": 1,
+    "historyAmountCents": 23207
+  },
+  "paymentAfterRestart": {
+    "warehouseYtdCents": 23207,
+    "districtYtdCents": 23207,
+    "customerBalanceCents": -23207,
+    "customerYtdPaymentCents": 23207,
+    "customerPaymentCount": 1,
+    "historyCount": 1,
+    "historyAmountCents": 23207
+  },
+  "stateBeforeRestartSha256": "9e1c5c9f28b60e7a7369b20bfea3da8749cb5e81f325b5174583969608f335aa",
+  "stateAfterRestartSha256": "9e1c5c9f28b60e7a7369b20bfea3da8749cb5e81f325b5174583969608f335aa",
+  "faultEvidence": {
+    "containerId": "62e5f29735bebea714f57304c4efb0b3f0c1d4521c9fa9b9859c9b217d613b0d",
+    "host": "192.168.86.32",
+    "restartedAt": "2026-11-26T15:49:24.518Z",
+    "readyAt": "2026-11-26T15:51:03.509Z",
+    "startedAtBefore": "2026-11-26T15:41:31.949910921Z",
+    "startedAtAfter": "2026-11-26T15:49:26.663316086Z",
+    "readiness": {
+      "cluster": {
+        "state": "ready",
+        "component": "lagrange-canonical-tables-routable",
+        "attempts": 3,
+        "stablePolls": 3,
+        "observedAt": "2026-11-26T15:50:56.348Z",
+        "timeToReadyMs": 25974,
+        "evidence": {
+          "denials": [],
+          "nodes": 3,
+          "tables": 56,
+          "partitions": 56,
+          "partitionIds": [
+            "tables-p1",
+            "nodes-p1",
+            "latency_groups-p1",
+            "inter_group_latencies-p1",
+            "message_groups-p1",
+            "partitions-p1",
+            "services-p1",
+            "indices-p1",
+            "logs-p1",
+            "config-p1",
+            "live_queries-p1",
+            "contexts-p1",
+            "code-p1",
+            "control_plane_publications-p1",
+            "replica_operations-p1",
+            "node_endpoints-p1",
+            "service_definitions-p1",
+            "service_instances-p1",
+            "service_bindings-p1",
+            "service_endpoints-p1",
+            "service_timers-p1",
+            "service_packages-p1",
+            "service_revisions-p1",
+            "service_installations-p1",
+            "service_install_failures-p1",
+            "module_manifests-p1",
+            "package_registry_mappings-p1",
+            "package_registry_overrides-p1",
+            "module_dependency_locks-p1",
+            "wasm_operations-p1",
+            "sql_transactions-p1",
+            "sql_transaction_participants-p1",
+            "sql_write_operations-p1",
+            "schema_operations-p1",
+            "schema_migrations-p1",
+            "schema_migration_partitions-p1",
+            "debug_sessions-p1",
+            "debug_breakpoints-p1",
+            "debug_snapshots-p1",
+            "storage_reservations-p1",
+            "service_partition_access-p1",
+            "call_cell_reduce_slots-p1",
+            "call_cell_reduce_results-p1",
+            "call_activation_leases-p1",
+            "artifact_payloads-p1",
+            "artifact_payload_chunks-p1",
+            "tbl-03d3b4007e4448bfb9315efc0aa3e6c7-p1",
+            "tbl-f1a2cd0a335da6d113bb8540278218a6-p1",
+            "tbl-538ceb516d98f3b7db578f1b602ea6f8-p1",
+            "tbl-d939516a1529b9d8a60eb1c76961dfe0-p1",
+            "tbl-c2799b25c747d38722eb238d398f5477-p1",
+            "tbl-332c57a1b7c706e4438ad85f6f2930ab-p1",
+            "tbl-c231fd71a2c7e4f65d2185424e52db54-p1",
+            "tbl-aa40f608c4cfd5c1f33156fb3ec34bf3-p1",
+            "tbl-158d72a693768b167f58caab324339b7-p1",
+            "tbl-d19b359bae809bb0c3fccb79cc1f2f4d-p1"
+          ],
+          "tableNames": [
+            "tables",
+            "nodes",
+            "latency_groups",
+            "inter_group_latencies",
+            "message_groups",
+            "partitions",
+            "services",
+            "indices",
+            "logs",
+            "config",
+            "live_queries",
+            "contexts",
+            "code",
+            "control_plane_publications",
+            "replica_operations",
+            "node_endpoints",
+            "service_definitions",
+            "service_instances",
+            "service_bindings",
+            "service_endpoints",
+            "service_timers",
+            "service_packages",
+            "service_revisions",
+            "service_installations",
+            "service_install_failures",
+            "module_manifests",
+            "package_registry_mappings",
+            "package_registry_overrides",
+            "module_dependency_locks",
+            "wasm_operations",
+            "sql_transactions",
+            "sql_transaction_participants",
+            "sql_write_operations",
+            "schema_operations",
+            "schema_migrations",
+            "schema_migration_partitions",
+            "debug_sessions",
+            "debug_breakpoints",
+            "debug_snapshots",
+            "storage_reservations",
+            "service_partition_access",
+            "call_cell_reduce_slots",
+            "call_cell_reduce_results",
+            "call_activation_leases",
+            "artifact_payloads",
+            "artifact_payload_chunks",
+            "bench_readiness_probe",
+            "warehouse",
+            "district",
+            "customer",
+            "item",
+            "stock",
+            "orders",
+            "new_order",
+            "order_line",
+            "history"
+          ],
+          "sampling": {
+            "factsChecks": 0,
+            "factsElapsedMs": 0,
+            "sqlBatches": 3,
+            "sqlElapsedMs": 2463
+          },
+          "spreadSummary": {
+            "rf3Partitions": 56,
+            "rf2Partitions": 0,
+            "rf1Partitions": 0,
+            "twoHostPartitionIds": []
+          },
+          "tableTimeToRoutableMs": {
+            "warehouse": 2759,
+            "district": 2759,
+            "customer": 2759,
+            "item": 2759,
+            "stock": 2759,
+            "orders": 2759,
+            "new_order": 2759,
+            "order_line": 2759,
+            "history": 2759
+          }
+        },
+        "tableTimeToRoutableMs": {
+          "warehouse": 2759,
+          "district": 2759,
+          "customer": 2759,
+          "item": 2759,
+          "stock": 2759,
+          "orders": 2759,
+          "new_order": 2759,
+          "order_line": 2759,
+          "history": 2759
+        }
+      },
+      "probe": {
+        "state": "ready",
+        "component": "lagrange-probe-write-readback",
+        "attempts": 1,
+        "stablePolls": 1,
+        "observedAt": "2026-11-26T15:50:59.358Z",
+        "timeToReadyMs": 3010,
+        "evidence": {
+          "written": "bench-review-c0a-three-1538-1795708257805",
+          "insertTag": "INSERT 0 1",
+          "insertRowCount": 1,
+          "readBack": [
+            {
+              "token": "bench-review-c0a-three-1538-1795708257805"
+            }
+          ],
+          "visibility": {
+            "status": "single-listener",
+            "readFrom": [
+              "00000000-0000-4000-8000-000000000001"
+            ],
+            "notReadFrom": [
+              "00000000-0000-4000-8000-000000000003",
+              "00000000-0000-4000-8000-000000000002"
+            ]
+          }
+        }
+      }
+    },
+    "faultTarget": {
+      "nodeId": "62e5f29735bebea714f57304c4efb0b3f0c1d4521c9fa9b9859c9b217d613b0d",
+      "role": "lagrange-node",
+      "isDataReplica": true,
+      "pgHostOnly": false
+    },
+    "beforeIncarnation": "62e5f29735bebea714f57304c4efb0b3f0c1d4521c9fa9b9859c9b217d613b0d:2026-11-26T15:41:31.949910921Z",
+    "afterIncarnation": "62e5f29735bebea714f57304c4efb0b3f0c1d4521c9fa9b9859c9b217d613b0d:2026-11-26T15:49:26.663316086Z",
+    "storageContinuity": "preserved",
+    "retainedObligations": [
+      "committed_payment_rows",
+      "full_oltp_state_sha256"
+    ]
+  },
+  "evaluation": {
+    "passed": true,
+    "failures": [],
+    "actual": {
+      "commitAcknowledged": true,
+      "paymentPassed": true,
+      "stateBeforeRestartSha256": "9e1c5c9f28b60e7a7369b20bfea3da8749cb5e81f325b5174583969608f335aa",
+      "stateAfterRestartSha256": "9e1c5c9f28b60e7a7369b20bfea3da8749cb5e81f325b5174583969608f335aa",
+      "faultEvidence": {
+        "faultTarget": {
+          "nodeId": "62e5f29735bebea714f57304c4efb0b3f0c1d4521c9fa9b9859c9b217d613b0d",
+          "role": "lagrange-node",
+          "isDataReplica": true,
+          "pgHostOnly": false
+        },
+        "beforeIncarnation": "62e5f29735bebea714f57304c4efb0b3f0c1d4521c9fa9b9859c9b217d613b0d:2026-11-26T15:41:31.949910921Z",
+        "afterIncarnation": "62e5f29735bebea714f57304c4efb0b3f0c1d4521c9fa9b9859c9b217d613b0d:2026-11-26T15:49:26.663316086Z",
+        "storageContinuity": "preserved",
+        "retainedObligations": [
+          "committed_payment_rows",
+          "full_oltp_state_sha256"
+        ]
+      }
+    },
+    "paymentEvaluation": {
+      "passed": true,
+      "failures": [],
+      "actual": {
+        "paidCents": 23207,
+        "warehouseYtdCents": 23207,
+        "districtYtdCents": 23207,
+        "customerBalanceCents": -23207,
+        "customerYtdPaymentCents": 23207,
+        "customerPaymentCount": 1,
+        "historyCount": 1,
+        "historyAmountCents": 23207
+      },
+      "expected": {
+        "paidCents": 23207,
+        "warehouseYtdCents": 23207,
+        "districtYtdCents": 23207,
+        "customerBalanceCents": -23207,
+        "customerYtdPaymentCents": 23207,
+        "customerPaymentCount": 1,
+        "historyCount": 1,
+        "historyAmountCents": 23207
+      },
+      "proofIds": [
+        "transaction:payment:customer_balance_decreases_by_payment_amount",
+        "transaction:payment:customer_payment_counters_advance_once",
+        "transaction:payment:district_ytd_increases_by_payment_amount",
+        "transaction:payment:one_history_row_created_for_logical_payment",
+        "transaction:payment:warehouse_ytd_increases_by_payment_amount"
+      ]
+    },
+    "proofIds": [
+      "isolation:atomicCommitRequired",
+      "isolation:successfulCommitDurable"
+    ]
+  },
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-scenario-a-durability",
+    "system": "lagrange",
+    "status": "passed",
+    "artifactSha256": "a09243f9465406d49963a88dd69ceb345f8af2ff1b3408f72402ee291fdf8531",
+    "proofIds": [
+      "isolation:atomicCommitRequired",
+      "isolation:successfulCommitDurable"
+    ]
+  },
+  "artifactSha256": "a09243f9465406d49963a88dd69ceb345f8af2ff1b3408f72402ee291fdf8531"
+}

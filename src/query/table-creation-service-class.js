@@ -124,6 +124,7 @@ class TableCreationService {
     this.schemaProvisioningJobOwner =
       options.schemaProvisioningJobOwner || new SchemaProvisioningJobOwner({
         repository: this.schemaProvisioningJobRepository,
+        recoveryLeaders: options.schemaRecoveryLeaders,
         logger: this.logger,
         workflowCoordinator: options.schemaWorkflowCoordinator,
         ownerId: options.schemaProvisioningOwnerId,

@@ -50,6 +50,20 @@ test('pinned snapshot and source replay reject a malformed retained statement ef
     ).run(field, value, entryKey);
     const malformed = [
       () => db.prepare('DELETE FROM _partition_statement_outcome_effects WHERE entry_key = ?').run(entryKey),
+      () => {
+        const injected = {...command, entryId: 'unmirrored-change'};
+        const key = committedStatementEntryKey(injected);
+        db.prepare('INSERT INTO orders VALUES (?)').run(1);
+        const result = db.prepare(injected.sql).run(...injected.params);
+        recordCommittedStatementOutcome(service, {entryKey: key, index: 3, term: 1, outcome,
+          result: {changes: result.changes, lastInsertRowid: null}});
+        assert.deepEqual(db.prepare('SELECT changes, mirror_effect_required ' +
+          'FROM _partition_statement_outcomes WHERE entry_key = ?').get(key),
+        {changes: 1, mirror_effect_required: 0});
+        db.prepare('INSERT INTO _partition_statement_outcome_effects VALUES (?, ?, ?, ?)').run(
+          key, 3, PARTITION_SERVICE_OPERATION.DELETE,
+          JSON.stringify({command: injected, typedEffects: encodeTypedRowSet(['id'], removed)}));
+      },
       change('$.command.mirrorRetentionBarrierIndex', 1),
       change('$.command.type', 'UNKNOWN'),
       change('$.command.entryId', 'wrong-key'),
@@ -85,6 +99,13 @@ test('pinned snapshot and source replay reject a malformed retained statement ef
     recordCommittedStatementOutcome(service, {...settled, entryKey: 'entry:empty', index: 6,
       result: {changes: 0, lastInsertRowid: null}});
     assert.deepEqual(loadDurableDeltasBehindWatermark(service, 2), []);
+    const empty = {...command, entryId: 'empty-delete'};
+    const noRows = db.prepare(empty.sql + ' RETURNING id').raw().all(...empty.params);
+    recordCommittedStatementOutcome(service, {...settled, command: empty,
+      entryKey: committedStatementEntryKey(empty), index: 7,
+      result: {changes: noRows.length, lastInsertRowid: null, mutationKind: PARTITION_SERVICE_OPERATION.DELETE,
+        typedEffects: encodeTypedRowSet(['id'], noRows)}});
+    assert.deepEqual(loadDurableDeltasBehindWatermark(service, 2)[0].affectedRows, []);
     scrubRaftRsCheckpointPayload(db, ENTITY_TYPE.PARTITION);
     assert.equal(validateRaftRsPayloadTables(db, descriptor), true);
   } finally {

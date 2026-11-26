@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-order-status-v1",
+  "system": "lagrange",
+  "caseId": "scenario-a-order-status-v1",
+  "caseSha256": "67f91fe868ba8a6daac124fb5b9179bad1a791b15a72a58f3c25bfd8cd447f39",
+  "datasetSha256": "c910f54f6c8fcaa11da7a22cebe9da838d7b2017cee58cfd4078a5624df72769",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "snapshot-write-conflict",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-review-c0a-three-1538",
+    "containerId": "cb985593f29fb4ff98a150fdfe5155ec5153ea536bddb0dccc853901c14e13e1",
+    "imageId": "sha256:58a0686fe872237146bf6ad8dc22c0695da4b724aa12346f8439260b01f91292",
+    "endpoint": "192.168.86.34:5432"
+  },
+  "setupOperation": {
+    "kind": "new_order",
+    "phase": "setup",
+    "workerId": 1,
+    "sequence": 1,
+    "warehouseId": 1,
+    "districtId": 2,
+    "customerId": 1,
+    "lines": [
+      {
+        "itemId": 1,
+        "quantity": 1,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 2,
+        "quantity": 2,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 3,
+        "quantity": 3,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 4,
+        "quantity": 4,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 5,
+        "quantity": 5,
+        "supplyWarehouseId": 1
+      }
+    ]
+  },
+  "operation": {
+    "kind": "order_status",
+    "phase": "measurement",
+    "workerId": 1,
+    "sequence": 3,
+    "warehouseId": 1,
+    "districtId": 2,
+    "customerId": 1
+  },
+  "setupRetryEvidence": {
+    "policyId": "scenario-a-retry-v2",
+    "attempts": 1,
+    "retries": 0,
+    "retryDelayMs": 0,
+    "failures": [],
+    "intendedIssueTimeMs": 1795708063794,
+    "completedAtMs": 1795708069906,
+    "requestClockElapsedMs": 6112
+  },
+  "retryEvidence": {
+    "policyId": "scenario-a-retry-v2",
+    "attempts": 1,
+    "retries": 0,
+    "retryDelayMs": 0,
+    "failures": [],
+    "intendedIssueTimeMs": 1795708071037,
+    "completedAtMs": 1795708071629,
+    "requestClockElapsedMs": 592
+  },
+  "observation": {
+    "orderId": 1,
+    "lineCount": 5,
+    "lines": [
+      {
+        "lineNumber": 1,
+        "itemId": 1,
+        "supplyWarehouseId": 1,
+        "quantity": 1,
+        "amountCents": 1632,
+        "delivered": 0
+      },
+      {
+        "lineNumber": 2,
+        "itemId": 2,
+        "supplyWarehouseId": 1,
+        "quantity": 2,
+        "amountCents": 18608,
+        "delivered": 0
+      },
+      {
+        "lineNumber": 3,
+        "itemId": 3,
+        "supplyWarehouseId": 1,
+        "quantity": 3,
+        "amountCents": 8346,
+        "delivered": 0
+      },
+      {
+        "lineNumber": 4,
+        "itemId": 4,
+        "supplyWarehouseId": 1,
+        "quantity": 4,
+        "amountCents": 13096,
+        "delivered": 0
+      },
+      {
+        "lineNumber": 5,
+        "itemId": 5,
+        "supplyWarehouseId": 1,
+        "quantity": 5,
+        "amountCents": 18680,
+        "delivered": 0
+      }
+    ],
+    "stateBeforeSha256": "11d913bf8940a7f27711daa19521cf5ce9e72582a9b93ad5ec3d6149f308c972",
+    "stateAfterSha256": "11d913bf8940a7f27711daa19521cf5ce9e72582a9b93ad5ec3d6149f308c972"
+  },
+  "evaluation": {
+    "passed": true,
+    "failures": [],
+    "actual": {
+      "orderId": 1,
+      "lineCount": 5,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "itemId": 1,
+          "supplyWarehouseId": 1,
+          "quantity": 1,
+          "amountCents": 1632,
+          "delivered": 0
+        },
+        {
+          "lineNumber": 2,
+          "itemId": 2,
+          "supplyWarehouseId": 1,
+          "quantity": 2,
+          "amountCents": 18608,
+          "delivered": 0
+        },
+        {
+          "lineNumber": 3,
+          "itemId": 3,
+          "supplyWarehouseId": 1,
+          "quantity": 3,
+          "amountCents": 8346,
+          "delivered": 0
+        },
+        {
+          "lineNumber": 4,
+          "itemId": 4,
+          "supplyWarehouseId": 1,
+          "quantity": 4,
+          "amountCents": 13096,
+          "delivered": 0
+        },
+        {
+          "lineNumber": 5,
+          "itemId": 5,
+          "supplyWarehouseId": 1,
+          "quantity": 5,
+          "amountCents": 18680,
+          "delivered": 0
+        }
+      ],
+      "stateBeforeSha256": "11d913bf8940a7f27711daa19521cf5ce9e72582a9b93ad5ec3d6149f308c972",
+      "stateAfterSha256": "11d913bf8940a7f27711daa19521cf5ce9e72582a9b93ad5ec3d6149f308c972"
+    },
+    "expected": {
+      "orderId": 1,
+      "lineCount": 5,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "itemId": 1,
+          "supplyWarehouseId": 1,
+          "quantity": 1,
+          "amountCents": 1632,
+          "delivered": 0
+        },
+        {
+          "lineNumber": 2,
+          "itemId": 2,
+          "supplyWarehouseId": 1,
+          "quantity": 2,
+          "amountCents": 18608,
+          "delivered": 0
+        },
+        {
+          "lineNumber": 3,
+          "itemId": 3,
+          "supplyWarehouseId": 1,
+          "quantity": 3,
+          "amountCents": 8346,
+          "delivered": 0
+        },
+        {
+          "lineNumber": 4,
+          "itemId": 4,
+          "supplyWarehouseId": 1,
+          "quantity": 4,
+          "amountCents": 13096,
+          "delivered": 0
+        },
+        {
+          "lineNumber": 5,
+          "itemId": 5,
+          "supplyWarehouseId": 1,
+          "quantity": 5,
+          "amountCents": 18680,
+          "delivered": 0
+        }
+      ]
+    },
+    "proofIds": [
+      "forbidden:read_only_transaction_mutation",
+      "transaction:order_status:database_state_is_unchanged",
+      "transaction:order_status:latest_customer_order_is_returned_when_present",
+      "transaction:order_status:returned_lines_belong_to_returned_order"
+    ]
+  },
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-order-status-v1",
+    "system": "lagrange",
+    "status": "passed",
+    "artifactSha256": "3cd09529d7d90b55e83f4ed56d5c7a48573f0f05f2774aaf8cbee026d429d8eb",
+    "proofIds": [
+      "forbidden:read_only_transaction_mutation",
+      "transaction:order_status:database_state_is_unchanged",
+      "transaction:order_status:latest_customer_order_is_returned_when_present",
+      "transaction:order_status:returned_lines_belong_to_returned_order"
+    ]
+  },
+  "artifactSha256": "3cd09529d7d90b55e83f4ed56d5c7a48573f0f05f2774aaf8cbee026d429d8eb"
+}

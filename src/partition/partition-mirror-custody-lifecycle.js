@@ -1,7 +1,7 @@
 import {authoritativeRecordOf, acknowledgeMirrorCustodyRelease} from './managed-workflow-record-store.js';
 import {parseTablePartitionTransition} from './partition-transition-row.js';
 import {TABLES} from '../constants/tables.js';
-import {endsSourceExecutionAttempt} from './partition-constants.js';
+import {endsSourceExecutionAttempt, PARTITION_TRANSITION_STATE} from './partition-constants.js';
 import {sameMirrorCustody} from './partition-mirror-custody-codec.js';
 import {
   readDurableMirrorRetentionCustodyIn, releaseSourceMirrorRetentionCustody,
@@ -50,6 +50,12 @@ export async function reconcileFailedMirrorCustody(service) {
   return work;
 }
 
+// A failed local run can finish draining while its durable grant remains live.
+export function isStoppedMirrorWorker(handle) {
+  return handle?.phase === PARTITION_TRANSITION_STATE.FAILED &&
+    handle.terminal === true && handle.quiesced === true;
+}
+
 // A terminal row is held by the record owner until all grants have a durable
 // release acknowledgement. Its projection is only a wake hint.
 export function redriveFailedMirrorRelease(service) {
@@ -58,7 +64,8 @@ export function redriveFailedMirrorRelease(service) {
   if (!terminalGrantForSource(row, service.partitionId)) {
     const transition = parseTablePartitionTransition(row);
     const metadata = transition?.metadata;
-    if (!service.splitReplication && !service.mergeReplication &&
+    if ((!service.splitReplication || isStoppedMirrorWorker(service.splitReplication)) &&
+        (!service.mergeReplication || isStoppedMirrorWorker(service.mergeReplication)) &&
         metadata?.mirrorCustodyGrants?.some((grant) => grant.partitionId === service.partitionId &&
           grant.fence === metadata.workflowFenceToken && !grant.release) && !metadata.mirrorExecutionEnded) {
       service.resumeDurableMirrorReplicationWorkers();

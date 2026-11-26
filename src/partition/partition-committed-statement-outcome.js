@@ -168,6 +168,7 @@ function readCommittedStatementOutcomeIn(db, entryKey) {
     ...(capturedEffects === null ?
       {} :
       {
+        mirrorEffectRequired: row.mirror_effect_required,
         affectedRows: capturedEffects.affectedRows,
         ...(capturedEffects.mutationKind === null ?
           {} :

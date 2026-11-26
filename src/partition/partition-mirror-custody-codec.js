@@ -91,6 +91,7 @@ export function assertAppliedMirrorEffect(command, index, previousIndex, rowCoun
   if (index <= previousIndex || !ordinal(rowCount) ||
       !mutationKind || mutationKind !== recorded?.mutationKind ||
       recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED ||
+      recorded.mirrorEffectRequired !== Number(rowCount > 0) ||
       recorded.logIndex !== index || recorded.changes !== rowCount) {
     throw invalidReplay(`Mirror effect lacks matching applied statement at index ${index}`);
   }

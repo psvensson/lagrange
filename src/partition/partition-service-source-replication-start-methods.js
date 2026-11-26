@@ -1,6 +1,6 @@
 import {readDurableMirrorRetentionCustodyIn, replicateSourceMirrorRetentionCustody} from './partition-mirror-effect-retention.js';
 import {canAssumeMirrorCustody} from './partition-mirror-custody-codec.js';
-import {reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
+import {isStoppedMirrorWorker, reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {ERRORS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
@@ -235,6 +235,14 @@ class PartitionServiceSourceReplicationStartMethods {
       this, request, transitionMetadata);
     if (followerResponse) return followerResponse;
     if (splitStartIsDuplicate(this, metadata)) {
+      const current = this.splitReplication;
+      if (isStoppedMirrorWorker(current)) {
+        return await this.startOrResumeSplitReplicationFromDurable() ? {success: true} :
+          rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+      }
+      if (current.terminal || current.quiescing || current.phase === PARTITION_TRANSITION_STATE.FAILED) {
+        return rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+      }
       return invokeStartMethod(this, START_METHOD.WAIT_SPLIT,
         this.splitReplication);
     }
@@ -341,6 +349,14 @@ class PartitionServiceSourceReplicationStartMethods {
         request, transitionMetadata);
     }
     if (mergeStartIsDuplicate(this, metadata)) {
+      const current = this.mergeReplication;
+      if (isStoppedMirrorWorker(current)) {
+        return await this.startOrResumeMergeReplicationFromDurable() ? {success: true} :
+          rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
+      }
+      if (current.terminal || current.quiescing || current.phase === PARTITION_TRANSITION_STATE.FAILED) {
+        return rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
+      }
       return invokeStartMethod(this, START_METHOD.WAIT_MERGE,
         this.mergeReplication);
     }
