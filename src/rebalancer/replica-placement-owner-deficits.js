@@ -334,8 +334,6 @@ function waitingOf(context, deficitKind, reason) {
 function copyMoveOf(context, deficitKind, type, fields) {
   const requireUnusedHost =
     deficitKind === KIND.HOST_SPREAD || deficitKind === KIND.LEARNER_DEFICIT;
-  const anyTarget = findTargetNode(context.live, context.eligibility, {requireUnusedHost});
-  if (anyTarget === null) return waitingOf(context, deficitKind, WAITING.NO_ELIGIBLE_TARGET);
   const storageExcludedNodeIds = context.storageExcludedTargets ?
     new Set(context.storageExcludedTargets.keys()) : null;
   const target = targetNodeOf(context.live, context.eligibility, {
@@ -345,11 +343,12 @@ function copyMoveOf(context, deficitKind, type, fields) {
     targetCapacityRanker: context.targetCapacityRanker,
   });
   if (target === null) {
-    return waitingOf(
-      context,
-      deficitKind,
-      context.storageExcludedTargets.get(anyTarget),
-    );
+    // Only storage exclusions can hide an otherwise eligible target. Consult the
+    // unranked choice only to attribute that refusal to its original reason.
+    const anyTarget = storageExcludedNodeIds?.size ?
+      findTargetNode(context.live, context.eligibility, {requireUnusedHost}) : null;
+    return waitingOf(context, deficitKind, anyTarget === null ?
+      WAITING.NO_ELIGIBLE_TARGET : context.storageExcludedTargets.get(anyTarget));
   }
   if (context.leader === undefined) {
     return waitingOf(context, deficitKind, WAITING.LEADER_UNKNOWN);

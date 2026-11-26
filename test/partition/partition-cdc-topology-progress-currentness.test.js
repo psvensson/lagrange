@@ -429,10 +429,7 @@ test('full CDC continuation path across overlapping tables, held recipient, tenu
     assert.equal(topology.inFlightDurableWaves.size, 0, 'no wave is left in flight');
   });
 
-// A baseline measurement. Both admissible outcomes (one or two ranges by
-// the first check callback) are meaningful. Nothing waits for a sibling.
-test('measure independent partition CDC ranges on one loopback recipient socket',
-  {timeout: 30000}, async (t) => {
+async function measureLoopbackRanges(t, arm) {
     const native = await recipientFixture(t, 'loopback', {replicaCount: 1, groupId: TARGET_GROUP});
     const [recipient] = native.services;
     const receiver = native.router;
@@ -471,6 +468,61 @@ test('measure independent partition CDC ranges on one loopback recipient socket'
     const tcpWrites = [];
     const now = () => performance.now();
     let firstCheck;
+    const lanes = [];
+    const pending = [];
+    const flushes = [];
+    const wireOrder = [];
+    let immediate, timer, expires, probe, withdrawn;
+    const flush = (reason) => {
+      if (!pending.length) return;
+      clearImmediate(immediate);
+      clearTimeout(timer);
+      const batch = pending.splice(0);
+      flushes.push({reason, count: batch.length});
+      tcp.cork();
+      try {
+        for (const item of batch) {
+          try {
+            assert.equal(sender.nodeConnections.get(receiver.nodeId)?.ws, ws);
+            item.resolve(item.submit());
+          } catch (error) {
+            item.reject(error);
+          }
+        }
+      } finally {
+        tcp.uncork();
+      }
+    };
+    t.after(() => {
+      clearImmediate(immediate);
+      clearTimeout(timer);
+      for (const item of pending.splice(0)) item.reject(new Error('experiment closed'));
+    });
+    const acknowledge = sender.handleAcknowledgment;
+    t.mock.method(sender, 'handleAcknowledgment', function(message) {
+      const sample = sends.get(message.messageId);
+      if (sample && message.acknowledged) sample.acks++;
+      return acknowledge.call(this, message);
+    });
+    const respond = sender.handleServiceResponse;
+    t.mock.method(sender, 'handleServiceResponse', function(message) {
+      const sample = sends.get(message.messageId);
+      if (sample && isCommittedCdcOutcome(message.result, sample.events, TARGET_GROUP)) {
+        sample.nativeAt = now();
+        sample.receipts = message.result.cdcCommitted;
+        if (arm === 'lost-answer' && sample === sends.values().next().value) {
+          withdrawn = sample.events[0].sourcePartition;
+          lanes.find((lane) => lane.partitionId === withdrawn).controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+          return;
+        }
+      }
+      return respond.call(this, message);
+    });
+    const raw = sender.sendRaw;
+    t.mock.method(sender, 'sendRaw', function(socket, message, ...args) {
+      if (socket === ws && message.type === ROUTER_MESSAGE_TYPE.PING) flush('urgent');
+      return raw.call(this, socket, message, ...args);
+    });
     const enqueue = sender.enqueueOutbound;
     t.mock.method(sender, 'enqueueOutbound', function(node, run, options) {
       if (options.targetAddress === recipient.unifiedAddress) {
@@ -486,9 +538,29 @@ test('measure independent partition CDC ranges on one loopback recipient socket'
         assert.equal(connection.ws, ws);
         const sample = samples.get(deliveredEventsOf(payload)[0].sourcePartition);
         sample.admitted = now();
+        sample.events = deliveredEventsOf(payload);
+        sample.acks = 0;
         sample.messageId = id;
         sends.set(id, sample);
         firstCheck ??= nextTurn().then(() => ({admitted: sends.size, elapsedMs: now() - sample.admitted}));
+        if (arm !== 'immediate') {
+          if (pending.length && now() >= expires) flush('window');
+          const submitted = new Promise((resolve, reject) => {
+            pending.push({resolve, reject, submit: () => {
+              sample.released = now();
+              return send.call(this, connection, address, id, payload, ...rest);
+            }});
+          });
+          if (pending.length === 2) flush('pair');
+          else {
+            expires = now() + 12;
+            immediate = setImmediate(() => flush('check'));
+            timer = setTimeout(() => flush('window'), 12);
+            if (arm === 'urgent' && !probe) probe = sender.pingNode(receiver.nodeId);
+          }
+          return submitted;
+        }
+        sample.released = now();
       }
       return send.call(this, connection, address, id, payload, ...rest);
     });
@@ -506,6 +578,7 @@ test('measure independent partition CDC ranges on one loopback recipient socket'
       const at = now();
       const result = sendFrame.call(this, bytes, ...options);
       const frame = JSON.parse(bytes);
+      wireOrder.push(frame.messageId ?? frame.type);
       if (frame.type === ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE && frame.targetAddress === recipient.unifiedAddress) {
         const sample = sends.get(frame.messageId);
         assert.equal(sample.write, undefined);
@@ -519,6 +592,10 @@ test('measure independent partition CDC ranges on one loopback recipient socket'
       const events = deliveredEventsOf(payload);
       grants.add(options.deliveryContext);
       const result = await deliver.call(this, address, payload, options);
+      if (withdrawn === events[0].sourcePartition) {
+        assert.ok(!isCommittedCdcOutcome(result.answer, events, TARGET_GROUP));
+        return result;
+      }
       assert.ok(isCommittedCdcOutcome(result.answer, events, TARGET_GROUP));
       const sample = samples.get(events[0].sourcePartition);
       sample.answered = now();
@@ -528,7 +605,6 @@ test('measure independent partition CDC ranges on one loopback recipient socket'
       return result;
     });
 
-    const lanes = [];
     for (const partitionId of ['config-loopback-a', 'config-loopback-b']) {
       const {leader} = await startLeader({tableName: TABLES.CONFIG, schema: CONFIG_SCHEMA,
         replicaId: partitionId + '-r1', timeSource: new RealTimeSource()}, partitionId);
@@ -563,14 +639,16 @@ test('measure independent partition CDC ranges on one loopback recipient socket'
       assert.equal(applyCommitted(leader, commit), null);
       await Promise.all([...leader.pendingCDCEventDeliveries]);
       await leader.cdcDelivery.flushCdcAcknowledgements(PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY);
-      assert.deepEqual(countCdcObligations(leader.db), {owed: 0, delivered: 2});
+      assert.deepEqual(countCdcObligations(leader.db), id === withdrawn ? {owed: 2, delivered: 0} : {owed: 0, delivered: 2});
     }));
     assert.equal(grants.size, 2);
     assert.equal(sends.size, 2);
     const record = RaftRsDurableStore.readDurableRecordIn(recipient.db, TARGET_GROUP);
     const ranges = [];
     for (const [partitionId, sample] of samples) {
-      assert.ok(sample.remainingMs > 0 && sample.answered >= sample.write && sample.write >= sample.admitted);
+      assert.ok(sample.remainingMs > 0 && sample.nativeAt >= sample.write && sample.write >= sample.admitted);
+      assert.equal(sample.acks, 1);
+      assert.equal(Number.isFinite(sample.answered), partitionId !== withdrawn);
       assert.deepEqual(sample.events.map((event) => event.sourceOrdinal), [0, 1]);
       for (const receipt of sample.receipts) {
         const entry = record.entries.find((item) => BigInt(item.index) === BigInt(receipt.logIndex));
@@ -580,10 +658,28 @@ test('measure independent partition CDC ranges on one loopback recipient socket'
         assert.ok(command.events.some((event) => event.eventKey === receipt.eventKey));
       }
       ranges.push({partitionId, messageId: sample.messageId, queueMs: sample.admitted - sample.queued,
-        admissionToWriteMs: sample.write - sample.admitted, writeToReceiptMs: sample.answered - sample.write,
+        admissionToWriteMs: sample.write - sample.admitted, collectionMs: sample.released - sample.admitted, writeToNativeReceiptMs: sample.nativeAt - sample.write,
         remainingMs: sample.remainingMs, receipts: sample.receipts});
     }
     assert.ok(tcpWrites.length > 0);
-    t.diagnostic(JSON.stringify({firstCheck: await firstCheck, ranges, wsRequestFrames: sends.size,
-      tcpStreamWrites: tcpWrites}));
+    const first = sends.values().next().value;
+    assert.deepEqual(wireOrder.filter((id) => sends.has(id)), [...sends.keys()]);
+    if (arm === 'urgent') {
+      assert.equal(await probe, true);
+      assert.equal(flushes[0].reason, 'urgent');
+      assert.equal(wireOrder.indexOf(ROUTER_MESSAGE_TYPE.PING), wireOrder.indexOf(first.messageId) + 1);
+    }
+    if (arm === 'lost-answer') assert.equal(withdrawn, first.events[0].sourcePartition);
+    return {arm, firstCheck: await firstCheck, ranges, flushes, wsRequestFrames: sends.size,
+      firstAdmissionToFirstNativeReceiptMs: Math.min(...[...sends.values()].map(s => s.nativeAt)) - first.admitted,
+      tcpStreamWrites: tcpWrites};
+}
+
+test('measure independent partition CDC ranges on one loopback recipient socket',
+  {timeout: 120000}, async (t) => {
+    for (const arm of ['immediate', 'pair', 'lost-answer', 'urgent']) {
+      await t.test(arm, {timeout: 30000}, async (t) => {
+        t.diagnostic(JSON.stringify(await measureLoopbackRanges(t, arm)));
+      });
+    }
   });

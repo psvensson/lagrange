@@ -675,6 +675,52 @@ test('one placement pass distinguishes admissions sharing a copy source and clas
   }
 });
 
+test('a repeated SERVICES wake admits the same newly feasible copy as a fresh resync', async () => {
+  const partitionId = 'tbl-repeat-copy-p1';
+  const nodes = ['n1', 'n2', 'n3'].map((id) => nodeRow(id, 'host-' + id));
+  async function run(repeat) {
+    const services = seededServiceRows(partitionId);
+    const update = {...services[0], [COLUMN.SERVICE_ID]: 'repeat-source'};
+    const cache = createSimpleSystemCache([seededPartitionRow(partitionId)], services);
+    const ledger = createRealSqlLedgerHarness(cache);
+    let targetAvailable = false;
+    const owner = createReplicaPlacementOwner({
+      nodeId: 'n1', ledgerPartitionService: ledger.service, systemTableCache: cache,
+      now: () => NOW_MS, logger: ledger.service.logger,
+      nodeAuthority: {subscribe: () => () => {}, scheduleRefresh() {},
+        answerCommittedNodes: () => ({state: 'ready', nodeRows: nodes, epoch: {publicationEpoch: 1},
+          formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 1}})},
+      storageAccountingService: {subscribeCapacitySemanticChanges: () => () => {},
+        getCapacitySemanticIdentity: (id) => ({projection: {capacity: {
+          budgetBytes: id === 'n1' || (id === 'n3' && targetAvailable) ? 1000000 : null,
+        }}})},
+      admitPlacement: ledger.admitPlacement, releasePlacementHold: ledger.releasePlacementHold,
+    });
+    try {
+      owner.setLeader(true);
+      await owner.awaitCurrentWorkIdle();
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, update);
+      await owner.awaitCurrentWorkIdle();
+      assert.equal(ledger.submittedStatements.length, 0);
+      const before = owner.lastPlacementDecision.serviceWakes;
+      targetAvailable = true;
+      if (repeat) cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {...update});
+      else owner.notify(PLACEMENT_TRIGGER.RESYNC);
+      await owner.awaitCurrentWorkIdle();
+      const admissions = ledger.submittedStatements.filter(({type}) => type === PLACEMENT_ADMIT_TYPE);
+      assert.equal(admissions.length, 1);
+      assert.equal(admissions[0].body.moves[0].targetNodeId, 'n3');
+      assert.equal(owner.lastPlacementDecision.serviceWakes.repeatOnlyAdmissions - before.repeatOnlyAdmissions,
+        repeat ? 1 : 0);
+      return admissions.map(({body}) => body);
+    } finally {
+      owner.shutdown();
+      ledger.db.close();
+    }
+  }
+  assert.deepEqual(await run(true), await run(false));
+});
+
 test('Scenario 8: leadership change with uncertain admission reconstructs occupancy and replays exact retained statement with its original recorded adaptive limits', async () => {
   const nowMs = NOW_MS;
   const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];

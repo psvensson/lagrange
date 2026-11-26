@@ -1,0 +1,72 @@
+{
+  "sourceCommit": "46cf0f679413f6817a7c365baf2d85cb97efdeb5",
+  "witnessBlob": "5c6376ffd0ddc289d519d73aa07b55a9d39c2b6a",
+  "labHost": "adams-gamla",
+  "scope": "Two independent source CDC ranges to one native RF1 recipient on one loopback TCP connection. Experimental collection exists only in the test. Each request retains its own protocol frame and receipt. Timings are single observations.",
+  "rawTapSha256": "0abd2da801033495780827c35a3f64e9910e5ce40b9776c2b93e9acb622de94a",
+  "samples": [
+    {
+      "arm": "immediate",
+      "flushes": [],
+      "wsRequestFrames": 2,
+      "tcpStreamWrites": 2,
+      "firstAdmissionToFirstNativeReceiptMs": 29.889686999999867,
+      "collectionMs": [
+        0.023906000000351924,
+        0.0022870000002512825
+      ]
+    },
+    {
+      "arm": "pair",
+      "flushes": [
+        {
+          "reason": "pair",
+          "count": 2
+        }
+      ],
+      "wsRequestFrames": 2,
+      "tcpStreamWrites": 1,
+      "firstAdmissionToFirstNativeReceiptMs": 17.85493299999962,
+      "collectionMs": [
+        6.052947000000131,
+        1.1888000000008105
+      ]
+    },
+    {
+      "arm": "lost-answer",
+      "flushes": [
+        {
+          "reason": "pair",
+          "count": 2
+        }
+      ],
+      "wsRequestFrames": 2,
+      "tcpStreamWrites": 1,
+      "firstAdmissionToFirstNativeReceiptMs": 14.529613000000609,
+      "collectionMs": [
+        5.222005000000536,
+        0.7990570000001753
+      ]
+    },
+    {
+      "arm": "urgent",
+      "flushes": [
+        {
+          "reason": "urgent",
+          "count": 1
+        },
+        {
+          "reason": "check",
+          "count": 1
+        }
+      ],
+      "wsRequestFrames": 2,
+      "tcpStreamWrites": 3,
+      "firstAdmissionToFirstNativeReceiptMs": 10.977679999999964,
+      "collectionMs": [
+        0.3409300000002986,
+        9.045437000000675
+      ]
+    }
+  ]
+}

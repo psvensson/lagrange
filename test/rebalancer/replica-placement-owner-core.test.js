@@ -141,6 +141,30 @@ function deficit(partitionId, placements, nodeRows = FIVE_ON_FOUR, replicationFa
     eligibility: buildPlacementNodeEligibility({nodeRows, nowMs: NOW_MS})});
 }
 
+test('copy target search scans eligible nodes once on success and preserves refusal attribution', () => {
+  const partitionId = 'tbl-target-p1';
+  const nodes = FIVE_ON_FOUR.slice(0, 3);
+  const base = buildPlacementNodeEligibility({nodeRows: nodes, nowMs: NOW_MS});
+  let scans = 0;
+  const eligibility = {...base, get eligibleNodeIds() {
+    scans++;
+    return base.eligibleNodeIds;
+  }};
+  const evaluate = (storageExcludedTargets, saturatedTargetNodeIds = new Set()) =>
+    evaluatePartitionDeficit({partitionId, replicationFactor: 3,
+      replicaRows: replicas(partitionId, [['n1', true]]), eligibility,
+      storageExcludedTargets, saturatedTargetNodeIds,
+      targetCapacityRanker: (id) => id === 'n3' ? 5 : 1});
+  assert.equal(evaluate(new Map()).candidate.move.targetNodeId, 'n3');
+  assert.equal(scans, 1);
+  const unknown = PLACEMENT_WAITING_REASON.TARGET_STORAGE_UNKNOWN;
+  const constrained = PLACEMENT_WAITING_REASON.TARGET_STORAGE_CONSTRAINED;
+  assert.equal(evaluate(new Map([['n3', constrained]])).candidate.move.targetNodeId, 'n2');
+  assert.equal(evaluate(new Map(), new Set(['n3'])).candidate.move.targetNodeId, 'n2');
+  assert.equal(evaluate(new Map(), new Set(['n2', 'n3'])).candidate.move.targetNodeId, 'n3');
+  assert.equal(evaluate(new Map([['n3', constrained], ['n2', unknown]])).waiting.reason, unknown);
+});
+
 test('class order: the ledger, the priority control plane, nodes-p1, system, user', () => {
   assert.deepEqual(['replica_operations-p1', 'sql_transactions-p1', 'nodes-p1',
     'services-p1', 'tbl-orders-p1'].map(classifyPlacementClass), [
