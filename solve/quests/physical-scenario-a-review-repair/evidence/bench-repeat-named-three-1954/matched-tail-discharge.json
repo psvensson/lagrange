@@ -1,0 +1,772 @@
+{
+  "bench-review-named-three-1947": {
+    "cutoffMs": 1795722814104,
+    "passSequence": 3545,
+    "evaluatedAtMs": 1795722808402,
+    "activeCopies": [
+      {
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1176-0",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000003",
+        "workflowStep": "SYNCING"
+      }
+    ],
+    "remainingAtCensus": [
+      "wasm_operations-p1"
+    ],
+    "sourceChecks": {
+      "service_timers-p1": {
+        "partitionId": "service_timers-p1",
+        "disposition": "NONE",
+        "busy": false,
+        "copyCheck": null,
+        "reason": null,
+        "placementClass": null,
+        "sourceNodeId": null,
+        "targetNodeId": null
+      },
+      "storage_reservations-p1": {
+        "partitionId": "storage_reservations-p1",
+        "disposition": "NONE",
+        "busy": false,
+        "copyCheck": null,
+        "reason": null,
+        "placementClass": null,
+        "sourceNodeId": null,
+        "targetNodeId": null
+      },
+      "wasm_operations-p1": {
+        "partitionId": "wasm_operations-p1",
+        "disposition": "partition_busy",
+        "busy": true,
+        "copyCheck": null,
+        "reason": null,
+        "placementClass": "SYSTEM",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000002"
+      }
+    },
+    "observer": {
+      "attempts": 88,
+      "completedAttempts": 29,
+      "readyAttempts": 0,
+      "lastDeniedObservation": {
+        "denials": [
+          "under_replicated_partitions"
+        ],
+        "underReplicatedPartitionCount": 1,
+        "lastTablesObservedAt": 1795722786695,
+        "sampling": {
+          "factsStride": 4,
+          "factsDeferred": 55,
+          "factsChecks": 28,
+          "factsElapsedMs": 12940,
+          "sqlBatches": 6,
+          "sqlElapsedMs": 5898
+        }
+      }
+    },
+    "events": [
+      {
+        "host": ".34",
+        "line": 5899,
+        "headroomMs": 20627,
+        "time": "2026-11-26T19:53:13.477Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1088-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5903,
+        "headroomMs": 20431,
+        "time": "2026-11-26T19:53:13.673Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1094-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5987,
+        "headroomMs": 14953,
+        "time": "2026-11-26T19:53:19.151Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1128-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5997,
+        "headroomMs": 14544,
+        "time": "2026-11-26T19:53:19.560Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1147-0",
+        "type": "GROWTH_PROMOTE",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 6047,
+        "headroomMs": 11468,
+        "time": "2026-11-26T19:53:22.636Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1149-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 6054,
+        "headroomMs": 11126,
+        "time": "2026-11-26T19:53:22.978Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1162-0",
+        "type": "GROWTH_PROMOTE",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 6094,
+        "headroomMs": 7770,
+        "time": "2026-11-26T19:53:26.334Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1163-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 6131,
+        "headroomMs": 4724,
+        "time": "2026-11-26T19:53:29.380Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1176-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 6138,
+        "headroomMs": 4547,
+        "time": "2026-11-26T19:53:29.557Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1188-0",
+        "type": "GROWTH_PROMOTE",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".41",
+        "line": 4854,
+        "headroomMs": 21099,
+        "time": "2026-11-26T19:53:13.005Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1088-0",
+        "replicaId": "replace-replica-71dc609221ae8a3d26b80c79d4bce9e8",
+        "attemptToken": "replica-create-admission:v1:pl-service_timers-p1-1088-0:replace-replica-71dc609221ae8a3d26b80c79d4bce9e8:00000000-0000-4000-8000-000000000002:1795722788929:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 1824.5350029999972,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "fb310288-c6f4-487a-85af-20e7b638bff9",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1811.1230910000158,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "fb310288-c6f4-487a-85af-20e7b638bff9",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1811.1230910000158,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".41",
+        "line": 5006,
+        "headroomMs": 12277,
+        "time": "2026-11-26T19:53:21.827Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1149-0",
+        "replicaId": "replace-replica-e4cf0d1c11d3ea4c9354bd6ca71bfc39",
+        "attemptToken": "replica-create-admission:v1:pl-storage_reservations-p1-1149-0:replace-replica-e4cf0d1c11d3ea4c9354bd6ca71bfc39:00000000-0000-4000-8000-000000000002:1795722799364:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 764.229021999985,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "8a98aad4-478a-453e-9b16-83e175c36c35",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 763.7223089999752,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "8a98aad4-478a-453e-9b16-83e175c36c35",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 763.7223089999752,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".41",
+        "line": 5080,
+        "headroomMs": 8313,
+        "time": "2026-11-26T19:53:25.791Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1163-0",
+        "replicaId": "replace-replica-a119f93f3226a9a701d47975171e49b0",
+        "attemptToken": "replica-create-admission:v1:pl-wasm_operations-p1-1163-0:replace-replica-a119f93f3226a9a701d47975171e49b0:00000000-0000-4000-8000-000000000002:1795722802811:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 536.2905930000124,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "6eb27cb2-c64d-4319-9182-40ff36061337",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 535.980470999988,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "6eb27cb2-c64d-4319-9182-40ff36061337",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 535.980470999988,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".32",
+        "line": 4852,
+        "headroomMs": 20955,
+        "time": "2026-11-26T19:53:13.149Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1094-0",
+        "replicaId": "replace-replica-cac95a04742cd5d6b7393ef686f195b9",
+        "attemptToken": "replica-create-admission:v1:pl-storage_reservations-p1-1094-0:replace-replica-cac95a04742cd5d6b7393ef686f195b9:00000000-0000-4000-8000-000000000003:1795722789254:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 1884.6126430000004,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "2b69b239-1cf4-4f8c-b47b-6650925c1bd0",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1882.9885819999909,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "2b69b239-1cf4-4f8c-b47b-6650925c1bd0",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1882.9885819999909,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".32",
+        "line": 4970,
+        "headroomMs": 15358,
+        "time": "2026-11-26T19:53:18.746Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1128-0",
+        "replicaId": "replace-replica-dd64c101cb3f3e4624ab06a6f67db4c4",
+        "attemptToken": "replica-create-admission:v1:pl-service_timers-p1-1128-0:replace-replica-dd64c101cb3f3e4624ab06a6f67db4c4:00000000-0000-4000-8000-000000000003:1795722795733:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 918.6869460000016,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "b5c70c41-8a4c-4614-b543-4356e0c88303",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 918.4313799999945,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "b5c70c41-8a4c-4614-b543-4356e0c88303",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 918.4313799999945,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".32",
+        "line": 5098,
+        "headroomMs": 5273,
+        "time": "2026-11-26T19:53:28.831Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1176-0",
+        "replicaId": "replace-replica-3506ee9b156980d6650a9f1787d95c1c",
+        "attemptToken": "replica-create-admission:v1:pl-wasm_operations-p1-1176-0:replace-replica-3506ee9b156980d6650a9f1787d95c1c:00000000-0000-4000-8000-000000000003:1795722806363:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 752.5623049999995,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "5dab6289-f0be-4ac9-a652-5ecc836f6109",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 752.2356489999802,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "5dab6289-f0be-4ac9-a652-5ecc836f6109",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 752.2356489999802,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      }
+    ],
+    "sha256": {
+      "bench-review-named-three-1947-raw.ndjson": "555495d0bdadf5ecdf8c0018d88ea14570a2b2f8e37ca79eec1b009a32346e18",
+      "bench-review-named-three-1947-deadline-census.ndjson": "489741793244e8e3671704991a43638768919dd22da014a01a578d03badc07c7",
+      "bench-review-named-three-1947-decision-samples.ndjson": "10b51b1d8d976a55d0d43553db41b6c5ad98ea3c1986c8278e1c4d3d73b437aa",
+      "bench-review-named-three-1947-node1.log.gz": "67cc3d58f262c55c6ee77784a2149efa7bada736fda1d88cc384f38db32568ad",
+      "bench-review-named-three-1947-node2.log.gz": "3783211c8afb6409ac53123fc93de4df31bfa2069c86f8df1f84264fcd8a47e6",
+      "bench-review-named-three-1947-node3.log.gz": "175df72c8ec490a7e771eae5657f4912d0b5a0a832de03d8cb8a195f2b02c012"
+    }
+  },
+  "bench-repeat-named-three-1954": {
+    "cutoffMs": 1795723112680,
+    "passSequence": 3386,
+    "evaluatedAtMs": 1795723107041,
+    "activeCopies": [
+      {
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1148-0",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000003",
+        "workflowStep": "SYNCING"
+      },
+      {
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1151-0",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000002",
+        "workflowStep": "SYNCING"
+      }
+    ],
+    "remainingAtCensus": [
+      "service_timers-p1",
+      "storage_reservations-p1",
+      "wasm_operations-p1"
+    ],
+    "sourceChecks": {
+      "service_timers-p1": {
+        "partitionId": "service_timers-p1",
+        "disposition": "partition_busy",
+        "busy": true,
+        "copyCheck": null,
+        "reason": null,
+        "placementClass": "SYSTEM",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000003"
+      },
+      "storage_reservations-p1": {
+        "partitionId": "storage_reservations-p1",
+        "disposition": "partition_busy",
+        "busy": true,
+        "copyCheck": null,
+        "reason": null,
+        "placementClass": "SYSTEM",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000003"
+      },
+      "wasm_operations-p1": {
+        "partitionId": "wasm_operations-p1",
+        "disposition": "capacity_denied",
+        "busy": false,
+        "copyCheck": {
+          "partitionId": "wasm_operations-p1",
+          "placementClass": "SYSTEM",
+          "repair": false,
+          "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+          "targetNodeId": "00000000-0000-4000-8000-000000000002",
+          "sourceOcc": 2,
+          "targetOcc": 1,
+          "kSrc": 1,
+          "kSrcForClass": 1,
+          "kTgt": 5,
+          "sourceAllowed": false,
+          "targetAllowed": true,
+          "allowed": false
+        },
+        "reason": null,
+        "placementClass": "SYSTEM",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000002"
+      }
+    },
+    "observer": {
+      "attempts": 67,
+      "completedAttempts": 22,
+      "readyAttempts": 0,
+      "lastDeniedObservation": {
+        "denials": [
+          "under_replicated_partitions"
+        ],
+        "underReplicatedPartitionCount": 3,
+        "lastTablesObservedAt": 1795723097375,
+        "sampling": {
+          "factsStride": 4,
+          "factsDeferred": 42,
+          "factsChecks": 22,
+          "factsElapsedMs": 14199,
+          "sqlBatches": 5,
+          "sqlElapsedMs": 3386
+        }
+      }
+    },
+    "events": [
+      {
+        "host": ".34",
+        "line": 5080,
+        "headroomMs": 8692,
+        "time": "2026-11-26T19:58:23.988Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1118-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5082,
+        "headroomMs": 8692,
+        "time": "2026-11-26T19:58:23.988Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1122-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5145,
+        "headroomMs": 6202,
+        "time": "2026-11-26T19:58:26.478Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1137-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5166,
+        "headroomMs": 4853,
+        "time": "2026-11-26T19:58:27.827Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1148-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5177,
+        "headroomMs": 4575,
+        "time": "2026-11-26T19:58:28.105Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1151-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5187,
+        "headroomMs": 4270,
+        "time": "2026-11-26T19:58:28.410Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1175-0",
+        "type": "GROWTH_PROMOTE",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5204,
+        "headroomMs": 3714,
+        "time": "2026-11-26T19:58:28.966Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1180-0",
+        "type": "GROWTH_PROMOTE",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5253,
+        "headroomMs": -1078,
+        "time": "2026-11-26T19:58:33.758Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1182-0",
+        "type": "ADD",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".34",
+        "line": 5262,
+        "headroomMs": -1499,
+        "time": "2026-11-26T19:58:34.179Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1198-0",
+        "type": "GROWTH_PROMOTE",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".41",
+        "line": 5801,
+        "headroomMs": 9172,
+        "time": "2026-11-26T19:58:23.508Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1118-0",
+        "replicaId": "replace-replica-64c5825de9e956d793673318d5ad8788",
+        "attemptToken": "replica-create-admission:v1:pl-service_timers-p1-1118-0:replace-replica-64c5825de9e956d793673318d5ad8788:00000000-0000-4000-8000-000000000002:1795723098925:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 745.3398489999818,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "4111d10f-970d-4b89-8a8c-eb29f9e8e6f7",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 744.362924999994,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "4111d10f-970d-4b89-8a8c-eb29f9e8e6f7",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 744.362924999994,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".41",
+        "line": 5902,
+        "headroomMs": 4979,
+        "time": "2026-11-26T19:58:27.701Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1151-0",
+        "replicaId": "replace-replica-9d234f0c675b373f66e3130fb21757c1",
+        "attemptToken": "replica-create-admission:v1:pl-storage_reservations-p1-1151-0:replace-replica-9d234f0c675b373f66e3130fb21757c1:00000000-0000-4000-8000-000000000002:1795723104247:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 1026.9675390000048,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "e3553d56-1e78-4e15-beaa-201547b831c1",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1026.46822900002,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "e3553d56-1e78-4e15-beaa-201547b831c1",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1026.46822900002,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".41",
+        "line": 6014,
+        "headroomMs": -551,
+        "time": "2026-11-26T19:58:33.231Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1182-0",
+        "replicaId": "replace-replica-b9f2cafb82aa9ecda2ca060c8998b847",
+        "attemptToken": "replica-create-admission:v1:pl-wasm_operations-p1-1182-0:replace-replica-b9f2cafb82aa9ecda2ca060c8998b847:00000000-0000-4000-8000-000000000002:1795723108383:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 609.7916669999831,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "1c549a84-9b4e-4f25-9ac0-c9673a500653",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 609.2822909999813,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "1c549a84-9b4e-4f25-9ac0-c9673a500653",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 609.2822909999813,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".32",
+        "line": 5018,
+        "headroomMs": 9149,
+        "time": "2026-11-26T19:58:23.531Z",
+        "partitionId": "storage_reservations-p1",
+        "operationId": "pl-storage_reservations-p1-1122-0",
+        "replicaId": "replace-replica-a4a61628a541c50985858bf34ae28b25",
+        "attemptToken": "replica-create-admission:v1:pl-storage_reservations-p1-1122-0:replace-replica-a4a61628a541c50985858bf34ae28b25:00000000-0000-4000-8000-000000000003:1795723099090:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 1181.4768089999852,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "7514071b-4004-4b8b-bd12-c285c0990804",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1181.0591559999739,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "7514071b-4004-4b8b-bd12-c285c0990804",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1181.0591559999739,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".32",
+        "line": 5096,
+        "headroomMs": 6778,
+        "time": "2026-11-26T19:58:25.902Z",
+        "partitionId": "wasm_operations-p1",
+        "operationId": "pl-wasm_operations-p1-1137-0",
+        "replicaId": "replace-replica-d9c19541066c4d73fa2a927536e55a56",
+        "attemptToken": "replica-create-admission:v1:pl-wasm_operations-p1-1137-0:replace-replica-d9c19541066c4d73fa2a927536e55a56:00000000-0000-4000-8000-000000000003:1795723102297:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 1249.1598959999974,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "3f2948a0-f674-46c0-8827-88fc544f7edd",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1248.713506,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "3f2948a0-f674-46c0-8827-88fc544f7edd",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1248.713506,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".32",
+        "line": 5149,
+        "headroomMs": 5362,
+        "time": "2026-11-26T19:58:27.318Z",
+        "partitionId": "service_timers-p1",
+        "operationId": "pl-service_timers-p1-1148-0",
+        "replicaId": "replace-replica-970cfe5a4036e23ab27e8723068dc9fa",
+        "attemptToken": "replica-create-admission:v1:pl-service_timers-p1-1148-0:replace-replica-970cfe5a4036e23ab27e8723068dc9fa:00000000-0000-4000-8000-000000000003:1795723104099:attempt:1",
+        "ownerIncarnation": 1,
+        "msg": "Replica CREATE physical worker",
+        "elapsedMs": 1117.2261140000192,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "abbf8122-4beb-4644-8aa3-9d6e781c20b9",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1116.9458909999812,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "abbf8122-4beb-4644-8aa3-9d6e781c20b9",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1116.9458909999812,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      }
+    ],
+    "sha256": {
+      "bench-repeat-named-three-1954-raw.ndjson": "3642775d83a1dd78a6f9a9890b9173a06e970eaa7ac613b8108f55d244c20a55",
+      "bench-repeat-named-three-1954-deadline-census.ndjson": "f625c3a55dc37bfc3bfe0412f694c9d9b393bd99ec2268d1e628d226b379fea1",
+      "bench-repeat-named-three-1954-decision-samples.ndjson": "ea6243f306ec949db87745795eb5c469a80ea58d0256068db01483c30fce21b1",
+      "bench-repeat-named-three-1954-node1.log.gz": "4e7bbdb06aebb118dc934c89ffde1b808981aeb66c591a2c93037293fd8e304d",
+      "bench-repeat-named-three-1954-node2.log.gz": "9d54d5170cbd4f5ca405c1e69f63254dd96be06750fc59a275a09b988c0b8e6b",
+      "bench-repeat-named-three-1954-node3.log.gz": "4e822f439c212d087c5050caddc0d68b90b5a135e9c84840a4c0f3555e8532cb"
+    }
+  },
+  "interpretation": "Positive headroom means an owner event preceded the controller cutoff, with host clocks uncorrected. Operation completion is the source terminal event. No later placement sample timestamps exact slot release. At repeat pass 3386 WASM had completed its first ADD and was waiting for a second. The last WASM growth promotion moved from +4547 ms headroom to -1499 ms. Public stable readiness was never observed in either run."
+}

@@ -1,0 +1,1179 @@
+{
+  "campaign": "bench-review-owed-three-1929",
+  "source": "a723f28f16ac39c760da5d48cdd0706a931a3246",
+  "deadlineUTC": "2026-11-26T19:36:42.014Z",
+  "sourcePass": {
+    "passSequence": 3292,
+    "evaluatedAtMs": 1795721796533,
+    "activeCopies": [
+      {
+        "partitionId": "service_partition_access-p1",
+        "operationId": "pl-service_partition_access-p1-1102-0",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000002",
+        "workflowStep": "CREATING",
+        "appliedLedgerAtCensus": {
+          "operation_id": "pl-service_partition_access-p1-1102-0",
+          "type": "ADD",
+          "source_node_id": "00000000-0000-4000-8000-000000000001",
+          "target_node_id": "00000000-0000-4000-8000-000000000002",
+          "replica_id": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+          "status": "creating",
+          "workflow_step": "CREATING",
+          "create_admission_state": "MATERIALIZED",
+          "create_admission_attempt_seq": 1,
+          "created_at": 1795721793056,
+          "updated_at": 1795721794830,
+          "completed_at": null,
+          "lease_expires_at": 1795721824830,
+          "error_message": null
+        },
+        "appliedHistory": [
+          {
+            "step": "PENDING",
+            "timestamp": 1795721793056,
+            "placementAdmission": {
+              "entryId": "placement-owner:00000000-0000-4000-8000-000000000001:admit:service_partition_access-p1:5bd7d049-c10d-43b1-8239-68ca554c3709",
+              "transitionKind": "PLACEMENT",
+              "placementClass": "SYSTEM",
+              "repair": false,
+              "formationLatchEpoch": 3,
+              "foundingIntentId": null
+            },
+            "replicaIds": [
+              "service_partition_access-p1-r1",
+              "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4"
+            ],
+            "peerAddresses": [
+              "00000000-0000-4000-8000-000000000001/partition/service_partition_access-p1-r1",
+              "00000000-0000-4000-8000-000000000002/partition/replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4"
+            ],
+            "bootstrapMembership": {
+              "kind": "committed",
+              "voters": [
+                "6680788527276673690"
+              ],
+              "votersOutgoing": [],
+              "learners": [],
+              "learnersNext": [],
+              "appliedIndex": 2,
+              "configurationKey": "[[\"6680788527276673690\"],[],[],[],false]",
+              "membershipGenerationIndex": 0,
+              "commitIndex": 2,
+              "term": 1,
+              "leaderId": "service_partition_access-p1-r1",
+              "gateOpen": true,
+              "identities": {
+                "6680788527276673690": "service_partition_access-p1-r1"
+              },
+              "nodeIds": {
+                "6680788527276673690": "00000000-0000-4000-8000-000000000001"
+              }
+            }
+          },
+          {
+            "step": "SENDING",
+            "timestamp": 1795721793163,
+            "previousStep": "PENDING",
+            "reason": "dispatch_sending",
+            "ownerKey": "pl-service_partition_access-p1-1102-0",
+            "readinessSnapshot": {
+              "nodeId": "00000000-0000-4000-8000-000000000002",
+              "dimensions": {
+                "processAlive": true,
+                "clusterMemberHealthy": true,
+                "routingReady": true,
+                "loadReady": true,
+                "placementEligible": true,
+                "provisioningEligible": true,
+                "controlPlaneWritable": true,
+                "controlPlanePublished": true,
+                "controlPlaneRecoveryEligible": true,
+                "metadataPublicationHealthy": true,
+                "repairEligible": true,
+                "serveEligible": true
+              },
+              "reasonCodes": [],
+              "lifecycleState": "active",
+              "observedAt": "2026-11-26T19:36:30.076Z",
+              "decisionDimension": "controlPlaneRecoveryEligible",
+              "runtimeAuthority": {
+                "state": "confirmed",
+                "authorityAvailable": true,
+                "ready": true,
+                "processAlive": true,
+                "clusterMemberHealthy": true,
+                "routingReady": true,
+                "writeEligible": true,
+                "recoveryEligible": true,
+                "repairEligible": true,
+                "publication": {
+                  "state": "healthy",
+                  "healthy": true,
+                  "mode": "repair_only",
+                  "reason": null
+                },
+                "visibility": {
+                  "state": "confirmed",
+                  "published": true,
+                  "observedAt": null
+                },
+                "repair": {
+                  "state": "not_attempted",
+                  "applied": false,
+                  "observedAt": null
+                },
+                "provisioning": {
+                  "state": "steady",
+                  "eligible": true
+                },
+                "failure": {
+                  "state": "none",
+                  "reason": null
+                },
+                "reasonCodes": []
+              },
+              "projectionReadinessContract": {
+                "state": "serve_ready",
+                "ready": true,
+                "recoveryOpen": false,
+                "publication": {
+                  "ready": true,
+                  "boundaryOutcome": {
+                    "state": "ready",
+                    "publicationState": "published",
+                    "ackState": "satisfied",
+                    "freshnessState": "fresh",
+                    "recoveryGateState": "ready",
+                    "ready": true,
+                    "active": false,
+                    "publicationObservationState": "authoritative",
+                    "reasonCodes": [],
+                    "pendingAckCount": 0,
+                    "missingPublishedCount": 0,
+                    "publicationEpoch": 3,
+                    "publicationStatus": "PUBLISHED"
+                  }
+                },
+                "readiness": {
+                  "serveEligible": true,
+                  "repairEligible": true,
+                  "recoveryEligible": true
+                },
+                "priorityRecovery": {
+                  "active": false,
+                  "reasonCodes": []
+                },
+                "reasonCodes": []
+              }
+            }
+          },
+          {
+            "step": "CREATING",
+            "timestamp": 1795721794830,
+            "previousStep": "SENDING",
+            "reason": "dispatch_creating",
+            "ownerKey": "pl-service_partition_access-p1-1102-0",
+            "readinessSnapshot": {
+              "nodeId": "00000000-0000-4000-8000-000000000002",
+              "dimensions": {
+                "processAlive": true,
+                "clusterMemberHealthy": true,
+                "routingReady": true,
+                "loadReady": true,
+                "placementEligible": true,
+                "provisioningEligible": true,
+                "controlPlaneWritable": true,
+                "controlPlanePublished": true,
+                "controlPlaneRecoveryEligible": true,
+                "metadataPublicationHealthy": true,
+                "repairEligible": true,
+                "serveEligible": true
+              },
+              "reasonCodes": [],
+              "lifecycleState": "active",
+              "observedAt": "2026-11-26T19:36:34.198Z",
+              "decisionDimension": "controlPlaneRecoveryEligible",
+              "runtimeAuthority": {
+                "state": "confirmed",
+                "authorityAvailable": true,
+                "ready": true,
+                "processAlive": true,
+                "clusterMemberHealthy": true,
+                "routingReady": true,
+                "writeEligible": true,
+                "recoveryEligible": true,
+                "repairEligible": true,
+                "publication": {
+                  "state": "healthy",
+                  "healthy": true,
+                  "mode": "repair_only",
+                  "reason": null
+                },
+                "visibility": {
+                  "state": "confirmed",
+                  "published": true,
+                  "observedAt": null
+                },
+                "repair": {
+                  "state": "not_attempted",
+                  "applied": false,
+                  "observedAt": null
+                },
+                "provisioning": {
+                  "state": "steady",
+                  "eligible": true
+                },
+                "failure": {
+                  "state": "none",
+                  "reason": null
+                },
+                "reasonCodes": []
+              },
+              "projectionReadinessContract": {
+                "state": "serve_ready",
+                "ready": true,
+                "recoveryOpen": false,
+                "publication": {
+                  "ready": true,
+                  "boundaryOutcome": {
+                    "state": "ready",
+                    "publicationState": "published",
+                    "ackState": "satisfied",
+                    "freshnessState": "fresh",
+                    "recoveryGateState": "ready",
+                    "ready": true,
+                    "active": false,
+                    "publicationObservationState": "authoritative",
+                    "reasonCodes": [],
+                    "pendingAckCount": 0,
+                    "missingPublishedCount": 0,
+                    "publicationEpoch": 3,
+                    "publicationStatus": "PUBLISHED"
+                  }
+                },
+                "readiness": {
+                  "serveEligible": true,
+                  "repairEligible": true,
+                  "recoveryEligible": true
+                },
+                "priorityRecovery": {
+                  "active": false,
+                  "reasonCodes": []
+                },
+                "reasonCodes": []
+              }
+            }
+          }
+        ],
+        "targetMembershipSignals": [
+          {
+            "line": 5269,
+            "time": "2026-11-26T19:36:36.837Z",
+            "msg": "Starting as learner (non-voting) - will promote once the leader proves catch-up"
+          },
+          {
+            "line": 5272,
+            "time": "2026-11-26T19:36:37.127Z",
+            "msg": "Metadata publication CAS missed observed state; refreshing guard row from authority",
+            "role": "learner"
+          },
+          {
+            "line": 5276,
+            "time": "2026-11-26T19:36:37.176Z",
+            "msg": "Replica admission request answered",
+            "reason": null,
+            "outcome": "in_flight"
+          },
+          {
+            "line": 5277,
+            "time": "2026-11-26T19:36:37.184Z",
+            "msg": "Raft leadership transition evidence",
+            "role": "learner",
+            "trigger": "leader_change",
+            "term": 1,
+            "eventType": "leader_observation"
+          },
+          {
+            "line": 5281,
+            "time": "2026-11-26T19:36:37.203Z",
+            "msg": "Learner promotion deferred",
+            "reason": "growth_promote_owned",
+            "activeVoterCount": 1,
+            "learnerCount": 1
+          },
+          {
+            "line": 5561,
+            "time": "2026-11-26T19:36:49.354Z",
+            "msg": "Raft leadership transition evidence",
+            "role": "follower",
+            "trigger": "leader_change",
+            "term": 2,
+            "eventType": "leader_observation"
+          },
+          {
+            "line": 5566,
+            "time": "2026-11-26T19:36:49.564Z",
+            "msg": "Raft leadership transition evidence",
+            "role": "follower",
+            "trigger": "leader_change",
+            "term": 2,
+            "eventType": "leader_observation"
+          }
+        ]
+      },
+      {
+        "partitionId": "service_revisions-p1",
+        "operationId": "pl-service_revisions-p1-1112-0",
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000003",
+        "workflowStep": "SENDING",
+        "appliedLedgerAtCensus": {
+          "operation_id": "pl-service_revisions-p1-1112-0",
+          "type": "ADD",
+          "source_node_id": "00000000-0000-4000-8000-000000000001",
+          "target_node_id": "00000000-0000-4000-8000-000000000003",
+          "replica_id": "replace-replica-c819f185b0827d0b973d391710822b52",
+          "status": "pending",
+          "workflow_step": "SENDING",
+          "create_admission_state": "ADMITTED",
+          "create_admission_attempt_seq": 1,
+          "created_at": 1795721796106,
+          "updated_at": 1795721796403,
+          "completed_at": null,
+          "lease_expires_at": 1795721826403,
+          "error_message": null
+        },
+        "appliedHistory": [
+          {
+            "step": "PENDING",
+            "timestamp": 1795721796106,
+            "placementAdmission": {
+              "entryId": "placement-owner:00000000-0000-4000-8000-000000000001:admit:service_revisions-p1:6de6ce14-dd66-4a77-aaaf-982cabc0f7e9",
+              "transitionKind": "PLACEMENT",
+              "placementClass": "SYSTEM",
+              "repair": false,
+              "formationLatchEpoch": 3,
+              "foundingIntentId": null
+            },
+            "replicaIds": [
+              "service_revisions-p1-r1",
+              "replace-replica-c819f185b0827d0b973d391710822b52"
+            ],
+            "peerAddresses": [
+              "00000000-0000-4000-8000-000000000001/partition/service_revisions-p1-r1",
+              "00000000-0000-4000-8000-000000000003/partition/replace-replica-c819f185b0827d0b973d391710822b52"
+            ],
+            "bootstrapMembership": {
+              "kind": "committed",
+              "voters": [
+                "471375771406592350"
+              ],
+              "votersOutgoing": [],
+              "learners": [],
+              "learnersNext": [],
+              "appliedIndex": 2,
+              "configurationKey": "[[\"471375771406592350\"],[],[],[],false]",
+              "membershipGenerationIndex": 0,
+              "commitIndex": 2,
+              "term": 1,
+              "leaderId": "service_revisions-p1-r1",
+              "gateOpen": true,
+              "identities": {
+                "471375771406592350": "service_revisions-p1-r1"
+              },
+              "nodeIds": {
+                "471375771406592350": "00000000-0000-4000-8000-000000000001"
+              }
+            }
+          },
+          {
+            "step": "SENDING",
+            "timestamp": 1795721796403,
+            "previousStep": "PENDING",
+            "reason": "dispatch_sending",
+            "ownerKey": "pl-service_revisions-p1-1112-0",
+            "readinessSnapshot": {
+              "nodeId": "00000000-0000-4000-8000-000000000003",
+              "dimensions": {
+                "processAlive": true,
+                "clusterMemberHealthy": true,
+                "routingReady": true,
+                "loadReady": true,
+                "placementEligible": true,
+                "provisioningEligible": true,
+                "controlPlaneWritable": true,
+                "controlPlanePublished": true,
+                "controlPlaneRecoveryEligible": true,
+                "metadataPublicationHealthy": true,
+                "repairEligible": true,
+                "serveEligible": true
+              },
+              "reasonCodes": [],
+              "lifecycleState": "active",
+              "observedAt": "2026-11-26T19:36:36.161Z",
+              "decisionDimension": "controlPlaneRecoveryEligible",
+              "runtimeAuthority": {
+                "state": "confirmed",
+                "authorityAvailable": true,
+                "ready": true,
+                "processAlive": true,
+                "clusterMemberHealthy": true,
+                "routingReady": true,
+                "writeEligible": true,
+                "recoveryEligible": true,
+                "repairEligible": true,
+                "publication": {
+                  "state": "healthy",
+                  "healthy": true,
+                  "mode": "repair_only",
+                  "reason": null
+                },
+                "visibility": {
+                  "state": "confirmed",
+                  "published": true,
+                  "observedAt": null
+                },
+                "repair": {
+                  "state": "not_attempted",
+                  "applied": false,
+                  "observedAt": null
+                },
+                "provisioning": {
+                  "state": "steady",
+                  "eligible": true
+                },
+                "failure": {
+                  "state": "none",
+                  "reason": null
+                },
+                "reasonCodes": []
+              },
+              "projectionReadinessContract": {
+                "state": "serve_ready",
+                "ready": true,
+                "recoveryOpen": false,
+                "publication": {
+                  "ready": true,
+                  "boundaryOutcome": {
+                    "state": "ready",
+                    "publicationState": "published",
+                    "ackState": "satisfied",
+                    "freshnessState": "fresh",
+                    "recoveryGateState": "ready",
+                    "ready": true,
+                    "active": false,
+                    "publicationObservationState": "authoritative",
+                    "reasonCodes": [],
+                    "pendingAckCount": 0,
+                    "missingPublishedCount": 0,
+                    "publicationEpoch": 3,
+                    "publicationStatus": "PUBLISHED"
+                  }
+                },
+                "readiness": {
+                  "serveEligible": true,
+                  "repairEligible": true,
+                  "recoveryEligible": true
+                },
+                "priorityRecovery": {
+                  "active": false,
+                  "reasonCodes": []
+                },
+                "reasonCodes": []
+              }
+            }
+          }
+        ],
+        "targetMembershipSignals": [
+          {
+            "line": 5266,
+            "time": "2026-11-26T19:36:39.265Z",
+            "msg": "Starting as learner (non-voting) - will promote once the leader proves catch-up"
+          },
+          {
+            "line": 5273,
+            "time": "2026-11-26T19:36:39.642Z",
+            "msg": "Metadata publication CAS missed observed state; refreshing guard row from authority",
+            "role": "learner"
+          },
+          {
+            "line": 5276,
+            "time": "2026-11-26T19:36:39.705Z",
+            "msg": "Replica admission request answered",
+            "reason": null,
+            "outcome": "in_flight"
+          },
+          {
+            "line": 5277,
+            "time": "2026-11-26T19:36:39.705Z",
+            "msg": "Learner promotion deferred",
+            "reason": "leader_not_discovered"
+          },
+          {
+            "line": 5279,
+            "time": "2026-11-26T19:36:39.714Z",
+            "msg": "Raft leadership transition evidence",
+            "role": "learner",
+            "trigger": "leader_change",
+            "term": 1,
+            "eventType": "leader_observation"
+          },
+          {
+            "line": 5291,
+            "time": "2026-11-26T19:36:40.707Z",
+            "msg": "Learner promotion deferred",
+            "reason": "growth_promote_owned",
+            "activeVoterCount": 1,
+            "learnerCount": 1
+          }
+        ]
+      }
+    ]
+  },
+  "denials": [
+    {
+      "partitionId": "service_timers-p1",
+      "disposition": "capacity_denied",
+      "busy": false,
+      "copyCheck": {
+        "partitionId": "service_timers-p1",
+        "placementClass": "SYSTEM",
+        "repair": false,
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000002",
+        "sourceOcc": 2,
+        "targetOcc": 1,
+        "kSrc": 2,
+        "kSrcForClass": 2,
+        "kTgt": 6,
+        "sourceAllowed": false,
+        "targetAllowed": true,
+        "allowed": false
+      },
+      "reason": null,
+      "placementClass": "SYSTEM",
+      "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+      "targetNodeId": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "partitionId": "wasm_operations-p1",
+      "disposition": "capacity_denied",
+      "busy": false,
+      "copyCheck": {
+        "partitionId": "wasm_operations-p1",
+        "placementClass": "SYSTEM",
+        "repair": false,
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000002",
+        "sourceOcc": 2,
+        "targetOcc": 1,
+        "kSrc": 2,
+        "kSrcForClass": 2,
+        "kTgt": 6,
+        "sourceAllowed": false,
+        "targetAllowed": true,
+        "allowed": false
+      },
+      "reason": null,
+      "placementClass": "SYSTEM",
+      "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+      "targetNodeId": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "partitionId": "storage_reservations-p1",
+      "disposition": "capacity_denied",
+      "busy": false,
+      "copyCheck": {
+        "partitionId": "storage_reservations-p1",
+        "placementClass": "SYSTEM",
+        "repair": false,
+        "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+        "targetNodeId": "00000000-0000-4000-8000-000000000002",
+        "sourceOcc": 2,
+        "targetOcc": 1,
+        "kSrc": 2,
+        "kSrcForClass": 2,
+        "kTgt": 6,
+        "sourceAllowed": false,
+        "targetAllowed": true,
+        "allowed": false
+      },
+      "reason": null,
+      "placementClass": "SYSTEM",
+      "sourceNodeId": "00000000-0000-4000-8000-000000000001",
+      "targetNodeId": "00000000-0000-4000-8000-000000000002"
+    }
+  ],
+  "observedOperations": {
+    "pl-service_partition_access-p1-1102-0": [
+      {
+        "host": ".34",
+        "line": 5784,
+        "time": "2026-11-26T19:36:33.329Z",
+        "msg": "Operation step changed",
+        "status": "pending",
+        "reason": "dispatch_sending"
+      },
+      {
+        "host": ".34",
+        "line": 5785,
+        "time": "2026-11-26T19:36:33.348Z",
+        "msg": "Storage reservation created with operation"
+      },
+      {
+        "host": ".34",
+        "line": 5786,
+        "time": "2026-11-26T19:36:33.351Z",
+        "msg": "Sending replica operation",
+        "workflowStep": "SENDING",
+        "boundary": null
+      },
+      {
+        "host": ".34",
+        "line": 5807,
+        "time": "2026-11-26T19:36:34.828Z",
+        "msg": "Replica CREATE dispatch outcome",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "workflowStep": "SENDING",
+        "answerStatus": "initiated",
+        "deliveryState": "delivered"
+      },
+      {
+        "host": ".34",
+        "line": 5808,
+        "time": "2026-11-26T19:36:34.866Z",
+        "msg": "Operation step changed",
+        "status": "creating",
+        "reason": "dispatch_creating"
+      },
+      {
+        "host": ".34",
+        "line": 5810,
+        "time": "2026-11-26T19:36:34.897Z",
+        "msg": "Deferred replica operation dispatch while control-plane path recovers"
+      },
+      {
+        "host": ".34",
+        "line": 5833,
+        "time": "2026-11-26T19:36:37.150Z",
+        "msg": "Replica admission request decided by leader",
+        "replicaId": "service_partition_access-p1-r1",
+        "outcome": "in_flight",
+        "reason": null
+      },
+      {
+        "host": ".34",
+        "line": 5843,
+        "time": "2026-11-26T19:36:37.434Z",
+        "msg": "Operation step changed",
+        "status": "syncing",
+        "reason": "dispatch_sending"
+      },
+      {
+        "host": ".34",
+        "line": 5892,
+        "time": "2026-11-26T19:36:39.724Z",
+        "msg": "Storage reservation released"
+      },
+      {
+        "host": ".34",
+        "line": 5893,
+        "time": "2026-11-26T19:36:39.724Z",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".41",
+        "line": 5220,
+        "time": "2026-11-26T19:36:33.889Z",
+        "msg": "Handling CREATE_REPLICA request",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4"
+      },
+      {
+        "host": ".41",
+        "line": 5239,
+        "time": "2026-11-26T19:36:34.824Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "claim",
+        "outcome": "acquired",
+        "elapsedMs": null
+      },
+      {
+        "host": ".41",
+        "line": 5240,
+        "time": "2026-11-26T19:36:34.825Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "queued_callback",
+        "outcome": "current",
+        "elapsedMs": null
+      },
+      {
+        "host": ".41",
+        "line": 5241,
+        "time": "2026-11-26T19:36:34.866Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "revalidate",
+        "outcome": "current",
+        "elapsedMs": null
+      },
+      {
+        "host": ".41",
+        "line": 5242,
+        "time": "2026-11-26T19:36:34.866Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "post_revalidation",
+        "outcome": "current",
+        "elapsedMs": null
+      },
+      {
+        "host": ".41",
+        "line": 5243,
+        "time": "2026-11-26T19:36:34.866Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "createReplicaAsync",
+        "outcome": "entered",
+        "elapsedMs": null
+      },
+      {
+        "host": ".41",
+        "line": 5274,
+        "time": "2026-11-26T19:36:37.129Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "voter_readiness",
+        "outcome": "started",
+        "elapsedMs": null
+      },
+      {
+        "host": ".41",
+        "line": 5276,
+        "time": "2026-11-26T19:36:37.176Z",
+        "msg": "Replica admission request answered",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "outcome": "in_flight",
+        "reason": null
+      },
+      {
+        "host": ".41",
+        "line": 5278,
+        "time": "2026-11-26T19:36:37.185Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "voter_readiness",
+        "outcome": "settled",
+        "elapsedMs": 55.72352899998077
+      },
+      {
+        "host": ".41",
+        "line": 5279,
+        "time": "2026-11-26T19:36:37.185Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "participant_release",
+        "outcome": "started",
+        "elapsedMs": null
+      },
+      {
+        "host": ".41",
+        "line": 5305,
+        "time": "2026-11-26T19:36:38.820Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "participant_release",
+        "outcome": "settled",
+        "elapsedMs": 1634.5776269999915,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "bdf7f6b8-ac86-4b5c-859a-36504b4eee0d",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1633.8627810000035,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "bdf7f6b8-ac86-4b5c-859a-36504b4eee0d",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 1633.8627810000035,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".41",
+        "line": 5306,
+        "time": "2026-11-26T19:36:38.820Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "activation_worker_revalidation",
+        "outcome": "started",
+        "elapsedMs": null
+      },
+      {
+        "host": ".41",
+        "line": 5307,
+        "time": "2026-11-26T19:36:38.894Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4",
+        "attemptToken": "replica-create-admission:v1:pl-service_partition_access-p1-1102-0:replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4:00000000-0000-4000-8000-000000000002:1795721793163:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "activation_worker_revalidation",
+        "outcome": "settled",
+        "elapsedMs": 74.21189000000595
+      },
+      {
+        "host": ".41",
+        "line": 5346,
+        "time": "2026-11-26T19:36:40.986Z",
+        "msg": "Replica creation completed",
+        "replicaId": "replace-replica-9fa8b052d31c8aec82c6210fc3aba8f4"
+      }
+    ],
+    "pl-service_revisions-p1-1112-0": [
+      {
+        "host": ".34",
+        "line": 5828,
+        "time": "2026-11-26T19:36:36.447Z",
+        "msg": "Operation step changed",
+        "status": "pending",
+        "reason": "dispatch_sending"
+      },
+      {
+        "host": ".34",
+        "line": 5829,
+        "time": "2026-11-26T19:36:36.447Z",
+        "msg": "Sending replica operation",
+        "workflowStep": "SENDING",
+        "boundary": "execute_reconcile"
+      },
+      {
+        "host": ".34",
+        "line": 5860,
+        "time": "2026-11-26T19:36:38.128Z",
+        "msg": "Replica CREATE dispatch outcome",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "workflowStep": "SENDING",
+        "answerStatus": "initiated",
+        "deliveryState": "delivered"
+      },
+      {
+        "host": ".34",
+        "line": 5864,
+        "time": "2026-11-26T19:36:38.275Z",
+        "msg": "Operation step changed",
+        "status": "creating",
+        "reason": "dispatch_creating"
+      },
+      {
+        "host": ".34",
+        "line": 5865,
+        "time": "2026-11-26T19:36:38.290Z",
+        "msg": "Storage reservation created with operation"
+      },
+      {
+        "host": ".34",
+        "line": 5866,
+        "time": "2026-11-26T19:36:38.292Z",
+        "msg": "Replica operation dispatch failed",
+        "workflowStep": "PENDING",
+        "reason": "operation_not_dispatchable"
+      },
+      {
+        "host": ".34",
+        "line": 5868,
+        "time": "2026-11-26T19:36:38.327Z",
+        "msg": "Sending replica operation",
+        "workflowStep": "CREATING",
+        "boundary": "dispatch"
+      },
+      {
+        "host": ".34",
+        "line": 5881,
+        "time": "2026-11-26T19:36:39.451Z",
+        "msg": "Replica CREATE dispatch outcome",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "workflowStep": "CREATING",
+        "answerStatus": "in_progress",
+        "deliveryState": "delivered"
+      },
+      {
+        "host": ".34",
+        "line": 5888,
+        "time": "2026-11-26T19:36:39.672Z",
+        "msg": "Replica admission request decided by leader",
+        "replicaId": "service_revisions-p1-r1",
+        "outcome": "in_flight",
+        "reason": null
+      },
+      {
+        "host": ".34",
+        "line": 5902,
+        "time": "2026-11-26T19:36:40.055Z",
+        "msg": "Operation step changed",
+        "status": "syncing",
+        "reason": "dispatch_sending"
+      },
+      {
+        "host": ".34",
+        "line": 5990,
+        "time": "2026-11-26T19:36:45.823Z",
+        "msg": "Storage reservation released"
+      },
+      {
+        "host": ".34",
+        "line": 5991,
+        "time": "2026-11-26T19:36:45.824Z",
+        "msg": "Operation completed"
+      },
+      {
+        "host": ".32",
+        "line": 5226,
+        "time": "2026-11-26T19:36:37.035Z",
+        "msg": "Handling CREATE_REPLICA request",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52"
+      },
+      {
+        "host": ".32",
+        "line": 5248,
+        "time": "2026-11-26T19:36:38.080Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "claim",
+        "outcome": "acquired",
+        "elapsedMs": null
+      },
+      {
+        "host": ".32",
+        "line": 5249,
+        "time": "2026-11-26T19:36:38.081Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "queued_callback",
+        "outcome": "current",
+        "elapsedMs": null
+      },
+      {
+        "host": ".32",
+        "line": 5256,
+        "time": "2026-11-26T19:36:38.623Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "revalidate",
+        "outcome": "current",
+        "elapsedMs": null
+      },
+      {
+        "host": ".32",
+        "line": 5257,
+        "time": "2026-11-26T19:36:38.623Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "post_revalidation",
+        "outcome": "current",
+        "elapsedMs": null
+      },
+      {
+        "host": ".32",
+        "line": 5258,
+        "time": "2026-11-26T19:36:38.623Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "createReplicaAsync",
+        "outcome": "entered",
+        "elapsedMs": null
+      },
+      {
+        "host": ".32",
+        "line": 5263,
+        "time": "2026-11-26T19:36:39.121Z",
+        "msg": "Handling CREATE_REPLICA request",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52"
+      },
+      {
+        "host": ".32",
+        "line": 5270,
+        "time": "2026-11-26T19:36:39.557Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "voter_readiness",
+        "outcome": "started",
+        "elapsedMs": null
+      },
+      {
+        "host": ".32",
+        "line": 5276,
+        "time": "2026-11-26T19:36:39.705Z",
+        "msg": "Replica admission request answered",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "outcome": "in_flight",
+        "reason": null
+      },
+      {
+        "host": ".32",
+        "line": 5280,
+        "time": "2026-11-26T19:36:39.714Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "voter_readiness",
+        "outcome": "settled",
+        "elapsedMs": 157.86359600001015
+      },
+      {
+        "host": ".32",
+        "line": 5281,
+        "time": "2026-11-26T19:36:39.715Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "participant_release",
+        "outcome": "started",
+        "elapsedMs": null
+      },
+      {
+        "host": ".32",
+        "line": 5324,
+        "time": "2026-11-26T19:36:42.427Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "participant_release",
+        "outcome": "settled",
+        "elapsedMs": 2711.898694000003,
+        "releaseHops": {
+          "release": {
+            "count": 2,
+            "slowest": {
+              "messageId": "6c7c42eb-3459-478a-8a68-b9aa467929f9",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 2711.5298340000154,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            },
+            "last": {
+              "messageId": "6c7c42eb-3459-478a-8a68-b9aa467929f9",
+              "nodeId": "00000000-0000-4000-8000-000000000001",
+              "elapsedMs": 2711.5298340000154,
+              "outcome": "cut_over",
+              "missingFact": null,
+              "deliveryState": "delivered"
+            }
+          }
+        }
+      },
+      {
+        "host": ".32",
+        "line": 5325,
+        "time": "2026-11-26T19:36:42.427Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "activation_worker_revalidation",
+        "outcome": "started",
+        "elapsedMs": null
+      },
+      {
+        "host": ".32",
+        "line": 5333,
+        "time": "2026-11-26T19:36:42.595Z",
+        "msg": "Replica CREATE physical worker",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52",
+        "attemptToken": "replica-create-admission:v1:pl-service_revisions-p1-1112-0:replace-replica-c819f185b0827d0b973d391710822b52:00000000-0000-4000-8000-000000000003:1795721796403:attempt:1",
+        "attemptSeq": 1,
+        "ownerIncarnation": 1,
+        "boundary": "activation_worker_revalidation",
+        "outcome": "settled",
+        "elapsedMs": 168.5907699999807
+      },
+      {
+        "host": ".32",
+        "line": 5395,
+        "time": "2026-11-26T19:36:44.190Z",
+        "msg": "Replica creation completed",
+        "replicaId": "replace-replica-c819f185b0827d0b973d391710822b52"
+      }
+    ]
+  },
+  "evidenceSHA256": {
+    "bench-review-owed-three-1929-node1.log.gz": "ecdeecbb4adf6526f8e4951c3f151d7b9b85f2d36cc09420cd364dc04731438f",
+    "bench-review-owed-three-1929-node2.log.gz": "b5336e8b75519af8808c49f612e3a0326a0d3ffb3349544bd4890c444ff33574",
+    "bench-review-owed-three-1929-node3.log.gz": "bad8430afb3bcc1af87fa2ffe7a7f3594f60505a8592174dbee149c8d37141cb",
+    "bench-review-owed-three-1929-decision-samples.ndjson": "8548b7d64ee08522bd2f3fb24689c8d76568ce35739693502d629b64b0a0ee4e",
+    "bench-review-owed-three-1929-deadline-census.ndjson": "a68294bb4e4f640b25acebb0e629365310150fb9b9a2e6e84eecadbb34e0efd7"
+  },
+  "limitations": [
+    "Per-host UTC clocks uncorrected. elapsedMs from the physical worker is monotonic.",
+    "No receiver summary matched either final release message ID. Both outer requests finished below the slow receiver threshold. Control-before-pause vs control-before-resume and per-member time are unobserved.",
+    "No later sampled placement pass timestamps the exact removal of either occupied slot. Source Operation completed and storage reservation release are separate owner events.",
+    "voter_readiness settled is the physical worker boundary; membership must be established independently of this label."
+  ],
+  "timingWitness": "selected-release-timing.patch is a diagnostic-image-only overlay. It emits the existing bounded receiver RELEASE summary for CREATE requests on these two subjects even below the slow threshold; owner/timer behavior and wire payload stay the same. Join the sender ack messageId to receiver messageId for control_before_pause and control_before_resume. Retain the existing growth-promotion and terminal records separately."
+}

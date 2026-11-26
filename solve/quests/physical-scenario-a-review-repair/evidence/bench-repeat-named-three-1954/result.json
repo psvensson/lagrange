@@ -1,0 +1,50 @@
+{
+  "campaignId": "bench-repeat-named-three-1954",
+  "sourceCommit": "f8d8396627f548f45320dfb88f67503ab6e6d302",
+  "imageRepoDigest": "lagrange@sha256:f9483efb391430b15ad041968c535e5860bce4f7449c5eeac588902a4967bd43",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T19:58:32.680Z",
+  "lastCompleteCensusAt": "2026-11-26T19:58:27.731Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 3,
+  "attempted": [
+    {
+      "runId": "bench-repeat-named-three-1954-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 92,
+    "medianMs": 1004,
+    "p95Ms": 5345,
+    "maxMs": 7125
+  },
+  "evidenceSha256": {
+    "bench-repeat-named-three-1954-deadline-census.ndjson": "f625c3a55dc37bfc3bfe0412f694c9d9b393bd99ec2268d1e628d226b379fea1",
+    "bench-repeat-named-three-1954-decision-samples.ndjson": "ea6243f306ec949db87745795eb5c469a80ea58d0256068db01483c30fce21b1",
+    "bench-repeat-named-three-1954-formation.ndjson": "3b9d14b01e71c2099ecde4b4f9ae3ee37aaca3923301f304a29292324cd3ea76",
+    "bench-repeat-named-three-1954-node1-tcp.ndjson.gz": "c30d021678fa53c970179b3c00d188afb77ed0883254b5cb195b88d72bdd1f51",
+    "bench-repeat-named-three-1954-node1.log.gz": "4e7bbdb06aebb118dc934c89ffde1b808981aeb66c591a2c93037293fd8e304d",
+    "bench-repeat-named-three-1954-node2-tcp.ndjson.gz": "c9cce4acf4e420fd23291478232c040205515e773f6d80b5b5a14920163ad816",
+    "bench-repeat-named-three-1954-node2.log.gz": "9d54d5170cbd4f5ca405c1e69f63254dd96be06750fc59a275a09b988c0b8e6b",
+    "bench-repeat-named-three-1954-node3-tcp.ndjson.gz": "ca57eff8d4e6cc06a196eb5d85e5e9f8d6f9705241821f746b75dd483c9070ef",
+    "bench-repeat-named-three-1954-node3.log.gz": "4e822f439c212d087c5050caddc0d68b90b5a135e9c84840a4c0f3555e8532cb",
+    "bench-repeat-named-three-1954-raw.ndjson": "3642775d83a1dd78a6f9a9890b9173a06e970eaa7ac613b8108f55d244c20a55",
+    "comparative-campaign-bench-repeat-named-three-1954.json": "1a5cb31ed522025e30dbab00555220aebd9ba848f8270e3282903d4fb727dfd5",
+    "partition-admission.md": "182a3db12cfeb98a95fd0ae1e549d47e1c14b891f15fae8ad3963f2eaf8ca78a",
+    "partition-waits.json": "894e7bb68106957e561b66fd4b48245fdda9f37b44024d2a442874ba4ca31b44",
+    "partition-waits.md": "13d2925be48a7e3e966df2b052a0776d15061faa4459f32344875e6e2f4cd39c",
+    "stage-results.txt": "37bc5d7d74e67eaeebffae11c42ed5723756c9b872f1d2cf67d08db79626fcce"
+  }
+}
