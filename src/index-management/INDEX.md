@@ -17,7 +17,7 @@ documentClass: generated
 - [global-index-predicate-matcher.js](global-index-predicate-matcher.js) - Predicate extraction, row-level condition evaluation, and base row projection helpers for Global Secondary Index... (importers: few)
 - [global-index-production-wiring.js](global-index-production-wiring.js) - Production runtime wiring for Global Secondary Index lifecycle coordination. (importers: many)
 - [global-index-provisioning-lifecycle.js](global-index-provisioning-lifecycle.js) - Provisioning, deferred join/retry completion, and crash-recovery lifecycle helpers for Global Secondary Index creation. (importers: one)
-- [global-index-read-router.js](global-index-read-router.js) - Global Secondary Index query planner, read router, and EXPLAIN DISTRIBUTED diagnostics. (importers: few)
+- [global-index-read-router.js](global-index-read-router.js) - Global Secondary Index query planner, read router, and EXPLAIN DISTRIBUTED diagnostics. (importers: many)
 - [global-index-write-maintenance.js](global-index-write-maintenance.js) - Global Secondary Index synchronous TX1 write maintenance. (importers: few)
 - [index-constants.js](index-constants.js) - No leading comment; first export: BASE_PARTITION_ID_COLUMN. (importers: hub)
 - [index-service-cdc-handler.js](index-service-cdc-handler.js) - No leading comment; first export: indexServiceCdcHandler. (importers: one)

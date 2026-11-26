@@ -272,6 +272,14 @@ class PartitionServiceMetadataDeliveryMethods {
    * @return {boolean} Whether local evidence was re-projected.
    */
   handleCanonicalLeaderRowCacheChange(record) {
+    if (
+      this.isLeader === true &&
+      CONTROL_PLANE_PARTITION_IDS.has(record?.[COLUMN.PARTITION_ID]) &&
+      this.persistedLeaderNodeId !== this.nodeId
+    ) {
+      this.reassertDurableLeaderNodeId();
+      this.reassertDurableRaftRole();
+    }
     const observation = this.localCanonicalLeaderObservation;
     if (
       !observation ||

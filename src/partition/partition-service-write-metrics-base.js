@@ -38,6 +38,10 @@ import {transactionSchemaWriteRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {refuseRoutedClientSystemTableWrite} from
   '../query/sql-statement-ingress.js';
+import {
+  excludedMemberFenceRefusalOf,
+  isLocalReplicaExcludedFenced,
+} from './partition-membership-recovery-store.js';
 
 
 const {
@@ -481,6 +485,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
     };
   }
   async proposeWrite(operation, options) {
+    if (isLocalReplicaExcludedFenced(this)) return excludedMemberFenceRefusalOf(this);
     const proposeStartMs = this.timeSource.now();
     const timestamp = this.hlcClock.now();
     const entryBuildStartMs = this.timeSource.now();
@@ -698,6 +703,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
    * @private
    */
   async applyWrite(entry, phaseTimings = null) {
+    if (isLocalReplicaExcludedFenced(this)) return excludedMemberFenceRefusalOf(this);
     const applyStartMs = this.timeSource.now();
     entry = buildPartitionWriteEntry(
       {

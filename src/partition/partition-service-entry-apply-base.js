@@ -70,6 +70,16 @@ import {applyLockingReadReservationCommand, requestLockingReadReservation} from
   './partition-locking-read-service.js';
 import {checkOperationsLockingReadConflict} from './partition-locking-read-write-check.js';
 import {LOCKING_READ_RESERVATION_TYPE} from './partition-locking-read-command-constants.js';
+import {
+  PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE_TYPE,
+  PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+} from './partition-membership-recovery-constants.js';
+import {
+  applyPartitionMembershipRecoveryCommand,
+  checkExcludedMemberEnvelopeFence,
+  handleMembershipRecoveryFenceNotice,
+  stagePartitionMembershipRecoveryIntent,
+} from './partition-membership-recovery.js';
 registerFormationPartitionApplyHooks({
   partitionWriteLeadershipRefusalOf, pausedWriteAnswerOf, recordCommittedOperationCdc,
   settleReservedCommittedStatement, startPartitionRaftWriteCommit,
@@ -89,6 +99,9 @@ const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
   [PLACEMENT_REPAIR_TYPE]: requestPlacementRepair,
   [PLACEMENT_REPAIR_PREPARE_TYPE]: requestPlacementRepairPreparation,
   [FORMATION_TRANSITION_TYPE]: requestFormationTransition,
+  [PARTITION_MEMBERSHIP_RECOVERY_TYPE]: stagePartitionMembershipRecoveryIntent,
+  [PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE_TYPE]:
+    handleMembershipRecoveryFenceNotice,
   [SERVICE_MSG_TYPE.LIVE_QUERY_CDC_SUBSCRIBE]: handleRemoteLiveQueryCdcSubscribe,
   [SERVICE_MSG_TYPE.LIVE_QUERY_CDC_UNSUBSCRIBE]: handleRemoteLiveQueryCdcUnsubscribe,
   [LOCKING_READ_RESERVATION_TYPE]: requestLockingReadReservation,
@@ -98,6 +111,10 @@ const NON_SQL_COMMITTED_APPLIERS = Object.freeze([
   [(type) => type === COORDINATOR_SETTLEMENT_TYPE, applyCoordinatorSettlement],
   [(type) => PLACEMENT_COMMAND_TYPES.includes(type), applyPlacementCommand],
   [(type) => type === FORMATION_TRANSITION_TYPE, applyFormationTransitionCommand],
+  [
+    (type) => type === PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+    applyPartitionMembershipRecoveryCommand,
+  ],
   [(type) => type === LOCKING_READ_RESERVATION_TYPE, applyLockingReadReservationCommand],
   [
     (type) => type ===
@@ -217,6 +234,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       // A shut-down or no-longer-registered incarnation refuses the envelope
       // it would drop, so the sender never records it as taken (F1).
       assertReplicaHandlerServing(this);
+      const fenceRefusal = checkExcludedMemberEnvelopeFence(this, envelope, payload);
+      if (fenceRefusal !== null) {
+        return fenceRefusal;
+      }
       return stepRaftEnvelope(this.raft, payload);
     }
     return this.handleCanonicalApplicationPayload(payload);

@@ -63,13 +63,22 @@ import {
   MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
   isPinnedMirrorRetentionCustodyCommand,
 } from './partition-mirror-effect-retention.js';
+import {
+  PARTITION_MEMBERSHIP_RECOVERY_ERROR,
+  PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+} from './partition-membership-recovery-constants.js';
 
 const FORMATION_ORIGIN_REFUSED_CODE = 'formation_transition_origin_refused';
 const FORMATION_INVALID_COMMAND_CODE = 'formation_transition_command_invalid';
 let registeredFormationCommandValidator = null;
+let registeredMembershipRecoveryCommandValidator = null;
 
 function registerFormationCommandValidator(validator) {
   registeredFormationCommandValidator = validator;
+}
+
+function registerMembershipRecoveryCommandValidator(validator) {
+  registeredMembershipRecoveryCommandValidator = validator;
 }
 
 // Who asks to propose a committed command. Participant commands enter only
@@ -84,6 +93,7 @@ const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   FORMATION_OWNER: 'formation-owner',
   LOCKING_READ_OWNER: 'locking-read-owner',
   MIRROR_RETENTION_OWNER: 'mirror-retention-owner',
+  MEMBERSHIP_RECOVERY_OWNER: 'membership-recovery-owner',
 });
 
 // What a refused write is answered with.
@@ -207,7 +217,26 @@ function mirrorRetentionCustodyCommandRefusal(command, origin) {
     );
 }
 
+function membershipRecoveryCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.MEMBERSHIP_RECOVERY_OWNER) {
+    return refused(
+      PARTITION_MEMBERSHIP_RECOVERY_ERROR.ORIGIN,
+      PARTITION_MEMBERSHIP_RECOVERY_ERROR.ORIGIN,
+    );
+  }
+  return registeredMembershipRecoveryCommandValidator !== null &&
+      registeredMembershipRecoveryCommandValidator(command) ?
+    ADMITTED :
+    refused(
+      PARTITION_MEMBERSHIP_RECOVERY_ERROR.BYTES,
+      PARTITION_MEMBERSHIP_RECOVERY_ERROR.BYTES,
+    );
+}
+
 function commandRefusalByKind(command, origin) {
+  if (command.type === PARTITION_MEMBERSHIP_RECOVERY_TYPE) {
+    return membershipRecoveryCommandRefusal(command, origin);
+  }
   if (command.type === PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY) {
     return mirrorRetentionCustodyCommandRefusal(command, origin);
   }
@@ -285,4 +314,5 @@ export {
   isCommittedCommandType,
   isCommittedSqlCommandType,
   registerFormationCommandValidator,
+  registerMembershipRecoveryCommandValidator,
 };

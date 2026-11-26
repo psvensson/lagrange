@@ -12,6 +12,8 @@ const PARTICIPANT_CUTOVER_PHASE = Object.freeze({
   INSPECT: 'inspect', PAUSE: 'pause',
   ROWID_CENSUS: 'rowid_census', ENABLE: 'enable', REPLICA_CENSUS: 'replica_census',
   RESUME: 'resume',
+  CONTROL_BEFORE_PAUSE: 'control_before_pause',
+  CONTROL_BEFORE_RESUME: 'control_before_resume',
 });
 const PARTICIPANT_CUTOVER_OUTCOME = Object.freeze({
   CUT_OVER: 'cut_over', OBSERVED: 'observed', PAUSED: 'paused',

@@ -138,8 +138,10 @@ function buildElapsedOperationFailureGuard(operation) {
   // the CREATE owns the next effect. Promotion and removal have distinct owners.
   const replaceBuildingTarget = isPartitionReplace(operation) &&
     !isReplaceExemptFromTimeBudget(operation) && !isReplacePromotionInLog(operation);
+  const preAdmissionCreate = operation?.createAdmissionState == null &&
+    (isPartitionAdd(operation) || replaceBuildingTarget);
   return {
-    ...(isPartitionAdd(operation) || replaceBuildingTarget ? ELAPSED_CREATE_FAILURE_GUARD : {}),
+    ...(preAdmissionCreate ? ELAPSED_CREATE_FAILURE_GUARD : {}),
     elapsedWorkflowPreimage: captureElapsedWorkflowPreimage(operation),
   };
 }
@@ -227,8 +229,7 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
     {...operation, workflowStep: durableStep}) ||
     options?.replacePostIntentFailure ===
       REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
-  const target = admitted && options.elapsedWorkflowPreimage &&
-    options.requireCreateAdmissionAbsent === true ?
+  const target = admitted && options.elapsedWorkflowPreimage ?
     await observeElapsedReplaceFailureTarget(owner, operation) : {admitted};
   return Object.freeze({...target,
     expectedWorkflowStep: durableStep,
@@ -609,8 +610,7 @@ async function admitReplaceTerminalRepair(owner, projectedOperation,
       persistOptions,
     });
   }
-  if (persistOptions.elapsedWorkflowPreimage &&
-      persistOptions.requireCreateAdmissionAbsent === true) {
+  if (persistOptions.elapsedWorkflowPreimage) {
     if (!durableOperation) return Object.freeze({admitted: false, persistOptions});
     const target = await observeElapsedReplaceFailureTarget(owner, durableOperation);
     return Object.freeze({...target, persistOptions});

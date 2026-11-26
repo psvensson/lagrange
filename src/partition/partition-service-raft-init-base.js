@@ -57,6 +57,7 @@ import {
 } from './partition-consensus-port-opening.js';
 import {createCommittedStatementOutcomeTable} from
   './partition-committed-statement-outcome.js';
+import {ensureMembershipRecoveryTables} from './partition-membership-recovery.js';
 import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
@@ -265,6 +266,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       try {
         createCommittedStatementOutcomeTable(this.db, this.partitionId, this.tableName);
         openParticipantTransactionStore(this.db);
+        ensureMembershipRecoveryTables(this.db);
         if (this.schema || this.tableName === SYSTEM_TABLE_NAME.NODES || this.tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
           this.createTable();
         }

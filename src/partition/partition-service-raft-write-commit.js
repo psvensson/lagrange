@@ -27,6 +27,10 @@ import {PARTICIPANT_TRANSACTION_LOG_MSG} from
 import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, cdcDrainAdmissionClass} from
   './partition-cdc-owed-admission.js';
 import {pausedWriteAnswerOf} from './partition-participant-transaction-pause.js';
+import {
+  excludedMemberFenceRefusalOf,
+  isLocalReplicaExcludedFenced,
+} from './partition-membership-recovery-store.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const {
@@ -488,6 +492,9 @@ async function executeHandedOffWriteCommit(service, options, handoff) {
  * @return {Object|null} The typed refusal (nothing proposed), or null.
  */
 function partitionWriteLeadershipRefusalOf(service) {
+  if (isLocalReplicaExcludedFenced(service)) {
+    return excludedMemberFenceRefusalOf(service);
+  }
   const tenure = service.leadershipTenure;
   const consensusStatus = service.raft.readStatus();
   const commitMode = resolvePartitionWriteCommitMode({
