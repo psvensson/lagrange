@@ -279,6 +279,63 @@ for (const family of Object.keys(FAMILY)) {
     return sources;
   }
 
+  if (family === 'split') test('deferred aborted child DELETE cannot erase a same-ID successor', async (t) => {
+    const store = spec.store();
+    const clock = {now: 1000};
+    const original = owner(spec, store, {name: 'A', clock});
+    const {workflowId} = await spec.start(original);
+    const [source] = await authorizeSources(original, store, t, true);
+    const {workflowAttempt: attempt, workflowFenceToken: fence, targetPartitionIds: children} = store.metadata();
+    const [child] = children;
+    t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken, fence);
+    let intercepted = false;
+    store.holdSubmission = ({sql, params}) => {
+      if (intercepted || !/^DELETE FROM partitions\b/i.test(sql) || !params.includes(child)) return false;
+      intercepted = true;
+      return true;
+    };
+    const failure = await original.acknowledgeSourceParticipant(workflowId, {
+      participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+      status: SPLIT_ACK_STATUS.BACKFILL_FAILED, attempt, fenceToken: fence, acknowledgedAt: clock.now});
+    t.equal(failure.result, 'accepted');
+    await original.runSerializedOwnerStep(SPLIT_SOURCE, async () => {});
+    if (!intercepted || store.tablesRow().partition_transition_state !== STATE.FAILED) {
+      throw new Error('abort did not submit the original child DELETE: ' + JSON.stringify(store.writes.slice(-5)));
+    }
+    t.ok(store.partitionRow(child), 'the held DELETE has not applied');
+    t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken, fence,
+      'committed abort does not by itself release the physical source pin');
+
+    // Reconstruct the owner on its actual durable rows. Its startup scan must
+    // positively finish the same terminal cleanup without the old RPC reply.
+    clock.now++;
+    const restarted = owner(spec, store, {name: 'A', clock});
+    source.sqlQueryEngine.managedSplitWorkflow = restarted;
+    for (let turn = 0; turn < 500 && children.some((id) => store.partitionRow(id)); turn++) await turns(1);
+    t.same(children.map((id) => store.partitionRow(id)), [null, null], 'fresh owner retired both children');
+    source.systemTableCache.applySystemTableChange('tables', 'INSERT', store.tablesRow());
+    t.equal(await reconcileFailedMirrorCustody(source), true);
+    t.equal(readDurableMirrorRetentionCustodyIn(source.db), null);
+    t.same(store.metadata().mirrorCustodyGrants, []);
+
+    // Require the ordinary retry to select the persisted plan, even if the
+    // fixture's planner would otherwise mint these same deterministic IDs.
+    restarted.buildManagedSplitPlan = () => { throw new Error('retry replanned the split'); };
+    clock.now++;
+    await spec.start(restarted);
+    const successor = store.metadata();
+    if (!(successor.workflowAttempt > attempt && successor.workflowFenceToken > fence &&
+        store.tablesRow().partition_transition_state === STATE.SPLIT_BACKFILLING)) {
+      throw new Error('successor did not enter backfill: ' + JSON.stringify(store.tablesRow()));
+    }
+    t.same(successor.targetPartitionIds, children);
+    const before = store.partitionRow(child);
+    if (!before) throw new Error('successor did not establish its child descriptor');
+    const applied = store.applyHeldSubmission();
+    t.same(store.partitionRow(child), before, 'old SQL must preserve the newer attempt descriptor',
+      {sql: applied.sql, params: applied.params, changes: applied.changes, attempt, successorAttempt: successor.workflowAttempt});
+  });
+
   test(`${family}: FAILED retains each source grant until committed release ACK`, async (t) => {
     const store = spec.store();
     const diagnostics = recordingLogger();
