@@ -476,14 +476,19 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
         nestedOperation: LOCAL_STR_PARTITION_ROUTING_WAIT,
         scope: {partitionId},
-        observe: () => ({
-          requiredCount,
-          routableCount: this.getRoutablePartitionServiceNodeIds(
-            partitionId,
+        observe: () => {
+          const snapshot = this.queryExecutor.getPartitionRoutingSnapshot(
+            partitionId, routingReadinessDimension,
+          );
+          const routableNodes = new Set(snapshot.routableServices
+            .map((service) => service.node_id || service.nodeId).filter(Boolean));
+          return {
+            requiredCount,
+            routableCount: routableNodes.size,
             routingReadinessDimension,
-          ).length,
-          routingReadinessDimension,
-        }),
+            routing: this.queryExecutor.summarizePartitionRoutingSnapshot(snapshot),
+          };
+        },
       },
     );
   }

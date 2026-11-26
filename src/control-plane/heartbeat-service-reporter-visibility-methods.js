@@ -15,6 +15,7 @@ import {
 import {
   buildNodeHeartbeatStructuralSignature,
   buildNodeHeartbeatUtilizationSignature,
+  heartbeatPlacementPressureReason,
   buildReporterHeartbeatVisibilityDecision,
   normalizeHeartbeatPublicationDiagnostics,
   recordHeartbeatPublicationTarget,
@@ -271,6 +272,7 @@ class HeartbeatServiceReporterVisibilityMethods {
   }
   recordConfirmedNodeHeartbeatWrite(updateRow, now) {
     this.lastNodeHeartbeatWriteAt = now;
+    this.lastPlacementPressureReason = heartbeatPlacementPressureReason(updateRow);
     this.lastNodeHeartbeatWriteSignature = buildNodeHeartbeatStructuralSignature(updateRow);
     this.lastNodeHeartbeatUtilizationSignature =
       buildNodeHeartbeatUtilizationSignature(updateRow, {

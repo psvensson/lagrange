@@ -78,7 +78,7 @@ function makePlanner() {
     entityType: 'runtime_service',
     moveStateProvider: {
       getAvailableNodes: () => NODE_IDS.map((nodeId) => ({
-        cpu_usage_percent: 0,
+        host_cpu_utilization_percent: 0,
         disk_usage_percent: 0,
         memory_usage_percent: 0,
         node_id: nodeId,

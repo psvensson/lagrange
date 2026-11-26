@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 
+import {socketEvidence} from '../../src/transport/message-router-socket-evidence.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   CONSENSUS_SEND_REFUSAL,
@@ -154,8 +155,10 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
         return null;
       });
     }
+    let writtenFrame;
     const wsToB = createFakeSocket({
       onSend: (raw) => {
+        writtenFrame = raw;
         receiver.receiveConsensusEnvelope(JSON.parse(raw), null);
       },
     });
@@ -170,11 +173,12 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
       ['g3', 2],
     ];
     let settledBeforeFlush = 0;
+    const context = 'δ "Raft"';
     const deliveries = schedule.map(([groupId, seq]) => {
-      const promise = Promise.resolve(sender.deliver(
-        `node-b/partition/${groupId}-r2`,
-        buildEnvelope(groupId, seq),
-      )).then((outcome) => {
+      const envelope = buildEnvelope(groupId, seq, context);
+      const submitted = sender.deliver(`node-b/partition/${groupId}-r2`, envelope);
+      envelope.message.context = 'changed after admission';
+      const promise = Promise.resolve(submitted).then((outcome) => {
         if (wsToB.sentFrames.length === 0) {
           settledBeforeFlush += 1;
         }
@@ -189,7 +193,12 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
     assert.ok(sender.getStats().consensusDelivery.pendingBatchBytes > 0,
       'pending application batch bytes are tracked before flush');
 
+    const admittedBytes = sender.getStats().consensusDelivery.pendingBatchBytes;
     const outcomes = await Promise.all(deliveries);
+    assert.equal(Buffer.byteLength(writtenFrame), admittedBytes,
+      'UTF-8 bytes sent match the reservation made before the flush');
+    const evidence = socketEvidence(sender, 'node-b', sender.nodeConnections.get('node-b'), wsToB);
+    assert.deepEqual(evidence.applicationSendReturned.consensus, {frames: 1, bytes: admittedBytes});
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.equal(settledBeforeFlush, 0,
@@ -212,13 +221,51 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
     for (const groupId of ['g1', 'g2', 'g3']) {
       const payloads = receivedByGroup.get(groupId);
       assert.deepEqual(payloads, [
-        buildEnvelope(groupId, 1),
-        buildEnvelope(groupId, 2),
+        buildEnvelope(groupId, 1, context),
+        buildEnvelope(groupId, 2, context),
       ], `group ${groupId} received its envelopes unchanged and in FIFO order`);
     }
   } finally {
     await sender.shutdown();
     await receiver.shutdown();
+    resetRouterProcess();
+  }
+});
+
+test('each sender encodes one canonical wrapper across separate remote flushes', async (t) => {
+  configureRouterProcess();
+  const stringify = JSON.stringify;
+  const wrapperEncodings = [];
+  t.mock.method(JSON, 'stringify', (...args) => {
+    const [value] = args;
+    if (value?.type === ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE && value.envelopes?.length === 0) {
+      wrapperEncodings.push(value.sourceNodeId);
+    }
+    return stringify(...args);
+  });
+  const routers = [];
+  const senderIds = ['node-"δ"', 'node-\\雪'];
+  try {
+    for (const nodeId of senderIds) {
+      const router = new MessageRouter({nodeId, bootIncarnation: TEST_BOOT_INCARNATION});
+      routers.push(router);
+      const rawFrames = [];
+      attachConnectedPeer(router, 'peer', createFakeSocket({onSend: (raw) => rawFrames.push(raw)}));
+      const targetAddress = 'peer/partition/g-r2';
+      for (let seq = 0; seq < 24; seq += 1) {
+        const payload = buildEnvelope('g', seq, 'π');
+        const expected = stringify({type: ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE,
+          sourceNodeId: nodeId, envelopes: [{targetAddress, payload}]});
+        const pending = router.deliver(targetAddress, payload);
+        assert.equal(router.getStats().consensusDelivery.pendingBatchBytes, Buffer.byteLength(expected));
+        assert.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await pending)));
+        assert.equal(rawFrames.length, seq + 1);
+        assert.equal(rawFrames[seq], expected);
+      }
+    }
+    assert.deepEqual(wrapperEncodings, senderIds);
+  } finally {
+    await Promise.all(routers.map((router) => router.shutdown()));
     resetRouterProcess();
   }
 });
@@ -535,6 +582,13 @@ test('(c1-incarnation-fence) closing or replacing a connection incarnation ' +
       newDelivery,
       closingDelivery,
     ]);
+
+    const currentConnection = router.nodeConnections.get('peer-b');
+    const oldStats = socketEvidence(router, 'peer-b', currentConnection, wsOld);
+    const newStats = socketEvidence(router, 'peer-b', currentConnection, wsNew);
+    assert.deepEqual(oldStats.applicationSendReturned.consensus, {frames: 0, bytes: 0});
+    assert.equal(newStats.applicationSendReturned.consensus.frames, 1);
+    assert.notEqual(oldStats.attemptedSocketId, newStats.attemptedSocketId);
 
     assert.equal(
       isDeliveredTransportDeliveryOutcome(deliveryTransportOf(outOld1)),

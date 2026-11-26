@@ -481,7 +481,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
           cpu_cores: 4,
           memory_mb: 1024,
           disk_gb: 10,
-          cpu_usage_percent: 10,
+          host_cpu_utilization_percent: 10,
           memory_usage_percent: 10,
           disk_usage_percent: 10,
           status: 'active',

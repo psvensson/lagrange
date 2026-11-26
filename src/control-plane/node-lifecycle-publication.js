@@ -1,3 +1,4 @@
+import {PLACEMENT_RESOURCE_COLUMNS} from '../diagnostics/placement-resource-sample.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   COLUMN,
@@ -113,7 +114,6 @@ const NODE_TELEMETRY_COLUMNS = Object.freeze([
   COLUMN.CPU_CORES,
   COLUMN.MEMORY_MB,
   COLUMN.DISK_GB,
-  COLUMN.CPU_USAGE_PERCENT,
   COLUMN.MEMORY_USAGE_PERCENT,
   COLUMN.DISK_USAGE_PERCENT,
 ]);
@@ -240,11 +240,15 @@ function resolveTelemetryColumns(telemetry, source) {
 function extractTelemetrySampleMeta(telemetry) {
   if (!telemetry || typeof telemetry !== 'object') return {};
   const meta = {};
-  if (numberIsFinite(telemetry.telemetry_sampled_at)) {
-    meta.telemetry_sampled_at = mathFloor(telemetry.telemetry_sampled_at);
+  for (const column of Object.values(PLACEMENT_RESOURCE_COLUMNS)) {
+    if (Object.hasOwn(telemetry, column)) {
+      meta[column] = numberIsFinite(telemetry[column]) ? telemetry[column] : null;
+    }
   }
-  if (telemetry.telemetry_sample_id !== undefined && telemetry.telemetry_sample_id !== null) {
-    meta.telemetry_sample_id = telemetry.telemetry_sample_id;
+  for (const key of ['telemetry_sampled_at', 'telemetry_sample_id']) {
+    if (Object.hasOwn(telemetry, key)) {
+      meta[key] = Number.isSafeInteger(telemetry[key]) ? telemetry[key] : null;
+    }
   }
   return meta;
 }

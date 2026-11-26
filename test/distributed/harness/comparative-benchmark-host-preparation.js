@@ -9,7 +9,9 @@
 import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
 import {
   arrayFilter,
-  arrayFind,
+  arrayEvery,
+  arrayIsArray,
+  jsonParse,
   arrayIncludes,
   arrayMap,
   stringSplit,
@@ -128,43 +130,117 @@ async function ensureProductImages({hosts, role, images, sshRun, opts}) {
   return present;
 }
 
-/**
- * The campaign's content-pinned image on every host, found by CONTENT
- * identity (the digest of its ordered RootFS diff_ids; real-product-identity.js),
- * never by .Id, which is the manifest digest on a containerd store and the
- * config digest on overlay2. A host whose image carries the registry digest
- * runs it by that digest; a host where the same content was `docker load`ed
- * (no RepoDigest) runs it by its local .Id and says so (`loaded:<id>`). A host
- * without the content is image_unavailable: no pull is attempted - placing
- * the image is an operator step (cloud-reproduction-guide.md).
- * @param {{hosts: Array<{ip: string}>, contentIdentity: string,
- *   registryRef: string, sshRun: Function, opts: Object}} input
- * @return {Promise<Object<string, Object>>} by host ip
- */
-async function resolvePinnedImage({hosts, contentIdentity, registryRef, sshRun, opts}) {
-  const resolved = {};
-  for (const host of hosts) {
-    const imageStore = imageStoreOf(await sshRun(host.ip, opts,
-      'docker info --format \'{{.Driver}}|{{json .DriverStatus}}\''));
-    const listing = await execWithStatus(sshRun, host.ip, opts,
-      'docker image inspect --format \'{{.Id}}|{{json .RepoDigests}}|' +
-      '{{json .RootFS.Layers}}\' $(docker image ls -aq --no-trunc | sort -u) 2>/dev/null');
-    const images = arrayMap(arrayFilter(stringSplit(listing.stdout, '\n'), Boolean),
-      (line) => {
-        const [id, digests, layers] = stringSplit(line, '|');
-        return {id, digests: JSON.parse(digests || 'null') || [],
-          contentIdentity: contentIdentityOf(JSON.parse(layers || 'null'))};
-      });
-    const match = arrayFind(images, (image) => image.contentIdentity === contentIdentity);
-    if (!match) {
-      throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
-        `pinned image content ${contentIdentity} is not on ${host.ip}`,
-        {host: host.ip, contentIdentity, reason: 'absent', imageStore});
+const IMAGE_DIGEST = /^sha256:[0-9a-f]{64}$/u;
+const CONFIG_BLOB = /^(?:blobs\/sha256\/([0-9a-f]{64})|([0-9a-f]{64})\.json)$/u;
+const IMAGE_FIELDS = "docker image inspect --format '{{.Id}}|{{json .RepoDigests}}|{{json .RootFS.Layers}}'";
+
+function refuseImage(host, reason, detail) {
+  throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
+    `pinned image on ${host}: ${reason}`, {host, reason, ...detail});
+}
+
+function parseImage(line, host) {
+  try {
+    const fields = stringSplit(line, '|');
+    if (fields.length !== 3) throw new TypeError('unexpected image fields');
+    const [id, digests, diffIds] = fields;
+    const layers = jsonParse(diffIds);
+    const repoDigests = jsonParse(digests) ?? [];
+    if (IMAGE_DIGEST.test(id) && arrayIsArray(repoDigests) &&
+        arrayEvery(repoDigests, (value) => typeof value === 'string') &&
+        arrayIsArray(layers) && layers.length && arrayEvery(layers, (value) => IMAGE_DIGEST.test(value))) {
+      return {id, repoDigests, contentIdentity: contentIdentityOf(layers)};
     }
-    const viaRegistry = arrayIncludes(match.digests, registryRef);
-    resolved[host.ip] = {runRef: viaRegistry ? registryRef : match.id, imageId: match.id,
-      imageStore, contentIdentity, repoDigests: match.digests,
-      provenance: viaRegistry ? `registry:${registryRef}` : `loaded:${match.id}`};
+  } catch (error) {
+    refuseImage(host, 'invalid_inspect', {detail: error.message});
+  }
+  refuseImage(host, 'invalid_inspect', {});
+}
+
+async function inspectLocalImage(ctx, ref) {
+  const result = await execWithStatus(ctx.sshRun, ctx.host, ctx.opts,
+    `${IMAGE_FIELDS} ${shellWord(ref)} 2>&1`);
+  if (result.exitCode === 0) return parseImage(stringTrim(result.stdout), ctx.host);
+  if (/^(?:Error(?: response from daemon)?: )?No such (?:image|object):/iu.test(stringTrim(result.stdout))) {
+    return null;
+  }
+  refuseImage(ctx.host, 'inspect_failed', {ref, output: result.stdout});
+}
+
+// Overlay2 exposes the config digest as .Id. Containerd may expose a manifest
+// or index ID. Its local Docker export names the actual config blob in manifest.json.
+async function configOf(ctx, image) {
+  if (ctx.imageStore === 'overlay2') return image.id;
+  const pipeline = `docker image save ${image.id} | tar -xOf - manifest.json`;
+  const result = await execWithStatus(ctx.sshRun, ctx.host, ctx.opts,
+    `bash -o pipefail -c ${shellWord(pipeline)}`);
+  if (result.exitCode === 0) {
+    try {
+      const records = jsonParse(result.stdout);
+      if (arrayIsArray(records) && records.length === 1) {
+        const match = CONFIG_BLOB.exec(records[0]?.Config);
+        if (match) return `sha256:${match[1] ?? match[2]}`;
+      }
+    } catch (error) {
+      refuseImage(ctx.host, 'config_unverified', {imageId: image.id, detail: error.message});
+    }
+  }
+  refuseImage(ctx.host, 'config_unverified', {imageId: image.id});
+}
+
+async function loadedConfig(ctx, configDigest, contentIdentity) {
+  if (ctx.imageStore === 'overlay2') {
+    const image = await inspectLocalImage(ctx, configDigest);
+    if (image?.id === configDigest && image.contentIdentity === contentIdentity) return image;
+  } else {
+    const listing = await execWithStatus(ctx.sshRun, ctx.host, ctx.opts, 'docker image ls -aq --no-trunc');
+    if (listing.exitCode !== 0) refuseImage(ctx.host, 'inventory_failed', {});
+    let match = null;
+    for (const id of new Set(arrayFilter(stringSplit(stringTrim(listing.stdout), '\n'), Boolean))) {
+      if (!IMAGE_DIGEST.test(id)) refuseImage(ctx.host, 'invalid_inventory', {id});
+      const image = await inspectLocalImage(ctx, id);
+      if (!image) continue;
+      if (image.id !== id) refuseImage(ctx.host, 'invalid_inventory', {id, observed: image.id});
+      if (image.contentIdentity !== contentIdentity || await configOf(ctx, image) !== configDigest) continue;
+      if (match) refuseImage(ctx.host, 'ambiguous_config', {configDigest});
+      match = image;
+    }
+    if (match) return match;
+  }
+  refuseImage(ctx.host, 'exact_config_absent', {configDigest, contentIdentity});
+}
+
+// First resolve Docker's requested reference wherever present. Only those
+// observations can establish the config required on hosts missing the reference.
+async function resolvePinnedImage({hosts, contentIdentity, registryRef, sshRun, opts}) {
+  let configDigest = null;
+  const observations = [];
+  for (const {ip: host} of hosts) {
+    const imageStore = imageStoreOf(await sshRun(host, opts,
+      'docker info --format \'{{.Driver}}|{{json .DriverStatus}}\''));
+    if (imageStore === 'unknown') refuseImage(host, 'unknown_store', {});
+    const ctx = {host, imageStore, sshRun, opts};
+    const exact = await inspectLocalImage(ctx, registryRef);
+    if (exact) {
+      if (exact.contentIdentity !== contentIdentity) {
+        refuseImage(host, 'reference_content_mismatch', {registryRef, contentIdentity});
+      }
+      const digest = await configOf(ctx, exact);
+      if (configDigest !== null && configDigest !== digest) {
+        refuseImage(host, 'reference_config_mismatch', {registryRef, configDigest, observed: digest});
+      }
+      configDigest = digest;
+    }
+    observations.push({ctx, exact});
+  }
+  if (!configDigest) refuseImage(hosts[0]?.ip, 'reference_absent', {registryRef, contentIdentity});
+  const resolved = {};
+  for (const {ctx, exact} of observations) {
+    const image = exact ?? await loadedConfig(ctx, configDigest, contentIdentity);
+    const viaRegistry = exact && arrayIncludes(image.repoDigests, registryRef);
+    resolved[ctx.host] = {runRef: viaRegistry ? registryRef : image.id, imageId: image.id,
+      imageStore: ctx.imageStore, contentIdentity, configDigest, repoDigests: image.repoDigests,
+      provenance: viaRegistry ? `registry:${registryRef}` : `loaded:${image.id}`};
   }
   return resolved;
 }

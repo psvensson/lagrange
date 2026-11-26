@@ -1,3 +1,4 @@
+import {admittedMirrorSource, sourceMirrorReservationFixture} from './source-mirror-reservation-fixture.js';
 /**
  * Guard tests for the source-partition merge replication executor:
  * START_MERGE_REPLICATION validation and idempotency, the ack ladder
@@ -37,7 +38,7 @@ async function loadPartitionServicePrototype() {
 
 function buildMetadata() {
   return {
-    workflowId: FIXTURE_WORKFLOW_ID,
+    workflowId: FIXTURE_WORKFLOW_ID, workflowAttempt: 1, workflowFenceToken: 1,
     primaryKeyColumn: 'id',
     sourcePartitionIds: [
       FIXTURE_SOURCE_PARTITION_ID,
@@ -68,34 +69,21 @@ function authorizedHandle(context, phase, pendingEntries = []) {
  * Mirrors the prototype-method-borrow fixture style used by
  * split-source-participant-ack.test.js.
  */
-async function buildSourceContext(options = {}) {
-  const proto = await loadPartitionServicePrototype();
+async function buildSourceContext(t, options = {}) {
   const ackCalls = [];
   const mirroredWrites = [];
   const snapshotRows = options.snapshotRows || [
     {id: 'a', v: 1},
     {id: 'b', v: 2},
   ];
-  const context = {
-    partitionId: FIXTURE_SOURCE_PARTITION_ID,
-    tableId: 'tbl-users',
-    tableName: 'users',
-    role: RAFT_ROLE.LEADER,
-    isShutdown: false,
-    dbPath: ':memory:',
+  const context = await admittedMirrorSource(t, FIXTURE_SOURCE_PARTITION_ID, [
+    {name: 'id', type: 'TEXT', primaryKey: true}, {name: 'v', type: 'INTEGER'},
+  ]);
+  for (const row of snapshotRows) {
+    context.db.prepare('INSERT INTO users (id, v) VALUES (?, ?)').run(row.id, row.v);
+  }
+  Object.assign(context, {
     splitSnapshotBackfillYieldEveryRows: 0,
-    mergeReplication: null,
-    mergeReplicationRun: null,
-    splitReplication: null,
-    db: {
-      prepare(sql) {
-        if (sql.startsWith('PRAGMA')) {
-          return {all: () => [{name: 'id'}, {name: 'v'}]};
-        }
-        return {all: () => snapshotRows};
-      },
-    },
-    logger: {info() {}, warn() {}, error() {}},
     // Descriptor-epoch evidence is never absent on an in-flight mirror
     // (fail-open is gone): the fixture models the hydrated cache the
     // real service sees, unless a test opts into the cold-cache gap.
@@ -119,6 +107,8 @@ async function buildSourceContext(options = {}) {
       options.systemTableCache,
     sqlQueryEngine: {
       managedMergeWorkflow: {
+        reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
+        confirmMergeReplicationStart: async () => false,
         async acknowledgeMergeSourceParticipant(workflowId, ack) {
           ackCalls.push({workflowId, ack});
           const responder = options.ackResponder;
@@ -135,49 +125,13 @@ async function buildSourceContext(options = {}) {
       },
     },
     cdcIntegrationService: options.cdcIntegrationService || null,
-  };
-  // Borrow the production prototype methods onto the context.
-  const methodNames = [
-    'normalizeMergeTransitionMetadata',
-    'isSameMergeReplication',
-    'handleStartMergeReplication',
-    'forwardStartMergeReplicationToLeader',
-    'resolveInFlightMergeReplicationResponse',
-    'handleMergeReplicationRunFailure',
-    'resolveMergeFailureAckStatus',
-    'enqueueMergeDeltaBounded',
-    'mirrorCutoverActiveMergeWrite',
-    'drainMergeReplicationQueueQuietly',
-    'runMergeReplicationWorkflow',
-    'emitMergeSourceAck',
-    'resolveMergeDescriptorEpochEvidence',
-    'assertMergeRoutingDescriptorEpoch',
-    'resolveSplitDescriptorEpochEvidence',
-    'backfillMergeSnapshot',
-    'applyMergeSnapshotBatch',
-    'routeMergeMirroredWrite',
-    'handleMergeReplicationAfterWrite',
-    'flushMergeReplicationQueue',
-    'drainMergeReplicationQueue',
-    'replayMergeEntry',
-    'waitForMergeCutoverActivation',
-    'isMergeCutoverActive',
-    'isMergeTransitionAborted',
-    'resolveLocalTableDescriptor',
-    'openSplitSnapshotDatabase',
-    'yieldSplitBackfillTurn',
-    'cloneSplitEntry',
-    'routeSplitMirroredWrite',
-  ];
-  for (const methodName of methodNames) {
-    context[methodName] = proto[methodName];
-  }
+  });
   return {context, ackCalls, mirroredWrites, snapshotRows};
 }
 
 test('merge source - rejects invalid merge transition metadata',
   async (t) => {
-    const {context} = await buildSourceContext();
+    const {context} = await buildSourceContext(t);
     const response = await context.handleStartMergeReplication({
       transitionMetadata: {workflowId: FIXTURE_WORKFLOW_ID},
     });
@@ -191,7 +145,7 @@ test('merge source - rejects invalid merge transition metadata',
 
 test('merge source - full run emits the ack ladder in order and fans ' +
     'every snapshot row into the merged target', async (t) => {
-  const {context, ackCalls, mirroredWrites} = await buildSourceContext();
+  const {context, ackCalls, mirroredWrites} = await buildSourceContext(t);
   const response = await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
@@ -239,7 +193,7 @@ test('merge source - full run emits the ack ladder in order and fans ' +
 
 test('merge source - idempotent restart acks; conflicting replication ' +
     'is refused', async (t) => {
-  const {context} = await buildSourceContext();
+  const {context} = await buildSourceContext(t);
   await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
@@ -269,7 +223,7 @@ test('merge source - live writes queued mid-mirror are flushed to the ' +
   const catchupGate = new Promise((resolve) => {
     releaseCatchup = resolve;
   });
-  const {context, mirroredWrites} = await buildSourceContext({
+  const {context, mirroredWrites} = await buildSourceContext(t, {
     ackResponder: async (workflowId, ack) => {
       if (ack[PARTICIPANT_ACK_FIELD.STATUS] ===
           MERGE_ACK_STATUS.CATCHUP_READY) {
@@ -305,7 +259,7 @@ test('merge source - live writes queued mid-mirror are flushed to the ' +
 
 test('merge source - mirror-origin entries are skipped to prevent loops',
   async (t) => {
-    const {context, mirroredWrites} = await buildSourceContext();
+    const {context, mirroredWrites} = await buildSourceContext(t);
     context.mergeReplication = authorizedHandle(
       context, PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE);
     await context.handleMergeReplicationAfterWrite({
@@ -338,7 +292,7 @@ test('merge source - waits for the durable cutover when the owner has ' +
     partition_id: FIXTURE_TARGET_PARTITION_ID,
     partition_version: 2,
   };
-  const {context, ackCalls} = await buildSourceContext({
+  const {context, ackCalls} = await buildSourceContext(t, {
     ackResponder: (workflowId, ack) => {
       if (ack[PARTICIPANT_ACK_FIELD.STATUS] ===
           MERGE_ACK_STATUS.CATCHUP_READY) {
@@ -388,7 +342,7 @@ test('merge source - waits for the durable cutover when the owner has ' +
 
 test('merge source - never writes system tables directly; unavailable START ' +
     'authorization installs no worker', async (t) => {
-  const {context} = await buildSourceContext({
+  const {context} = await buildSourceContext(t, {
     cdcIntegrationService: {
       updateSystemTableRow() {
         t.fail('source-side merge executor must not write system tables');
@@ -414,7 +368,7 @@ test('merge source - queue is fully drained BEFORE the catch-up ack the ' +
   const snapshotGate = new Promise((resolve) => {
     releaseSnapshot = resolve;
   });
-  const {context, mirroredWrites} = await buildSourceContext({
+  const {context, mirroredWrites} = await buildSourceContext(t, {
     ackResponder: async (workflowId, ack) => {
       if (ack[PARTICIPANT_ACK_FIELD.STATUS] ===
           MERGE_ACK_STATUS.CATCHUP_READY) {
@@ -454,7 +408,7 @@ test('merge source - queue is fully drained BEFORE the catch-up ack the ' +
 
 test('merge source - a mirror failure emits the matching failure ack ' +
     'so the owner can abort before cutover (D2 guard)', async (t) => {
-  const {context, ackCalls} = await buildSourceContext();
+  const {context, ackCalls} = await buildSourceContext(t);
   // The queued live write fails to mirror during the pre-ack drain.
   context.sqlQueryEngine.queryExecutor.executeOnPartition =
     async (pid, sql, params) => {
@@ -503,7 +457,7 @@ test('merge source - a mirror failure emits the matching failure ack ' +
 
 test('merge source - cutover-active live writes preserve source order ' +
     'behind a non-empty queue (D5 guard)', async (t) => {
-  const {context, mirroredWrites} = await buildSourceContext();
+  const {context, mirroredWrites} = await buildSourceContext(t);
   context.mergeReplication = authorizedHandle(
     context, PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE, [
       {sql: 'INSERT INTO users (id, v) VALUES (?, ?)', params: ['older', 1]},
@@ -547,7 +501,7 @@ test('merge source - the peer abort is observed: cutover wait exits ' +
     partition_id: FIXTURE_TARGET_PARTITION_ID,
     partition_version: 2,
   };
-  const {context, ackCalls} = await buildSourceContext({
+  const {context, ackCalls} = await buildSourceContext(t, {
     ackResponder: (workflowId, ack) => {
       if (ack[PARTICIPANT_ACK_FIELD.STATUS] ===
           MERGE_ACK_STATUS.CATCHUP_READY) {

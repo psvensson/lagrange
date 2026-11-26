@@ -33,7 +33,17 @@ function createHedgedFanoutState(partitionIds, executionOptions = {}) {
       }),
   );
   const deliveryObservations = new Map();
+  const controllers = new Map();
+  const signals = new Map();
+  for (const partitionId of partitionIds) {
+    const controller = new AbortController();
+    controllers.set(partitionId, controller);
+    signals.set(partitionId, executionOptions.signal ?
+      AbortSignal.any([executionOptions.signal, controller.signal]) : controller.signal);
+  }
   const state = {
+    controllers,
+    signals,
     launchedAtMs: Date.now(),
     results,
     pendingPartitions,
@@ -134,6 +144,7 @@ function settleHedgedPartition(state, partitionId, outcome) {
   state.results.set(partitionId, outcome);
   state.pendingPartitions.delete(partitionId);
   state.settlementResolvers.get(partitionId)(outcome);
+  state.controllers.get(partitionId).abort();
   return true;
 }
 

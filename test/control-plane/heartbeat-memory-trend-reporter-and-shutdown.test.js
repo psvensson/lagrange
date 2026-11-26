@@ -480,7 +480,7 @@ async (t) => {
     cpu_cores: 4,
     memory_mb: 256,
     disk_gb: 64,
-    cpu_usage_percent: 10,
+    host_cpu_utilization_percent: 10,
     memory_usage_percent: 20,
     disk_usage_percent: 30,
     status: SERVICE_STATUS.STOPPED,
@@ -622,7 +622,7 @@ test('HeartbeatService preserves max-staleness liveness writes in quiet mode eve
     Date.now = () => now;
     try {
       await service.sendHeartbeat({
-        cpu: {count: 4, usagePercent: 11},
+        cpu: {count: 4},
         memory: {totalBytes: 128 * 1024 * 1024, usagePercent: 21},
         diskGb: 100,
         diskUsagePercent: 31,
@@ -630,7 +630,7 @@ test('HeartbeatService preserves max-staleness liveness writes in quiet mode eve
       quietModeActive = true;
       now += 60;
       await service.sendHeartbeat({
-        cpu: {count: 4, usagePercent: 12},
+        cpu: {count: 4},
         memory: {totalBytes: 128 * 1024 * 1024, usagePercent: 22},
         diskGb: 100,
         diskUsagePercent: 32,

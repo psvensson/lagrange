@@ -198,25 +198,18 @@ class IndexService {
           'SELECT * FROM indices',
           [],
         );
-        indices = result.rows || [];
+        if (result?.success === false || !Array.isArray(result?.rows)) {
+          throw new Error(result?.error || INDEX_LOG_MSG.INDICES_LOAD_FAILED);
+        }
+        indices = result.rows;
       }
 
       for (const index of indices) {
-        const tableId = index.table_id;
-        if (!this.indexCache.has(tableId)) {
-          this.indexCache.set(tableId, new Map());
-        }
-
         const indexMetadata = index.is_global ?
           hydrateGlobalIndexFromRow(this, this.getGlobalIndexCoordinator(), index) :
           buildLocalIndexMetadata(index);
 
-        if (indexMetadata) {
-          this.indexCache.get(tableId).set(
-            index.index_name, indexMetadata,
-          );
-          this.indices.set(index.index_name, indexMetadata);
-        }
+        if (indexMetadata) this._cacheIndexMetadata(indexMetadata);
       }
 
       this.logger.debug(INDEX_LOG_MSG.INDICES_LOADED, {
@@ -767,6 +760,7 @@ class IndexService {
     this._detachSystemTableCacheListener();
     this.indexCache.clear();
     this.indices?.clear();
+    this._incompleteGlobalIndexes?.clear();
     this.initialized = false;
     this._initializePromise = null;
   }

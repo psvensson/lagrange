@@ -309,6 +309,10 @@ function resolveEffectiveDeadlineMs(deadlineMs, finiteDeadlineAtMs, startedAt) {
 
 function applyProbeOutcomeToState(state, outcome, attempt) {
   state.attemptedPolls = attempt;
+  if (outcome.deferredObservation === true) {
+    state.consecutive = 0;
+    return;
+  }
   if (isIncompleteProbeOutcome(outcome)) {
     recordIncompleteProbeAttempt(state, outcome, attempt);
   } else {

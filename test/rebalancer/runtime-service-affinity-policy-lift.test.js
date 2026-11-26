@@ -277,7 +277,7 @@ test('end-to-end: record -> publish -> aggregate -> policy -> ' +
       {
         node_id: NODE_A,
         status: ReplicaStatus.ACTIVE,
-        cpu_usage_percent: 30,
+        host_cpu_utilization_percent: 30,
         memory_usage_percent: 0,
         disk_usage_percent: 0,
         latency_group_id: 'G1',
@@ -285,7 +285,7 @@ test('end-to-end: record -> publish -> aggregate -> policy -> ' +
       {
         node_id: NODE_B,
         status: ReplicaStatus.ACTIVE,
-        cpu_usage_percent: 30,
+        host_cpu_utilization_percent: 30,
         memory_usage_percent: 0,
         disk_usage_percent: 0,
         latency_group_id: 'G2',

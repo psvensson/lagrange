@@ -174,7 +174,7 @@ class GroupRetirementRedrive {
    * @param {Function} step - async () => *.
    * @return {Promise<*>}
    */
-  exclusive(key, step) {
+  exclusive(key, step, {terminal = () => false} = {}) {
     const running = this.inFlight.get(key);
     if (running) {
       running.again = true;
@@ -184,7 +184,7 @@ class GroupRetirementRedrive {
     slot.promise = (async () => {
       try {
         let result = await step();
-        while (slot.again) {
+        while (slot.again && !terminal(result)) {
           slot.again = false;
           result = await step();
         }

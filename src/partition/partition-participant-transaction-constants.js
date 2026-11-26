@@ -116,6 +116,7 @@ const PARTICIPANT_TRANSACTION_FAILURE_CODE = Object.freeze({
     'participant_transaction_session_write_nondeterministic',
   STATEMENT_FAILED: 'participant_transaction_statement_failed',
   REPLAY_DIVERGED: 'participant_transaction_replay_diverged',
+  STALE_READ: 'participant_transaction_stale_read',
   REPLAY_BUDGET_EXCEEDED: 'participant_transaction_replay_budget_exceeded',
   DETERMINISM_SELF_CHECK_FAILED:
     'participant_transaction_determinism_self_check_failed',

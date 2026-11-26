@@ -339,6 +339,7 @@ function seedInFlightFormationOperations(cache, partitionIds) {
       startedAtMs,
       steps: spec.steps,
     });
+    if (idx === 2) delete stepsHistory.find((entry) => entry.step === 'CREATING').timestamp;
     cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
       operation_id: operationId,
       type: spec.type,
@@ -489,6 +490,12 @@ test(
         'completed diagnostic rows retain only their latest compact step',
       );
       t.equal(row.stepsHistory[0].step, 'ACTIVE');
+      t.same(row.completedCopyStages.SYNCING, {
+        startedAtMs: row.completedAt - 1000,
+        endedAtMs: row.completedAt,
+        nextStep: 'ACTIVE',
+        durationMs: 1000,
+      });
       t.equal(Number.isFinite(row.stepsHistory[0].timestamp), true);
     }
     assertNoHeavyKeysInSummary(t, summary, 'partition diagnostics');
@@ -590,7 +597,13 @@ test(
       t.equal(latestState.eventType, 'state');
       t.equal(latestState.inFlight, true);
     }
+    const partial = rowsById.get('op-inflight-02');
+    t.equal(partial.completedCopyStages.CREATING, undefined,
+      'missing stage entry time cannot be inferred from other steps or row creation');
+    t.equal(partial.completedCopyStages.SYNCING, undefined,
+      'an ongoing stage has no completion timestamp');
     const staleRow = rowsById.get('op-inflight-00');
+    t.equal(staleRow.completedCopyStages, null, 'REMOVE is not a copy');
     t.equal(
       resolveOperationCurrentStepEntry(staleRow).timestamp,
       NOW_MS - STALE_STOPPING_AGE_MS,

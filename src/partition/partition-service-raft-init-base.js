@@ -76,6 +76,7 @@ const {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   RaftRole,
+  SYSTEM_TABLE_NAME,
   assertCritical,
   computeReplicaElectionTimeouts,
   fs,
@@ -263,14 +264,12 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       // migrated, and the handle is closed with the refusal.
       try {
         createCommittedStatementOutcomeTable(this.db, this.partitionId);
+        openParticipantTransactionStore(this.db);
+        if (this.schema || this.tableName === SYSTEM_TABLE_NAME.NODES) this.createTable();
       } catch (error) {
         this.db.close();
         this.db = null;
         throw error;
-      }
-      openParticipantTransactionStore(this.db);
-      if (this.schema) {
-        this.createTable();
       }
     });
     if (this.transport) {

@@ -1,3 +1,6 @@
+import {renderTableDefinitionSql} from '../query/sql-table-definition.js';
+import {SYSTEM_TABLE_NAME} from './system-table-schema-shared-constants.js';
+
 const LOCAL_STR_RPAREN = ')';
 
 // The schema descriptor is supplied by the catalog owner, never command SQL.
@@ -12,6 +15,10 @@ function readSystemTableRowsIn(db, schema) {
  * @return {string} SQL CREATE TABLE statement.
  */
 function generateCreateTableSQL(schema) {
+  if (schema.tableName === SYSTEM_TABLE_NAME.NODES) {
+    return renderTableDefinitionSql(schema.tableName, schema)
+      .replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS ');
+  }
   const columnDefs = schema.columns.map((col) => {
     let def = `${col.name} ${col.type}`;
     if (col.primaryKey) {

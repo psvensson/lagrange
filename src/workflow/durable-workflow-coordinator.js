@@ -500,6 +500,10 @@ class DurableWorkflowCoordinator {
     workflow.participants.set(participant.participantKey, participant);
   }
 
+  hasInFlightExecution(ownerKey) {
+    return this.inFlightExecutionsByOwnerKey.has(String(ownerKey || ''));
+  }
+
   /**
    * Run one execution per owner key at a time.
    * @param {string} ownerKey - Workflow owner key.

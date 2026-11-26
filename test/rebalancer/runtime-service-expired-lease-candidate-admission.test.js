@@ -86,19 +86,19 @@ test('ordinary runtime-service placement excludes an expired-lease ' +
     {
       node_id: OWNER_NODE_ID,
       status: 'active',
-      cpu_usage_percent: 50,
+      host_cpu_utilization_percent: 50,
       ready_lease_expires_at: now + 60_000,
     },
     {
       node_id: EXPIRED_NODE_ID,
       status: 'active',
-      cpu_usage_percent: 1,
+      host_cpu_utilization_percent: 1,
       ready_lease_expires_at: now - 1,
     },
     {
       node_id: HEALTHY_NODE_ID,
       status: 'active',
-      cpu_usage_percent: 90,
+      host_cpu_utilization_percent: 90,
       ready_lease_expires_at: now + 60_000,
     },
   ];

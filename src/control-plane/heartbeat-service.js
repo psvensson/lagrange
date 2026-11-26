@@ -42,6 +42,7 @@ class HeartbeatService extends EventEmitter {
    * @param {Object} options.systemTableCache - System table cache.
    */ constructor(options = {}) {
     super();
+    this.resourceDiagnosticsSampler = options.resourceDiagnosticsSampler;
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
@@ -157,6 +158,7 @@ class HeartbeatService extends EventEmitter {
     this.lastNodeHeartbeatWriteAt = null;
     this.lastNodeHeartbeatWriteSignature = null;
     this.lastNodeHeartbeatUtilizationSignature = null;
+    this.lastPlacementPressureReason = null;
     this.lastEndpointUpsertAt = null;
     this.lastEndpointUpsertSignature = null;
     this.lastHeartbeatPublicationDecision = null;
@@ -233,6 +235,7 @@ defineHeartbeatServiceReporterVisibilityMethods(HeartbeatService);
  */
 function assembleHeartbeatService(options = {}) {
   const heartbeatService = new HeartbeatService({
+    resourceDiagnosticsSampler: options.resourceDiagnosticsSampler,
     nodeId: options.nodeId,
     nodeAddress: options.nodeAddress,
     advertisedNodeWsAddress: options.advertisedNodeWsAddress,

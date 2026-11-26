@@ -7,6 +7,7 @@
 // pragma/connection-state functions, OR ROLLBACK conflict clauses, and writes
 // to foreign tables. Rowid rules R1-R3 (partition-statement-admission-rowid-rules.js)
 // apply on writes, with R3 also checked post-statement inside a savepoint.
+import {extractLexedSqlMutationType, lexedMutationOperationType} from './partition-statement-mutation-kind.js';
 import {preparePartitionReadStatement} from './partition-read-statement-owner.js';
 import {asciiLower, lexPartitionStatement} from './partition-statement-admission-lexer.js';
 import {
@@ -105,39 +106,6 @@ function mainVerb(lexed) {
 }
 
 const QUALIFIED_TARGET_ADVANCE = 3;
-const DIRECT_MUTATION_KIND_BY_VERB = Object.freeze({
-  [KEYWORD.DELETE]: PARTITION_SERVICE_OPERATION.DELETE,
-  [KEYWORD.UPDATE]: PARTITION_SERVICE_OPERATION.UPDATE,
-  [KEYWORD.REPLACE]: PARTITION_SERVICE_OPERATION.UPSERT,
-});
-
-function isInsertOrReplaceAt(tokens, verbIndex) {
-  return (
-    tokens[verbIndex + 1]?.upper === KEYWORD.OR &&
-    tokens[verbIndex + 2]?.upper === KEYWORD.REPLACE
-  );
-}
-
-function lexedMutationOperationType(lexed) {
-  const verbIndex = dmlVerbIndex(lexed);
-  if (verbIndex < 0) return null;
-  const tokens = lexed.tokens;
-  const verb = tokens[verbIndex]?.upper ?? null;
-  if (Object.hasOwn(DIRECT_MUTATION_KIND_BY_VERB, verb)) {
-    return DIRECT_MUTATION_KIND_BY_VERB[verb];
-  }
-  if (verb !== KEYWORD.INSERT) return null;
-  return isInsertOrReplaceAt(tokens, verbIndex) || hasDoUpdateClause(tokens) ?
-    PARTITION_SERVICE_OPERATION.UPSERT :
-    PARTITION_SERVICE_OPERATION.INSERT;
-}
-
-function extractLexedSqlMutationType(sql) {
-  return typeof sql === 'string' && sql.length > 0 ?
-    lexedMutationOperationType(lexPartitionStatement(sql)) :
-    null;
-}
-
 function dmlTargetTokenIndex(tokens, verb) {
   const keyword = tokens[verb].upper;
   const afterVerb = tokens[verb + 1]?.upper === KEYWORD.OR ?
@@ -415,8 +383,7 @@ function hasTopLevelReturning(lexed) {
 function hasActiveMirrorCapture(service) {
   return Boolean(
     service.splitReplication ||
-    service.mergeReplication ||
-    service.captureDurableMirrorEffects,
+    service.mergeReplication,
   );
 }
 
