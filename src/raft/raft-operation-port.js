@@ -32,7 +32,7 @@ function isFreezableValue(value) {
 }
 
 function deepFreeze(value, seen = null) {
-  if (!isFreezableValue(value) || Object.isFrozen(value)) {
+  if (!isFreezableValue(value)) {
     return value;
   }
   let visited = seen;
@@ -47,7 +47,7 @@ function deepFreeze(value, seen = null) {
     const descriptor = Object.getOwnPropertyDescriptor(value, keys[index]);
     if (descriptor && Object.hasOwn(descriptor, VALUE_DESCRIPTOR_KEY)) {
       const child = descriptor.value;
-      if (isFreezableValue(child) && !Object.isFrozen(child)) {
+      if (isFreezableValue(child)) {
         if (visited === null) {
           visited = new Set();
           visited.add(value);

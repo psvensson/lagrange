@@ -275,7 +275,7 @@ function classifyAttributedCongestion(obs, thresholds) {
 function isHighUtilizationQueueDelayed(rawUtilPercent, maxHealthyPercent, observation, thresholds) {
   if (Number(rawUtilPercent) <= maxHealthyPercent) return false;
   if (!isFiniteMetric(observation.eventLoopDelayMs)) return true;
-  return Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs / 2;
+  return Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs;
 }
 
 function isEventLoopWithinHealthyBand(observation, thresholds) {
@@ -597,12 +597,9 @@ function isObservationConstrained(obs, config) {
   return classifyAttributedCongestion(obs, config.thresholds) !== null;
 }
 
-function canWindowAdvanceNow(stateEntry, stamped, config, nowMs) {
-  if (classifyPlacementPressure(stamped, config.thresholds).action !== ACTION.INCREASE) {
-    return false;
-  }
+function canWindowAdvanceNow(stateEntry, config, nowMs) {
   if (!stateEntry) return true;
-  if (stateEntry.limit >= config.maxLimit) {
+  if (stateEntry.limit >= config.maxLimit && stateEntry.lastDecreasedAtMs === null) {
     return false;
   }
   if (!Number.isFinite(stateEntry.lastAdjustedAtMs)) return true;
@@ -625,8 +622,8 @@ function canNodeAdvanceAnyWindow(
   nodeId, stamped, sourceStates, targetStates, sourceConfig, targetConfig, nowMs,
 ) {
   if (!isObservationCompleteForGrowth(stamped)) return false;
-  return canWindowAdvanceNow(sourceStates.get(nodeId), stamped, sourceConfig, nowMs) ||
-    canWindowAdvanceNow(targetStates.get(nodeId), stamped, targetConfig, nowMs);
+  return canWindowAdvanceNow(sourceStates.get(nodeId), sourceConfig, nowMs) ||
+    canWindowAdvanceNow(targetStates.get(nodeId), targetConfig, nowMs);
 }
 
 function shouldWakeOnObservation({
