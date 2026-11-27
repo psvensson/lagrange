@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-retryable-conflict-v1",
+  "system": "lagrange",
+  "caseId": "scenario-a-retryable-conflict-v1",
+  "caseSha256": "9a7987a52c953bdb00783d794b0f727ae685c70c0ec748b1f8e6d2af1c217e94",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "snapshot-write-conflict",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-review-4bc-three-1009",
+    "containerId": "444a1345676d1701acace95a43bc738180298ce89e1f4731070e7547f3535f95",
+    "imageId": "sha256:e94e5f313502c2b992f1992c3890c8b858c9b3d399d3a281fa8ad852d64bda44",
+    "endpoint": "192.168.86.34:5432"
+  },
+  "observation": {
+    "mechanism": "serialization-conflict",
+    "victimSqlState": "40001",
+    "retryCommitted": true,
+    "retry": {
+      "attempts": 2,
+      "retries": 1
+    },
+    "effects": {
+      "baseline": 0,
+      "final": 200,
+      "delta": 100
+    }
+  },
+  "evaluation": {
+    "passed": true,
+    "failures": [],
+    "actual": {
+      "mechanism": "serialization-conflict",
+      "victimSqlState": "40001",
+      "retryCommitted": true,
+      "effects": {
+        "baseline": 0,
+        "final": 200,
+        "delta": 100
+      }
+    },
+    "expected": {
+      "effectsPresent": 2,
+      "loserSqlStateWhenConflicting": "40001",
+      "loserOutcomeWhenConflicting": "serialization_conflict",
+      "loserCommitsOnRetry": true
+    },
+    "proofIds": [
+      "outcome:retryableConflictSqlState:40001"
+    ]
+  },
+  "victim": {
+    "side": "right",
+    "code": "40001",
+    "sqlState": "40001",
+    "message": "Write conflict detected"
+  },
+  "probeResults": [
+    {
+      "side": "left",
+      "succeeded": true,
+      "error": null
+    },
+    {
+      "side": "right",
+      "succeeded": true,
+      "error": {
+        "side": "right",
+        "code": "40001",
+        "sqlState": "40001",
+        "message": "Write conflict detected"
+      }
+    }
+  ],
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-retryable-conflict-v1",
+    "system": "lagrange",
+    "status": "passed",
+    "artifactSha256": "00cde7bddf9becbbcf9210e5896fba8b5780eb1acd25f046ad5c81e2316d62a2",
+    "proofIds": [
+      "outcome:retryableConflictSqlState:40001"
+    ]
+  },
+  "artifactSha256": "00cde7bddf9becbbcf9210e5896fba8b5780eb1acd25f046ad5c81e2316d62a2"
+}

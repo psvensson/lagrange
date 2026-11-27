@@ -1,0 +1,393 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-new-order-contention-v1",
+  "system": "lagrange",
+  "caseId": "scenario-a-new-order-district-contention-v1",
+  "caseSha256": "1eac78e095d813a832f812b6d1714a004b9a903e9ef21b9fd20e1cd9036a3017",
+  "datasetSha256": "e01740c28e513b8747efb5ee7288c9880a8478567e4d2784093ae59152714fd6",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "snapshot-write-conflict",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-review-4bc-three-1009",
+    "containerId": "444a1345676d1701acace95a43bc738180298ce89e1f4731070e7547f3535f95",
+    "imageId": "sha256:e94e5f313502c2b992f1992c3890c8b858c9b3d399d3a281fa8ad852d64bda44",
+    "endpoint": "192.168.86.34:5432"
+  },
+  "logicalResults": [
+    {
+      "phase": "semantic-proof",
+      "workerId": 1,
+      "sequence": 1,
+      "status": "committed",
+      "orderId": 2,
+      "retryEvidence": {
+        "policyId": "scenario-a-retry-v2",
+        "attempts": 2,
+        "retries": 1,
+        "retryDelayMs": 5,
+        "failures": [
+          {
+            "attempt": 1,
+            "retryable": true,
+            "outcome": "serialization_conflict",
+            "sqlState": "40001"
+          }
+        ],
+        "intendedIssueTimeMs": 1795774432545,
+        "completedAtMs": 1795774439585,
+        "requestClockElapsedMs": 7040
+      }
+    },
+    {
+      "phase": "semantic-proof",
+      "workerId": 2,
+      "sequence": 1,
+      "status": "committed",
+      "orderId": 1,
+      "retryEvidence": {
+        "policyId": "scenario-a-retry-v2",
+        "attempts": 1,
+        "retries": 0,
+        "retryDelayMs": 0,
+        "failures": [],
+        "intendedIssueTimeMs": 1795774432545,
+        "completedAtMs": 1795774435981,
+        "requestClockElapsedMs": 3436
+      }
+    }
+  ],
+  "observation": {
+    "logicalCommitted": 2,
+    "districtNextOrderId": 3,
+    "orderIds": [
+      1,
+      2
+    ],
+    "newOrderIds": [
+      1,
+      2
+    ],
+    "orderLineCountByOrderId": {
+      "1": 5,
+      "2": 5
+    },
+    "stockRows": [
+      {
+        "warehouseId": 1,
+        "itemId": 1,
+        "quantity": 69,
+        "ytdQuantity": 1,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 2,
+        "quantity": 58,
+        "ytdQuantity": 2,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 3,
+        "quantity": 79,
+        "ytdQuantity": 3,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 4,
+        "quantity": 34,
+        "ytdQuantity": 4,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 5,
+        "quantity": 88,
+        "ytdQuantity": 5,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 6,
+        "quantity": 68,
+        "ytdQuantity": 2,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 7,
+        "quantity": 60,
+        "ytdQuantity": 3,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 8,
+        "quantity": 72,
+        "ytdQuantity": 4,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 9,
+        "quantity": 20,
+        "ytdQuantity": 5,
+        "orderCount": 1,
+        "remoteCount": 0
+      },
+      {
+        "warehouseId": 1,
+        "itemId": 10,
+        "quantity": 36,
+        "ytdQuantity": 6,
+        "orderCount": 1,
+        "remoteCount": 0
+      }
+    ]
+  },
+  "evaluation": {
+    "passed": true,
+    "failures": [],
+    "actual": {
+      "logicalCommitted": 2,
+      "districtNextOrderId": 3,
+      "orderIds": [
+        1,
+        2
+      ],
+      "newOrderIds": [
+        1,
+        2
+      ],
+      "orderLineCountByOrderId": {
+        "1": 5,
+        "2": 5
+      },
+      "stockRows": [
+        {
+          "warehouseId": 1,
+          "itemId": 1,
+          "quantity": 69,
+          "ytdQuantity": 1,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 2,
+          "quantity": 58,
+          "ytdQuantity": 2,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 3,
+          "quantity": 79,
+          "ytdQuantity": 3,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 4,
+          "quantity": 34,
+          "ytdQuantity": 4,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 5,
+          "quantity": 88,
+          "ytdQuantity": 5,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 6,
+          "quantity": 68,
+          "ytdQuantity": 2,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 7,
+          "quantity": 60,
+          "ytdQuantity": 3,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 8,
+          "quantity": 72,
+          "ytdQuantity": 4,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 9,
+          "quantity": 20,
+          "ytdQuantity": 5,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 10,
+          "quantity": 36,
+          "ytdQuantity": 6,
+          "orderCount": 1,
+          "remoteCount": 0
+        }
+      ]
+    },
+    "expected": {
+      "logicalRequestCount": 2,
+      "initialDistrictNextOrderId": 1,
+      "districtNextOrderId": 3,
+      "orderIds": [
+        1,
+        2
+      ],
+      "newOrderIds": [
+        1,
+        2
+      ],
+      "orderLineCountByOrderId": {
+        "1": 5,
+        "2": 5
+      },
+      "stockRows": [
+        {
+          "warehouseId": 1,
+          "itemId": 1,
+          "quantity": 69,
+          "ytdQuantity": 1,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 2,
+          "quantity": 58,
+          "ytdQuantity": 2,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 3,
+          "quantity": 79,
+          "ytdQuantity": 3,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 4,
+          "quantity": 34,
+          "ytdQuantity": 4,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 5,
+          "quantity": 88,
+          "ytdQuantity": 5,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 6,
+          "quantity": 68,
+          "ytdQuantity": 2,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 7,
+          "quantity": 60,
+          "ytdQuantity": 3,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 8,
+          "quantity": 72,
+          "ytdQuantity": 4,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 9,
+          "quantity": 20,
+          "ytdQuantity": 5,
+          "orderCount": 1,
+          "remoteCount": 0
+        },
+        {
+          "warehouseId": 1,
+          "itemId": 10,
+          "quantity": 36,
+          "ytdQuantity": 6,
+          "orderCount": 1,
+          "remoteCount": 0
+        }
+      ]
+    },
+    "proofIds": [
+      "forbidden:duplicate_success_effect",
+      "forbidden:lost_successful_write",
+      "isolation:lostSuccessfulWriteForbidden",
+      "isolation:successfulEffectsExactlyOnce",
+      "transaction:new_order:district_next_order_id_advances_once",
+      "transaction:new_order:one_new_order_row_created_for_allocated_order_id",
+      "transaction:new_order:one_order_line_created_per_input_line",
+      "transaction:new_order:one_order_row_created_for_allocated_order_id",
+      "transaction:new_order:stock_effects_applied_once_per_input_line"
+    ]
+  },
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-new-order-contention-v1",
+    "system": "lagrange",
+    "status": "passed",
+    "artifactSha256": "a60c986ac0aa332a7af2146324be9720c5bfc2f79cc0a7420613c278cc7dc5e2",
+    "proofIds": [
+      "forbidden:duplicate_success_effect",
+      "forbidden:lost_successful_write",
+      "isolation:lostSuccessfulWriteForbidden",
+      "isolation:successfulEffectsExactlyOnce",
+      "transaction:new_order:district_next_order_id_advances_once",
+      "transaction:new_order:one_new_order_row_created_for_allocated_order_id",
+      "transaction:new_order:one_order_line_created_per_input_line",
+      "transaction:new_order:one_order_row_created_for_allocated_order_id",
+      "transaction:new_order:stock_effects_applied_once_per_input_line"
+    ]
+  },
+  "artifactSha256": "a60c986ac0aa332a7af2146324be9720c5bfc2f79cc0a7420613c278cc7dc5e2"
+}
