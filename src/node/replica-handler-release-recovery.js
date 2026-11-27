@@ -18,7 +18,10 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
   PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {runParticipantCutover} from './replica-handler-participant-cutover.js';
-import {hasAnyUnreachableOrDeadClusterNode} from './replica-handler-membership-recovery-decision.js';
+import {
+  hasAnyUnreachableOrDeadClusterNode,
+  hasUnpublishedCompletedMembershipRecovery,
+} from './replica-handler-membership-recovery-decision.js';
 import {captureParticipantReleaseRecoveryDetail} from './participant-release-diagnostic-observation.js';
 import {completeParticipantRelease, requestParticipantRelease} from './participant-release-client.js';
 import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
@@ -278,9 +281,14 @@ function createParticipantReleaseRecovery(handler) {
     const isPriorityPartition = PRIORITY_RELEASE_PARTITION_SET.has(partitionId);
     if (participantCutoverPauseOf(leader) === null) {
       const voterCount = leader.raft?.readStatus?.()?.voterCount ?? 0;
-      if (!isPriorityPartition ||
-          (!leader.lastCompletedMembershipRecovery &&
-            (voterCount <= 1 || !hasAnyUnreachableOrDeadClusterNode(handler)))) {
+      const hasUnpublishedRecovery = hasUnpublishedCompletedMembershipRecovery(
+        handler,
+        leader,
+      );
+      if (!hasUnpublishedRecovery &&
+          (!isPriorityPartition ||
+            (!leader.lastCompletedMembershipRecovery &&
+              (voterCount <= 1 || !hasAnyUnreachableOrDeadClusterNode(handler))))) {
         return;
       }
       const recovered = await handler.tryAutonomousPermanentMemberLossRecovery?.(leader);
@@ -338,13 +346,22 @@ function createParticipantReleaseRecovery(handler) {
       enqueue(partitionId);
       return;
     }
-    if (hasAnyCompletedLocalMembershipRecovery() ||
+    const hasUnpublishedRecovery = hasUnpublishedCompletedMembershipRecovery(
+      handler,
+      leader,
+    );
+    if (hasUnpublishedRecovery ||
+        hasAnyCompletedLocalMembershipRecovery() ||
         hasAnyUnreachableOrDeadClusterNode(handler)) {
       leader.reassertDurableLeaderNodeId?.();
       leader.reassertDurableRaftRole?.();
-      if (leader.lastCompletedMembershipRecovery &&
-          leader.lastCompletedMembershipRecoveryPersisted !== true) {
-        await handler.tryAutonomousPermanentMemberLossRecovery?.(leader);
+      if (hasUnpublishedRecovery ||
+          (leader.lastCompletedMembershipRecovery &&
+            leader.lastCompletedMembershipRecoveryPersisted !== true)) {
+        const recovered = await handler.tryAutonomousPermanentMemberLossRecovery?.(leader);
+        if (recovered?.retry === true) {
+          enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
+        }
       }
       if (isPriorityPartition) {
         reassertAllLocalLeadersMetadata();

@@ -34,6 +34,17 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {
+  participantCutoverPauseOf,
+  readParticipantReleaseFacts,
+  resumeParticipantCutoverAdmission,
+} from '../../src/partition/partition-participant-transaction-pause.js';
+import {
+  enableParticipantTransactionAdmission,
+} from '../../src/partition/partition-participant-transaction-request.js';
+import {
+  releaseIdentityOf,
+} from '../../src/partition/partition-participant-release-contract.js';
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {createLoopbackTransport} from './partition-service-test-support.js';
 import {NODE, placementStatement} from './placement-admission-fixture.js';
@@ -464,10 +475,14 @@ function createMutableSystemTableCache(initialServices = [], initialNodes = []) 
 }
 
 test('committed recovery application is deterministic across divergent voter metadata caches, ' +
-  'supersedes obsolete target boot incarnations, and reconstructs post-removal SERVICES ' +
-  'publication after driving leader crash', {timeout: 120000}, async (t) => {
+  'preserves materialized replica across lost reply, supersedes obsolete target boot before and ' +
+  'after learner admission, and reconstructs ordinary-partition SERVICES publication via the ' +
+  'registered recovery queue', {timeout: 120000}, async (t) => {
   const transport = createLoopbackTransport();
-  const partitionId = SQL_TRANSACTIONS_SCHEMA.tableName + '-p1';
+  // Use a non-priority partition id ('schema_operations-p2' is not in PRIORITY_RELEASE_PARTITION_SET)
+  // to prove the per-partition recovery queue reconstructs completed SERVICES publication
+  // without priority-partition special casing.
+  const partitionId = SCHEMA_OPERATIONS_SCHEMA.tableName + '-p2';
   const members = nodes.map((node, i) => [partitionId + '-r' + (i + 1), node]);
   const group = await formAdmittedGroup({
     partitionId,
@@ -476,15 +491,18 @@ test('committed recovery application is deterministic across divergent voter met
     budgetMs,
     tempPrefix: 'retirement-review-findings-',
     serviceOptions: {
-      tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
-      tableName: SQL_TRANSACTIONS_SCHEMA.tableName,
-      schema: SQL_TRANSACTIONS_SCHEMA,
+      tableId: SCHEMA_OPERATIONS_SCHEMA.tableName,
+      tableName: SCHEMA_OPERATIONS_SCHEMA.tableName,
+      schema: SCHEMA_OPERATIONS_SCHEMA,
     },
   });
   const handlers = new Map();
   t.after(async () => {
     for (const handler of handlers.values()) {
       await handler.participantReleaseRecovery.shutdown();
+      for (const svc of handler.localServices.values()) {
+        await svc.shutdown?.();
+      }
       handler.unregisterFromRouter(transport);
     }
     await group.dispose();
@@ -672,36 +690,145 @@ test('committed recovery application is deterministic across divergent voter met
     },
   };
 
-  const supersededRecovery = await handlers.get(firstLeader.nodeId)
+  // Wrap transport.deliver to test:
+  // (a) lost completion reply after real learner materialization on boot-2 NODE.D, and
+  // (b) target NODE.D restart to boot-3 AFTER the boot-2 learner is admitted to committed Raft membership.
+  const baseDeliver = transport.deliver.bind(transport);
+  let dropFirstBoot2MaterializeReply = true;
+  let boot2MaterializedReplicaId = null;
+  transport.deliver = async (destination, payload, options) => {
+    if (destination.startsWith(`${NODE.D}/`) &&
+        payload?.type === 'MATERIALIZE_RECOVERY_LEARNER' &&
+        payload?.targetNodeBootIncarnation === 2 &&
+        dropFirstBoot2MaterializeReply) {
+      dropFirstBoot2MaterializeReply = false;
+      boot2MaterializedReplicaId = payload.targetReplicaId;
+      // Execute real materialization on targetHandlerBoot2, then drop the reply.
+      await baseDeliver(destination, payload, options);
+      return {
+        transport: {
+          acknowledged: false,
+          deliveryState: 'not_delivered',
+          reasonCode: 'message_timeout',
+        },
+        answer: null,
+      };
+    }
+    return baseDeliver(destination, payload, options);
+  };
+
+  // Attempt 1: Supersedes boot-1 -> commits boot-2 decision -> materializes boot-2 learner for real,
+  // but its completion reply is lost.
+  const lostReplyAttempt = await handlers.get(firstLeader.nodeId)
     .executePermanentMemberLossRecovery({
       ...boot1Decision,
+      deadlineAtMs: handlers.get(firstLeader.nodeId).timeSource.now() + budgetMs,
+    });
+  assert.equal(lostReplyAttempt.success, false, 'lost materialization reply fails the first attempt');
+  assert.ok(boot2MaterializedReplicaId, 'boot-2 learner was materialized before reply loss');
+  const materializedBoot2Service = targetHandlerBoot2.getTrackedService(boot2MaterializedReplicaId);
+  assert.ok(materializedBoot2Service, 'real boot-2 learner runtime is registered on target');
+  assert.equal(
+    targetHandlerBoot2.localServices.size,
+    1,
+    'exactly one learner runtime exists on target after lost reply',
+  );
+  const recoveriesAfterLostReply = readCommittedMembershipRecoveriesIn(firstLeader.db);
+  assert.equal(recoveriesAfterLostReply.length, 2, 'boot-1 and boot-2 decisions committed');
+  const boot2DecisionRecord = recoveriesAfterLostReply[1];
+  assert.equal(boot2DecisionRecord.targetReplicaId, boot2MaterializedReplicaId);
+  assert.equal(
+    firstLeader.supersededRecoveryDecisionIds.has(boot2DecisionRecord.decisionId),
+    false,
+    'lost materialization reply must NOT mark boot-2 decision as superseded',
+  );
+
+  // Attempt 2: Retry must preserve boot-2 target identity (reusing materializedBoot2Service),
+  // admit it as a committed Raft learner, and then stop at our observe timeout hook.
+  const admitLearnerAttempt = await handlers.get(firstLeader.nodeId)
+    .executePermanentMemberLossRecovery({
+      ...boot2DecisionRecord,
+      failFastOnCatchUpBehind: true,
+      requiredAppliedBoundary: Number.MAX_SAFE_INTEGER,
+      deadlineAtMs: handlers.get(firstLeader.nodeId).timeSource.now() + 500,
+    });
+  assert.equal(admitLearnerAttempt.success, false);
+  assert.equal(
+    targetHandlerBoot2.localServices.size,
+    1,
+    'retry after lost reply reused the existing boot-2 learner without allocating a second replica',
+  );
+  const membershipWithBoot2Learner = await readPartitionCommittedMembership(firstLeader);
+  assert.ok(
+    (membershipWithBoot2Learner.learners || [])
+      .map(String)
+      .includes(String(boot2DecisionRecord.targetPeerId)),
+    'boot-2 target is now admitted in committed Raft membership.learners',
+  );
+
+  // Now simulate target NODE.D restarting to ownerIncarnation = 3 AFTER learner admission!
+  await targetHandlerBoot2.participantReleaseRecovery.shutdown();
+  targetHandlerBoot2.unregisterFromRouter(transport);
+  await materializedBoot2Service.shutdown();
+  const targetHandlerBoot3 = new ReplicaHandler({
+    nodeId: NODE.D,
+    ownerIncarnation: 3,
+    systemTableCache: leaderCache,
+    messageRouter: transport,
+    timeSource: new VirtualTimeSource({startMs: 3000}),
+    dataDir: path.dirname(group.dbFileOf([founderReplicaId, NODE.A])),
+    createPartitionService: (options) => new PartitionService(options),
+    cdcIntegrationService: {
+      sqlQueryEngine: {
+        queryExecutor: {
+          bootstrapTopologySnapshotOwner: {
+            resolveCanonicalPartitionLeaderNodeId: () => leaderOf(group)?.nodeId,
+          },
+        },
+      },
+    },
+  });
+  handlers.set(NODE.D, targetHandlerBoot3);
+  targetHandlerBoot3.registerWithRouter(transport);
+
+  // Attempt 3: Leader discovers committed boot-2 learner's node is now at boot 3,
+  // retires the obsolete committed boot-2 learner from Raft, commits superseding boot-3 decision
+  // via the canonical planner, materializes & promotes boot-3 learner, and retires dead voter NODE.A.
+  const supersededRecovery = await handlers.get(firstLeader.nodeId)
+    .executePermanentMemberLossRecovery({
+      ...boot2DecisionRecord,
       deadlineAtMs: handlers.get(firstLeader.nodeId).timeSource.now() + budgetMs,
     });
   assert.equal(supersededRecovery.success, true, JSON.stringify(supersededRecovery));
   assert.notEqual(
     supersededRecovery.decisionId,
-    boot1Decision.decisionId,
-    'obsolete target boot-1 intent must be superseded by a new committed decisionId',
+    boot2DecisionRecord.decisionId,
+    'obsolete committed boot-2 learner must be retired and superseded by a new boot-3 decisionId',
   );
   assert.equal(
     supersededRecovery.recovery.targetNodeBootIncarnation,
-    2,
-    'superseding committed recovery decision must bind targetNodeBootIncarnation = 2',
+    3,
+    'superseding committed recovery decision must bind targetNodeBootIncarnation = 3',
   );
-  const replacementService = targetHandlerBoot2.getTrackedService(
+  assert.equal(
+    targetHandlerBoot3.localServices.size,
+    1,
+    'exactly one target runtime exists on boot-3 target handler',
+  );
+  const replacementService = targetHandlerBoot3.getTrackedService(
     supersededRecovery.recovery.targetReplicaId,
   );
-  assert.ok(replacementService, 'replacement learner must materialize and promote under boot 2');
+  assert.ok(replacementService, 'replacement learner must materialize and promote under boot 3');
   group.services.push(replacementService);
 
   const allRecoveriesOnFollower = readCommittedMembershipRecoveriesIn(firstFollower.db);
   assert.equal(
     allRecoveriesOnFollower.length,
-    2,
-    'both original boot-1 and superseding boot-2 decisions are durably recorded in log order',
+    3,
+    'boot-1, boot-2, and boot-3 decisions are durably recorded in log order',
   );
   assert.equal(
-    allRecoveriesOnFollower[1].decisionId,
+    allRecoveriesOnFollower[2].decisionId,
     supersededRecovery.decisionId,
   );
 
@@ -720,11 +847,12 @@ test('committed recovery application is deterministic across divergent voter met
   handlers.delete(firstLeader.nodeId);
   await firstLeader.shutdown();
 
-  // Elect successor leader on the surviving cohort {firstFollower, replacementService}.
-  assert.ok(await group.waitFor(() => {
-    const next = leaderOf(group);
-    return Boolean(next && next !== firstLeader);
-  }), 'surviving cohort elects successor leader after driving leader crash');
+  // Elect the divergent-cache follower as successor leader on the surviving cohort {firstFollower, replacementService}.
+  assert.ok(await group.waitFor(async () => {
+    if (leaderOf(group) === firstFollower) return true;
+    await firstFollower.raft.campaign();
+    return leaderOf(group) === firstFollower;
+  }), 'surviving cohort elects divergent-cache follower as successor leader after driving leader crash');
   const successorLeader = leaderOf(group);
   const successorHandler = handlers.get(successorLeader.nodeId);
   assert.equal(
@@ -756,38 +884,106 @@ test('committed recovery application is deterministic across divergent voter met
   successorHandler.controlPlaneSystemTableGateway = {
     async submitMutation(mutation) {
       publishedMutations.push(mutation);
+      if (mutation.tableName === 'services' && mutation.row) {
+        divergentCache.applySystemTableChange('services', 'INSERT', mutation.row);
+      }
       return {success: true};
     },
-    async updateSystemTableRow() {
+    async updateSystemTableRow(tableName, where, updates) {
+      if (tableName === 'services' && where?.service_id) {
+        divergentCache.applySystemTableChange('services', 'UPDATE', {
+          service_id: where.service_id,
+          ...updates,
+        });
+      }
       return {success: true};
     },
     async deleteSystemTableRow(tableName, where) {
       publishedDeletes.push({tableName, where});
+      if (tableName === 'services' && where?.service_id) {
+        divergentCache.applySystemTableChange('services', 'DELETE', {
+          service_id: where.service_id,
+        });
+      }
       return {success: true};
     },
   };
 
-  // Run autonomous permanent-loss recovery on successor leader: sourcePeerId is already removed
-  // from Raft voters, so successor must reconstruct the completed transition from
-  // _partition_membership_recovery and finish SERVICES publication.
-  const postCrashAutonomous = await successorHandler
-    .tryAutonomousPermanentMemberLossRecovery(successorLeader);
+  // Step 3-5 of Finding 2 schedule: the crashed driving leader restarts (losing its volatile
+  // lastCompletedMembershipRecovery) and rejoins before census, so all 3 current voters answer
+  // and participant cutover succeeds on the ordinary partition.
+  const firstLeaderIndex = group.services.indexOf(firstLeader);
+  const reopenedFirstLeader = await group.reopen(firstLeaderIndex);
+  assert.equal(reopenedFirstLeader.lastCompletedMembershipRecovery ?? null, null);
+  crashedLeaderHandler.localServices.set(reopenedFirstLeader.replicaId, reopenedFirstLeader);
+  crashedLeaderHandler.registerWithRouter(transport);
+  handlers.set(reopenedFirstLeader.nodeId, crashedLeaderHandler);
+  const activeVoters = [reopenedFirstLeader, successorLeader, replacementService];
+  const originEnabled = await enableParticipantTransactionAdmission(successorLeader);
+  assert.equal(originEnabled.success, true, JSON.stringify(originEnabled));
+  let resumed = null;
+  assert.ok(await group.waitFor(async () => {
+    const census = await Promise.all(
+      activeVoters.map((v) => readParticipantReleaseFacts(handlers.get(v.nodeId), v)),
+    );
+    const leaderFacts = census.find((f) => f.generation?.replicaId === successorLeader.replicaId);
+    if (!leaderFacts?.membership || !leaderFacts?.buildDigest) return false;
+    const release = releaseIdentityOf({
+      partitionId: successorLeader.partitionId,
+      targetBuildDigest: leaderFacts.buildDigest,
+      configurationKey: leaderFacts.membership.configurationKey,
+      membershipGenerationIndex: leaderFacts.membership.membershipGenerationIndex,
+    });
+    if (!release) return false;
+    resumed = await resumeParticipantCutoverAdmission(
+      successorHandler,
+      successorLeader,
+      {release, census},
+    );
+    return resumed === 'resumed';
+  }), 'restarted former leader rejoins, origin replicates across all 3 voters, and participant cutover resumes');
+  assert.equal(resumed, 'resumed');
   assert.equal(
-    postCrashAutonomous,
+    participantCutoverPauseOf(successorLeader),
     null,
-    'once completed recovery SERVICES publication settles on successor leader, no retry remains',
+    'ordinary partition is now unpaused after participant cutover succeeds',
   );
+  successorLeader.lastCompletedMembershipRecovery = null;
+  successorLeader.lastCompletedMembershipRecoveryPersisted = false;
+  for (const liveNodeId of [NODE.B, NODE.C, NODE.D]) {
+    divergentCache.applySystemTableChange('nodes', 'INSERT', {
+      node_id: liveNodeId,
+      boot_incarnation: liveNodeId === NODE.D ? 3 : 1,
+      status: 'ready',
+      connection_state: 'connected',
+      ready_lease_expires_at: 999999,
+    });
+  }
+
+  // Enter through the normal registered per-partition recovery queue (wake -> dispatch -> reconcile)
+  // on this ordinary non-priority partition rather than calling tryAutonomousPermanentMemberLossRecovery directly.
+  successorHandler.participantReleaseRecovery.wake(partitionId, 0);
   assert.ok(
-    publishedMutations.some((m) =>
-      m.tableName === 'services' &&
-      m.row?.service_id === supersededRecovery.recovery.targetReplicaId &&
-      m.row?.status === 'active'),
-    'successor leader must reconstruct and publish the promoted replacement SERVICES row',
+    await group.waitFor(() => {
+      successorHandler.timeSource.advance(10);
+      return publishedMutations.some((m) =>
+        m.tableName === 'services' &&
+        m.row?.service_id === supersededRecovery.recovery.targetReplicaId &&
+        m.row?.status === 'active') &&
+      publishedDeletes.some((d) =>
+        d.tableName === 'services' &&
+        d.where?.service_id === founderReplicaId);
+    }),
+    'registered per-partition recovery queue must reconstruct and publish SERVICES upsert + delete on an unpaused ordinary partition',
   );
-  assert.ok(
-    publishedDeletes.some((d) =>
-      d.tableName === 'services' &&
-      d.where?.service_id === founderReplicaId),
-    'successor leader must reconstruct and delete the retired source SERVICES row',
+  assert.equal(
+    divergentCache.get('services', supersededRecovery.recovery.targetReplicaId)?.status,
+    'active',
+    'replacement voter SERVICES row is active in metadata projection',
+  );
+  assert.equal(
+    divergentCache.get('services', founderReplicaId),
+    null,
+    'retired source SERVICES row is deleted from metadata projection',
   );
 });

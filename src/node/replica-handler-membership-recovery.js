@@ -1,7 +1,6 @@
 // Explicit-context functions for ReplicaHandler's permanent member loss
 // recovery orchestration across surviving voters and the replacement target.
 
-import {createHash} from 'node:crypto';
 import {
   PARTITION_MEMBERSHIP_RECOVERY_DEFAULT as DEFAULT_VALUE,
   PARTITION_MEMBERSHIP_RECOVERY_ERROR as ERROR,
@@ -10,7 +9,6 @@ import {
   PARTITION_MEMBERSHIP_RECOVERY_STAGE as STAGE,
 } from '../partition/partition-membership-recovery-constants.js';
 import {
-  deriveCanonicalPeerIdString,
   readCommittedMembershipRecoveryByIdIn,
   readPartitionMemberBinding,
   stagePartitionMembershipRecoveryIntent,
@@ -59,62 +57,39 @@ import {
   handleMaterializeRecoveryLearner,
   handleObserveRecoveryLearner,
   isNodeEligibleForPermanentLossRecovery,
+  isTargetBootSuperseded,
   persistRecoveredServicesRowsAsync,
   planAutonomousPermanentLossRecovery,
   reconcileCompletedMembershipRecoveryPublications,
 } from './replica-handler-membership-recovery-decision.js';
 
-const DIGEST_ALGORITHM = 'sha256';
-const DIGEST_ENCODING = 'hex';
-
-function buildSupersedingTargetBootRecoveryPlan(
-  leaderService,
-  membership,
-  unfinished,
-  targetNodeBootIncarnation,
-  targetNodeId = unfinished?.targetNodeId,
-) {
-  if (!leaderService || !membership || !unfinished ||
-      typeof targetNodeId !== 'string' || targetNodeId.length === 0 ||
-      !Number.isSafeInteger(targetNodeBootIncarnation) ||
-      targetNodeBootIncarnation < 1) {
-    return null;
-  }
-  const digest = createHash(DIGEST_ALGORITHM)
-    .update(
-      `${leaderService.partitionId}:${membership.configurationKey}:` +
-      `${membership.membershipGenerationIndex}:${unfinished.sourceReplicaId}:` +
-      `${targetNodeId}:targetBoot=${targetNodeBootIncarnation}:` +
-      `supersedes=${unfinished.decisionId}`,
-    )
-    .digest(DIGEST_ENCODING)
-    .slice(0, DEFAULT_VALUE.DECISION_DIGEST_SLICE_LEN);
-  const decisionId =
-    `membership-recovery-${leaderService.partitionId}-` +
-    `${membership.membershipGenerationIndex}-` +
-    `${digest.slice(0, DEFAULT_VALUE.DECISION_ID_SLICE_LEN)}`;
-  const targetReplicaId = `replace-replica-${digest}`;
-  return Object.freeze({
-    decisionId,
-    entryId: decisionId,
-    partitionId: leaderService.partitionId,
-    configurationKey: membership.configurationKey,
-    membershipGenerationIndex: Number(membership.membershipGenerationIndex),
-    sourcePeerId: unfinished.sourcePeerId,
-    sourceReplicaId: unfinished.sourceReplicaId,
-    sourceReplicaCreatedAt: unfinished.sourceReplicaCreatedAt,
-    sourceNodeId: unfinished.sourceNodeId,
-    sourceNodeBootIncarnation: unfinished.sourceNodeBootIncarnation,
-    targetPeerId: deriveCanonicalPeerIdString(targetReplicaId),
-    targetReplicaId,
-    targetReplicaCreatedAt: unfinished.targetReplicaCreatedAt + 1,
-    targetNodeId,
-    targetNodeBootIncarnation,
-  });
-}
-
 // ends-on: committed membership recovery completes source removal
 const DEFAULT_RECOVERY_TIMEOUT_MS = 20_000;
+
+function recordReportedTargetBootAndCheckSupersession(
+  handler,
+  leaderService,
+  recovery,
+  materialized,
+) {
+  const actualBoot = Number(materialized?.actualTargetNodeBootIncarnation);
+  if (Number.isSafeInteger(actualBoot) && actualBoot >= 1) {
+    leaderService.targetNodeBoots ??= new Map();
+    leaderService.targetNodeBoots.set(recovery.targetNodeId, actualBoot);
+  }
+  const explicitBootMismatch =
+    materialized?.failureCode === ERROR.SOURCE_GENERATION_MISMATCH &&
+    Number.isSafeInteger(actualBoot) &&
+    actualBoot >= 1 &&
+    actualBoot !== recovery.targetNodeBootIncarnation;
+  const superseded = explicitBootMismatch ||
+    isTargetBootSuperseded(handler, leaderService, recovery);
+  if (superseded) {
+    leaderService.supersededRecoveryDecisionIds ??= new Set();
+    leaderService.supersededRecoveryDecisionIds.add(recovery.decisionId);
+  }
+  return superseded;
+}
 
 function nowOf(handler) {
   return handler.timeSource.now();
@@ -366,6 +341,7 @@ async function runPermanentMemberLossRecoveryInternal(handler, request) {
     targetReplicaCreatedAt: recovery.targetReplicaCreatedAt,
     decisionId: recovery.decisionId,
     memberBindings: collectKnownMemberBindings(leaderService, recovery),
+    supersededTargetReplicaId: request?.supersededTargetReplicaId ?? null,
   };
   let targetRole = projectPeerRole(membership, recovery.targetPeerId);
   const sourceRoleInitial = projectPeerRole(membership, recovery.sourcePeerId);
@@ -395,17 +371,14 @@ async function runPermanentMemberLossRecoveryInternal(handler, request) {
         materialized.failureCode : ERROR.TARGET_INVALID;
       const matError = isNonEmptyString(materialized?.error) ?
         materialized.error : DEFAULT_VALUE.MATERIALIZE_FAILED_MSG;
-      const actualBoot = Number(materialized?.actualTargetNodeBootIncarnation);
-      leaderService.supersededRecoveryDecisionIds ??= new Set();
-      leaderService.supersededRecoveryDecisionIds.add(recovery.decisionId);
-      if (Number.isSafeInteger(actualBoot) && actualBoot >= 1) {
-        leaderService.observedTargetNodeBoots ??= new Map();
-        leaderService.observedTargetNodeBoots.set(
-          recovery.targetNodeId,
-          actualBoot,
-        );
-      }
-      if (request?.allowTargetSupersession !== false &&
+      const superseded = recordReportedTargetBootAndCheckSupersession(
+        handler,
+        leaderService,
+        recovery,
+        materialized,
+      );
+      if (superseded &&
+          request?.allowTargetSupersession !== false &&
           wallNowMs() < deadlineAtMs) {
         const replanned = await planAutonomousPermanentLossRecovery(
           handler,
@@ -413,24 +386,10 @@ async function runPermanentMemberLossRecoveryInternal(handler, request) {
           recovery.sourceNodeId,
           recovery.sourceReplicaId,
         );
-        const supersedingPlan = (replanned.plan &&
-            replanned.plan.decisionId !== recovery.decisionId) ?
-          replanned.plan :
-          (matCode === ERROR.SOURCE_GENERATION_MISMATCH &&
-            Number.isSafeInteger(actualBoot) &&
-            actualBoot >= 1 &&
-            actualBoot !== recovery.targetNodeBootIncarnation ?
-            buildSupersedingTargetBootRecoveryPlan(
-              leaderService,
-              membership,
-              recovery,
-              actualBoot,
-            ) :
-            null);
-        if (supersedingPlan) {
+        if (replanned.plan && replanned.plan.decisionId !== recovery.decisionId) {
           return runPermanentMemberLossRecoveryInternal(handler, {
             ...request,
-            ...supersedingPlan,
+            ...replanned.plan,
             allowTargetSupersession: false,
           });
         }
@@ -489,13 +448,53 @@ async function runPermanentMemberLossRecoveryInternal(handler, request) {
       purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP,
     });
     const stamp = committedStampOfAnswer(stampAnswer);
+    let reMaterialized = null;
     if (stamp) {
-      await deliverRecoveryHandlerMessage(
+      reMaterialized = await deliverRecoveryHandlerMessage(
         handler,
         recovery.targetNodeId,
         {...materializePayload, bootstrapMembership: stamp},
         Math.max(DEFAULT_VALUE.MIN_MATERIALIZE_BUDGET_MS, deadlineAtMs - wallNowMs()),
       );
+    }
+    const learnerTargetSuperseded = recordReportedTargetBootAndCheckSupersession(
+      handler,
+      leaderService,
+      recovery,
+      reMaterialized,
+    );
+    if (learnerTargetSuperseded) {
+      await retirePartitionRaftPeer(leaderService, recovery.targetReplicaId);
+      const afterLearnerRetire = await waitForRecoveryMembershipPredicate(
+        handler,
+        leaderService,
+        deadlineAtMs,
+        (m) => projectPeerRole(m, recovery.targetPeerId) ===
+          COMMITTED_REPLICA_ROLE.ABSENT,
+      );
+      if (afterLearnerRetire &&
+          request?.allowTargetSupersession !== false &&
+          wallNowMs() < deadlineAtMs) {
+        const replanned = await planAutonomousPermanentLossRecovery(
+          handler,
+          leaderService,
+          recovery.sourceNodeId,
+          recovery.sourceReplicaId,
+        );
+        if (replanned.plan && replanned.plan.decisionId !== recovery.decisionId) {
+          return runPermanentMemberLossRecoveryInternal(handler, {
+            ...request,
+            ...replanned.plan,
+            allowTargetSupersession: false,
+          });
+        }
+      }
+      return Object.freeze({
+        success: false,
+        committed: false,
+        partitionId: leaderService.partitionId,
+        failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
+      });
     }
     const leaderCommitBoundary = Math.max(
       Number(leaderService.raft.readStatus()?.commitIndex ?? 0),

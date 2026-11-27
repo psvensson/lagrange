@@ -79,7 +79,6 @@ const MAX_DECREASE_RATIO = 0.95;
 const MAX_CONFIGURABLE_WINDOW_LIMIT = 64;
 const MAX_CONFIGURABLE_INTERVAL_MS = 600_000;
 const MAX_CONFIGURABLE_HEALTHY_SAMPLES = 20;
-const SUSTAINED_PAIR_UTILIZATION_CEILING = 101;
 const ROLE_SOURCE = 'source';
 const ROLE_TARGET = 'target';
 const SAMPLE_ID_PREFIX = 'sample:';
@@ -323,8 +322,9 @@ function isObservationWithinHealthyGrowthBand(observation, thresholds) {
 // still belong to the controller, independent of heartbeat publication.
 function classifyPlacementPressure(observation, thresholds = DEFAULTS.THRESHOLDS) {
   const congestionReason = classifyAttributedCongestion(observation, thresholds);
-  if (congestionReason !== null) return {action: ACTION.DECREASE, reason: congestionReason};
-  if (!isObservationCompleteForGrowth(observation)) {
+  if (congestionReason !== null) {
+    return {action: ACTION.DECREASE, reason: congestionReason};
+  } else if (!isObservationCompleteForGrowth(observation)) {
     return {action: ACTION.HOLD, reason: REASON.OBSERVATION_INCOMPLETE};
   }
   return isObservationWithinHealthyGrowthBand(observation, thresholds) ?
@@ -527,22 +527,14 @@ function normalizeWindowDecisionInputs(demand, rawConfig) {
 }
 
 function resolvePressureThresholdsForState(baseState, config) {
-  if (baseState.lastDecreasedAtMs === null) return config.thresholds;
-  if (baseState.limit <= config.minLimit) {
-    return {
-      ...config.thresholds,
-      healthyEluPercent: config.thresholds.congestionEluPercent,
-      healthyMainThreadCpuPercent: config.thresholds.congestionMainThreadCpuPercent,
-    };
+  if (baseState.lastDecreasedAtMs === null || baseState.limit > config.minLimit) {
+    return config.thresholds;
   }
-  if (baseState.limit <= config.minLimit + config.additiveIncrease) {
-    return {
-      ...config.thresholds,
-      congestionEluPercent: SUSTAINED_PAIR_UTILIZATION_CEILING,
-      congestionMainThreadCpuPercent: SUSTAINED_PAIR_UTILIZATION_CEILING,
-    };
-  }
-  return config.thresholds;
+  return {
+    ...config.thresholds,
+    healthyEluPercent: config.thresholds.congestionEluPercent,
+    healthyMainThreadCpuPercent: config.thresholds.congestionMainThreadCpuPercent,
+  };
 }
 
 /**

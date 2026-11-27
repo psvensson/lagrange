@@ -817,6 +817,7 @@ test(
     const deliveredAddresses = [];
     const deliveredEntryIds = [];
     let fencedDeliveryCount = 0;
+    let fencedRefusalsObserved = 0;
     const systemCache = buildMockSystemCache({
       partitions: [{
         partition_id: 'counters-p1',
@@ -869,6 +870,21 @@ test(
               errorCode: 'ROUTER_MESSAGE_TIMEOUT',
             });
           }
+          const fencedResponse = await service.handleRemoteQuery(message);
+          if (fencedResponse?.failureCode ===
+              PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED) {
+            fencedRefusalsObserved += 1;
+          }
+          return buildDeliveryEnvelope({acknowledged: true}, fencedResponse);
+        }
+        // Surviving replica only becomes reachable after the client actually observes
+        // RETIRED_MEMBER_FENCED from the fenced replica on the same write entryId.
+        if (fencedRefusalsObserved === 0) {
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            error: 'Surviving leader election still in flight before fence observation',
+            errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+          });
         }
         const response = await service.handleRemoteQuery(message);
         return buildDeliveryEnvelope({acknowledged: true}, response);
@@ -906,6 +922,10 @@ test(
       'QueryExecutor must not settle on RETIRED_MEMBER_FENCED and must recover the committed write from a surviving replica',
     );
     t.ok(
+      fencedRefusalsObserved >= 1,
+      'the same write operation must observe a real RETIRED_MEMBER_FENCED refusal after its committed reply was lost',
+    );
+    t.ok(
       deliveredAddresses.includes(fencedAddress) &&
         deliveredAddresses.includes(survivingAddress),
       'QueryExecutor must widen from the exclusion-fenced replica to the surviving replica',
@@ -921,8 +941,10 @@ test(
       'the non-idempotent UPDATE must be applied exactly once',
     );
 
-    // Subcase 2: When no surviving replica is reachable before deadline after a fenced refusal
-    // on an unresolved write, QueryExecutor must surface OUTCOME_UNKNOWN, never RETIRED_MEMBER_FENCED.
+    // Subcase 2: Derive the deadline-exhaustion variant from the same genuinely committed + lost
+    // write followed by real RETIRED_MEMBER_FENCED refusals when no survivor can answer before deadline.
+    fencedReplica.excludedMemberGenerationFenced = false;
+    fencedReplica.db.prepare('DELETE FROM _partition_membership_local_fence').run();
     const isolatedCache = buildMockSystemCache({
       partitions: [{
         partition_id: 'counters-p1',
@@ -940,6 +962,7 @@ test(
       }],
     });
     let isolatedAttempts = 0;
+    let isolatedFencedRefusals = 0;
     const isolatedExecutor = new QueryExecutor({
       controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: isolatedCache,
@@ -947,9 +970,21 @@ test(
         async deliver(_address, message) {
           isolatedAttempts += 1;
           if (isolatedAttempts === 1) {
+            const committedFirst = await fencedReplica.handleRemoteQuery(message);
+            t.equal(committedFirst.success, true, 'first delivery commits on replica before reply is lost');
+            markLocalReplicaExcludedFence(fencedReplica, {
+              decisionId: 'recover-counters-p1-deadline',
+              partitionId: 'counters-p1',
+              sourceReplicaId: fencedReplica.replicaId,
+              sourceNodeId: 'node-fenced',
+              sourceNodeBootIncarnation: 1,
+              sourceReplicaCreatedAt: 1000,
+              configurationKey: 'v:1,2,3',
+              membershipGenerationIndex: 2,
+            });
             return buildDeliveryEnvelope({
               acknowledged: false,
-              error: 'Message timeout',
+              error: 'Message timeout after real commit',
               errorCode: 'ROUTER_MESSAGE_TIMEOUT',
             });
           }
@@ -959,6 +994,7 @@ test(
             PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED,
             'the fenced replica returns RETIRED_MEMBER_FENCED',
           );
+          isolatedFencedRefusals += 1;
           return buildDeliveryEnvelope({acknowledged: true}, fencedAnswer);
         },
       },
@@ -984,6 +1020,12 @@ test(
       },
     );
     t.equal(unresolvedResult.success, false);
+    t.ok(isolatedFencedRefusals >= 1, 'deadline variant observed real RETIRED_MEMBER_FENCED after real commit');
+    t.equal(
+      survivingLeader.db.prepare('SELECT value FROM counters WHERE id = 1').get().value,
+      2,
+      'the deadline-exhausted write really committed in SQLite before its first reply was lost',
+    );
     t.equal(
       unresolvedResult.failureCode,
       PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,

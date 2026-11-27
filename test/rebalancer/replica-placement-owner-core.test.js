@@ -84,6 +84,7 @@ import {
 import {
   PLACEMENT_ADAPTIVE_BUDGET_REASON as BUDGET_REASON,
   PLACEMENT_ADAPTIVE_WINDOW_ACTION as WINDOW_ACTION,
+  createAdaptivePlacementBudgetController,
   decideAdaptiveResourceWindow, normalizeWindowConfig,
 } from '../../src/rebalancer/replica-placement-adaptive-budget.js';
 import {
@@ -1413,23 +1414,16 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
 test('Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold', async () => {
   resetFixtureSingletons();
   try {
-    await runGrowthPromoteProductionWitness({
-      createSimpleSystemCache,
-      nodeRow,
-      seededPartitionRow,
-    });
+    await runGrowthPromoteProductionWitness({createSimpleSystemCache, nodeRow, seededPartitionRow});
   } finally {
     clearFixtureSingletons();
   }
 });
-
 test('Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly', async () => {
   resetFixtureSingletons();
   try {
     await runCorrectionBProductionAssemblyWitness({
-      createSimpleSystemCache,
-      seededPartitionRow,
-      seededServiceRows,
+      createSimpleSystemCache, seededPartitionRow, seededServiceRows,
     });
   } finally {
     clearFixtureSingletons();
@@ -1440,20 +1434,15 @@ test('Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new lea
   resetFixtureSingletons();
   try {
     await runGrowthPromoteLeaderRedirectAndTimeoutWitness({
-      createSimpleSystemCache,
-      nodeRow,
-      seededPartitionRow,
+      createSimpleSystemCache, nodeRow, seededPartitionRow,
     });
   } finally {
     clearFixtureSingletons();
   }
 });
 
-test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs then holds in hysteresis band', () => {
-  const floorConfig = normalizeWindowConfig({
-    initialLimit: 2, minLimit: 1, maxLimit: 6,
-    minAdjustIntervalMs: 1_000, requiredHealthySamplesAfterDecrease: 2,
-  });
+test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs under production defaults then holds or backs off on congestion', () => {
+  const floorConfig = normalizeWindowConfig({initialLimit: 2, minLimit: 1, maxLimit: 6});
   const baseObs = {
     sampledAtMs: NOW_MS, sampleId: 601, congestionEpochId: 601, bootIncarnation: 1,
     processCpuCores: 1.08, mainThreadCpuPercent: 25, eventLoopDelayMs: 120,
@@ -1469,34 +1458,38 @@ test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs then
   const decreased = decideAdaptiveResourceWindow(null, baseObs, demand(2, NOW_MS), floorConfig);
   assert.equal(decreased.action, WINDOW_ACTION.DECREASE);
   assert.equal(decreased.limit, 1);
-  const sample1 = decideAdaptiveResourceWindow(
+  const recovered = decideAdaptiveResourceWindow(
     decreased.nextState, obsAt(602, NOW_MS + 1_100), demand(1, NOW_MS + 1_100), floorConfig,
   );
-  assert.equal(sample1.reason, BUDGET_REASON.RECOVERY_HYSTERESIS_HOLD);
-  assert.equal(sample1.limit, 1);
-  const sample2 = decideAdaptiveResourceWindow(
-    sample1.nextState, obsAt(603, NOW_MS + 2_200), demand(1, NOW_MS + 2_200), floorConfig,
-  );
-  assert.equal(sample2.action, WINDOW_ACTION.INCREASE);
-  assert.equal(sample2.limit, 2);
+  assert.equal(recovered.action, WINDOW_ACTION.INCREASE);
+  assert.equal(recovered.limit, 2);
   const holdAboveFloor = decideAdaptiveResourceWindow(
-    sample2.nextState, obsAt(604, NOW_MS + 3_500), demand(2, NOW_MS + 3_500), floorConfig,
+    recovered.nextState, obsAt(603, NOW_MS + 2_200), demand(2, NOW_MS + 2_200), floorConfig,
   );
   assert.equal(holdAboveFloor.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
   assert.equal(holdAboveFloor.limit, 2);
-  const holdBurstAtPair = decideAdaptiveResourceWindow(
+  const decreaseOnEluCongestion = decideAdaptiveResourceWindow(
     holdAboveFloor.nextState,
-    {...obsAt(605, NOW_MS + 4_800), eventLoopDelayMs: 45,
-      eventLoopUtilizationPercent: 96, mainThreadCpuPercent: 95},
-    demand(2, NOW_MS + 4_800), floorConfig,
+    {...obsAt(604, NOW_MS + 3_500), eventLoopDelayMs: 30, eventLoopUtilizationPercent: 95},
+    demand(2, NOW_MS + 3_500), floorConfig,
   );
-  assert.equal(holdBurstAtPair.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
-  assert.equal(holdBurstAtPair.limit, 2);
-  const decreaseOnRealStall = decideAdaptiveResourceWindow(
-    holdBurstAtPair.nextState,
-    {...obsAt(606, NOW_MS + 6_000), eventLoopDelayMs: 90},
-    demand(2, NOW_MS + 6_000), floorConfig,
-  );
-  assert.equal(decreaseOnRealStall.action, WINDOW_ACTION.DECREASE);
-  assert.equal(decreaseOnRealStall.limit, 1);
+  assert.equal(decreaseOnEluCongestion.action, WINDOW_ACTION.DECREASE);
+  assert.equal(decreaseOnEluCongestion.limit, 1);
+  const controller = createAdaptivePlacementBudgetController();
+  let woke = 0;
+  controller.subscribe(() => {
+    woke += 1;
+  });
+  const evalTarget = (occ, nowMs) => controller.evaluatePassBudgets({
+    occupancy: {byTarget: new Map([['n1', occ]])}, waitingByTarget: new Map([['n1', 4]]), nowMs,
+  }).targetBudgetOf('n1');
+  controller.recordObservation('n1', baseObs, NOW_MS);
+  assert.equal(evalTarget(3, NOW_MS), 2);
+  const obs602 = {...baseObs, sampleId: 602, congestionEpochId: 602, sampledAtMs: NOW_MS + 1_100};
+  controller.recordObservation('n1', obs602, NOW_MS + 1_100);
+  assert.equal(evalTarget(2, NOW_MS + 1_100), 1);
+  const wBeforeRecovery = woke;
+  controller.recordObservation('n1', obsAt(603, NOW_MS + 2_200), NOW_MS + 2_200);
+  assert.equal(woke, wBeforeRecovery + 1);
+  assert.equal(evalTarget(1, NOW_MS + 2_200), 2);
 });
