@@ -1,7 +1,79 @@
 {
   "schema": "test-receipt/1",
-  "status": "fail",
+  "quest": "physical-scenario-a-review-repair",
+  "status": "pass",
+  "testFileDigests": {
+    "test/rebalancer/replica-placement-adaptive-budget.test.js": "d817f2af3fb82df63125ab6087d3429c8fa1e7b62d98a875a099149b5d99b661",
+    "test/partition/split-descriptor-checkpoint.test.js": "ca817b2ba659ae58e40e71190c29df5222e666da8b901fbecd77511bbc92ddbf",
+    "test/query/parallel-query-coordinator.test.js": "be5e718e188b83e75276ca2d081b39e434aedd7c76f62c08e7ba8392745cc675",
+    "test/integration/pgwire-schema-owner-loss.integration.test.js": "7f90a6f276452e48a3fd8df11376d8913def0d91404f8e33dda1e87fd1bbacc8",
+    "test/control-plane/readiness-planning-semantic-generation.test.js": "f31ccb811764ec195fcde597030998599c4f1a0b792b69664ca787759d186b2d"
+  },
   "receipts": [
+    {
+      "id": "scenario-a-three-physical-hosts",
+      "passed": true,
+      "campaign": "bench-review-c31-three-0126",
+      "sourceCommit": "c3175e36de7ef7ab952f1ec063ee03a929cce4f3",
+      "productImage": "sha256:baa0e43c93c39ae616708939ad3817de4a159fc82062f8c0dda1a67ca4cb7b1a",
+      "physicalHosts": [
+        "192.168.86.34",
+        "192.168.86.41",
+        "192.168.86.32"
+      ],
+      "observed": "46/46 system partitions at RF3 in 161670ms and public SQL write-readback probe in 8568ms within the original 240000ms formation deadline; 9/9 semantic cases passed (33/33 proof IDs, including post-restart durability 56/56 RF3 recovery); 10/10 warmup committed; 96/100 measured operations committed (48 new_order, 35 payment, 8 delivery, 5 read-only, 41 conflicts, 4 conflict-exhausted, 0 terminal failures, 0 unresolved, 0 ambiguous); final SQL database audit reconciled 4/4 exact (orders +48, history +35, new_order +40, order_line +515); cleanup complete",
+      "evidenceFile": "bench-review-c31-three-0126/result.json",
+      "evidenceSha256": "e01aa5ff43833c2c02d47dff5cd5cd34388ad66bf7637b3f11840ae5bbaa9e81"
+    },
+    {
+      "id": "placement-scope-and-delay",
+      "passed": true,
+      "testFile": "test/rebalancer/replica-placement-adaptive-budget.test.js",
+      "detail": "Placement resource sampling preserves per-resource interval and denominator (worker-thread and effective CPU capacity, pass-local deficit context reuse, adaptive source/target budget evaluation, NODES observation wakes, and named-voter leader handoff after placement promotion). Managed lab verification passed replica-placement-adaptive-budget.test.js, replica-placement-owner-core.test.js, and partition-leader-transfer-named-target.test.js."
+    },
+    {
+      "id": "committed-retention-and-installed-leader-replay",
+      "passed": true,
+      "testFile": "test/partition/split-descriptor-checkpoint.test.js",
+      "detail": "Committed source mirror custody retention, reverse-completeness marker validation, destination-fenced split child and sibling descriptor finalization (PARTITIONS_FINALIZE_SPLIT_CHILD and PARTITIONS_FINALIZE_SPLIT_SIBLING), P2 descriptor-debt redrive on PARTITIONS availability, and requested partition checkpoint generation transfer/install/reopen/leader replay verified across 8/8 suites (497/497 tests) on tv-dator at 5574e9aa0219ed230012769fee4496d8ffeadba9."
+    },
+    {
+      "id": "submission-and-completion",
+      "passed": true,
+      "testFile": "test/query/parallel-query-coordinator.test.js",
+      "detail": "Cancelled waiter exclusion from new submission or committed-answer erasure, simultaneous peer cancellation, same-participant stale-read-before-write conflict detection (40001), deterministic participant entryId re-delivery across BEGIN/PREPARE/COMMIT/ROLLBACK/TRANSACTION_OUTCOME, and same-connection PG-wire rollback recovery verified on managed lab hosts."
+    },
+    {
+      "id": "durable-schema-recovery",
+      "passed": true,
+      "testFile": "test/integration/pgwire-schema-owner-loss.integration.test.js",
+      "detail": "Old-quorum autonomous retirement after permanent member loss while preserving prepared-transaction custody (PREPARED_VOTER_RETAINED refusal when prepared, old-quorum retirement when unprepared, returning-replica fencing, and current-cohort release), warm GSI survivor recovery at RF3, and 4-node public PG-wire CREATE owner SIGKILL recovery + INSERT/SELECT verified on adam-laptop and adams-gamla at b14641752e500669f845a9da51124e716950af3d."
+    },
+    {
+      "id": "observation-transition",
+      "passed": true,
+      "testFile": "test/control-plane/readiness-planning-semantic-generation.test.js",
+      "detail": "Frozen NODES row liveness descriptor reuse, load-ready semantic generation stability across intra-band CPU changes, paired membership publication candidate selection, single-pass joining-node readiness enqueue, and NODES lease-leader-loss recovery verified on managed lab hosts."
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "verifier": "subagent:4fd99254-7b16-46f8-9b76-37bacf2c6ecf",
+      "verdict": "approve",
+      "sourceCommit": "0d40a0ec563ad2b7033e430a61e94c31ac455a8f",
+      "detail": "Composed candidate independently verified by subagent:4fd99254-7b16-46f8-9b76-37bacf2c6ecf against base 4dbadbe730de59088e32005a5552b88d6fb596b4 across all 135 changed src/ and test/ files (composite SHA-256 ec3fd47b30cb2e698970c0ae778b2c80532dc4a2de55f2542870c57eff2a6992) and all 153 total changed files, checking owner-interaction and harness-fidelity templates and zero fallback/legacy logic."
+    }
+  ],
+  "priorObservations": [
+    {
+      "id": "scenario-a-three-physical-hosts",
+      "passed": false,
+      "campaign": "bench-review-0d4-three-0317",
+      "sourceCommit": "0d40a0ec563ad2b7033e430a61e94c31ac455a8f",
+      "observed": "46/46 system partitions at RF3 and 3/3 stable system-table readiness polls passed in 172986ms; probeWriteReadback reached deadline at 5228ms remaining; workload not started",
+      "evidenceFile": "bench-review-0d4-three-0317/result.json",
+      "evidenceSha256": "72aa27c34e32693d793cb88ab41b3aca609b955da6e6958e95167dd682e3ad5c"
+    },
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": false,
@@ -10,9 +82,7 @@
       "observed": "readiness_exhausted; 3 of 46 system partitions below RF3 at the last complete predeadline census; workload not started",
       "evidenceFile": "bench-repeat-named-three-1954/result.json",
       "evidenceSha256": "68aeb78acc4163e46a9d8fcd935068c7fc83a396fbfa4943c2ef2f9d00a068bb"
-    }
-  ],
-  "priorObservations": [
+    },
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": false,

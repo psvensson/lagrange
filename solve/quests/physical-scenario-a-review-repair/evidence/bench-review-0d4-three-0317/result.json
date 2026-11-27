@@ -1,0 +1,31 @@
+{
+  "campaignId": "bench-review-0d4-three-0317",
+  "sourceCommit": "0d40a0ec563ad2b7033e430a61e94c31ac455a8f",
+  "productImage": "sha256:6bbaf0b4ea79fca345987d8d4904c73ff004daa7544b99b227ff4fd1fe417dd2",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "readiness": {
+    "state": "exhausted",
+    "observedAt": "2026-11-27T02:22:30.810Z",
+    "failedStage": "lagrange-probe-write-readback",
+    "failedStageElapsedMs": 5228,
+    "systemTablesState": "ready",
+    "systemTablesObservedAt": "2026-11-27T02:22:21.589Z",
+    "systemTablesTimeToReadyMs": 172986,
+    "systemTablesStablePolls": 3,
+    "spreadSummary": {
+      "rf3Partitions": 46,
+      "rf2Partitions": 0,
+      "rf1Partitions": 0,
+      "twoHostPartitionIds": []
+    }
+  },
+  "cleanupComplete": true,
+  "exitCode": 1,
+  "rawFileSha256": "6f3ed34e577b3c1e3bbf5f84fd59128034646d47f95694164985b9ae251c91ce",
+  "campaignFileSha256": "fa37995e623af36e11e7e3952dd39290abd287828dce12d8dfa415bdca7f4751"
+}
