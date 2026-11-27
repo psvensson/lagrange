@@ -1108,8 +1108,33 @@ test('committed recovery application is deterministic across divergent voter met
     'retired source SERVICES row is deleted from metadata projection',
   );
 
-  // P2 #3 Witness (Effect fence):
-  // (a) Fail-closed when leaderService authority is unavailable (shut down or not leader):
+  // P1 #1 Witness: A stale MATERIALIZE_RECOVERY_LEARNER request (with an older targetNodeBootIncarnation)
+  // arriving at targetHandlerBoot3 must be refused with SOURCE_GENERATION_MISMATCH WITHOUT shutting down
+  // or removing the live promoted voter runtime (replacementService).
+  const staleMaterializeReply = await targetHandlerBoot3.handleMaterializeRecoveryLearner({
+    type: 'MATERIALIZE_RECOVERY_LEARNER',
+    partitionId,
+    targetNodeId: NODE.D,
+    targetReplicaId: supersededRecovery.recovery.targetReplicaId,
+    targetNodeBootIncarnation: 1,
+    targetReplicaCreatedAt: supersededRecovery.recovery.targetReplicaCreatedAt,
+    supersededTargetReplicaId: supersededRecovery.recovery.targetReplicaId,
+  });
+  assert.equal(staleMaterializeReply.status, 'error');
+  assert.equal(staleMaterializeReply.failureCode, RECOVERY_ERROR.SOURCE_GENERATION_MISMATCH);
+  assert.equal(
+    replacementService.isShutdown,
+    false,
+    'stale MATERIALIZE_RECOVERY_LEARNER request must NOT shut down a live voter runtime',
+  );
+  assert.equal(
+    targetHandlerBoot3.getTrackedService(supersededRecovery.recovery.targetReplicaId),
+    replacementService,
+    'live voter runtime remains tracked after stale materialization refusal',
+  );
+
+  // P2 #2 & Finding #3 Witness (Effect fence across leader loss and old-publisher failure):
+  // (a) Fail-closed when leaderService authority is unavailable before write:
   const mutationsBeforeClosed = publishedMutations.length;
   const closedPublished = await persistRecoveredServicesRowsAsync(
     successorHandler,
@@ -1120,29 +1145,120 @@ test('committed recovery application is deterministic across divergent voter met
   assert.equal(closedPublished, false, 'unavailable authority must fail closed and retain publication debt');
   assert.equal(publishedMutations.length, mutationsBeforeClosed, 'unavailable authority submits no mutations');
 
-  // (b) Delayed in-flight INSERT for an older recovery (A -> D) that resolves AFTER a subsequent
-  // recovery (D -> E) has retired D must immediately retract D via deleteSystemTableRow:
+  // (b) P2 #2 Witness: Losing publication authority (election / step-down) AFTER a successful
+  // INSERT/UPDATE while the target is still a valid voter must NOT delete the valid SERVICES row:
+  let stepDownAfterInsert = false;
+  const realReadStatus = successorLeader.raft.readStatus.bind(successorLeader.raft);
+  const baseSubmitForStepDown = successorHandler.controlPlaneSystemTableGateway.submitMutation;
+  successorHandler.controlPlaneSystemTableGateway.submitMutation = async (mutation) => {
+    const res = await baseSubmitForStepDown(mutation);
+    if (mutation.tableName === 'services' &&
+        mutation.row?.service_id === supersededRecovery.recovery.targetReplicaId) {
+      stepDownAfterInsert = true;
+    }
+    return res;
+  };
+  const stepDownLeaderView = Object.create(successorLeader);
+  stepDownLeaderView.raft = {
+    ...successorLeader.raft,
+    readStatus: () => {
+      const s = realReadStatus();
+      return stepDownAfterInsert ? {...s, role: 'follower'} : s;
+    },
+  };
+  const deletesBeforeStepDown = publishedDeletes.filter(
+    (d) => d.where?.service_id === supersededRecovery.recovery.targetReplicaId,
+  ).length;
+  const stepDownPublished = await persistRecoveredServicesRowsAsync(
+    successorHandler,
+    supersededRecovery.recovery,
+    null,
+    stepDownLeaderView,
+  );
+  successorHandler.controlPlaneSystemTableGateway.submitMutation = baseSubmitForStepDown;
+  assert.equal(
+    stepDownPublished,
+    false,
+    'step-down during publication returns false so debt remains unconfirmed',
+  );
+  assert.equal(
+    publishedDeletes.filter(
+      (d) => d.where?.service_id === supersededRecovery.recovery.targetReplicaId,
+    ).length,
+    deletesBeforeStepDown,
+    'losing leadership after INSERT must NOT delete a valid voter SERVICES row',
+  );
+  assert.equal(
+    divergentCache.get('services', supersededRecovery.recovery.targetReplicaId)?.status,
+    'active',
+    'replacement voter SERVICES row remains active after publisher loses leadership',
+  );
+
+  // (c) Finding #3 Witness: An OLD publisher (crashedLeaderHandler) starts publishing R1 (A -> D),
+  // its INSERT for D is delayed in flight, and while delayed:
+  //   1) the old publisher fails before compensation (crashedLeaderHandler.shuttingDown = true,
+  //      reopenedFirstLeader shuts down), and
+  //   2) the new leader (successorHandler / successorLeader) commits and publishes a later
+  //      recovery R2 (D -> E) retiring D.
+  // When the old publisher's delayed INSERT for D finally executes, the shared recovery publication
+  // fence must block D from landing in SERVICES even though the old publisher failed before compensation.
   let releaseDelayedInsert = null;
   const delayedInsertGate = new Promise((resolve) => {
     releaseDelayedInsert = resolve;
   });
-  const baseSubmit = successorHandler.controlPlaneSystemTableGateway.submitMutation;
-  successorHandler.controlPlaneSystemTableGateway.submitMutation = async (mutation) => {
-    if (mutation.tableName === 'services' &&
-        mutation.row?.service_id === supersededRecovery.recovery.targetReplicaId) {
-      await delayedInsertGate;
-    }
-    return baseSubmit(mutation);
+  crashedLeaderHandler.controlPlaneSystemTableGateway = {
+    async submitMutation(mutation) {
+      if (mutation.tableName === 'services' &&
+          mutation.row?.service_id === supersededRecovery.recovery.targetReplicaId) {
+        await delayedInsertGate;
+      }
+      return baseSubmitForStepDown(mutation);
+    },
+    async updateSystemTableRow(tableName, where, updates) {
+      return successorHandler.controlPlaneSystemTableGateway
+        .updateSystemTableRow(tableName, where, updates);
+    },
+    async deleteSystemTableRow(tableName, where) {
+      return successorHandler.controlPlaneSystemTableGateway
+        .deleteSystemTableRow(tableName, where);
+    },
+  };
+  const fakeOldLeaderView = Object.create(reopenedFirstLeader);
+  fakeOldLeaderView.raft = {
+    readStatus: () => ({...realReadStatus(), role: 'leader'}),
+    readCommittedMembership: (...args) => successorLeader.raft.readCommittedMembership(...args),
   };
   const inFlightOldPublish = persistRecoveredServicesRowsAsync(
-    successorHandler,
+    crashedLeaderHandler,
     supersededRecovery.recovery,
     null,
-    successorLeader,
+    fakeOldLeaderView,
   );
   // Wait a tick so inFlightOldPublish passes the pre-check and is suspended inside submitMutation(INSERT D).
   await new Promise((resolve) => setTimeout(resolve, 20));
-  // Now record a subsequent committed recovery D -> E in _partition_membership_recovery retiring D!
+  // Old publisher fails before compensation!
+  crashedLeaderHandler.shuttingDown = true;
+  fakeOldLeaderView.isShutdown = true;
+  // Meanwhile, New Leader (successorLeader / successorHandler) commits and publishes R2 (D -> E) retiring D!
+  const r2Record = {
+    decisionId: 'recover-d-to-e',
+    entryId: 'recover-d-to-e',
+    partitionId,
+    configurationKey: supersededRecovery.recovery.configurationKey,
+    membershipGenerationIndex: supersededRecovery.recovery.membershipGenerationIndex + 1,
+    sourcePeerId: supersededRecovery.recovery.targetPeerId,
+    sourceReplicaId: supersededRecovery.recovery.targetReplicaId,
+    sourceReplicaCreatedAt: supersededRecovery.recovery.targetReplicaCreatedAt,
+    sourceNodeId: supersededRecovery.recovery.targetNodeId,
+    sourceNodeBootIncarnation: supersededRecovery.recovery.targetNodeBootIncarnation,
+    targetPeerId: deriveCanonicalPeerIdString('replace-replica-e-final'),
+    targetReplicaId: 'replace-replica-e-final',
+    targetReplicaCreatedAt: 9000,
+    targetNodeId: NODE.B,
+    targetNodeBootIncarnation: 1,
+    intentLogIndex: 999,
+    intentTerm: 3,
+  };
   successorLeader.db.prepare(
     `INSERT INTO _partition_membership_recovery (
       decision_id, entry_id, partition_id, configuration_key, membership_generation_index,
@@ -1151,32 +1267,31 @@ test('committed recovery application is deterministic across divergent voter met
       intent_log_index, intent_term
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
-    'recover-d-to-e',
-    'recover-d-to-e',
-    partitionId,
-    supersededRecovery.recovery.configurationKey,
-    supersededRecovery.recovery.membershipGenerationIndex + 1,
-    supersededRecovery.recovery.targetPeerId,
-    supersededRecovery.recovery.targetReplicaId,
-    supersededRecovery.recovery.targetReplicaCreatedAt,
-    supersededRecovery.recovery.targetNodeId,
-    supersededRecovery.recovery.targetNodeBootIncarnation,
-    deriveCanonicalPeerIdString('replace-replica-e-final'),
-    'replace-replica-e-final',
-    9000,
-    NODE.B,
-    1,
-    999,
-    3,
+    r2Record.decisionId, r2Record.entryId, r2Record.partitionId,
+    r2Record.configurationKey, r2Record.membershipGenerationIndex,
+    r2Record.sourcePeerId, r2Record.sourceReplicaId, r2Record.sourceReplicaCreatedAt,
+    r2Record.sourceNodeId, r2Record.sourceNodeBootIncarnation,
+    r2Record.targetPeerId, r2Record.targetReplicaId, r2Record.targetReplicaCreatedAt,
+    r2Record.targetNodeId, r2Record.targetNodeBootIncarnation,
+    r2Record.intentLogIndex, r2Record.intentTerm,
   );
-  divergentCache.applySystemTableChange('services', 'DELETE', {
-    service_id: supersededRecovery.recovery.targetReplicaId,
-  });
+  await persistRecoveredServicesRowsAsync(
+    successorHandler,
+    supersededRecovery.recovery,
+    null,
+    successorLeader,
+  );
+  assert.equal(
+    divergentCache.get('services', supersededRecovery.recovery.targetReplicaId),
+    null,
+    'new leader reconciliation after R2 deletes retired D from SERVICES',
+  );
+  // Now release the crashed old leader's delayed INSERT for D!
   releaseDelayedInsert();
   await inFlightOldPublish;
   assert.equal(
     divergentCache.get('services', supersededRecovery.recovery.targetReplicaId),
     null,
-    'post-write effect fence must retract delayed INSERT for a target that was subsequently retired',
+    'shared recovery publication fence must prevent a crashed old leader delayed INSERT from landing after a later recovery',
   );
 });

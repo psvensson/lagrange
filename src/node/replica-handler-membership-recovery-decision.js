@@ -3,17 +3,10 @@
 // hosted partition leaders on ReplicaHandler.
 
 import {createHash} from 'node:crypto';
-import {createPartitionConstructionHandoff} from
-  '../bootstrap/shared/partition-service-construction.js';
-import {
-  SYSTEM_TABLE_NAME, getSchemaByTableName,
-} from '../bootstrap/system-table-schemas-constants.js';
-import {
-  COLUMN, NODE_STATE, SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES,
-} from '../constants/index.js';
-import {
-  CONTROL_PLANE_MUTATION_OPERATION,
-} from '../control-plane/control-plane-system-table-gateway.js';
+import {createPartitionConstructionHandoff} from '../bootstrap/shared/partition-service-construction.js';
+import {SYSTEM_TABLE_NAME, getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {COLUMN, NODE_STATE, SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES} from '../constants/index.js';
+import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
 import {hasLiveTransportEvidence} from '../control-plane/live-transport-evidence.js';
 import {NodeReadyLeaseAuthority} from '../control-plane/node-ready-lease-authority.js';
 import {projectNodeLivenessSemantics} from '../control-plane/node-liveness-semantic-projection.js';
@@ -23,25 +16,19 @@ import {
   PARTITION_MEMBERSHIP_RECOVERY_ERROR as ERROR,
 } from '../partition/partition-membership-recovery-constants.js';
 import {
-  deriveCanonicalPeerIdString, readCommittedMembershipRecoveriesIn,
-  recordPartitionMemberBinding, resolveAuthoritativeMemberBinding,
+  deriveCanonicalPeerIdString, isExcludedRecoveryServiceReplica,
+  noteExcludedRecoveryServiceReplica, readCommittedMembershipRecoveriesIn,
+  recordPartitionMemberBinding, registerRecoveryPublicationPartitionService,
+  resolveAuthoritativeMemberBinding,
 } from '../partition/partition-membership-recovery.js';
-import {
-  readPartitionCommittedMembership,
-} from '../partition/partition-service-raft-membership-administration.js';
+import {readPartitionCommittedMembership} from '../partition/partition-service-raft-membership-administration.js';
 import {RAFT_ROLE} from '../raft/constants.js';
-import {
-  COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE,
-} from '../raft/raft-committed-membership-constants.js';
-import {
-  replicaIdsOfStamp, validateBootstrapMembershipStamp,
-} from '../raft/raft-committed-membership-stamp.js';
+import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
+import {replicaIdsOfStamp, validateBootstrapMembershipStamp} from '../raft/raft-committed-membership-stamp.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {ReplicaOperationResponseStatus} from '../rebalancer/replica-operation-constants.js';
-import {
-  OperationType, ReplicaStatus, isTerminalReplicaOperationRecord,
-} from '../rebalancer/replica-operation-progress.js';
+import {OperationType, ReplicaStatus, isTerminalReplicaOperationRecord} from '../rebalancer/replica-operation-progress.js';
 
 const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_ENCODING = 'hex';
@@ -382,17 +369,13 @@ function observeRecoveryTargetReplica(service) {
   const status = service?.raft?.readStatus?.() ?? null;
   if (!status || status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return null;
   return Object.freeze({
-    replicaIdentity: service.replicaId,
-    peerId: deriveCanonicalPeerIdString(service.replicaId),
-    nodeId: service.nodeId,
-    term: Number(status.term ?? 0),
-    commitIndex: Number(status.commitIndex ?? 0),
-    appliedIndex: Number(status.appliedIndex ?? 0),
+    replicaIdentity: service.replicaId, peerId: deriveCanonicalPeerIdString(service.replicaId),
+    nodeId: service.nodeId, term: Number(status.term ?? 0),
+    commitIndex: Number(status.commitIndex ?? 0), appliedIndex: Number(status.appliedIndex ?? 0),
     configurationKey: status.configurationKey ?? null,
     membershipGenerationIndex: Number(status.membershipGenerationIndex ?? 0),
     runtimeGeneration: Number(status.runtimeGeneration ?? 0),
-    gateOpen: status.gateOpen === true,
-    confChangePending: status.confChangePending === true,
+    gateOpen: status.gateOpen === true, confChangePending: status.confChangePending === true,
   });
 }
 
@@ -420,11 +403,7 @@ async function constructRecoveryLearnerPartition(
   const {partitionId, targetReplicaId} = request;
   const replicaIds = replicaIdsOfStamp(stamp, targetReplicaId);
   const construction = createPartitionConstructionHandoff(
-    targetReplicaId,
-    () => handler.throwIfShuttingDown(),
-  );
-  const capturePartition = (constructed, publish) =>
-    construction.retain(constructed, publish);
+    targetReplicaId, () => handler.throwIfShuttingDown());
   const service = await handler.createPartitionService({
     partitionId, tableId, tableName, schema, keyRange: request.keyRange ?? null,
     replicaId: targetReplicaId, replicaIds, nodeId: handler.nodeId, ...storageOption,
@@ -433,11 +412,25 @@ async function constructRecoveryLearnerPartition(
     bootstrapMembership: stamp, identityExisted: false, deferCdcPropagationHandshake: true,
     suppressLifecycleLogs: true,
     resolveHandlerRetirementLane: () => handler.replicaStateMachine,
-    onPartitionConstructed: capturePartition,
+    onPartitionConstructed: (c, p) => construction.retain(c, p),
   });
   if (construction.opened !== null) construction.publish(service);
   if (service.initialized !== true) await service.initialize();
   return service;
+}
+
+async function retireUnpromotedSupersededService(handler, replicaId) {
+  if (!isNonEmptyString(replicaId)) return;
+  const replicaEntry = handler.localReplicas?.get?.(replicaId) ?? null;
+  const service = handler.getTrackedService(replicaId);
+  if (replicaEntry?.status === ReplicaStatus.ACTIVE ||
+      service?.role === RAFT_ROLE.LEADER ||
+      service?.role === RAFT_ROLE.FOLLOWER) {
+    return;
+  }
+  await service?.shutdown?.();
+  handler.localServices?.delete?.(replicaId);
+  handler.localReplicas?.delete?.(replicaId);
 }
 
 async function handleMaterializeRecoveryLearner(handler, request) {
@@ -451,13 +444,8 @@ async function handleMaterializeRecoveryLearner(handler, request) {
     targetReplicaCreatedAt, bootstrapMembership, supersededTargetReplicaId,
     retireSupersededOnly,
   } = request;
-  if (isNonEmptyString(supersededTargetReplicaId) &&
-      (retireSupersededOnly === true || supersededTargetReplicaId !== targetReplicaId)) {
-    await handler.getTrackedService(supersededTargetReplicaId)?.shutdown?.();
-    handler.localServices?.delete?.(supersededTargetReplicaId);
-    handler.localReplicas?.delete?.(supersededTargetReplicaId);
-  }
   if (retireSupersededOnly === true) {
+    await retireUnpromotedSupersededService(handler, supersededTargetReplicaId);
     return handler.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, {
       partitionId, replicaId: supersededTargetReplicaId ?? null, nodeId: handler.nodeId,
       actualTargetNodeBootIncarnation: handler.ownerIncarnation,
@@ -465,17 +453,14 @@ async function handleMaterializeRecoveryLearner(handler, request) {
   }
   if (isPositiveSafeInteger(handler.ownerIncarnation) &&
       handler.ownerIncarnation !== targetNodeBootIncarnation) {
-    if (isPositiveSafeInteger(targetNodeBootIncarnation) &&
-        handler.ownerIncarnation > targetNodeBootIncarnation &&
-        isNonEmptyString(targetReplicaId)) {
-      await handler.getTrackedService(targetReplicaId)?.shutdown?.();
-      handler.localServices?.delete?.(targetReplicaId);
-      handler.localReplicas?.delete?.(targetReplicaId);
-    }
     return handler.buildReplicaOperationResponse(ReplicaOperationResponseStatus.ERROR, {
       error: ERROR.SOURCE_GENERATION_MISMATCH, failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
       nodeId: handler.nodeId, actualTargetNodeBootIncarnation: handler.ownerIncarnation,
     });
+  }
+  if (isNonEmptyString(supersededTargetReplicaId) &&
+      supersededTargetReplicaId !== targetReplicaId) {
+    await retireUnpromotedSupersededService(handler, supersededTargetReplicaId);
   }
   let service = handler.getTrackedService(targetReplicaId);
   if (!service || service.isShutdown) {
@@ -575,7 +560,8 @@ function isTargetSourceOfLaterRecovery(allRecoveries, recovery) {
       record.sourceReplicaId === recovery.targetReplicaId));
 }
 
-async function readRecoveryPublicationAuthority(leaderService, recovery) {
+async function readRecoveryPublicationAuthority(leaderService, recovery, cache = null) {
+  registerRecoveryPublicationPartitionService(leaderService, cache);
   if (!leaderService || leaderService.isShutdown ||
       leaderService.raft?.readStatus?.()?.role !== RAFT_ROLE.LEADER) {
     return {available: false, targetStillVoter: false, sourceStillAbsent: false};
@@ -591,19 +577,32 @@ async function readRecoveryPublicationAuthority(leaderService, recovery) {
   const currentVoters = new Set((current.voters || []).map(String));
   const allRecoveries = readCommittedMembershipRecoveriesIn(leaderService);
   const targetReplacedLater = isTargetSourceOfLaterRecovery(allRecoveries, recovery);
+  if (targetReplacedLater) {
+    noteExcludedRecoveryServiceReplica(
+      recovery.targetReplicaId, recovery.targetReplicaCreatedAt, cache);
+  }
+  const sourceStillAbsent = !currentVoters.has(String(recovery.sourcePeerId));
+  if (sourceStillAbsent) {
+    noteExcludedRecoveryServiceReplica(
+      recovery.sourceReplicaId, recovery.sourceReplicaCreatedAt, cache);
+  }
   return {
     available: true,
     targetStillVoter: !targetReplacedLater && currentVoters.has(String(recovery.targetPeerId)),
-    sourceStillAbsent: !currentVoters.has(String(recovery.sourcePeerId)),
+    sourceStillAbsent,
   };
 }
 
 function persistRecoveredServicesRowsAsync(
-  handler,
-  recovery,
-  targetAddress,
-  leaderService = null,
+  handler, recovery, targetAddress, leaderService = null,
 ) {
+  const cache = handler?.systemTableCache ?? null;
+  registerRecoveryPublicationPartitionService(leaderService, cache);
+  if (handler?.localServices instanceof Map) {
+    for (const svc of handler.localServices.values()) {
+      registerRecoveryPublicationPartitionService(svc, cache);
+    }
+  }
   const gateway = resolveRecoveryMetadataGateway(handler);
   const nowMs = Number(handler?.timeSource?.now?.() ?? Date.now());
   const resolvedAddress = isNonEmptyString(targetAddress) ?
@@ -624,14 +623,17 @@ function persistRecoveredServicesRowsAsync(
     deliveryPriority: DEFAULT_VALUE.DELIVERY_PRIORITY_CRITICAL,
   };
   const chains = handler.recoveryPublicationChains instanceof Map ?
-    handler.recoveryPublicationChains :
-    (handler.recoveryPublicationChains = new Map());
+    handler.recoveryPublicationChains : (handler.recoveryPublicationChains = new Map());
   const previous = chains.get(recovery.partitionId) ?? Promise.resolve(false);
   const run = previous.catch(() => false).then(async () => {
-    const pre = await readRecoveryPublicationAuthority(leaderService, recovery);
+    const pre = await readRecoveryPublicationAuthority(leaderService, recovery, cache);
     if (!pre.available) return false;
-    let targetPersisted = !pre.targetStillVoter;
-    if (pre.targetStillVoter) {
+    let targetPersisted = false;
+    const isTargetExcluded = () => isExcludedRecoveryServiceReplica(
+      recovery.targetReplicaId, recovery.targetReplicaCreatedAt, cache);
+    const excludeTarget = () => noteExcludedRecoveryServiceReplica(
+      recovery.targetReplicaId, recovery.targetReplicaCreatedAt, cache);
+    if (pre.targetStillVoter && !isTargetExcluded()) {
       try {
         const updatedAt = Number(handler?.timeSource?.now?.() ?? Date.now());
         const inserted = await gateway.submitMutation({
@@ -639,8 +641,10 @@ function persistRecoveredServicesRowsAsync(
           tableName: SYSTEM_TABLE_NAME.SERVICES,
           row: {...targetRow, updated_at: updatedAt},
         }, {...writeOptions, ignoreExisting: true});
+        const mid = await readRecoveryPublicationAuthority(leaderService, recovery, cache);
         let updatedOk = true;
-        if (gateway.updateSystemTableRow) {
+        if (mid.available && mid.targetStillVoter && !isTargetExcluded() &&
+            gateway.updateSystemTableRow) {
           const updated = await gateway.updateSystemTableRow(
             SYSTEM_TABLE_NAME.SERVICES,
             {service_id: recovery.targetReplicaId, node_id: recovery.targetNodeId},
@@ -649,13 +653,15 @@ function persistRecoveredServicesRowsAsync(
           );
           if (updated?.success === false) updatedOk = false;
         }
-        const postTarget = await readRecoveryPublicationAuthority(leaderService, recovery);
-        if (!postTarget.targetStillVoter) {
-          await gateway.deleteSystemTableRow(
-            SYSTEM_TABLE_NAME.SERVICES, {service_id: recovery.targetReplicaId}, writeOptions,
-          );
+        const postTarget = await readRecoveryPublicationAuthority(leaderService, recovery, cache);
+        if (isTargetExcluded() || (postTarget.available && !postTarget.targetStillVoter)) {
+          excludeTarget();
+          if (!handler?.shuttingDown && postTarget.available) {
+            await gateway.deleteSystemTableRow(
+              SYSTEM_TABLE_NAME.SERVICES, {service_id: recovery.targetReplicaId}, writeOptions);
+          }
           targetPersisted = postTarget.available;
-        } else if (inserted?.success !== false && updatedOk) {
+        } else if (postTarget.available && inserted?.success !== false && updatedOk) {
           targetPersisted = true;
         }
       } catch (error) {
@@ -663,13 +669,23 @@ function persistRecoveredServicesRowsAsync(
           partitionId: recovery.partitionId, error: error?.message ?? String(error),
         });
       }
+    } else {
+      excludeTarget();
+      try {
+        const retracted = await gateway.deleteSystemTableRow(
+          SYSTEM_TABLE_NAME.SERVICES, {service_id: recovery.targetReplicaId}, writeOptions);
+        targetPersisted = retracted?.success !== false;
+      } catch (_error) {
+        targetPersisted = false;
+      }
     }
     let sourceDeleted = !pre.sourceStillAbsent;
     if (pre.sourceStillAbsent) {
+      noteExcludedRecoveryServiceReplica(
+        recovery.sourceReplicaId, recovery.sourceReplicaCreatedAt, cache);
       try {
         const deleted = await gateway.deleteSystemTableRow(
-          SYSTEM_TABLE_NAME.SERVICES, {service_id: recovery.sourceReplicaId}, writeOptions,
-        );
+          SYSTEM_TABLE_NAME.SERVICES, {service_id: recovery.sourceReplicaId}, writeOptions);
         if (deleted?.success !== false) sourceDeleted = true;
       } catch (error) {
         handler.logger?.debug?.(ERROR.CONFIGURATION_IN_TRANSITION, {
@@ -728,16 +744,13 @@ function collectUnsettledSupersededRecoveries(
 }
 
 async function reconcileCompletedMembershipRecoveryPublications(
-  handler,
-  leaderService,
-  membership = null,
+  handler, leaderService, membership = null,
 ) {
   if (!leaderService || leaderService.isShutdown) {
     return Object.freeze({pendingPublication: false});
   }
   const resolvedMembership = membership ?? await readPartitionCommittedMembership(
-    leaderService, COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT,
-  );
+    leaderService, COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT);
   if (resolvedMembership?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
     return Object.freeze({pendingPublication: false});
   }
@@ -755,8 +768,7 @@ async function reconcileCompletedMembershipRecoveryPublications(
     leaderService.lastCompletedMembershipRecovery = record;
     leaderService.lastCompletedMembershipRecoveryPersisted = false;
     const published = await persistRecoveredServicesRowsAsync(
-      handler, record, `${record.targetNodeId}/partition/${record.targetReplicaId}`, leaderService,
-    );
+      handler, record, `${record.targetNodeId}/partition/${record.targetReplicaId}`, leaderService);
     if (!published && gateway?.submitMutation && gateway?.deleteSystemTableRow) {
       pendingPublication = true;
     }
@@ -778,16 +790,10 @@ function hasUnpublishedCompletedMembershipRecovery(handler, leaderService) {
 }
 
 export {
-  collectUnsettledSupersededRecoveries,
-  handleMaterializeRecoveryLearner,
-  handleObserveRecoveryLearner,
-  hasAnyUnreachableOrDeadClusterNode,
-  hasUnpublishedCompletedMembershipRecovery,
-  isNodeEligibleForPermanentLossRecovery,
-  isTargetBootSuperseded,
-  observeRecoveryTargetReplica,
-  persistRecoveredServicesRowsAsync,
-  planAutonomousPermanentLossRecovery,
-  reconcileCompletedMembershipRecoveryPublications,
-  selectEligibleReplacementTargetNode,
+  collectUnsettledSupersededRecoveries, handleMaterializeRecoveryLearner,
+  handleObserveRecoveryLearner, hasAnyUnreachableOrDeadClusterNode,
+  hasUnpublishedCompletedMembershipRecovery, isNodeEligibleForPermanentLossRecovery,
+  isTargetBootSuperseded, observeRecoveryTargetReplica,
+  persistRecoveredServicesRowsAsync, planAutonomousPermanentLossRecovery,
+  reconcileCompletedMembershipRecoveryPublications, selectEligibleReplacementTargetNode,
 };

@@ -1,7 +1,7 @@
 // Durable store, generation bindings, log-entry validation, and excluded-member
 // fencing for group-bound permanent member loss recovery.
 
-import {COLUMN, TABLES} from '../constants/index.js';
+import {CDC_OPERATIONS, COLUMN, TABLES} from '../constants/index.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
 import {raftRsConfStateKey} from '../raft/raft-rs-conf-state-key.js';
 import {
@@ -147,6 +147,7 @@ function readMetadataMemberBinding(service, replicaId, suppliedNodeId) {
 }
 
 function resolveAuthoritativeMemberBinding(service, replicaId, suppliedNodeId) {
+  registerRecoveryPublicationPartitionService(service);
   const durable = readPartitionMemberBinding(service, replicaId);
   if (durable !== null) {
     if (isNonEmptyString(suppliedNodeId) && suppliedNodeId !== durable.nodeId) {
@@ -331,6 +332,7 @@ function readCommittedMembershipRecoveriesIn(target) {
 }
 
 function validateMembershipRecoveryIntentAtLogEntry(service, command, options = {}) {
+  registerRecoveryPublicationPartitionService(service);
   if (command.partitionId !== service.partitionId) {
     return Object.freeze({valid: false, failureCode: ERROR.PARTITION_MISMATCH});
   }
@@ -439,6 +441,96 @@ const {
   FENCE_DECISION_ID,
   GENERATION_INDEX: DEFAULT_GENERATION_INDEX,
 } = DEFAULT_VALUE;
+
+function prepareRecoveryFenceHolder(holder) {
+  if (!holder || !holder.applySystemTableChange) return false;
+  if (!(holder.excludedRecoveryServiceReplicas instanceof Map)) {
+    holder.excludedRecoveryServiceReplicas = new Map();
+  }
+  if (!(holder.observedRecoveryPartitionServices instanceof Set)) {
+    holder.observedRecoveryPartitionServices = new Set();
+  }
+  if (holder.recoveryServiceCacheFenceInstalled !== true) {
+    const baseApply = holder.applySystemTableChange.bind(holder);
+    holder.applySystemTableChange = (tableName, operation, row, options) => {
+      if (tableName === TABLES.SERVICES &&
+          operation !== CDC_OPERATIONS.DELETE &&
+          isExcludedRecoveryServiceReplica(row?.service_id, Number(row?.created_at), holder)) {
+        return false;
+      }
+      return baseApply(tableName, operation, row, options);
+    };
+    holder.recoveryServiceCacheFenceInstalled = true;
+  }
+  return true;
+}
+
+function noteExcludedRecoveryServiceReplica(replicaId, createdAt = null, holder = null) {
+  if (!isNonEmptyString(replicaId) || !prepareRecoveryFenceHolder(holder)) return;
+  const map = holder.excludedRecoveryServiceReplicas;
+  const prev = map.get(replicaId) ?? 0;
+  const next = isPositiveSafeInteger(createdAt) ? Math.max(prev, createdAt) : prev;
+  map.set(replicaId, next);
+}
+
+function isReplicaReplacedInObservedService(replicaId, holder) {
+  if (!prepareRecoveryFenceHolder(holder)) return false;
+  for (const service of holder.observedRecoveryPartitionServices) {
+    const handle = resolveDatabaseHandle(service);
+    if (!handle || handle.open === false) {
+      holder.observedRecoveryPartitionServices.delete(service);
+      continue;
+    }
+    ensureMembershipRecoveryTables(handle);
+    const asSource = handle.prepare(SQL.SELECT_BY_SOURCE_REPLICA_ID).get(replicaId);
+    if (!asSource) continue;
+    const allRows = handle.prepare(SQL.SELECT_ALL_RECOVERIES).all();
+    const wasRecoveryTarget = allRows.some((r) => r.target_replica_id === replicaId);
+    let absentFromVoters = false;
+    if (!wasRecoveryTarget && isNonEmptyString(service?.partitionId)) {
+      const durableRecord = RaftRsDurableStore.readDurableRecordIn(handle, service.partitionId);
+      const confState = durableRecord?.confState;
+      const activeVoters = new Set([
+        ...(confState?.voters || []).map(String),
+        ...(confState?.votersOutgoing || []).map(String),
+      ]);
+      absentFromVoters = !activeVoters.has(String(asSource.source_peer_id));
+    }
+    if (wasRecoveryTarget || absentFromVoters) {
+      noteExcludedRecoveryServiceReplica(
+        replicaId, Number(asSource.source_replica_created_at), holder);
+      return true;
+    }
+  }
+  return false;
+}
+
+function isExcludedRecoveryServiceReplica(replicaId, createdAt = null, holder = null) {
+  if (!isNonEmptyString(replicaId) || !prepareRecoveryFenceHolder(holder)) return false;
+  const map = holder.excludedRecoveryServiceReplicas;
+  if (!map.has(replicaId) && !isReplicaReplacedInObservedService(replicaId, holder)) {
+    return false;
+  }
+  const fenceCreatedAt = map.get(replicaId) ?? 0;
+  if (!isPositiveSafeInteger(fenceCreatedAt) || !isPositiveSafeInteger(createdAt)) {
+    return true;
+  }
+  return createdAt <= fenceCreatedAt;
+}
+
+function installRecoveryServiceCacheFence(holder) {
+  prepareRecoveryFenceHolder(holder);
+}
+
+function registerRecoveryPublicationPartitionService(service, holder = null) {
+  const firstHolder = service?.systemTableCache ?? null;
+  const hasFirst = prepareRecoveryFenceHolder(firstHolder);
+  const hasSecond = prepareRecoveryFenceHolder(holder);
+  if (service && resolveDatabaseHandle(service)) {
+    if (hasFirst) firstHolder.observedRecoveryPartitionServices.add(service);
+    if (hasSecond) holder.observedRecoveryPartitionServices.add(service);
+  }
+}
 
 function markLocalReplicaExcludedFence(service, recovery) {
   const db = resolveDatabaseHandle(service);
@@ -580,9 +672,12 @@ export {
   deriveCanonicalPeerIdString,
   ensureMembershipRecoveryTables,
   excludedMemberFenceRefusalOf,
+  installRecoveryServiceCacheFence,
+  isExcludedRecoveryServiceReplica,
   isLocalReplicaExcludedFenced,
   isPeerExcludedInGroup,
   markLocalReplicaExcludedFence,
+  noteExcludedRecoveryServiceReplica,
   noteMembershipRecoveryOrFenceRowWritten,
   readCommittedMembershipRecoveriesIn,
   readCommittedMembershipRecoveryByEntryIn,
@@ -590,6 +685,7 @@ export {
   readPartitionMemberBinding,
   recordPartitionMemberBinding,
   recoveryRowMatchesCommand,
+  registerRecoveryPublicationPartitionService,
   resolveAuthoritativeMemberBinding,
   validateMembershipRecoveryBinding,
   validateMembershipRecoveryIntentAtLogEntry,

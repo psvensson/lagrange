@@ -1,11 +1,11 @@
 {
   "schema": "test-receipt/1",
   "quest": "physical-scenario-a-review-repair",
-  "status": "pass",
+  "status": "fail",
   "testFileDigests": {
     "test/rebalancer/replica-placement-adaptive-budget.test.js": "d817f2af3fb82df63125ab6087d3429c8fa1e7b62d98a875a099149b5d99b661",
     "test/rebalancer/replica-placement-owner-core.test.js": "c27227041be81026dd00138d5403a270619d5dfe3436770a63f6cb53d5154f4b",
-    "test/partition/participant-release-retirement-interlock.test.js": "8c547ae27693d742133171bb4c8b20bf3b4d3b709052377c39ec01e4dd81f9d3",
+    "test/partition/participant-release-retirement-interlock.test.js": "bcae8776c0e3f67a9b9a10ea45fdd0a9d979cbac5b5baf71b0c4140acccd3a23",
     "test/query/write-path-internal-pacing.test.js": "72193c2770515596dfc556f14f8bfe6fc33898e58c71e2fe4746710013d6e8a1",
     "test/partition/split-descriptor-checkpoint.test.js": "11f4278d031e2876007152470a34c7fea7caf206c767ebb25f5094c1fbe30473",
     "test/query/parallel-query-coordinator.test.js": "be5e718e188b83e75276ca2d081b39e434aedd7c76f62c08e7ba8392745cc675",
@@ -15,7 +15,7 @@
   "receipts": [
     {
       "id": "scenario-a-three-physical-hosts",
-      "passed": true,
+      "passed": false,
       "campaign": "bench-review-4bc-three-1009",
       "sourceCommit": "4bc1bc1005e42e1ea3d980372bc3b9e1e866c50d",
       "productImage": "sha256:e94e5f313502c2b992f1992c3890c8b858c9b3d399d3a281fa8ad852d64bda44",
@@ -24,7 +24,7 @@
         "192.168.86.41",
         "192.168.86.32"
       ],
-      "observed": "46/46 system partitions at RF3 in 120628ms (cumulative 181872ms) and public SQL write-readback probe in 10530ms (total readiness 193090ms within the original 240000ms formation deadline, 46910ms spare); 8/8 executable SQL semantic cases passed (31/31 SQL proof IDs in 178181ms); 10/10 warmup committed; 83/86 issued operations committed (0 product_error, 0 correctness_failure, 0 transport_failure, 0 harness_fault, 0 ambiguous); final SQL database audit reconciled 4/4 exact (orders +42, history +30, new_order +36, order_line +446); cleanup complete. Prior full-storage campaign bench-review-c31-three-0126 also retained.",
+      "observed": "46/46 system partitions at RF3 in 120628ms (cumulative 181872ms) and public SQL write-readback probe in 10530ms (total readiness 193090ms within the original 240000ms formation deadline, 46910ms spare); 8/8 executable SQL semantic cases passed (31/33 required semantic proof IDs established in 178181ms; durability case probe_inapplicable: durability_requires_persistent_storage); 10/10 warmup committed; 100 offered, 86 issued, 14 unissued, 83 committed, 33 conflicts, 1 conflict-exhausted, 2 unresolved (0 product_error, 0 correctness_failure, 0 transport_failure, 0 harness_fault, 0 ambiguous) when the 268035ms workload watchdog stopped issuing (state: interrupted, failureCode: watchdog_stopped, exitCode: 1, admission outcome: failed, cell status: product-failure [watchdog-stopped]); final SQL database audit reconciled 4/4 exact (orders +42, history +30, new_order +36, order_line +446); cleanup complete.",
       "evidenceFile": "bench-review-4bc-three-1009/raw-observations.ndjson",
       "evidenceSha256": "a7692844815f1ed092df6f432033f6421f9737129cb3cc8b7d1f68366e3e1a05"
     },
