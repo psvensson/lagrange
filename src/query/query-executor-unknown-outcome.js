@@ -4,8 +4,11 @@ import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
 import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
+  isPartitionWriteFailureCode,
+  isRetryableWriteFailureCode,
   isWriteOutcomeUnknown,
 } from '../partition/partition-write-kernel.js';
+import {QUERY_ERROR_CODE} from './query-constants.js';
 
 // The executor's partition delivery is the one owner that re-delivers a
 // write whose outcome is not known. A write is delivered under one entryId
@@ -46,6 +49,21 @@ const FUNCTION_TYPE = 'function';
 
 function isNonEmptyString(value) {
   return typeof value === STRING_TYPE && value.length > 0;
+}
+
+function isSettledWriteFailureAnswer(answer) {
+  if (answer?.committed === true) {
+    return true;
+  }
+  if (answer?.deferRetry === true) {
+    return false;
+  }
+  if (answer?.errorCode === QUERY_ERROR_CODE.LOCK_NOT_AVAILABLE) {
+    return true;
+  }
+  return isNonEmptyString(answer?.failureCode) &&
+    !isPartitionWriteFailureCode(answer.failureCode) &&
+    !isRetryableWriteFailureCode(answer.failureCode);
 }
 
 function resolveNonUnknownAnswerDecision(entryId, unresolved) {
@@ -164,7 +182,7 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
       if (forRead) {
         return UNKNOWN_OUTCOME_DECISION.NONE;
       }
-      if (answer?.committed === true) {
+      if (isSettledWriteFailureAnswer(answer)) {
         state.settled = true;
         return UNKNOWN_OUTCOME_DECISION.NONE;
       }

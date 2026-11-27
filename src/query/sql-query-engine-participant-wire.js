@@ -42,11 +42,8 @@ import {
   PARTICIPANT_TRANSACTION_STATE,
 } from '../partition/partition-participant-transaction-constants.js';
 import {
-  beginEntryIdOf,
   decisionEntryIdOf,
-  outcomeEntryIdOf,
   prepareEntryIdOf,
-  unboundRollbackEntryIdOf,
 } from '../partition/partition-participant-transaction-bytes.js';
 import {
   QUERY_ERROR_MSG,
@@ -131,25 +128,13 @@ function participantEntryIdOf(operation, request) {
   if (!isNonEmptyString(request.participantId)) {
     return null;
   }
-  if (operation === QUERY_OPERATION.BEGIN) {
-    return beginEntryIdOf(request.participantId);
-  }
   if (operation === QUERY_OPERATION.PREPARE) {
     return prepareEntryIdOf(request.participantId);
   }
-  if (operation === QUERY_OPERATION.TRANSACTION_OUTCOME) {
-    return outcomeEntryIdOf(request.participantId);
-  }
-  if (operation === QUERY_OPERATION.COMMIT) {
-    return isNonEmptyString(request.decisionDigest) ?
-      decisionEntryIdOf(request.participantId, request.decisionDigest) : null;
-  }
-  if (operation === QUERY_OPERATION.ROLLBACK) {
-    return isNonEmptyString(request.decisionDigest) ?
-      decisionEntryIdOf(request.participantId, request.decisionDigest) :
-      unboundRollbackEntryIdOf(request.participantId);
-  }
-  return null;
+  const decides = operation === QUERY_OPERATION.COMMIT ||
+    operation === QUERY_OPERATION.ROLLBACK;
+  return decides && isNonEmptyString(request.decisionDigest) ?
+    decisionEntryIdOf(request.participantId, request.decisionDigest) : null;
 }
 
 /**

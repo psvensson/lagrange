@@ -679,3 +679,93 @@ test(
     );
   },
 );
+
+test(
+  'a participant transaction refusal after a lost answer settles immediately without overwriting failureCode',
+  async (t) => {
+    const partitionId = 'district-p1';
+    const address = 'node-leader/partition/district-r1';
+    let deliveries = 0;
+    const systemCache = buildMockSystemCache({
+      partitions: [{
+        partition_id: partitionId,
+        table_name: 'district',
+        leader_node_id: 'node-leader',
+      }],
+      services: [{
+        service_id: 'district-r1',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'node-leader',
+        raft_role: 'leader',
+        address,
+        status: 'active',
+      }],
+    });
+    const messageRouter = {
+      async deliver(_address, _message, routerOptions) {
+        deliveries += 1;
+        if (deliveries === 1) {
+          t.equal(
+            routerOptions?.timeoutMs,
+            16000,
+            'transactional session writes allow the 15s row-key conflict wait before transport timeout',
+          );
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            error: 'Message timeout',
+            errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+          });
+        }
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: false,
+          failureCode: 'participant_transaction_stale_read',
+          error: 'Participant transaction request refused: participant_transaction_stale_read',
+          partitionId,
+        });
+      },
+    };
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter,
+      systemCache,
+    });
+    executor.leaderRetryDelayMs = 1;
+    const timeoutMs = 30000;
+    const startedAtMs = Date.now();
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'UPDATE district SET next_order_id = ? WHERE warehouse_id = ? AND district_id = ?',
+      [2, 1, 1],
+      false,
+      false,
+      false,
+      {
+        entryId: 'dwrite-participant-stale-read-test',
+        transactionIdentity: {
+          transactionId: 'tx-stale-read-1',
+          commitMode: 'TWO_PHASE_COMMIT',
+          transactionEpoch: 1,
+        },
+        timeoutMs,
+        timeoutBudget: {
+          configuredBudgetMs: timeoutMs,
+          startedAtMs,
+          deadlineMs: startedAtMs + timeoutMs,
+        },
+      },
+    );
+
+    t.equal(result.success, false, 'refused transactional write fails');
+    t.equal(
+      deliveries,
+      2,
+      'settled participant refusal stops redelivery immediately after the lost first answer',
+    );
+    t.equal(
+      result.failureCode,
+      'participant_transaction_stale_read',
+      'settled participant refusal preserves its typed failureCode instead of partition_write_outcome_unknown',
+    );
+  },
+);
