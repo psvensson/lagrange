@@ -4,6 +4,9 @@
   "status": "pass",
   "testFileDigests": {
     "test/rebalancer/replica-placement-adaptive-budget.test.js": "d817f2af3fb82df63125ab6087d3429c8fa1e7b62d98a875a099149b5d99b661",
+    "test/rebalancer/replica-placement-owner-core.test.js": "c27227041be81026dd00138d5403a270619d5dfe3436770a63f6cb53d5154f4b",
+    "test/partition/participant-release-retirement-interlock.test.js": "8c547ae27693d742133171bb4c8b20bf3b4d3b709052377c39ec01e4dd81f9d3",
+    "test/query/write-path-internal-pacing.test.js": "72193c2770515596dfc556f14f8bfe6fc33898e58c71e2fe4746710013d6e8a1",
     "test/partition/split-descriptor-checkpoint.test.js": "11f4278d031e2876007152470a34c7fea7caf206c767ebb25f5094c1fbe30473",
     "test/query/parallel-query-coordinator.test.js": "be5e718e188b83e75276ca2d081b39e434aedd7c76f62c08e7ba8392745cc675",
     "test/integration/pgwire-schema-owner-loss.integration.test.js": "7f90a6f276452e48a3fd8df11376d8913def0d91404f8e33dda1e87fd1bbacc8",
@@ -13,23 +16,23 @@
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": true,
-      "campaign": "bench-review-c31-three-0126",
-      "sourceCommit": "c3175e36de7ef7ab952f1ec063ee03a929cce4f3",
-      "productImage": "sha256:baa0e43c93c39ae616708939ad3817de4a159fc82062f8c0dda1a67ca4cb7b1a",
+      "campaign": "bench-review-4bc-three-1009",
+      "sourceCommit": "4bc1bc1005e42e1ea3d980372bc3b9e1e866c50d",
+      "productImage": "sha256:e94e5f313502c2b992f1992c3890c8b858c9b3d399d3a281fa8ad852d64bda44",
       "physicalHosts": [
         "192.168.86.34",
         "192.168.86.41",
         "192.168.86.32"
       ],
-      "observed": "46/46 system partitions at RF3 in 161670ms and public SQL write-readback probe in 8568ms within the original 240000ms formation deadline; 9/9 semantic cases passed (33/33 proof IDs, including post-restart durability 56/56 RF3 recovery); 10/10 warmup committed; 96/100 measured operations committed (48 new_order, 35 payment, 8 delivery, 5 read-only, 41 conflicts, 4 conflict-exhausted, 0 terminal failures, 0 unresolved, 0 ambiguous); final SQL database audit reconciled 4/4 exact (orders +48, history +35, new_order +40, order_line +515); cleanup complete",
-      "evidenceFile": "bench-review-c31-three-0126/result.json",
-      "evidenceSha256": "e01aa5ff43833c2c02d47dff5cd5cd34388ad66bf7637b3f11840ae5bbaa9e81"
+      "observed": "46/46 system partitions at RF3 in 120628ms (cumulative 181872ms) and public SQL write-readback probe in 10530ms (total readiness 193090ms within the original 240000ms formation deadline, 46910ms spare); 8/8 executable SQL semantic cases passed (31/31 SQL proof IDs in 178181ms); 10/10 warmup committed; 83/86 issued operations committed (0 product_error, 0 correctness_failure, 0 transport_failure, 0 harness_fault, 0 ambiguous); final SQL database audit reconciled 4/4 exact (orders +42, history +30, new_order +36, order_line +446); cleanup complete. Prior full-storage campaign bench-review-c31-three-0126 also retained.",
+      "evidenceFile": "bench-review-4bc-three-1009/raw-observations.ndjson",
+      "evidenceSha256": "a7692844815f1ed092df6f432033f6421f9737129cb3cc8b7d1f68366e3e1a05"
     },
     {
       "id": "placement-scope-and-delay",
       "passed": true,
       "testFile": "test/rebalancer/replica-placement-adaptive-budget.test.js",
-      "detail": "Placement resource sampling preserves per-resource interval and denominator (worker-thread and effective CPU capacity, pass-local deficit context reuse, adaptive source/target budget evaluation, NODES observation wakes, and named-voter leader handoff after placement promotion). Managed lab verification passed replica-placement-adaptive-budget.test.js, replica-placement-owner-core.test.js, and partition-leader-transfer-named-target.test.js."
+      "detail": "Placement resource sampling preserves per-resource interval and denominator, and the 25/40ms event-loop delay hysteresis deadband on a previously decreased two-copy window (PAIR_WINDOW_UTILIZATION_DELAY_FLOOR_MS = 40) preserves fast 1->2 recovery while holding at 2 copies between 25ms and 40ms event-loop delay before backing off above 40ms under high utilization. Combined gate passed replica-placement-adaptive-budget.test.js and replica-placement-owner-core.test.js (34/34 tests)."
     },
     {
       "id": "committed-retention-and-installed-leader-replay",
@@ -60,8 +63,8 @@
       "passed": true,
       "verifier": "subagent:4fd99254-7b16-46f8-9b76-37bacf2c6ecf",
       "verdict": "approve",
-      "sourceCommit": "ea6bd68618eb0ba55101ec68d8b679a861f7a9a9",
-      "detail": "Consolidated candidate independently verified by subagent:4fd99254-7b16-46f8-9b76-37bacf2c6ecf against base 4dbadbe730de59088e32005a5552b88d6fb596b4 and ea6bd68618eb0ba55101ec68d8b679a861f7a9a9 across all 142 changed src/ and test/ files (composite SHA-256 8745efc8d6f33a17b53ac803d7f789d50cb37f7fd633685b9606c680585e648d) and 9 helper-module consolidations (packed npm tarball entry count 2099 <= 2100; npm-package-consolidated.tap sha256 3bc9ef5f982958286e7a68cf41a46126ff83b0ac88a177b839d4cdda3ea6b6e6), checking owner-interaction and harness-fidelity templates and zero fallback/legacy logic."
+      "sourceCommit": "5d282c4ba592a9c91a051284a3a7a4d4af36c82d",
+      "detail": "Independently reviewed candidate 5d282c4ba592a9c91a051284a3a7a4d4af36c82d (including recovery base 760075a46cc9e397b5f21c81b6a2da712cd2f765, adaptive placement 25/40ms hysteresis deadband 4bc1bc1005e42e1ea3d980372bc3b9e1e866c50d, and retained 3-host physical campaign evidence bench-review-4bc-three-1009) against base 4dbadbe730de59088e32005a5552b88d6fb596b4 in /mnt/data/peter/projects/.worktrees/physical-review-20261126 (147 existing changed src/ and test/ files, composite SHA-256 ba2969ca9c7e0a3378fd6d0cc70cd9e2a114d61e09bf5a6bd25c211140b4293f; 153 changed src/ and test/ paths including 6 net-deleted base modules, composite SHA-256 8bb967bda8593e5faf6161c0cae5aa567a4af52017ffcdfb2abe51ce8645fc7e). Verified that all 3 P2 recovery findings are closed, verified pre-fence SQLite commit assertions in write-path-internal-pacing.test.js and the 25/40ms two-copy delay-hysteresis deadband in replica-placement-adaptive-budget.js, and executed replica-placement-owner-core.test.js, replica-placement-adaptive-budget.test.js, write-path-internal-pacing.test.js, and participant-release-retirement-interlock.test.js (87/87 subtests passing). Confirmed zero material defects and zero fallback/legacy violations."
     }
   ],
   "priorObservations": [
