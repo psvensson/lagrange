@@ -1,32 +1,33 @@
 {
   "schema": "test-receipt/1",
   "quest": "physical-scenario-a-review-repair",
-  "status": "fail",
+  "status": "pass",
   "testFileDigests": {
     "test/rebalancer/replica-placement-adaptive-budget.test.js": "d817f2af3fb82df63125ab6087d3429c8fa1e7b62d98a875a099149b5d99b661",
     "test/rebalancer/replica-placement-owner-core.test.js": "c27227041be81026dd00138d5403a270619d5dfe3436770a63f6cb53d5154f4b",
-    "test/partition/participant-release-retirement-interlock.test.js": "bcae8776c0e3f67a9b9a10ea45fdd0a9d979cbac5b5baf71b0c4140acccd3a23",
+    "test/partition/participant-release-retirement-interlock.test.js": "9cfa7cd835eb8338111136fd18135908cb4b486f1cfe808687c1654c2e8e327b",
     "test/query/write-path-internal-pacing.test.js": "72193c2770515596dfc556f14f8bfe6fc33898e58c71e2fe4746710013d6e8a1",
     "test/partition/split-descriptor-checkpoint.test.js": "11f4278d031e2876007152470a34c7fea7caf206c767ebb25f5094c1fbe30473",
     "test/query/parallel-query-coordinator.test.js": "be5e718e188b83e75276ca2d081b39e434aedd7c76f62c08e7ba8392745cc675",
     "test/integration/pgwire-schema-owner-loss.integration.test.js": "7f90a6f276452e48a3fd8df11376d8913def0d91404f8e33dda1e87fd1bbacc8",
-    "test/control-plane/readiness-planning-semantic-generation.test.js": "f31ccb811764ec195fcde597030998599c4f1a0b792b69664ca787759d186b2d"
+    "test/control-plane/readiness-planning-semantic-generation.test.js": "f31ccb811764ec195fcde597030998599c4f1a0b792b69664ca787759d186b2d",
+    "test/query/scenario-a-oltp-review-witnesses.test.js": "f7022a1d67441e4ec3cf65e4c3df9a68be955bdbaeb57074a27bc72001617c77"
   },
   "receipts": [
     {
       "id": "scenario-a-three-physical-hosts",
-      "passed": false,
-      "campaign": "bench-review-4bc-three-1009",
-      "sourceCommit": "4bc1bc1005e42e1ea3d980372bc3b9e1e866c50d",
-      "productImage": "sha256:e94e5f313502c2b992f1992c3890c8b858c9b3d399d3a281fa8ad852d64bda44",
+      "passed": true,
+      "campaign": "bench-oltp-1b0-three-2354",
+      "sourceCommit": "1b021c2203825b8bdd5f829bea9c7b2885e2c5a2",
+      "productImage": "sha256:9003d484f0e3dcc4f28abf1076f0107bd40a154842a2f09dad6cdfefb3319767",
       "physicalHosts": [
         "192.168.86.34",
         "192.168.86.41",
         "192.168.86.32"
       ],
-      "observed": "46/46 system partitions at RF3 in 120628ms (cumulative 181872ms) and public SQL write-readback probe in 10530ms (total readiness 193090ms within the original 240000ms formation deadline, 46910ms spare); 8/8 executable SQL semantic cases passed (31/33 required semantic proof IDs established in 178181ms; durability case probe_inapplicable: durability_requires_persistent_storage); 10/10 warmup committed; 100 offered, 86 issued, 14 unissued, 83 committed, 33 conflicts, 1 conflict-exhausted, 2 unresolved (0 product_error, 0 correctness_failure, 0 transport_failure, 0 harness_fault, 0 ambiguous) when the 268035ms workload watchdog stopped issuing (state: interrupted, failureCode: watchdog_stopped, exitCode: 1, admission outcome: failed, cell status: product-failure [watchdog-stopped]); final SQL database audit reconciled 4/4 exact (orders +42, history +30, new_order +36, order_line +446); cleanup complete.",
-      "evidenceFile": "bench-review-4bc-three-1009/raw-observations.ndjson",
-      "evidenceSha256": "a7692844815f1ed092df6f432033f6421f9737129cb3cc8b7d1f68366e3e1a05"
+      "observed": "46/46 system partitions at RF3 in 142085ms and public SQL write-readback probe in 9996ms (total readiness 202029ms within the 240000ms DEFAULT_READINESS.formationDeadlineMs gate, 37971ms spare); 9/9 executable SQL semantic cases passed on persistent storage /var/tmp/lagrange-scenario-a-storage (33/33 required semantic proof IDs established, including scenario-a-durability-lagrange across container restart); 10/10 warmup committed; 100 offered, 100 issued, 0 unissued, 98 committed, 42 conflicts, 2 conflict-exhausted, 0 product_error, 0 correctness_failure, 0 transport_failure, 0 harness_fault, 0 unresolved, 0 ambiguous (state: completed, failureCode: null, exitCode: 0, admission outcome: passed [valid-observed], drainMs 183760.74ms vs 268035ms watchdog bound, watchdog fired: false); final SQL database audit reconciled 4/4 exact (orders +50, history +35, new_order +42, order_line +534); cleanup complete.",
+      "evidenceFile": "bench-oltp-1b0-three-2354/raw-observations.ndjson",
+      "evidenceSha256": "8c9dd656fc4665f37c466e32a3a4c7a5fda012d437211880a6ef901d08bf999c"
     },
     {
       "id": "placement-scope-and-delay",
@@ -68,6 +69,36 @@
     }
   ],
   "priorObservations": [
+    {
+      "id": "scenario-a-three-physical-hosts",
+      "passed": false,
+      "campaign": "bench-oltp-49e-three-2116",
+      "sourceCommit": "49e9a4b75ce3d8a2624022e5f18c00602fb5ca3d",
+      "productImage": "sha256:8f15b045445496b5c5f89ea8cd41d86c36ab5cd80b140069d2ca6bcf8c9a90fb",
+      "physicalHosts": [
+        "192.168.86.34",
+        "192.168.86.41",
+        "192.168.86.32"
+      ],
+      "observed": "46/46 system partitions at RF3 in 145021ms and public SQL write-readback probe in 9210ms (total readiness 206383ms within 240000ms formation deadline); 9/9 executable SQL semantic cases passed on persistent storage (33/33 required semantic proof IDs established, including scenario-a-durability-lagrange); 10/10 warmup committed; 100 offered, 100 issued, 0 unissued, 41 committed, 19 conflicts, 1 conflict-exhausted, 58 product_error (mid-workload leader change on item-p1 and schema_operations-p1 caused unretried CUTOVER_PAUSED BEGIN and sql_transactions-p1 control-cohort revalidation fall-through during ROLLBACK freeze, leaving both worker sessions in TRANSACTION_DECISION_IN_DOUBT), 0 unresolved, drainMs 133025ms; final SQL database audit reconciled 4/4 exact (orders +22, history +11, new_order +18, order_line +221); cleanup complete.",
+      "evidenceFile": "bench-oltp-49e-three-2116/raw-observations.ndjson",
+      "evidenceSha256": "3b3f5cd6dc7eb2ae7971640f2dbb4b7da2e0db682cff123a798403da13177908"
+    },
+    {
+      "id": "scenario-a-three-physical-hosts",
+      "passed": false,
+      "campaign": "bench-review-4bc-three-1009",
+      "sourceCommit": "4bc1bc1005e42e1ea3d980372bc3b9e1e866c50d",
+      "productImage": "sha256:e94e5f313502c2b992f1992c3890c8b858c9b3d399d3a281fa8ad852d64bda44",
+      "physicalHosts": [
+        "192.168.86.34",
+        "192.168.86.41",
+        "192.168.86.32"
+      ],
+      "observed": "46/46 system partitions at RF3 in 120628ms (cumulative 181872ms) and public SQL write-readback probe in 10530ms (total readiness 193090ms within the original 240000ms formation deadline, 46910ms spare); 8/8 executable SQL semantic cases passed (31/33 required semantic proof IDs established in 178181ms; durability case probe_inapplicable: durability_requires_persistent_storage); 10/10 warmup committed; 100 offered, 86 issued, 14 unissued, 83 committed, 33 conflicts, 1 conflict-exhausted, 2 unresolved (0 product_error, 0 correctness_failure, 0 transport_failure, 0 harness_fault, 0 ambiguous) when the 268035ms workload watchdog stopped issuing (state: interrupted, failureCode: watchdog_stopped, exitCode: 1, admission outcome: failed, cell status: product-failure [watchdog-stopped]); final SQL database audit reconciled 4/4 exact (orders +42, history +30, new_order +36, order_line +446); cleanup complete.",
+      "evidenceFile": "bench-review-4bc-three-1009/raw-observations.ndjson",
+      "evidenceSha256": "a7692844815f1ed092df6f432033f6421f9737129cb3cc8b7d1f68366e3e1a05"
+    },
     {
       "id": "scenario-a-three-physical-hosts",
       "passed": false,
