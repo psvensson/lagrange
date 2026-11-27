@@ -52,6 +52,8 @@ const ERRORS = Object.freeze({
     'The carried operation batch exceeds the partition CDC capacity; no data changed',
   SERVING_ADMISSION_FENCED_FOR_REMOVAL:
     'Serving admission fenced for replica removal',
+  MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED:
+    'membership_recovery_retired_member_fenced',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
@@ -77,6 +79,7 @@ const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_CUTOVER_PAUSED,
   ERRORS.WRITE_CDC_CAPACITY,
   ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
+  ERRORS.MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED,
 ]);
 
 /**

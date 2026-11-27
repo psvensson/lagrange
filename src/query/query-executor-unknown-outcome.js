@@ -4,10 +4,10 @@ import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
 import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
-  isPartitionWriteFailureCode,
-  isRetryableWriteFailureCode,
   isWriteOutcomeUnknown,
 } from '../partition/partition-write-kernel.js';
+import {PARTICIPANT_TRANSACTION_FAILURE_CODE} from
+  '../partition/partition-participant-transaction-constants.js';
 import {QUERY_ERROR_CODE} from './query-constants.js';
 
 // The executor's partition delivery is the one owner that re-delivers a
@@ -47,23 +47,48 @@ const EXECUTOR_ENTRY_ID_PREFIX = 'qexec-';
 const STRING_TYPE = 'string';
 const FUNCTION_TYPE = 'function';
 
+const SETTLED_PARTICIPANT_STAGING_FAILURE_CODES = Object.freeze(new Set([
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.IDENTITY_REQUIRED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.IDENTITY_MISMATCH,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.ALREADY_ACTIVE,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.NOT_ACTIVE,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARING,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.SEALED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.TERMINAL,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARE_REFUSED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARE_CONTENT_CONFLICT,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.NOT_PREPARED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.COMMIT_REFUSED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.HISTORICAL_PREPARED_CONTRADICTION,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.DECISION_BINDING_REQUIRED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.DECISION_DIGEST_MISMATCH,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.DECISION_CONFLICT,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.SESSION_WRITE_PARAM_UNSUPPORTED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.SESSION_WRITE_NONDETERMINISTIC,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.STATEMENT_FAILED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.REPLAY_DIVERGED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.STALE_READ,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.REPLAY_BUDGET_EXCEEDED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.DETERMINISM_SELF_CHECK_FAILED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.UNREPLICATED_LOCAL_MUTATION,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.CONNECTION_SERVED_LEGACY,
+]));
+
 function isNonEmptyString(value) {
   return typeof value === STRING_TYPE && value.length > 0;
 }
 
-function isSettledWriteFailureAnswer(answer) {
+function isSettledWriteFailureAnswer(answer, isParticipantStagingWrite = false) {
   if (answer?.committed === true) {
     return true;
   }
-  if (answer?.deferRetry === true) {
+  if (!isParticipantStagingWrite || answer?.deferRetry === true) {
     return false;
   }
   if (answer?.errorCode === QUERY_ERROR_CODE.LOCK_NOT_AVAILABLE) {
     return true;
   }
-  return isNonEmptyString(answer?.failureCode) &&
-    !isPartitionWriteFailureCode(answer.failureCode) &&
-    !isRetryableWriteFailureCode(answer.failureCode);
+  return SETTLED_PARTICIPANT_STAGING_FAILURE_CODES.has(answer?.failureCode);
 }
 
 function resolveNonUnknownAnswerDecision(entryId, unresolved) {
@@ -143,7 +168,12 @@ function reportSpentWaitOnce(state, logger, failureResult, spentWait) {
  * @param {Function} options.now - The executor's clock.
  * @return {Object} The tracker.
  */
-function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
+function createUnknownOutcomeRedelivery({
+  entryId,
+  forRead,
+  isParticipantStagingWrite = false,
+  now,
+}) {
   const state = {
     deliveries: 0,
     unknownAnswers: 0,
@@ -182,7 +212,7 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
       if (forRead) {
         return UNKNOWN_OUTCOME_DECISION.NONE;
       }
-      if (isSettledWriteFailureAnswer(answer)) {
+      if (isSettledWriteFailureAnswer(answer, isParticipantStagingWrite)) {
         state.settled = true;
         return UNKNOWN_OUTCOME_DECISION.NONE;
       }

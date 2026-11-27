@@ -148,52 +148,48 @@ function readMetadataMemberBinding(service, replicaId, suppliedNodeId) {
 
 function resolveAuthoritativeMemberBinding(service, replicaId, suppliedNodeId) {
   const durable = readPartitionMemberBinding(service, replicaId);
+  if (durable !== null) {
+    if (isNonEmptyString(suppliedNodeId) && suppliedNodeId !== durable.nodeId) {
+      return Object.freeze({available: false, contradicted: true});
+    }
+    return Object.freeze({
+      available: true,
+      contradicted: false,
+      replicaId,
+      peerId: durable.peerId ?? deriveCanonicalPeerIdString(replicaId),
+      nodeId: durable.nodeId,
+      replicaCreatedAt: durable.replicaCreatedAt,
+      nodeBootIncarnation: durable.nodeBootIncarnation,
+    });
+  }
   const metadata = readMetadataMemberBinding(
     service,
     replicaId,
-    suppliedNodeId ?? durable?.nodeId ?? null,
+    suppliedNodeId ?? null,
   );
-  const durableCreatedAt = durable?.replicaCreatedAt ?? null;
   const metadataCreatedAt = metadata?.replicaCreatedAt ?? null;
-  const durableBoot = durable?.nodeBootIncarnation ?? null;
   const metadataBoot = metadata?.nodeBootIncarnation ?? null;
-  const durableNodeId = durable?.nodeId ?? null;
   const metadataNodeId = metadata?.nodeId ?? null;
-  const contradicted =
-    (isPositiveSafeInteger(durableCreatedAt) &&
-      isPositiveSafeInteger(metadataCreatedAt) &&
-      durableCreatedAt !== metadataCreatedAt) ||
-    (isPositiveSafeInteger(durableBoot) &&
-      isPositiveSafeInteger(metadataBoot) &&
-      durableBoot !== metadataBoot) ||
-    (isNonEmptyString(durableNodeId) &&
+  if (isNonEmptyString(suppliedNodeId) &&
       isNonEmptyString(metadataNodeId) &&
-      durableNodeId !== metadataNodeId);
-  if (contradicted) {
+      suppliedNodeId !== metadataNodeId) {
     return Object.freeze({available: false, contradicted: true});
   }
-  let effectiveNodeId = suppliedNodeId ?? null;
-  if (!isNonEmptyString(effectiveNodeId)) {
-    effectiveNodeId = isNonEmptyString(durableNodeId) ?
-      durableNodeId : metadataNodeId;
-  }
-  const replicaCreatedAt = isPositiveSafeInteger(durableCreatedAt) ?
-    durableCreatedAt : metadataCreatedAt;
-  const nodeBootIncarnation = isPositiveSafeInteger(durableBoot) ?
-    durableBoot : metadataBoot;
+  const effectiveNodeId = isNonEmptyString(suppliedNodeId) ?
+    suppliedNodeId : metadataNodeId;
   if (!isNonEmptyString(replicaId) || !isNonEmptyString(effectiveNodeId) ||
-      !isPositiveSafeInteger(replicaCreatedAt) ||
-      !isPositiveSafeInteger(nodeBootIncarnation)) {
+      !isPositiveSafeInteger(metadataCreatedAt) ||
+      !isPositiveSafeInteger(metadataBoot)) {
     return Object.freeze({available: false, contradicted: false});
   }
   return Object.freeze({
     available: true,
     contradicted: false,
     replicaId,
-    peerId: durable?.peerId ?? deriveCanonicalPeerIdString(replicaId),
+    peerId: deriveCanonicalPeerIdString(replicaId),
     nodeId: effectiveNodeId,
-    replicaCreatedAt,
-    nodeBootIncarnation,
+    replicaCreatedAt: metadataCreatedAt,
+    nodeBootIncarnation: metadataBoot,
   });
 }
 
@@ -386,24 +382,38 @@ function validateMembershipRecoveryIntentAtLogEntry(service, command, options = 
         sourceReservation.nodeId !== command.sourceNodeId)) {
     return Object.freeze({valid: false, failureCode: ERROR.SOURCE_NOT_VOTER});
   }
-  const binding = resolveAuthoritativeMemberBinding(
-    service, command.sourceReplicaId, command.sourceNodeId);
-  if (binding.contradicted === true) {
-    return Object.freeze({
-      valid: false,
-      failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
-    });
-  }
-  if (binding.available !== true) {
-    return Object.freeze({valid: false, failureCode: ERROR.BINDING_ABSENT});
-  }
-  if (binding.nodeId !== command.sourceNodeId ||
-      binding.nodeBootIncarnation !== command.sourceNodeBootIncarnation ||
-      binding.replicaCreatedAt !== command.sourceReplicaCreatedAt) {
-    return Object.freeze({
-      valid: false,
-      failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
-    });
+  if (options.checkPendingConfChange === true) {
+    const binding = resolveAuthoritativeMemberBinding(
+      service, command.sourceReplicaId, command.sourceNodeId);
+    if (binding.contradicted === true) {
+      return Object.freeze({
+        valid: false,
+        failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
+      });
+    }
+    if (binding.available !== true) {
+      return Object.freeze({valid: false, failureCode: ERROR.BINDING_ABSENT});
+    }
+    if (binding.nodeId !== command.sourceNodeId ||
+        binding.nodeBootIncarnation !== command.sourceNodeBootIncarnation ||
+        binding.replicaCreatedAt !== command.sourceReplicaCreatedAt) {
+      return Object.freeze({
+        valid: false,
+        failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
+      });
+    }
+  } else {
+    const durableBinding = readPartitionMemberBinding(
+      service.db, command.sourceReplicaId);
+    if (durableBinding !== null &&
+        (durableBinding.nodeId !== command.sourceNodeId ||
+          durableBinding.nodeBootIncarnation !== command.sourceNodeBootIncarnation ||
+          durableBinding.replicaCreatedAt !== command.sourceReplicaCreatedAt)) {
+      return Object.freeze({
+        valid: false,
+        failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
+      });
+    }
   }
   if (voters.includes(command.targetPeerId) ||
       (confState.votersOutgoing || []).map(String).includes(command.targetPeerId)) {

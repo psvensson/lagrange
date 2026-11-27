@@ -2,6 +2,15 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  PARTITION_MEMBERSHIP_RECOVERY_ERROR,
+} from '../../src/partition/partition-membership-recovery-constants.js';
+import {
+  markLocalReplicaExcludedFence,
+} from '../../src/partition/partition-membership-recovery.js';
+import {
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+} from '../../src/partition/partition-write-kernel.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
@@ -767,5 +776,226 @@ test(
       'participant_transaction_stale_read',
       'settled participant refusal preserves its typed failureCode instead of partition_write_outcome_unknown',
     );
+  },
+);
+
+test(
+  'a committed write whose answer is lost before the replica is exclusion-fenced ' +
+  'retains unknown-outcome custody across RETIRED_MEMBER_FENCED and recovers from a surviving replica',
+  async (t) => {
+    const replicaIds = ['counters-r1', 'counters-r2', 'counters-r3'];
+    const fencedReplica = createCounterPartition(replicaIds[0], replicaIds);
+    const survivingLeader = createCounterPartition(replicaIds[1], replicaIds);
+    await fencedReplica.initialize();
+    await survivingLeader.initialize();
+    for (const service of [fencedReplica, survivingLeader]) {
+      service.db
+        .prepare('INSERT INTO counters (id, value) VALUES (?, ?)')
+        .run(1, 0);
+      service.role = 'leader';
+      service.isLeader = true;
+      service.leaderId = service.replicaId;
+      service.controllablePort.setRole(RAFT_ROLE.LEADER);
+      await resumeFixtureParticipantAdmission(service);
+    }
+    // Replicate commits across both replicas so when entry E commits on fencedReplica
+    // before its answer is lost, survivingLeader also has E committed in its durable outcome table.
+    fencedReplica.controllablePort.setProposeHandler(async (entry) => {
+      fencedReplica.controllablePort.commit(entry);
+      survivingLeader.controllablePort.commit(entry);
+    });
+    survivingLeader.controllablePort.setProposeHandler(async (entry) => {
+      survivingLeader.controllablePort.commit(entry);
+    });
+
+    const fencedAddress = 'node-fenced/partition/counters-r1';
+    const survivingAddress = 'node-surviving/partition/counters-r2';
+    const servicesByAddress = new Map([
+      [fencedAddress, fencedReplica],
+      [survivingAddress, survivingLeader],
+    ]);
+    const deliveredAddresses = [];
+    const deliveredEntryIds = [];
+    let fencedDeliveryCount = 0;
+    const systemCache = buildMockSystemCache({
+      partitions: [{
+        partition_id: 'counters-p1',
+        table_name: 'counters',
+        leader_node_id: 'node-fenced',
+      }],
+      services: [
+        {
+          service_id: 'counters-r1',
+          service_type: 'partition',
+          partition_id: 'counters-p1',
+          node_id: 'node-fenced',
+          raft_role: 'leader',
+          address: fencedAddress,
+          status: 'active',
+        },
+        {
+          service_id: 'counters-r2',
+          service_type: 'partition',
+          partition_id: 'counters-p1',
+          node_id: 'node-surviving',
+          raft_role: 'follower',
+          address: survivingAddress,
+          status: 'active',
+        },
+      ],
+    });
+    const messageRouter = {
+      async deliver(address, message) {
+        deliveredAddresses.push(address);
+        deliveredEntryIds.push(message.entryId);
+        const service = servicesByAddress.get(address);
+        if (address === fencedAddress) {
+          fencedDeliveryCount += 1;
+          if (fencedDeliveryCount === 1) {
+            await service.handleRemoteQuery(message);
+            markLocalReplicaExcludedFence(fencedReplica, {
+              decisionId: 'recover-counters-p1',
+              partitionId: 'counters-p1',
+              sourceReplicaId: fencedReplica.replicaId,
+              sourceNodeId: 'node-fenced',
+              sourceNodeBootIncarnation: 1,
+              sourceReplicaCreatedAt: 1000,
+              configurationKey: 'v:1,2,3',
+              membershipGenerationIndex: 1,
+            });
+            return buildDeliveryEnvelope({
+              acknowledged: false,
+              error: 'Message timeout after write committed on soon-to-be-fenced replica',
+              errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+            });
+          }
+        }
+        const response = await service.handleRemoteQuery(message);
+        return buildDeliveryEnvelope({acknowledged: true}, response);
+      },
+    };
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter,
+      systemCache,
+    });
+    executor.leaderRetryDelayMs = 1;
+    const timeoutMs = 500;
+    const startedAtMs = Date.now();
+    const result = await executor.executeOnPartition(
+      'counters-p1',
+      'UPDATE counters SET value = value + 1 WHERE id = ?',
+      [1],
+      false,
+      false,
+      false,
+      {
+        entryId: 'entry-fenced-after-commit-1',
+        timeoutMs,
+        timeoutBudget: {
+          configuredBudgetMs: timeoutMs,
+          startedAtMs,
+          deadlineMs: startedAtMs + timeoutMs,
+        },
+      },
+    );
+
+    t.equal(
+      result.success,
+      true,
+      'QueryExecutor must not settle on RETIRED_MEMBER_FENCED and must recover the committed write from a surviving replica',
+    );
+    t.ok(
+      deliveredAddresses.includes(fencedAddress) &&
+        deliveredAddresses.includes(survivingAddress),
+      'QueryExecutor must widen from the exclusion-fenced replica to the surviving replica',
+    );
+    t.equal(
+      new Set(deliveredEntryIds).size,
+      1,
+      'all redeliveries must carry the exact same entryId',
+    );
+    t.equal(
+      survivingLeader.db.prepare('SELECT value FROM counters WHERE id = 1').get().value,
+      1,
+      'the non-idempotent UPDATE must be applied exactly once',
+    );
+
+    // Subcase 2: When no surviving replica is reachable before deadline after a fenced refusal
+    // on an unresolved write, QueryExecutor must surface OUTCOME_UNKNOWN, never RETIRED_MEMBER_FENCED.
+    const isolatedCache = buildMockSystemCache({
+      partitions: [{
+        partition_id: 'counters-p1',
+        table_name: 'counters',
+        leader_node_id: 'node-fenced',
+      }],
+      services: [{
+        service_id: 'counters-r1',
+        service_type: 'partition',
+        partition_id: 'counters-p1',
+        node_id: 'node-fenced',
+        raft_role: 'leader',
+        address: fencedAddress,
+        status: 'active',
+      }],
+    });
+    let isolatedAttempts = 0;
+    const isolatedExecutor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      systemCache: isolatedCache,
+      messageRouter: {
+        async deliver(_address, message) {
+          isolatedAttempts += 1;
+          if (isolatedAttempts === 1) {
+            return buildDeliveryEnvelope({
+              acknowledged: false,
+              error: 'Message timeout',
+              errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+            });
+          }
+          const fencedAnswer = await fencedReplica.handleRemoteQuery(message);
+          t.equal(
+            fencedAnswer.failureCode,
+            PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED,
+            'the fenced replica returns RETIRED_MEMBER_FENCED',
+          );
+          return buildDeliveryEnvelope({acknowledged: true}, fencedAnswer);
+        },
+      },
+    });
+    isolatedExecutor.leaderRetryDelayMs = 1;
+    const shortBudgetMs = 40;
+    const isolatedStartMs = Date.now();
+    const unresolvedResult = await isolatedExecutor.executeOnPartition(
+      'counters-p1',
+      'UPDATE counters SET value = value + 1 WHERE id = ?',
+      [1],
+      false,
+      false,
+      false,
+      {
+        entryId: 'entry-fenced-unresolved-deadline',
+        timeoutMs: shortBudgetMs,
+        timeoutBudget: {
+          configuredBudgetMs: shortBudgetMs,
+          startedAtMs: isolatedStartMs,
+          deadlineMs: isolatedStartMs + shortBudgetMs,
+        },
+      },
+    );
+    t.equal(unresolvedResult.success, false);
+    t.equal(
+      unresolvedResult.failureCode,
+      PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+      'deadline expiry after RETIRED_MEMBER_FENCED on an unresolved write must preserve OUTCOME_UNKNOWN',
+    );
+    t.equal(
+      unresolvedResult.entryId,
+      'entry-fenced-unresolved-deadline',
+      'OUTCOME_UNKNOWN answer must preserve the unresolved entryId',
+    );
+
+    await fencedReplica.shutdown();
+    await survivingLeader.shutdown();
   },
 );

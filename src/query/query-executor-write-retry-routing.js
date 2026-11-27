@@ -569,8 +569,12 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     const isPriorityControlPlaneWrite =
       !forRead && partitionClassification.priorityControlPlane;
     const isRemovalFencedFailure =
-      typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      failure.error.includes(ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL);
+      failure?.failureCode === ERRORS.MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED ||
+      (typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+        (failure.error.includes(ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL) ||
+          failure.error.includes(
+            ERRORS.MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED,
+          )));
     return this.buildControlPlaneWriteRetryDecision(
       evaluateControlPlaneWriteRetryDecision({
         isSystemTableWrite,

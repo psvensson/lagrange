@@ -83,8 +83,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameLatencyGroup);
     const executionOptions = withWriteEntryIdentity(deliveryOptions, forRead);
     const resolveNowMs = () => (this.nowFn ? this.nowFn() : this.timeSource.now());
+    const isParticipantStagingWrite = !forRead &&
+      Boolean(executionOptions?.transactionIdentity) &&
+      typeof executionOptions?.buildRequest !== 'function';
     const unknownOutcome = createUnknownOutcomeRedelivery({
-      entryId: executionOptions?.entryId ?? null, forRead,
+      entryId: executionOptions?.entryId ?? null,
+      forRead,
+      isParticipantStagingWrite,
       now: resolveNowMs,
     });
     const cancellationToken = executionOptions?.cancellationToken || null;
@@ -235,7 +240,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           unknownOutcome.observeTransport(deliveryTransportOf(delivery));
         },
         finishCommittedFailure: (answer, ticket) => buildFailureResult(answer.error, {
-          ...answer, participantAddress: ticket.address, participantNodeId: ticket.serviceInfo?.nodeId,
+          ...answer,
+          participantAddress: ticket.address,
+          participantNodeId: ticket.serviceInfo?.nodeId,
         }),
         buildSuccessResult,
         cancellationToken,

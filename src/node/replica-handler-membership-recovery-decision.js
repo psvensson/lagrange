@@ -10,7 +10,6 @@ import {
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
-  CDC_OPERATION,
   COLUMN,
   NODE_STATE,
   SERVICE_STATUS,
@@ -130,7 +129,13 @@ function hasAnyUnreachableOrDeadClusterNode(handler) {
     isClusterNodeRowUnreachableOrDead(handler, nodeRow));
 }
 
-function selectEligibleReplacementTargetNode(handler, partitionId, excludedNodeIds, nowMs) {
+function selectEligibleReplacementTargetNode(
+  handler,
+  partitionId,
+  excludedNodeIds,
+  nowMs,
+  leaderService = null,
+) {
   const cache = handler?.systemTableCache;
   if (!cache || !cache.getAll) return null;
   const operationRows = cache.getAll(TABLES.REPLICA_OPERATIONS) || [];
@@ -141,10 +146,15 @@ function selectEligibleReplacementTargetNode(handler, partitionId, excludedNodeI
     isNonEmptyString(row.target_node_id) &&
     !excludedNodeIds.has(row.target_node_id));
   const nodeRows = cache.getAll(TABLES.NODES) || [];
+  const observedBoots = leaderService?.observedTargetNodeBoots instanceof Map ?
+    leaderService.observedTargetNodeBoots : null;
   const eligibleNodes = [];
   for (const nodeRow of nodeRows) {
     const nodeId = nodeRow?.[COLUMN.NODE_ID];
-    const bootIncarnation = Number(nodeRow?.[COLUMN.BOOT_INCARNATION]);
+    const observedBoot = isNonEmptyString(nodeId) && observedBoots ?
+      Number(observedBoots.get(nodeId)) : null;
+    const bootIncarnation = isPositiveSafeInteger(observedBoot) ?
+      observedBoot : Number(nodeRow?.[COLUMN.BOOT_INCARNATION]);
     if (!isNonEmptyString(nodeId) || excludedNodeIds.has(nodeId) ||
          !isPositiveSafeInteger(bootIncarnation) ||
         observesCommittedNodeLossRow(nodeRow)) {
@@ -180,6 +190,57 @@ function selectEligibleReplacementTargetNode(handler, partitionId, excludedNodeI
     targetNodeBootIncarnation: eligibleNodes[0].bootIncarnation,
     targetReplicaId: null,
   } : null;
+}
+
+function isUnfinishedRecoveryTargetObsolete(
+  handler,
+  leaderService,
+  membership,
+  unfinished,
+) {
+  if (!unfinished) return false;
+  const committedPeers = new Set([
+    ...(membership.voters || []).map(String),
+    ...(membership.learners || []).map(String),
+    ...(membership.votersOutgoing || []).map(String),
+    ...(membership.learnersNext || []).map(String),
+  ]);
+  if (committedPeers.has(String(unfinished.targetPeerId))) {
+    return false;
+  }
+  if (leaderService?.supersededRecoveryDecisionIds instanceof Set &&
+      leaderService.supersededRecoveryDecisionIds.has(unfinished.decisionId)) {
+    return true;
+  }
+  const observedBoot = leaderService?.observedTargetNodeBoots instanceof Map ?
+    Number(leaderService.observedTargetNodeBoots.get(unfinished.targetNodeId)) :
+    null;
+  if (isPositiveSafeInteger(observedBoot) &&
+      observedBoot !== unfinished.targetNodeBootIncarnation) {
+    return true;
+  }
+  const nodeRow = handler?.systemTableCache?.get?.(
+    TABLES.NODES,
+    unfinished.targetNodeId,
+  ) ?? null;
+  if (!nodeRow) {
+    return false;
+  }
+  const cachedBoot = Number(nodeRow[COLUMN.BOOT_INCARNATION]);
+  if (isPositiveSafeInteger(cachedBoot) &&
+      cachedBoot !== unfinished.targetNodeBootIncarnation) {
+    return true;
+  }
+  if (observesCommittedNodeLossRow(nodeRow)) {
+    return true;
+  }
+  if (unfinished.targetNodeId !== handler?.nodeId &&
+      !hasLiveTransportEvidence(unfinished.targetNodeId, {
+        messageRouter: handler?.messageRouter,
+      })) {
+    return true;
+  }
+  return false;
 }
 
 function resolvePeerNodeIdFromMetadata(handler, membership, status, peerId, replicaId) {
@@ -218,14 +279,25 @@ async function planAutonomousPermanentLossRecovery(
   if (status?.role !== RAFT_ROLE.LEADER || status.confChangePending === true) {
     return Object.freeze({plan: null, pendingExpiry: false});
   }
+  const nowMs = handler.timeSource.now();
   const voterPeerIds = (membership.voters || []).map(String);
   const existingRecoveries = readCommittedMembershipRecoveriesIn(leaderService);
-  const unfinished = existingRecoveries.find((record) =>
+  const activeVoterRecoveries = existingRecoveries.filter((record) =>
     voterPeerIds.includes(record.sourcePeerId));
+  const unfinished = activeVoterRecoveries.length > 0 ?
+    activeVoterRecoveries[activeVoterRecoveries.length - 1] : null;
+  let supersededDecisionId = null;
   if (unfinished) {
-    return Object.freeze({plan: unfinished, pendingExpiry: false});
+    if (!isUnfinishedRecoveryTargetObsolete(
+      handler,
+      leaderService,
+      membership,
+      unfinished,
+    )) {
+      return Object.freeze({plan: unfinished, pendingExpiry: false});
+    }
+    supersededDecisionId = unfinished.decisionId;
   }
-  const nowMs = handler.timeSource.now();
   let sourcePeerId = null;
   let sourceReplicaId = null;
   let sourceNodeId = null;
@@ -276,7 +348,7 @@ async function planAutonomousPermanentLossRecovery(
     if (isNonEmptyString(nodeId)) occupiedNodeIds.add(nodeId);
   }
   const targetSelection = selectEligibleReplacementTargetNode(
-    handler, leaderService.partitionId, occupiedNodeIds, nowMs);
+    handler, leaderService.partitionId, occupiedNodeIds, nowMs, leaderService);
   if (!targetSelection) {
     return Object.freeze({plan: null, pendingExpiry: true});
   }
@@ -286,10 +358,14 @@ async function planAutonomousPermanentLossRecovery(
   }) ?? null;
   const existingLearnerReplicaId = existingLearnerPeerId ?
     membership.identities?.[existingLearnerPeerId] ?? null : null;
+  const supersessionSuffix = isNonEmptyString(supersededDecisionId) ?
+    `:targetBoot=${targetSelection.targetNodeBootIncarnation}:` +
+    `supersedes=${supersededDecisionId}` :
+    '';
   const digest = sha256Hex(
     `${leaderService.partitionId}:${membership.configurationKey}:` +
     `${membership.membershipGenerationIndex}:${sourceReplicaId}:` +
-    `${targetSelection.targetNodeId}`,
+    `${targetSelection.targetNodeId}${supersessionSuffix}`,
   ).slice(0, DEFAULT_VALUE.DECISION_DIGEST_SLICE_LEN);
   const decisionId =
     `membership-recovery-${leaderService.partitionId}-` +
@@ -298,7 +374,8 @@ async function planAutonomousPermanentLossRecovery(
   let targetReplicaId = `replace-replica-${digest}`;
   if (isNonEmptyString(existingLearnerReplicaId)) {
     targetReplicaId = existingLearnerReplicaId;
-  } else if (isNonEmptyString(targetSelection.targetReplicaId)) {
+  } else if (isNonEmptyString(targetSelection.targetReplicaId) &&
+      targetSelection.targetReplicaId !== unfinished?.targetReplicaId) {
     targetReplicaId = targetSelection.targetReplicaId;
   }
   const defaultCreatedAt = sourceBinding.replicaCreatedAt + 1 +
@@ -363,32 +440,6 @@ function resolveTableSchemaForRecovery(handler, request) {
       JSON.parse(tableRow.schema_json) : tableRow.schema_json;
   }
   return null;
-}
-
-function seedTargetServiceMetadataRow(handler, service, status, raftRole, createdAt) {
-  const cache = handler?.systemTableCache;
-  if (!cache || !cache.applySystemTableChange) return;
-  const nowMs = handler.timeSource.now();
-  const existing = cache.get?.(TABLES.SERVICES, service.replicaId) ?? null;
-  const row = {
-    ...(existing || {}),
-    service_id: service.replicaId,
-    replica_id: service.replicaId,
-    partition_id: service.partitionId,
-    service_type: SERVICE_TYPE.PARTITION,
-    node_id: handler.nodeId,
-    address: service.unifiedAddress,
-    status,
-    raft_role: raftRole,
-    created_at: isPositiveSafeInteger(createdAt) ?
-      createdAt : (existing?.created_at ?? nowMs),
-    updated_at: nowMs,
-  };
-  cache.applySystemTableChange(
-    TABLES.SERVICES,
-    existing ? CDC_OPERATION.UPDATE : CDC_OPERATION.INSERT,
-    row,
-  );
 }
 
 function buildRecoveryStorageOption(handler, partitionId, replicaId) {
@@ -462,6 +513,7 @@ async function handleMaterializeRecoveryLearner(handler, request) {
         error: ERROR.SOURCE_GENERATION_MISMATCH,
         failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
         nodeId: handler.nodeId,
+        actualTargetNodeBootIncarnation: handler.ownerIncarnation,
       },
     );
   }
@@ -521,12 +573,11 @@ async function handleMaterializeRecoveryLearner(handler, request) {
     nodeBootIncarnation: targetNodeBootIncarnation,
     replicaCreatedAt: targetReplicaCreatedAt,
   });
-  seedTargetServiceMetadataRow(
-    handler,
-    service,
+  handler.seedLocalPriorityServiceRow?.(
+    service.replicaId,
+    service.partitionId,
     ReplicaStatus.SYNCING,
-    RAFT_ROLE.LEARNER,
-    targetReplicaCreatedAt,
+    {markLocalOnly: false},
   );
   return handler.buildReplicaOperationResponse(
     ReplicaOperationResponseStatus.COMPLETED,
@@ -568,13 +619,13 @@ async function handleObserveRecoveryLearner(handler, request) {
       status: ReplicaStatus.ACTIVE,
       service,
     });
-    seedTargetServiceMetadataRow(
-      handler,
-      service,
+    handler.seedLocalPriorityServiceRow?.(
+      service.replicaId,
+      service.partitionId,
       SERVICE_STATUS.ACTIVE,
-      RAFT_ROLE.FOLLOWER,
-      request.targetReplicaCreatedAt,
+      {markLocalOnly: false},
     );
+    handler.seedLocalReplicaVoterRaftRole?.(service.replicaId);
     service.reassertDurableRaftRole?.();
   }
   return handler.buildReplicaOperationResponse(
@@ -602,11 +653,9 @@ function persistRecoveredServicesRowsAsync(
   leaderService = null,
 ) {
   const gateway = resolveRecoveryMetadataGateway(handler);
-  const cache = handler?.systemTableCache;
   const nowMs = Number(handler?.timeSource?.now?.() ?? Date.now());
   const resolvedAddress = isNonEmptyString(targetAddress) ?
-    targetAddress :
-    `${recovery.targetNodeId}/partition/${recovery.targetReplicaId}`;
+    targetAddress : `${recovery.targetNodeId}/partition/${recovery.targetReplicaId}`;
   const targetRow = {
     service_id: recovery.targetReplicaId,
     replica_id: recovery.targetReplicaId,
@@ -620,94 +669,105 @@ function persistRecoveredServicesRowsAsync(
     state_entered_at: recovery.targetReplicaCreatedAt,
     updated_at: nowMs,
   };
-  if (cache && cache.applySystemTableChange) {
-    const existingTarget =
-      cache.get?.(TABLES.SERVICES, recovery.targetReplicaId) ?? null;
-    cache.applySystemTableChange(
-      TABLES.SERVICES,
-      existingTarget ? CDC_OPERATION.UPDATE : CDC_OPERATION.INSERT,
-      {
-        ...(existingTarget || {}),
-        ...targetRow,
-      },
-    );
-    const existingSource =
-      cache.get?.(TABLES.SERVICES, recovery.sourceReplicaId) ?? null;
-    if (existingSource) {
-      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE, {
-        ...existingSource,
-        service_id: recovery.sourceReplicaId,
-      });
-    }
-  }
-  if (!gateway ||
-      !gateway.submitMutation ||
-      !gateway.deleteSystemTableRow) {
-    return;
+  if (!gateway || !gateway.submitMutation || !gateway.deleteSystemTableRow) {
+    return Promise.resolve(false);
   }
   const writeOptions = {
     workClass: PRESSURE_WORK_CLASS.CRITICAL,
     deliveryPriority: DEFAULT_VALUE.DELIVERY_PRIORITY_CRITICAL,
   };
-  void Promise.resolve().then(async () => {
+  return Promise.resolve().then(async () => {
     let targetPersisted = false;
     try {
       const updatedAt = Number(handler?.timeSource?.now?.() ?? Date.now());
-      const inserted = await gateway.submitMutation(
-        {
-          operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
-          tableName: SYSTEM_TABLE_NAME.SERVICES,
-          row: {
-            ...targetRow,
-            updated_at: updatedAt,
-          },
-        },
-        {...writeOptions, ignoreExisting: true},
-      );
-      if (inserted?.success !== false) {
-        targetPersisted = true;
+      const inserted = await gateway.submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: SYSTEM_TABLE_NAME.SERVICES,
+        row: {...targetRow, updated_at: updatedAt},
+      }, {...writeOptions, ignoreExisting: true});
+      let updatedOk = true;
+      if (typeof gateway.updateSystemTableRow === 'function') {
+        const updated = await gateway.updateSystemTableRow(
+          SYSTEM_TABLE_NAME.SERVICES,
+          {service_id: recovery.targetReplicaId, node_id: recovery.targetNodeId},
+          {status: SERVICE_STATUS.ACTIVE, raft_role: RAFT_ROLE.FOLLOWER, updated_at: updatedAt},
+          writeOptions,
+        );
+        if (updated?.success === false) updatedOk = false;
       }
-      await gateway.updateSystemTableRow?.(
-        SYSTEM_TABLE_NAME.SERVICES,
-        {
-          service_id: recovery.targetReplicaId,
-          node_id: recovery.targetNodeId,
-        },
-        {
-          status: SERVICE_STATUS.ACTIVE,
-          raft_role: RAFT_ROLE.FOLLOWER,
-          updated_at: updatedAt,
-        },
-        writeOptions,
-      );
+      if (inserted?.success !== false && updatedOk) targetPersisted = true;
     } catch (error) {
       handler.logger?.debug?.(ERROR.CONFIGURATION_IN_TRANSITION, {
-        partitionId: recovery.partitionId,
-        error: error?.message ?? String(error),
+        partitionId: recovery.partitionId, error: error?.message ?? String(error),
       });
     }
     let sourceDeleted = false;
     try {
       const deleted = await gateway.deleteSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        {
-          service_id: recovery.sourceReplicaId,
-        },
-        writeOptions,
+        SYSTEM_TABLE_NAME.SERVICES, {service_id: recovery.sourceReplicaId}, writeOptions,
       );
-      if (deleted?.success !== false) {
-        sourceDeleted = true;
-      }
+      if (deleted?.success !== false) sourceDeleted = true;
     } catch (error) {
       handler.logger?.debug?.(ERROR.CONFIGURATION_IN_TRANSITION, {
-        partitionId: recovery.partitionId,
-        error: error?.message ?? String(error),
+        partitionId: recovery.partitionId, error: error?.message ?? String(error),
       });
     }
-    if (leaderService && targetPersisted && sourceDeleted) {
-      leaderService.lastCompletedMembershipRecoveryPersisted = true;
+    const published = targetPersisted && sourceDeleted;
+    if (leaderService && published) {
+      leaderService.persistedCompletedRecoveryDecisionIds ??= new Set();
+      leaderService.persistedCompletedRecoveryDecisionIds.add(recovery.decisionId);
+      if (leaderService.lastCompletedMembershipRecovery?.decisionId === recovery.decisionId) {
+        leaderService.lastCompletedMembershipRecoveryPersisted = true;
+      }
     }
+    return published;
   });
+}
+
+function needsCompletedRecoveryPublication(handler, leaderService, record) {
+  const persistedSet = leaderService?.persistedCompletedRecoveryDecisionIds;
+  if (!(persistedSet instanceof Set) || !persistedSet.has(record.decisionId)) return true;
+  const cache = handler?.systemTableCache;
+  if (!cache || typeof cache.get !== 'function') return false;
+  if ((cache.get(TABLES.SERVICES, record.sourceReplicaId) ?? null) !== null) return true;
+  const targetRow = cache.get(TABLES.SERVICES, record.targetReplicaId) ?? null;
+  return targetRow === null || targetRow[COLUMN.STATUS] !== SERVICE_STATUS.ACTIVE;
+}
+
+async function reconcileCompletedMembershipRecoveryPublications(
+  handler,
+  leaderService,
+  membership = null,
+) {
+  if (!leaderService || leaderService.isShutdown) {
+    return Object.freeze({pendingPublication: false});
+  }
+  const resolvedMembership = membership ?? await readPartitionCommittedMembership(
+    leaderService, COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT,
+  );
+  if (resolvedMembership?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
+    return Object.freeze({pendingPublication: false});
+  }
+  const voterPeerIds = new Set((resolvedMembership.voters || []).map(String));
+  const completedRecoveries = readCommittedMembershipRecoveriesIn(leaderService).filter((record) =>
+    voterPeerIds.has(String(record.targetPeerId)) &&
+    !voterPeerIds.has(String(record.sourcePeerId)));
+  if (completedRecoveries.length === 0) return Object.freeze({pendingPublication: false});
+  let pendingPublication = false;
+  const gateway = resolveRecoveryMetadataGateway(handler);
+  for (const record of completedRecoveries) {
+    if (!needsCompletedRecoveryPublication(handler, leaderService, record)) continue;
+    leaderService.lastCompletedMembershipRecovery = record;
+    leaderService.lastCompletedMembershipRecoveryPersisted = false;
+    const published = await persistRecoveredServicesRowsAsync(
+      handler, record, `${record.targetNodeId}/partition/${record.targetReplicaId}`, leaderService,
+    );
+    if (!published && gateway && typeof gateway.submitMutation === 'function' &&
+        typeof gateway.deleteSystemTableRow === 'function') {
+      pendingPublication = true;
+    }
+  }
+  return Object.freeze({pendingPublication});
 }
 
 export {
@@ -718,5 +778,6 @@ export {
   observeRecoveryTargetReplica,
   persistRecoveredServicesRowsAsync,
   planAutonomousPermanentLossRecovery,
+  reconcileCompletedMembershipRecoveryPublications,
   selectEligibleReplacementTargetNode,
 };
