@@ -172,15 +172,30 @@ const distributedTransactionParticipantSetMethods = {
   },
 
   async freezeParticipantSet(tx, options = {}) {
-    if (Array.isArray(tx.pendingWriteOperationPersists) &&
-        tx.pendingWriteOperationPersists.length > 0) {
-      const pending = tx.pendingWriteOperationPersists.splice(0);
-      await settleAllOrThrow(pending);
-    }
+    const flushBufferedWriteOps =
+      Array.isArray(tx.pendingWriteOperationRecords) &&
+      tx.pendingWriteOperationRecords.length > 0 ?
+        this.flushPendingWriteOperationRecords(tx) :
+        Promise.resolve();
+    const pendingPersists =
+      Array.isArray(tx.pendingWriteOperationPersists) &&
+      tx.pendingWriteOperationPersists.length > 0 ?
+        tx.pendingWriteOperationPersists.splice(0) :
+        [];
+    const drainBookkeepingPromise = settleAllOrThrow([
+      flushBufferedWriteOps,
+      ...pendingPersists,
+    ]);
     const pairs = readParticipantSet(tx.transactionId, tx.participantSetText);
     if (!pairs || pairs.length !== tx.participants.size ||
-        pairs.some((pair) => !tx.participants.has(pair[1]))) throw incompleteParticipantSet();
-    if (tx.participantSetState === PARTICIPANT_SET_STATE.FROZEN) return;
+        pairs.some((pair) => !tx.participants.has(pair[1]))) {
+      await drainBookkeepingPromise;
+      throw incompleteParticipantSet();
+    }
+    if (tx.participantSetState === PARTICIPANT_SET_STATE.FROZEN) {
+      await drainBookkeepingPromise;
+      return;
+    }
     const decidedAt = this.now();
     const baseFrozen = buildFrozenTransactionDecision({
       transactionMode: tx.transactionMode,
@@ -190,7 +205,10 @@ const distributedTransactionParticipantSetMethods = {
     const frozen = shouldAdvanceFrozenSetToPreparing(this, tx, pairs.length, options) ?
       {...baseFrozen, status: TRANSACTION_STATUS.PREPARING, updatedAt: decidedAt} :
       baseFrozen;
-    await this.persistAdmittedParticipantSet(tx, {...tx, ...frozen});
+    await settleAllOrThrow([
+      drainBookkeepingPromise,
+      this.persistAdmittedParticipantSet(tx, {...tx, ...frozen}),
+    ]);
     Object.assign(tx, frozen);
   },
 

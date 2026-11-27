@@ -1237,7 +1237,7 @@ test('committed recovery application is deterministic across divergent voter met
   // Wait a tick so inFlightOldPublish passes the pre-check and is suspended inside submitMutation(INSERT D).
   await new Promise((resolve) => setTimeout(resolve, 20));
   // Old publisher fails before compensation!
-  crashedLeaderHandler.shuttingDown = true;
+  await crashedLeaderHandler.shutdown();
   fakeOldLeaderView.isShutdown = true;
   // Meanwhile, New Leader (successorLeader / successorHandler) commits and publishes R2 (D -> E) retiring D!
   const r2Record = {

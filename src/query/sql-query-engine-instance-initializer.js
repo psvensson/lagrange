@@ -63,7 +63,9 @@ function bindSchemaJobGsiCompletionHandler(engine) {
   }
   if (owner?.setSucceededGlobalIndexRecoveryHandler) {
     owner.setSucceededGlobalIndexRecoveryHandler(
-      () => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.({ordinaryDiscovery: true}),
+      () => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.(
+        {ordinaryDiscovery: true},
+      ),
     );
   }
 }
@@ -376,6 +378,13 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
           ...record,
           workClass: PRESSURE_WORK_CLASS.CRITICAL,
         }),
+      persistWriteOperationsBatch: async (records) =>
+        engine.persistDistributedWriteOperationRowsBatch(
+          records.map((record) => ({
+            ...record,
+            workClass: PRESSURE_WORK_CLASS.CRITICAL,
+          })),
+        ),
       persistTransactionDecision: async (record) =>
         engine.persistDistributedTransactionDecision(record),
       persistTransactionParticipantSet: async (record, previousText) =>

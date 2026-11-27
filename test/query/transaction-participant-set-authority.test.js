@@ -689,11 +689,15 @@ test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert 
       'upsertParticipant(ACTIVE) must start concurrently with executeWrite');
     assert.equal(writeOutcomeBeforePersistReleased, 0,
       'sql_write_operations persistence waits until concurrent upsertParticipant(ACTIVE) and executeWrite settle');
-    assert.equal(gateway.rows('sql_write_operations')[0].status, 'SUCCEEDED');
+    assert.equal(
+      coordinator.getTransaction('overlap-tx').writeOperations[0].status,
+      'SUCCEEDED',
+    );
 
     // Mixed read+write COMMIT must persist status='COMMITTED' concurrently while p-ro rollback RPC is blocked.
     const commitPromise = coordinator.commit('overlap-tx');
     await roReleaseStarted.promise;
+    assert.equal(gateway.rows('sql_write_operations')[0].status, 'SUCCEEDED');
     assert.equal(gateway.rows('sql_transactions')[0].status, 'COMMITTED',
       'COMMITTED status update must overlap with releaseReadOnlyParticipants without waiting for p-ro RPC');
     releaseRoRollback.resolve();

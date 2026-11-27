@@ -651,6 +651,57 @@ const sqlQueryEngineTransactionPersistenceMethods = {
       );
     }
   },
+
+  /**
+   * Persist a bounded batch of distributed write operation rows for one
+   * transaction in a single UPSERT_BATCH mutation.
+   * @param {Object[]} records - Write operation persistence payloads.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistDistributedWriteOperationRowsBatch(records) {
+    if (!this.canPersistDistributedTransactionState() ||
+        !Array.isArray(records) ||
+        records.length === 0) {
+      return;
+    }
+    if (records.length === 1) {
+      await this.persistDistributedWriteOperationRow(records[0]);
+      return;
+    }
+    const transactionId = trimmedString(records[0]?.transactionId);
+    const workClass = resolveWriteOperationWorkClass(records[0]);
+    const rows = records.map((record) =>
+      buildWriteOperationRowPayload(
+        trimmedString(record?.operationId),
+        trimmedString(record?.transactionId) || transactionId,
+        record,
+      ));
+    const coalescingKey = transactionId.length > 0 ?
+      `${SQL_WRITE_OPERATION_COALESCING_PREFIX}${transactionId}` :
+      null;
+    const startedAtMs = resolveNowMs();
+    try {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT_BATCH,
+        tableName: TABLES.SQL_WRITE_OPERATIONS,
+        rows,
+      }, this.buildDistributedTransactionMutationOptions(
+        TABLES.SQL_WRITE_OPERATIONS,
+        {workClass, coalescingKey},
+      ));
+      this.assertDistributedTransactionMutationSucceeded(
+        result,
+        TABLES.SQL_WRITE_OPERATIONS,
+      );
+    } finally {
+      this.transactionCoordinator?.noteMetadataPersistElapsed?.(
+        transactionId,
+        TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME,
+        Math.max(0, resolveNowMs() - startedAtMs),
+      );
+    }
+  },
 };
 
 const METHOD_BAG_CONSTRUCTOR_KEY = 'constructor';

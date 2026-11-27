@@ -1,7 +1,11 @@
 // Durable store, generation bindings, log-entry validation, and excluded-member
 // fencing for group-bound permanent member loss recovery.
 
-import {CDC_OPERATIONS, COLUMN, TABLES} from '../constants/index.js';
+import {
+  CDC_OPERATION,
+  COLUMN,
+  TABLES,
+} from '../constants/index.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
 import {raftRsConfStateKey} from '../raft/raft-rs-conf-state-key.js';
 import {
@@ -454,7 +458,7 @@ function prepareRecoveryFenceHolder(holder) {
     const baseApply = holder.applySystemTableChange.bind(holder);
     holder.applySystemTableChange = (tableName, operation, row, options) => {
       if (tableName === TABLES.SERVICES &&
-          operation !== CDC_OPERATIONS.DELETE &&
+          operation !== CDC_OPERATION.DELETE &&
           isExcludedRecoveryServiceReplica(row?.service_id, Number(row?.created_at), holder)) {
         return false;
       }

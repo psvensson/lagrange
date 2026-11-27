@@ -54,6 +54,9 @@ import {
   persistParticipants,
   persistParticipantRecord,
   persistWriteOperationRecord,
+  persistWriteOperationRecordsBatch,
+  enqueueBufferedWriteOperationRecord,
+  flushPendingWriteOperationRecords,
   createTransactionId,
   createParticipantId,
   createWritePayloadHash,
@@ -82,29 +85,6 @@ import {admitExpectedTransaction, STATEMENT_ADMISSION} from
  * Distributed transaction coordinator with participant state persistence hooks.
  */
 class DistributedTransactionCoordinator {
-  /**
-   * @param {Object} options - Coordinator options.
-   * @param {Function} options.beginParticipant - Begin callback.
-   * @param {Function} [options.prepareParticipant] - Prepare callback.
-   * @param {Function} options.commitParticipant - Commit callback.
-   * @param {Function} options.rollbackParticipant - Rollback callback.
-   * @param {Function} [options.persistTransaction] - Persist tx row callback.
-   * @param {Function} [options.persistParticipant] - Persist participant callback.
-   * @param {Function} [options.persistWriteOperation] - Persist write op callback.
-   * @param {Function} [options.persistTransactionDecision] - Record the
-   *   transaction's insert-once decision; throws when one is already
-   *   recorded or the write's outcome is unknown.
-   * @param {Function} [options.readTransactionDecision] - Read the recorded
-   *   decision row of a transaction (null when none is readable).
-   * @param {Function} [options.epochSource] - Monotonic transaction epoch source.
-   * @param {number} [options.transactionBudgetMs] - Transaction timeout budget.
-   * @param {number} [options.participantRetryMaxRetries] - Retry attempts.
-   * @param {number} [options.participantRetryBaseDelayMs] - Retry base delay.
-   * @param {number} [options.participantRetryMaxDelayMs] - Retry max delay.
-   * @param {Function} [options.sleep] - Async sleep hook.
-   * @param {Function} [options.onParticipantRetry] - Retry diagnostic hook.
-   * @param {Function} [options.now] - Clock function.
-   */
   constructor(options = {}) {
     this.beginParticipant = options.beginParticipant || (async () => {});
     this.prepareParticipant = options.prepareParticipant || (async () => {});
@@ -114,6 +94,13 @@ class DistributedTransactionCoordinator {
     this.persistParticipant = options.persistParticipant || (async () => {});
     this.persistWriteOperation =
       options.persistWriteOperation || (async () => {});
+    this.persistWriteOperationsBatch =
+      options.persistWriteOperationsBatch ||
+      (async (records) => {
+        for (const record of records) {
+          await this.persistWriteOperation(record);
+        }
+      });
     this.persistTransactionParticipantSet = options.persistTransactionParticipantSet ||
       (async () => {});
     this.readTransactionRecoveryState = options.readTransactionRecoveryState || null;
@@ -424,6 +411,8 @@ class DistributedTransactionCoordinator {
       participants: new Map(),
       readOnlyParticipants: new Map(),
       writeOperations: [],
+      pendingWriteOperationRecords: [],
+      pendingWriteOperationBytes: 0,
       pendingWriteOperationPersists: [],
       telemetry: createTransactionTelemetry(transactionId, sessionId),
       createdAt: now,
@@ -505,8 +494,23 @@ class DistributedTransactionCoordinator {
     if (!operation) return;
     this.applyWriteOperationOutcome(operation, result, this.now());
     tx.updatedAt = operation.updatedAt;
+    if (options.deferPersistenceAwait === true) {
+      if (this.enqueueBufferedWriteOperationRecord(tx, operation)) {
+        this.enqueueDeferredWriteOperationPersist(
+          tx,
+          this.flushPendingWriteOperationRecords(tx),
+        );
+      }
+      return;
+    }
+    if (Array.isArray(tx.pendingWriteOperationRecords) &&
+        tx.pendingWriteOperationRecords.length > 0) {
+      this.enqueueBufferedWriteOperationRecord(tx, operation);
+      await this.flushPendingWriteOperationRecords(tx);
+      return;
+    }
     this.noteMetadataMutation?.(tx);
-    const persistPromise = Promise.resolve(
+    await Promise.resolve(
       this.persistWriteOperationRecord(tx, operation),
     ).catch((persistErr) => {
       this.logger?.warn?.(QUERY_LOG_MSG.DISTRIBUTED_TX_METADATA_PERSIST_WARN, {
@@ -515,11 +519,6 @@ class DistributedTransactionCoordinator {
         error: persistErr?.message || String(persistErr),
       });
     });
-    if (options.deferPersistenceAwait === true) {
-      this.enqueueDeferredWriteOperationPersist(tx, persistPromise);
-      return;
-    }
-    await persistPromise;
   }
 
 
@@ -610,22 +609,11 @@ class DistributedTransactionCoordinator {
       this.runRollbackProtocol(tx);
   }
 
-  /**
-   * Return transaction metadata for one session.
-   * @param {string} sessionId - Session ID.
-   * @return {Object|null} Transaction metadata.
-   */
   getTransaction(sessionId) {
     const tx = this.transactionsBySession.get(sessionId);
     return tx ? this.transactionMetadataOf(tx) : null;
   }
 
-  /**
-   * The metadata projection of one transaction's state.
-   * @param {Object} tx - Transaction state.
-   * @return {Object} Transaction metadata.
-   * @private
-   */
   transactionMetadataOf(tx) {
     return {
       sessionId: tx.sessionId,
@@ -647,12 +635,6 @@ class DistributedTransactionCoordinator {
     };
   }
 
-  /**
-   * Check if a session has an active transaction: one the session began.
-   * An obligation recovery discovered is never one (its owner is recovery).
-   * @param {string} sessionId - Session ID.
-   * @return {boolean} Active transaction state.
-   */
   hasActiveTransaction(sessionId) {
     return this.transactionsBySession.has(sessionId);
   }
@@ -733,6 +715,18 @@ class DistributedTransactionCoordinator {
 
   async persistWriteOperationRecord(tx, operation) {
     return persistWriteOperationRecord.call(this, tx, operation);
+  }
+
+  async persistWriteOperationRecordsBatch(tx, operations) {
+    return persistWriteOperationRecordsBatch.call(this, tx, operations);
+  }
+
+  enqueueBufferedWriteOperationRecord(tx, operation) {
+    return enqueueBufferedWriteOperationRecord.call(this, tx, operation);
+  }
+
+  flushPendingWriteOperationRecords(tx) {
+    return flushPendingWriteOperationRecords.call(this, tx);
   }
 
   createTransactionId(sessionId) {

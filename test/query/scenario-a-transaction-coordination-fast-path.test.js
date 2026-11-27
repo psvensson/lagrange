@@ -124,14 +124,25 @@ test('Scenario A fast path: payment transaction breakdown tracer and Priority 1 
   );
   assert.equal(
     secondMutations.filter((m) => m.tableName === 'sql_write_operations').length,
-    1,
-    'sql_write_operations persisted once with final outcome',
+    0,
+    'interactive write statements buffer sql_write_operations outcomes for batch flush at freeze',
   );
   assert.equal(secondMutations.length <= 2, true);
   assert.equal(authoritativeReadCount - readsBeforeSecond, 0);
 
   const committed = await coordinator.commit('payment-session');
   assert.equal(committed.success, true);
+
+  const writeOpMutations = gateway.mutations.filter(
+    (m) => m.tableName === 'sql_write_operations',
+  );
+  assert.equal(
+    writeOpMutations.length,
+    1,
+    'buffered write operations flush in one UPSERT_BATCH submission at manifest freeze',
+  );
+  assert.equal(writeOpMutations[0].operation, 'upsert_batch');
+  assert.equal(writeOpMutations[0].rows?.length, 2);
 
   const breakdown = coordinator.getLastTransactionBreakdown(begun.transactionId);
   assert.equal(Boolean(breakdown), true);
@@ -147,6 +158,30 @@ test('Scenario A fast path: payment transaction breakdown tracer and Priority 1 
 
   const summary = coordinator.getTransactionTelemetrySummary();
   assert.equal(summary.transactionCount, 1);
+
+  const selectSql = 'SELECT 1 AS ok WHERE 1 = $1';
+  const descResult = await engine.describeSqlRequest({
+    executionMode: 'describe',
+    statement: selectSql,
+    parameters: [],
+    dialect: 'postgresql',
+    sessionId: 'payment-session',
+  });
+  assert.equal(descResult.success, true);
+  const cachedReadOnlyAst = engine.parseCache.peekReadOnly(selectSql, 'postgresql');
+  assert.equal(Boolean(cachedReadOnlyAst), true);
+  const tableSelectSql = 'SELECT id, ytd_cents FROM warehouse WHERE id = $1';
+  engine.parseCache.set(
+    tableSelectSql,
+    'postgresql',
+    new SQLParser(tableSelectSql, {dialect: 'postgresql'}).parse(),
+  );
+  const selectAst = engine.parseCache.get(tableSelectSql, 'postgresql');
+  const template1 = engine.distributedQueryPlanner.resolveStructuralTemplate(selectAst);
+  const template2 = engine.distributedQueryPlanner.resolveStructuralTemplate(selectAst);
+  assert.equal(Boolean(template1), true);
+  assert.equal(template1, template2);
+  assert.equal(engine.distributedQueryPlanner.structuralTemplates.size >= 1, true);
 });
 
 test('Scenario A fast path: Priority 2 concurrent participant phases while DurableWorkflowCoordinator stays sequential', async () => {
