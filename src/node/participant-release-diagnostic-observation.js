@@ -1,6 +1,7 @@
 // Bounded observations for the existing participant-release interaction.
 // These values explain a refusal; they never decide release, drain, retry,
 // admission, recovery, or deadline policy.
+import {performance} from 'node:perf_hooks';
 import {types} from 'node:util';
 import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME} from
   '../partition/partition-participant-transaction-cutover-constants.js';
@@ -272,16 +273,65 @@ function participantReleaseSeedBudgetObservation(start, terminal, budgetMs) {
     remainingMs: clockState === CLOCK_STATE.MEASURED ? remainingMs : null});
 }
 
+const releaseTraces = new WeakMap();
+
+function bindReleaseTrace(key, trace) {
+  if (trace) releaseTraces.set(key, trace);
+}
+
+function releaseTrace(key) {
+  return releaseTraces.get(key);
+}
+
+function recordReleaseHop(trace, phase, hop) {
+  if (!trace) return;
+  const group = trace.hops[phase] ??= {count: 0, slowest: null, last: null};
+  group.count++;
+  if (!group.slowest || hop.elapsedMs > group.slowest.elapsedMs) group.slowest = hop;
+  group.last = hop;
+}
+
+async function observeReleaseReceiver(handler, envelope, request, execute) {
+  const action = request.action;
+  if (![
+    PARTICIPANT_RELEASE_ACTION.RELEASE,
+    PARTICIPANT_RELEASE_ACTION.INSPECT,
+    PARTICIPANT_RELEASE_ACTION.RESUME,
+  ].includes(action)) return execute();
+  const start = performance.now();
+  const trace = {messageId: envelope.messageId ?? null, hops: {}};
+  if (action === PARTICIPANT_RELEASE_ACTION.RELEASE) bindReleaseTrace(request, trace);
+  let answer;
+  try {
+    answer = await execute();
+    return answer;
+  } finally {
+    const elapsedMs = performance.now() - start;
+    if (elapsedMs >= PARTICIPANT_CUTOVER_BOUND.REQUEST_TIMEOUT_MS) {
+      handler.logger?.info?.('Slow participant release response', {
+        partitionId: request.partitionId, sourceNodeId: envelope.sourceNodeId,
+        operationId: controlRefusalText(request.createAdmissionIdentity, 'operationId'),
+        attemptToken: controlRefusalText(request.createAdmissionIdentity, 'attemptToken'),
+        action, elapsedMs, outcome: controlRefusalText(answer, 'outcome'), ...trace,
+      });
+    }
+  }
+}
+
 export {
+  bindReleaseTrace,
   controlRefusalText as releaseDiagnosticText,
   captureReleaseInspectTarget,
   captureParticipantControlRefusal,
   captureParticipantReleaseRecoveryDetail,
   captureParticipantReleaseDiagnosticTrigger,
   observeParticipantReleaseClockValue,
+  observeReleaseReceiver,
   safeClockInteger as participantReleaseSafeClockInteger,
   participantReleaseClockMeasured,
   participantReleaseAttemptAgeObservation,
   participantReleaseSeedBudgetObservation,
   readParticipantReleaseClock,
+  recordReleaseHop,
+  releaseTrace,
 };

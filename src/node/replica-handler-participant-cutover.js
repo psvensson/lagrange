@@ -1,4 +1,3 @@
-import {releaseTrace, bindReleaseTrace} from './participant-release-hop-observation.js';
 // The release sequence runs at the existing replica lifecycle owner, using
 // only per-attempt memory. A retry reconstructs from owners; no phase marker
 // grants permission, and an unavailable member keeps admission closed.
@@ -20,9 +19,9 @@ import {isCurrentOriginRevalidatableQueryCensus, isReleaseDrained, releaseAnswer
 import {askParticipantRelease, participantReleaseAbsoluteClockValid, participantReleaseWaitRemainingMs,
   releaseNodeOfAddress, requestParticipantRelease} from
   './participant-release-client.js';
-import {captureParticipantControlRefusal, captureParticipantReleaseDiagnosticTrigger,
+import {bindReleaseTrace, captureParticipantControlRefusal, captureParticipantReleaseDiagnosticTrigger,
   participantReleaseAttemptAgeObservation, participantReleaseClockMeasured,
-  readParticipantReleaseClock} from
+  readParticipantReleaseClock, releaseTrace} from
   './participant-release-diagnostic-observation.js';
 import {settleTransactionReleaseRows, transactionReleaseProofOf} from
   '../query/distributed/distributed-transaction-release-settlement.js';

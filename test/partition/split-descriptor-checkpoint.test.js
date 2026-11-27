@@ -29,9 +29,8 @@ import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-s
 import {readRaftRsPeerIdentityReservations} from '../../src/raft/raft-rs-peer-identity.js';
 import {PARTITION_COMMITTED_STATEMENT_ERROR_CODE} from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {createPartitionSnapshotCadence, RAFT_SNAPSHOT_CADENCE_OUTCOME} from '../../src/partition/partition-snapshot-cadence.js';
-import {isSplitDescriptorReceiptFor, SPLIT_DESCRIPTOR_FINALIZE_SQL, splitDescriptorWriteKey} from
+import {deriveParticipantEntryId, isSplitDescriptorReceiptFor, SPLIT_DESCRIPTOR_FINALIZE_SQL, splitDescriptorWriteKey} from
   '../../src/partition/partition-split-descriptor-command.js';
-import {deriveParticipantEntryId} from '../../src/query/distributed/participant-entry-id.js';
 import {scrubRaftRsCheckpointPayload, validateRaftRsPayloadTables} from '../../src/raft/snapshot-application-content.js';
 import {requestSnapshotInstall, resolveReplicaCheckpointsRoot} from '../../src/raft/snapshot-install.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../../src/raft/snapshot-install-constants.js';

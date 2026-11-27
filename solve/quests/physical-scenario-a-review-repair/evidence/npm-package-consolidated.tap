@@ -1,0 +1,5 @@
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 54C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/integration/lagrange-server-npm-package.integration.test.js (3 assertions, 44498ms)
+# test-files total=1 pass=1 fail=0 assertions=3

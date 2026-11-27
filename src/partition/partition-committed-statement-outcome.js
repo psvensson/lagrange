@@ -10,7 +10,7 @@ import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest
 
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schema-shared-constants.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
-import {detectCommittedStatementOutcomeFormat} from './partition-committed-statement-format.js';
+import {detectCommittedStatementOutcomeFormat} from './partition-retained-store-observation.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE, PARTITION_COMMITTED_COMMAND_OUTCOME,

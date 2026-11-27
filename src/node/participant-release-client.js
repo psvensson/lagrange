@@ -1,4 +1,3 @@
-import {recordReleaseHop} from './participant-release-hop-observation.js';
 // One client for the release lifecycle route. Node hints select where to
 // ask; only the answering consensus owner can name the current leader.
 import {AddressManager} from '../address/address-manager.js';
@@ -6,7 +5,7 @@ import {deliveryTransportOf, deliveryAnswerOf, classifyThrownDeliveryError, isDe
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
 import {participantReleaseClockMeasured, participantReleaseSafeClockInteger, releaseDiagnosticText, captureReleaseInspectTarget,
-  readParticipantReleaseClock} from
+  readParticipantReleaseClock, recordReleaseHop} from
   './participant-release-diagnostic-observation.js';
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,

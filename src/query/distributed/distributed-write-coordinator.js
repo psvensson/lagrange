@@ -1,6 +1,6 @@
 import {splitDescriptorCommitFields, splitDescriptorFailureFields} from '../split-descriptor-delivery-fields.js';
 import {randomUUID} from 'node:crypto';
-import {deriveParticipantEntryId} from './participant-entry-id.js';
+import {deriveParticipantEntryId} from '../../partition/partition-split-descriptor-command.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {
   affectedRowsField,

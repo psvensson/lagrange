@@ -4,7 +4,7 @@
   "status": "pass",
   "testFileDigests": {
     "test/rebalancer/replica-placement-adaptive-budget.test.js": "d817f2af3fb82df63125ab6087d3429c8fa1e7b62d98a875a099149b5d99b661",
-    "test/partition/split-descriptor-checkpoint.test.js": "ca817b2ba659ae58e40e71190c29df5222e666da8b901fbecd77511bbc92ddbf",
+    "test/partition/split-descriptor-checkpoint.test.js": "11f4278d031e2876007152470a34c7fea7caf206c767ebb25f5094c1fbe30473",
     "test/query/parallel-query-coordinator.test.js": "be5e718e188b83e75276ca2d081b39e434aedd7c76f62c08e7ba8392745cc675",
     "test/integration/pgwire-schema-owner-loss.integration.test.js": "7f90a6f276452e48a3fd8df11376d8913def0d91404f8e33dda1e87fd1bbacc8",
     "test/control-plane/readiness-planning-semantic-generation.test.js": "f31ccb811764ec195fcde597030998599c4f1a0b792b69664ca787759d186b2d"
@@ -60,8 +60,8 @@
       "passed": true,
       "verifier": "subagent:4fd99254-7b16-46f8-9b76-37bacf2c6ecf",
       "verdict": "approve",
-      "sourceCommit": "0d40a0ec563ad2b7033e430a61e94c31ac455a8f",
-      "detail": "Composed candidate independently verified by subagent:4fd99254-7b16-46f8-9b76-37bacf2c6ecf against base 4dbadbe730de59088e32005a5552b88d6fb596b4 across all 135 changed src/ and test/ files (composite SHA-256 ec3fd47b30cb2e698970c0ae778b2c80532dc4a2de55f2542870c57eff2a6992) and all 153 total changed files, checking owner-interaction and harness-fidelity templates and zero fallback/legacy logic."
+      "sourceCommit": "ea6bd68618eb0ba55101ec68d8b679a861f7a9a9",
+      "detail": "Consolidated candidate independently verified by subagent:4fd99254-7b16-46f8-9b76-37bacf2c6ecf against base 4dbadbe730de59088e32005a5552b88d6fb596b4 and ea6bd68618eb0ba55101ec68d8b679a861f7a9a9 across all 142 changed src/ and test/ files (composite SHA-256 8745efc8d6f33a17b53ac803d7f789d50cb37f7fd633685b9606c680585e648d) and 9 helper-module consolidations (packed npm tarball entry count 2099 <= 2100; npm-package-consolidated.tap sha256 3bc9ef5f982958286e7a68cf41a46126ff83b0ac88a177b839d4cdda3ea6b6e6), checking owner-interaction and harness-fidelity templates and zero fallback/legacy logic."
     }
   ],
   "priorObservations": [

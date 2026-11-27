@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {INITIAL_PARTITION_IDS, PARTITIONS_SCHEMA, SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
-import {deriveParticipantEntryId} from '../../src/query/distributed/participant-entry-id.js';
 import {
+  deriveParticipantEntryId,
   SPLIT_DESCRIPTOR_ERROR as ERROR, SPLIT_DESCRIPTOR_FINALIZE_SQL as SQL,
   splitDescriptorWriteKey,
 } from '../../src/partition/partition-split-descriptor-command.js';

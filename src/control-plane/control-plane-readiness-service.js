@@ -19,7 +19,7 @@ import * as planning from './control-plane-readiness-priority-recovery-planning.
 import * as snapshot from './control-plane-readiness-publication-planning-snapshot.js';
 import * as resolution from './control-plane-readiness-publication-planning-resolution.js';
 import * as startup from './control-plane-readiness-startup-authority-health.js';
-import {isNodeLoadReady} from './node-load-readiness.js';
+import {isNodeLoadReady} from './readiness-planning-table-impact-classification.js';
 import * as rows from './control-plane-readiness-node-service-rows.js';
 import * as serve from './control-plane-readiness-serve-eligibility-methods.js';
 import {installControlPlaneReadinessPlanningOwnerDelegateMethods} from

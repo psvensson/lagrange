@@ -1,6 +1,8 @@
-import {applySplitDescriptorStatement} from './partition-split-descriptor-apply.js';
-import {decodeSplitDescriptorCommand,
-  SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from './partition-split-descriptor-command.js';
+import {SIBLING_DESCRIPTOR_ACTION, siblingDescriptorDispositionIn} from './partition-sibling-descriptor-effect.js';
+import {decodeSplitDescriptorCommand, deriveParticipantEntryId, descriptorRefusal,
+  finalizeChildReceipt, isSiblingDescriptorAction, retainedSplitDescriptorAnswer,
+  SPLIT_DESCRIPTOR_ERROR, splitDescriptorCommandDigest, splitDescriptorWriteKey,
+  usesSplitDescriptorIdentity} from './partition-split-descriptor-command.js';
 import {requestPlacementRepairPreparation} from './partition-placement-repair-preparation.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
@@ -19,6 +21,7 @@ import {MIRROR_RETENTION_CUSTODY_COMMAND_ERROR, PARTITION_COMMITTED_STATEMENT_RE
   './partition-committed-statement-outcome-constants.js';
 import {
   applyMirrorRetentionCustodyCommand,
+  committedStatementEntryKey,
   isCommittedStatementKeyed, readCommittedStatementOutcome, recordCommittedStatementOutcome,
   registerMirrorRetentionRaftHooks,
   settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
@@ -92,6 +95,38 @@ const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
 });
+
+function readDescriptorAnswer(service, intent) {
+  const entryId = deriveParticipantEntryId(splitDescriptorWriteKey(intent), service.partitionId);
+  const recorded = readCommittedStatementOutcome(service, committedStatementEntryKey({entryId}));
+  if (recorded.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED) return null;
+  return retainedSplitDescriptorAnswer({intent, digest: splitDescriptorCommandDigest(intent)}, recorded);
+}
+
+function withDescriptorReceipt(result, receipt) {
+  return receipt === null ? {refusal: descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.UNRESOLVED, true)} :
+    {result, receipt};
+}
+
+function applySplitDescriptorStatement(service, command, descriptor) {
+  const {intent} = descriptor;
+  if (!isSiblingDescriptorAction(intent.action)) {
+    const result = runCommittedPartitionStatement(service, command);
+    return withDescriptorReceipt(result, finalizeChildReceipt(service.db, intent, result.changes));
+  }
+
+  const promote = intent.action === SIBLING_DESCRIPTOR_ACTION.PROMOTE;
+  const opposite = readDescriptorAnswer(service, {...intent, action: promote ?
+    SIBLING_DESCRIPTOR_ACTION.FINALIZE : SIBLING_DESCRIPTOR_ACTION.PROMOTE});
+  if (opposite?.success === false) return {refusal: opposite};
+  if (promote && opposite !== null) return {refusal: descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.FINALIZED)};
+  if (!promote && opposite === null) {
+    return withDescriptorReceipt({changes: 0, lastInsertRowid: null},
+      siblingDescriptorDispositionIn(service.db, intent, 0, true));
+  }
+  const result = runCommittedPartitionStatement(service, command);
+  return withDescriptorReceipt(result, siblingDescriptorDispositionIn(service.db, intent, result.changes, false));
+}
 
 const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
   [COORDINATOR_SETTLEMENT_TYPE]: requestCoordinatorSettlement,

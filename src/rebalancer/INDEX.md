@@ -234,7 +234,6 @@ documentClass: generated
 - [replica-operation-update-outcome.js](replica-operation-update-outcome.js) - No leading comment; first export: INVALID_OPERATION_PERSISTENCE_OUTCOME. (importers: hub)
 - [replica-placement-adaptive-budget.js](replica-placement-adaptive-budget.js) - Public entry: decideAdaptiveResourceWindow, createAdaptivePlacementBudgetController,... (importers: few)
 - [replica-placement-cure-policy.js](replica-placement-cure-policy.js) - Single owner of the replica-placement CURE-TYPING relation (quest cure-typing-single-owner-table; epic... (importers: many)
-- [replica-placement-decision-diagnostics.js](replica-placement-decision-diagnostics.js) - No leading comment; first export: createPlacementDecisionDiagnostics. (importers: one)
 - [replica-placement-owner-admission-statement.js](replica-placement-owner-admission-statement.js) - The canonical admission statement of a raw input: exact fields, typed values, the moves its kind admits. (importers: many)
 - [replica-placement-owner-attempts.js](replica-placement-owner-attempts.js) - Public entry: persistUnresolvedPlacementAttempt, deleteUnresolvedPlacementAttempt, reconcilePlacementAttempts,... (importers: few)
 - [replica-placement-owner-capacity.js](replica-placement-owner-capacity.js) - Public entry: summarizeCopyOccupancy, saturatedTargetsOf, decideCopyCapacity, recordAdmittedCopyOccupancy,... (importers: many)

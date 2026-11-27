@@ -1,5 +1,4 @@
 import {isDeepStrictEqual} from 'node:util';
-import {createPlacementDecisionDiagnostics} from './replica-placement-decision-diagnostics.js';
 import {promotedVoterReplicaIdsByPartition} from './replica-placement-owner-retained-repair-statement.js';
 // Public entry: createReplicaPlacementOwner, attachReplicaPlacementOwner, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID.
 // Required collaborators: nodeId, ledgerPartitionService (replica_operations-p1, its leadershipTenure and consensus port), nodeAuthority, systemTableCache, now, logger; optional workflowOwner, storageAccountingService, timer functions.
@@ -17,8 +16,8 @@ import {PLACEMENT_RESULT_FIELD} from '../partition/partition-placement-admission
 import {LEDGER_PARTITION_ID, isOccupyingCopy, readPlacementCensus} from
   '../partition/partition-placement-admission-decision.js';
 import {COPY_MOVE_TYPES, buildPassOrderedCandidates, buildTargetCapacityRanker,
-  classifyNodeStorageExclusion, computeCopyWaitingDemand, decideCopyCapacity,
-  recordAdmittedCopyOccupancy, resolveOwnerMoveCopyLimits, saturatedTargetsOf,
+  classifyNodeStorageExclusion, computeCopyWaitingDemand, createPlacementDecisionDiagnostics,
+  decideCopyCapacity, recordAdmittedCopyOccupancy, resolveOwnerMoveCopyLimits, saturatedTargetsOf,
   sourceLimitOf, summarizeCopyOccupancy, targetLimitOf} from './replica-placement-owner-capacity.js';
 import {createAdaptivePlacementBudgetController} from
   './replica-placement-adaptive-budget.js';

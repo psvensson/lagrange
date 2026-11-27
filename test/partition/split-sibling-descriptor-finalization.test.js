@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {INITIAL_PARTITION_IDS, PARTITIONS_SCHEMA, SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {deriveParticipantEntryId} from '../../src/query/distributed/participant-entry-id.js';
 import {PARTITION_TRANSITION_STATE} from '../../src/partition/partition-constants.js';
 import {ManagedMergeWorkflowExecutionGateMethods} from '../../src/partition/managed-merge-workflow-execution-gate-methods.js';
 import {ManagedMergeWorkflowPersistenceMethods} from '../../src/partition/managed-merge-workflow-persistence-methods.js';
@@ -11,7 +10,7 @@ import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-
 import {readCommittedStatementOutcome} from '../../src/partition/partition-committed-statement-outcome.js';
 import {readPartitionWriteGeneration} from '../../src/partition/partition-participant-transaction-store.js';
 import {SIBLING_DESCRIPTOR_ACTION as ACTION, siblingDescriptorStatement} from '../../src/partition/partition-sibling-descriptor-effect.js';
-import {SPLIT_DESCRIPTOR_ERROR, splitDescriptorWriteKey} from '../../src/partition/partition-split-descriptor-command.js';
+import {deriveParticipantEntryId, SPLIT_DESCRIPTOR_ERROR, splitDescriptorWriteKey} from '../../src/partition/partition-split-descriptor-command.js';
 import {buildPartitionWriteEntry} from '../../src/partition/partition-write-kernel.js';
 import {selectRows, withSurface} from '../query/unknown-outcome-surface-fixture.js';
 import {applyCommitted, clearFixtureSingletons, resetFixtureSingletons,

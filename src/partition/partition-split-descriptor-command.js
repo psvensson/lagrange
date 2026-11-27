@@ -1,13 +1,26 @@
 // A split descriptor receipt names the destination effect across retries and
 // owner lease renewals. The TABLES workflow attempt is part of the subject.
+import {createHash} from 'node:crypto';
 import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {SIBLING_DESCRIPTOR_ACTION, canonicalSiblingDescriptorIntent,
   isSiblingDescriptorReceiptFor, siblingDescriptorChangeCount,
   siblingDescriptorStatement} from './partition-sibling-descriptor-effect.js';
-import {deriveParticipantEntryId} from '../query/distributed/participant-entry-id.js';
 import {copyDenseOwnDataArray, copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {committedCommandDigest} from './partition-committed-statement-outcome-constants.js';
 import {PARTITION_COMMITTED_COMMAND_OUTCOME, PARTITION_SERVICE_OPERATION} from './partition-service-constants.js';
+
+const PARTICIPANT_HASH_ALGORITHM = 'sha1';
+const PARTICIPANT_DIGEST_ENCODING = 'hex';
+const PARTICIPANT_DIGEST_PREFIX_LENGTH = 16;
+const PARTICIPANT_ENTRY_ID_PREFIX = 'dwrite-participant-';
+
+function deriveParticipantEntryId(idempotencyKey, partitionId) {
+  const entryIdentityDigest = createHash(PARTICIPANT_HASH_ALGORITHM)
+    .update(JSON.stringify({idempotencyKey, partitionId}))
+    .digest(PARTICIPANT_DIGEST_ENCODING)
+    .slice(0, PARTICIPANT_DIGEST_PREFIX_LENGTH);
+  return `${PARTICIPANT_ENTRY_ID_PREFIX}${entryIdentityDigest}`;
+}
 
 const SPLIT_DESCRIPTOR_FINALIZE_SQL = 'DELETE FROM partitions WHERE table_id = ? AND ' +
   'split_descriptor_attempt = ? AND partition_id = ?';
@@ -164,7 +177,7 @@ function retainedSplitDescriptorAnswer(descriptor, recorded) {
 }
 
 export {DISPOSITION as SPLIT_DESCRIPTOR_DISPOSITION, SPLIT_DESCRIPTOR_ERROR,
-  SPLIT_DESCRIPTOR_FINALIZE_SQL, decodeSplitDescriptorCommand, descriptorRefusal,
+  SPLIT_DESCRIPTOR_FINALIZE_SQL, decodeSplitDescriptorCommand, deriveParticipantEntryId, descriptorRefusal,
   finalizeChildReceipt, isSplitDescriptorDigest, isSplitDescriptorReceiptFor, retainedSplitDescriptorAnswer,
   canonicalIntent as canonicalSplitDescriptorIntent, isSiblingDescriptorAction, splitDescriptorCommandDigest, splitDescriptorStatement, splitDescriptorWriteKey,
   usesSplitDescriptorIdentity};

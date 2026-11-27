@@ -7,7 +7,7 @@
 // pragma/connection-state functions, OR ROLLBACK conflict clauses, and writes
 // to foreign tables. Rowid rules R1-R3 (partition-statement-admission-rowid-rules.js)
 // apply on writes, with R3 also checked post-statement inside a savepoint.
-import {extractLexedSqlMutationType, lexedMutationOperationType} from './partition-statement-mutation-kind.js';
+import {extractLexedSqlMutationType, lexedMutationOperationType} from './partition-mirror-custody-codec.js';
 import {preparePartitionReadStatement} from './partition-read-statement-owner.js';
 import {asciiLower, lexPartitionStatement} from './partition-statement-admission-lexer.js';
 import {

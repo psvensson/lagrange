@@ -7,13 +7,13 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "dd9bc23c621ad516f60e2502fd7976bdb36c173b2227b5a7b3af805bd8b10a52"
+        "sha256": "9de99ce0aecda1527b855e29c9eb33bcafaa3a8b7787ce57d5c4096c460dd906"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "4d5e30532d5ed5c898cd0998dac713bbb54b694419c483218a2d9ef45ad2efab"
+        "sha256": "c5b6421174dfa95ec8e4c7155669dc101772c1a95cdb8ef3de847ac3e19aa32c"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 4003446,
-        "sha256": "aa3fb4f0c74698b2ce24a56455b85e90902191c92296b39b1300ce83c56781d9"
+        "bytes": 3999745,
+        "sha256": "88b9e85606334beeb8384d0e8d33234824d9a861f2a701f9b6ecba3f1053b92d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "97e94a0dbf6ad3021544c8812461a8ea26fb6c95c20266e6df0114e5a642fcb2"
+        "sha256": "83ae5c1ec14f1b058503b71ae12db206021f97a754a525a795062fc27deb4a92"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a1114497aa85ec60e90c11fae7c3337da5636b0f177840a19dbc796feca8fa30"
+        "sha256": "19c082de4bc17e08e4345b764be0b3cca8ffb35c416dc23d434e591c818e8eea"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "ad8b409cc96d9e7a2e7ef52e0e7b3aa071ef5a627e17678dec3ab3b56448bc76"
+    "inputDigest": "84d2f353df32aa9b3387054c4badb52dd25ca5d21824196b3b36f3129dc6a298"
   },
   "reconciliation": {
     "complexity": {
@@ -73,22 +73,22 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "dd9bc23c621ad516f60e2502fd7976bdb36c173b2227b5a7b3af805bd8b10a52"
+        "sha256": "9de99ce0aecda1527b855e29c9eb33bcafaa3a8b7787ce57d5c4096c460dd906"
       },
-      "declaredCount": 1696,
-      "observedCount": 1696,
-      "assignedCount": 1696
+      "declaredCount": 1695,
+      "observedCount": 1695,
+      "assignedCount": 1695
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "4d5e30532d5ed5c898cd0998dac713bbb54b694419c483218a2d9ef45ad2efab"
+        "sha256": "c5b6421174dfa95ec8e4c7155669dc101772c1a95cdb8ef3de847ac3e19aa32c"
       },
-      "declaredCount": 153,
-      "observedCount": 153,
-      "assignedCount": 153
+      "declaredCount": 152,
+      "observedCount": 152,
+      "assignedCount": 152
     },
     "fileSize": {
       "authority": {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "97e94a0dbf6ad3021544c8812461a8ea26fb6c95c20266e6df0114e5a642fcb2"
+          "sha256": "83ae5c1ec14f1b058503b71ae12db206021f97a754a525a795062fc27deb4a92"
         },
         "cloneGroups": 32,
         "duplicatedLines": 1025,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a1114497aa85ec60e90c11fae7c3337da5636b0f177840a19dbc796feca8fa30"
+          "sha256": "19c082de4bc17e08e4345b764be0b3cca8ffb35c416dc23d434e591c818e8eea"
         },
         "cloneGroups": 592,
         "duplicatedLines": 21028,
@@ -173,48 +173,48 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 4003446,
-        "sha256": "aa3fb4f0c74698b2ce24a56455b85e90902191c92296b39b1300ce83c56781d9"
+        "bytes": 3999745,
+        "sha256": "88b9e85606334beeb8384d0e8d33234824d9a861f2a701f9b6ecba3f1053b92d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 9776,
         "sha256": "94a0181aa0d56c84540c59b8e6aae07e36cd8d56aeb4a95539fce8ec12555f7b"
       },
-      "sourceDigest": "7d6fd7b52e897ff3ccf9456ae3c1b81f2fd40bc91e65b4e59a72f82701f6c53a",
-      "moduleCount": 6602,
-      "edgeCount": 40928,
+      "sourceDigest": "42580d0e868887a7a876a898f5c1595937710bde812c0d3f0e035822bfde3d46",
+      "moduleCount": 6593,
+      "edgeCount": 40899,
       "unresolvedCount": 40
     }
   },
   "assignment": {
-    "sourceSignalCount": 2384,
-    "assignedSignalCount": 2384,
-    "uniqueAssignmentCount": 2384,
-    "digest": "e41e3fb13309a4574e517a7bb7246b4370dea4cbcb1617e1841e9433bbfe8ceb"
+    "sourceSignalCount": 2382,
+    "assignedSignalCount": 2382,
+    "uniqueAssignmentCount": 2382,
+    "digest": "c112dedc99093a5759a9a97606db578af8549fab70282f86a2aee3da9c8bfdbf"
   },
   "signalCounts": {
-    "cognitive": 153,
-    "complexity": 1696,
+    "cognitive": 152,
+    "complexity": 1695,
     "duplication": 440,
     "fileSize": 55,
     "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1300,
+    "filesWithDebt": 1298,
     "rankedBoundaryCount": 111,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 91,
     "declaredLogicalOwnerCount": 19,
     "unownedSourceBoundaryCount": 32,
-    "unownedSourceFileCount": 444,
+    "unownedSourceFileCount": 443,
     "childQuestCount": 16
   },
   "logicalOwnerAndAmbiguitySummary": {
     "declaredLogicalOwnerCount": 19,
     "multiBoundaryLogicalOwnerCount": 1,
     "crossAreaLogicalOwnerCount": 0,
-    "declaredOwnerFileCount": 155,
+    "declaredOwnerFileCount": 154,
     "declaredOwnerSignalCount": 375,
     "declaredOwnerScore": 1728.8,
     "logicalOwners": [
@@ -227,7 +227,7 @@
         "ownerAreas": [
           "src/node"
         ],
-        "fileCount": 19,
+        "fileCount": 18,
         "signalCount": 51,
         "complexity": 44,
         "cognitive": 7,
@@ -235,8 +235,8 @@
         "duplicatedLines": 0,
         "cycleGroups": 0,
         "lintExclusions": 0,
-        "importIn": 47,
-        "importOut": 253,
+        "importIn": 46,
+        "importOut": 246,
         "score": 232
       },
       {
@@ -621,9 +621,9 @@
     ],
     "contractAmbiguity": {
       "unownedSourceBoundaryCount": 32,
-      "unownedSourceFileCount": 444,
-      "unownedSourceSignalCount": 936,
-      "unownedSourceScore": 4301.8,
+      "unownedSourceFileCount": 443,
+      "unownedSourceSignalCount": 934,
+      "unownedSourceScore": 4289.8,
       "unownedSourceBoundaries": [
         {
           "boundary": "src/control-plane",
@@ -818,22 +818,6 @@
           ]
         },
         {
-          "boundary": "src/raft",
-          "ownerAreas": [
-            "src/raft"
-          ],
-          "fileCount": 6,
-          "signalCount": 11,
-          "score": 64,
-          "topPaths": [
-            "src/raft/raft-rs-runtime-owner.js",
-            "src/raft/raft-operation-port.js",
-            "src/raft/raft-rs-replica-lifecycle-owner.js",
-            "src/raft/raft-rs-leadership-transfer.js",
-            "src/raft/raft-committed-membership-stamp.js"
-          ]
-        },
-        {
           "boundary": "src/wasm-service",
           "ownerAreas": [
             "src/wasm-service"
@@ -863,6 +847,22 @@
             "src/logging/logs-table-service-pressure-helpers.js",
             "src/logging/log-query-service.js",
             "src/logging/log-retention-service.js"
+          ]
+        },
+        {
+          "boundary": "src/raft",
+          "ownerAreas": [
+            "src/raft"
+          ],
+          "fileCount": 5,
+          "signalCount": 9,
+          "score": 52,
+          "topPaths": [
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-rs-replica-lifecycle-owner.js",
+            "src/raft/raft-rs-leadership-transfer.js",
+            "src/raft/raft-committed-membership-stamp.js",
+            "src/raft/raft-rs-group-membership-admission.js"
           ]
         },
         {
@@ -1201,8 +1201,8 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 999,
-      "importOut": 590,
+      "importIn": 1007,
+      "importOut": 599,
       "score": 804.8,
       "topPaths": [
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
@@ -1314,7 +1314,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 355,
-      "importOut": 318,
+      "importOut": 320,
       "score": 328,
       "topPaths": [
         "src/partition/managed-workflow-record-store.js",
@@ -1388,7 +1388,7 @@
       "ownerAreas": [
         "src/node"
       ],
-      "fileCount": 19,
+      "fileCount": 18,
       "signalCount": 51,
       "complexity": 44,
       "cognitive": 7,
@@ -1397,15 +1397,15 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 47,
-      "importOut": 253,
+      "importIn": 46,
+      "importOut": 246,
       "score": 232,
       "topPaths": [
+        "src/node/replica-handler-membership-recovery-decision.js",
         "src/node/replica-handler-voter-readiness-methods.js",
         "src/node/replica-handler-create-status-methods.js",
         "src/node/replica-handler-membership-recovery.js",
-        "src/node/replica-handler-runtime-methods.js",
-        "src/node/replica-handler-membership-recovery-decision.js"
+        "src/node/replica-handler-runtime-methods.js"
       ]
     },
     {
@@ -1426,7 +1426,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 160,
-      "importOut": 169,
+      "importOut": 168,
       "score": 216,
       "topPaths": [
         "src/query/distributed/distributed-transaction-settlement.js",
@@ -1846,7 +1846,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 144,
-      "importOut": 128,
+      "importOut": 127,
       "score": 96,
       "topPaths": [
         "src/node/runtime-service-handler.js",
@@ -2050,34 +2050,6 @@
         "src/live-query/live-query-startup-wiring.js",
         "src/live-query/live-query-group-helpers.js",
         "src/live-query/live-query-manager.js"
-      ]
-    },
-    {
-      "key": "area:src/raft",
-      "owner": null,
-      "boundary": "src/raft",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/raft"
-      ],
-      "fileCount": 6,
-      "signalCount": 11,
-      "complexity": 8,
-      "cognitive": 1,
-      "oversizedFiles": 2,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 233,
-      "importOut": 62,
-      "score": 64,
-      "topPaths": [
-        "src/raft/raft-rs-runtime-owner.js",
-        "src/raft/raft-operation-port.js",
-        "src/raft/raft-rs-replica-lifecycle-owner.js",
-        "src/raft/raft-rs-leadership-transfer.js",
-        "src/raft/raft-committed-membership-stamp.js"
       ]
     },
     {
@@ -2301,6 +2273,34 @@
         "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js",
         "test/raft/raft-rs-backend/formation-placement-lease-authority-fixture.js",
         "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js"
+      ]
+    },
+    {
+      "key": "area:src/raft",
+      "owner": null,
+      "boundary": "src/raft",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/raft"
+      ],
+      "fileCount": 5,
+      "signalCount": 9,
+      "complexity": 7,
+      "cognitive": 0,
+      "oversizedFiles": 2,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 155,
+      "importOut": 61,
+      "score": 52,
+      "topPaths": [
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-leadership-transfer.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-group-membership-admission.js"
       ]
     },
     {

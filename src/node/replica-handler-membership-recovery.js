@@ -55,14 +55,12 @@ import {
 import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {
-  isNodeEligibleForPermanentLossRecovery,
-  planAutonomousPermanentLossRecovery,
-} from './replica-handler-membership-recovery-decision.js';
-import {
   handleMaterializeRecoveryLearner,
   handleObserveRecoveryLearner,
+  isNodeEligibleForPermanentLossRecovery,
   persistRecoveredServicesRowsAsync,
-} from './replica-handler-membership-recovery-target.js';
+  planAutonomousPermanentLossRecovery,
+} from './replica-handler-membership-recovery-decision.js';
 
 // ends-on: committed membership recovery completes source removal
 const DEFAULT_RECOVERY_TIMEOUT_MS = 20_000;

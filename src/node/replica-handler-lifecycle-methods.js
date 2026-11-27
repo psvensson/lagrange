@@ -1,4 +1,4 @@
-import {observeReleaseReceiver} from './participant-release-hop-observation.js';
+import {observeReleaseReceiver} from './participant-release-diagnostic-observation.js';
 /**
  * ReplicaHandler lifecycle + message dispatch methods.
  *

@@ -1,6 +1,6 @@
 import {assertMirrorReplayCoverageIn} from '../partition/partition-mirror-effect-retention.js';
 import {assertAppliedMirrorEffect, decodeMirrorCustodyRow, decodeMirrorReplayRecord} from '../partition/partition-mirror-custody-codec.js';
-import {detectCommittedStatementOutcomeFormat} from '../partition/partition-committed-statement-format.js';
+import {detectCommittedStatementOutcomeFormat} from '../partition/partition-retained-store-observation.js';
 import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, PARTITION_COMMITTED_STATEMENT_FORMAT,
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
   '../partition/partition-committed-statement-outcome-constants.js';
