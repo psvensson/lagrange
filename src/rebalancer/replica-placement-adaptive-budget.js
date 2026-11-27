@@ -275,7 +275,7 @@ function classifyAttributedCongestion(obs, thresholds) {
 function isHighUtilizationQueueDelayed(rawUtilPercent, maxHealthyPercent, observation, thresholds) {
   if (Number(rawUtilPercent) <= maxHealthyPercent) return false;
   if (!isFiniteMetric(observation.eventLoopDelayMs)) return true;
-  return Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs;
+  return Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs / 2;
 }
 
 function isEventLoopWithinHealthyBand(observation, thresholds) {
@@ -322,9 +322,8 @@ function isObservationWithinHealthyGrowthBand(observation, thresholds) {
 // still belong to the controller, independent of heartbeat publication.
 function classifyPlacementPressure(observation, thresholds = DEFAULTS.THRESHOLDS) {
   const congestionReason = classifyAttributedCongestion(observation, thresholds);
-  if (congestionReason !== null) {
-    return {action: ACTION.DECREASE, reason: congestionReason};
-  } else if (!isObservationCompleteForGrowth(observation)) {
+  if (congestionReason !== null) return {action: ACTION.DECREASE, reason: congestionReason};
+  if (!isObservationCompleteForGrowth(observation)) {
     return {action: ACTION.HOLD, reason: REASON.OBSERVATION_INCOMPLETE};
   }
   return isObservationWithinHealthyGrowthBand(observation, thresholds) ?
