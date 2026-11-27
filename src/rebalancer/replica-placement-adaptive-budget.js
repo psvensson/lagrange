@@ -56,7 +56,7 @@ const PLACEMENT_ADAPTIVE_WINDOW_DEFAULTS = Object.freeze({
     additiveIncrease: 1, multiplicativeDecrease: 0.75,
   }),
   TIMING: Object.freeze({
-    minAdjustIntervalMs: 1_000, maxSampleAgeMs: 15_000, requiredHealthySamplesAfterDecrease: 2,
+    minAdjustIntervalMs: 1_000, maxSampleAgeMs: 15_000, requiredHealthySamplesAfterDecrease: 1,
   }),
   THRESHOLDS: Object.freeze({
     healthyEventLoopDelayMs: 25, congestionEventLoopDelayMs: 80,
@@ -79,6 +79,7 @@ const MAX_DECREASE_RATIO = 0.95;
 const MAX_CONFIGURABLE_WINDOW_LIMIT = 64;
 const MAX_CONFIGURABLE_INTERVAL_MS = 600_000;
 const MAX_CONFIGURABLE_HEALTHY_SAMPLES = 20;
+const SUSTAINED_PAIR_UTILIZATION_CEILING = 101;
 const ROLE_SOURCE = 'source';
 const ROLE_TARGET = 'target';
 const SAMPLE_ID_PREFIX = 'sample:';
@@ -526,14 +527,22 @@ function normalizeWindowDecisionInputs(demand, rawConfig) {
 }
 
 function resolvePressureThresholdsForState(baseState, config) {
-  if (baseState.lastDecreasedAtMs === null || baseState.limit > config.minLimit) {
-    return config.thresholds;
+  if (baseState.lastDecreasedAtMs === null) return config.thresholds;
+  if (baseState.limit <= config.minLimit) {
+    return {
+      ...config.thresholds,
+      healthyEluPercent: config.thresholds.congestionEluPercent,
+      healthyMainThreadCpuPercent: config.thresholds.congestionMainThreadCpuPercent,
+    };
   }
-  return {
-    ...config.thresholds,
-    healthyEluPercent: config.thresholds.congestionEluPercent,
-    healthyMainThreadCpuPercent: config.thresholds.congestionMainThreadCpuPercent,
-  };
+  if (baseState.limit <= config.minLimit + config.additiveIncrease) {
+    return {
+      ...config.thresholds,
+      congestionEluPercent: SUSTAINED_PAIR_UTILIZATION_CEILING,
+      congestionMainThreadCpuPercent: SUSTAINED_PAIR_UTILIZATION_CEILING,
+    };
+  }
+  return config.thresholds;
 }
 
 /**

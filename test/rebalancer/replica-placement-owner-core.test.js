@@ -1484,4 +1484,19 @@ test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs then
   );
   assert.equal(holdAboveFloor.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
   assert.equal(holdAboveFloor.limit, 2);
+  const holdBurstAtPair = decideAdaptiveResourceWindow(
+    holdAboveFloor.nextState,
+    {...obsAt(605, NOW_MS + 4_800), eventLoopDelayMs: 45,
+      eventLoopUtilizationPercent: 96, mainThreadCpuPercent: 95},
+    demand(2, NOW_MS + 4_800), floorConfig,
+  );
+  assert.equal(holdBurstAtPair.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
+  assert.equal(holdBurstAtPair.limit, 2);
+  const decreaseOnRealStall = decideAdaptiveResourceWindow(
+    holdBurstAtPair.nextState,
+    {...obsAt(606, NOW_MS + 6_000), eventLoopDelayMs: 90},
+    demand(2, NOW_MS + 6_000), floorConfig,
+  );
+  assert.equal(decreaseOnRealStall.action, WINDOW_ACTION.DECREASE);
+  assert.equal(decreaseOnRealStall.limit, 1);
 });
