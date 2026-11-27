@@ -10,52 +10,30 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
+import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
+import {REPLICA_OPERATIONS_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  ControlPlaneSetup,
-} from '../../src/bootstrap/shared/control-plane-setup.js';
-import {
-  REPLICA_OPERATIONS_SCHEMA,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
+  generateCreateIndexSQL, generateCreateTableSQL,
 } from '../../src/bootstrap/system-table-schema-sql.js';
 import {COLUMN} from '../../src/constants/columns.js';
 import {
-  CDC_OPERATION,
-  SERVICE_STATUS,
-  TABLES,
-  WORKFLOW_STEP,
+  CDC_OPERATION, SERVICE_STATUS, TABLES, WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {ServeEligibilityOwner} from '../../src/control-plane/serve-eligibility-owner.js';
+import {PARTITION_CDC_EVENT_BUILD_STATE} from '../../src/partition/partition-cdc-generator.js';
+import {ensureCdcObligationLedger} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {
-  ServeEligibilityOwner,
-} from '../../src/control-plane/serve-eligibility-owner.js';
-import {
-  PARTITION_CDC_EVENT_BUILD_STATE,
-} from '../../src/partition/partition-cdc-generator.js';
-import {
-  ensureCdcObligationLedger,
-} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {
-  committedStatementEntryKey,
-  createCommittedStatementOutcomeTable,
+  committedStatementEntryKey, createCommittedStatementOutcomeTable,
 } from '../../src/partition/partition-committed-statement-outcome.js';
 import {
   openParticipantTransactionStore,
 } from '../../src/partition/partition-participant-transaction-store.js';
+import {buildPlacementCommand} from '../../src/partition/partition-placement-admission-command.js';
 import {
-  buildPlacementCommand,
-} from '../../src/partition/partition-placement-admission-command.js';
-import {
-  PLACEMENT_ADMIT_TYPE,
-  PLACEMENT_RELEASE_HOLD_TYPE,
+  PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE,
 } from '../../src/partition/partition-placement-admission-constants.js';
-import {
-  LEDGER_PARTITION_ID,
-} from '../../src/partition/partition-placement-admission-decision.js';
-import {
-  applyPlacementCommand,
-} from '../../src/partition/partition-placement-admission.js';
+import {LEDGER_PARTITION_ID} from '../../src/partition/partition-placement-admission-decision.js';
+import {applyPlacementCommand} from '../../src/partition/partition-placement-admission.js';
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
@@ -1441,7 +1419,7 @@ test('Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new lea
   }
 });
 
-test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs under production defaults then holds or backs off on congestion', () => {
+test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs under production defaults then holds in 25/40ms deadband or backs off above 40ms congestion', () => {
   const floorConfig = normalizeWindowConfig({initialLimit: 2, minLimit: 1, maxLimit: 6});
   const baseObs = {
     sampledAtMs: NOW_MS, sampleId: 601, congestionEpochId: 601, bootIncarnation: 1,
@@ -1451,9 +1429,9 @@ test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs unde
   const demand = (occ, nowMs) => ({
     occupancy: occ, waitingDemandCount: 4, nowMs, expectedBootIncarnation: 1,
   });
-  const obsAt = (id, nowMs) => ({
+  const obsAt = (id, nowMs, overrides = {}) => ({
     ...baseObs, sampleId: id, congestionEpochId: id, sampledAtMs: nowMs,
-    eventLoopDelayMs: 15, eventLoopUtilizationPercent: 84, mainThreadCpuPercent: 82,
+    eventLoopDelayMs: 15, eventLoopUtilizationPercent: 84, mainThreadCpuPercent: 82, ...overrides,
   });
   const decreased = decideAdaptiveResourceWindow(null, baseObs, demand(2, NOW_MS), floorConfig);
   assert.equal(decreased.action, WINDOW_ACTION.DECREASE);
@@ -1468,10 +1446,26 @@ test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs unde
   );
   assert.equal(holdAboveFloor.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
   assert.equal(holdAboveFloor.limit, 2);
+  const holdInDeadband = decideAdaptiveResourceWindow(
+    holdAboveFloor.nextState, obsAt(604, NOW_MS + 3_300, {
+      eventLoopDelayMs: 35, eventLoopUtilizationPercent: 95, mainThreadCpuPercent: 96,
+    }), demand(2, NOW_MS + 3_300), floorConfig,
+  );
+  assert.equal(holdInDeadband.action, WINDOW_ACTION.HOLD);
+  assert.equal(holdInDeadband.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
+  assert.equal(holdInDeadband.limit, 2);
+  const holdAbove40LowUtil = decideAdaptiveResourceWindow(
+    holdInDeadband.nextState, obsAt(605, NOW_MS + 4_400, {
+      eventLoopDelayMs: 55, eventLoopUtilizationPercent: 70, mainThreadCpuPercent: 72,
+    }), demand(2, NOW_MS + 4_400), floorConfig,
+  );
+  assert.equal(holdAbove40LowUtil.action, WINDOW_ACTION.HOLD);
+  assert.equal(holdAbove40LowUtil.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
+  assert.equal(holdAbove40LowUtil.limit, 2);
   const decreaseOnEluCongestion = decideAdaptiveResourceWindow(
-    holdAboveFloor.nextState,
-    {...obsAt(604, NOW_MS + 3_500), eventLoopDelayMs: 30, eventLoopUtilizationPercent: 95},
-    demand(2, NOW_MS + 3_500), floorConfig,
+    holdAbove40LowUtil.nextState, obsAt(606, NOW_MS + 5_500, {
+      eventLoopDelayMs: 45, eventLoopUtilizationPercent: 95,
+    }), demand(2, NOW_MS + 5_500), floorConfig,
   );
   assert.equal(decreaseOnEluCongestion.action, WINDOW_ACTION.DECREASE);
   assert.equal(decreaseOnEluCongestion.limit, 1);
@@ -1485,8 +1479,7 @@ test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs unde
   }).targetBudgetOf('n1');
   controller.recordObservation('n1', baseObs, NOW_MS);
   assert.equal(evalTarget(3, NOW_MS), 2);
-  const obs602 = {...baseObs, sampleId: 602, congestionEpochId: 602, sampledAtMs: NOW_MS + 1_100};
-  controller.recordObservation('n1', obs602, NOW_MS + 1_100);
+  controller.recordObservation('n1', {...baseObs, sampleId: 602, congestionEpochId: 602, sampledAtMs: NOW_MS + 1_100}, NOW_MS + 1_100);
   assert.equal(evalTarget(2, NOW_MS + 1_100), 1);
   const wBeforeRecovery = woke;
   controller.recordObservation('n1', obsAt(603, NOW_MS + 2_200), NOW_MS + 2_200);

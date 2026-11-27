@@ -79,6 +79,7 @@ const MAX_DECREASE_RATIO = 0.95;
 const MAX_CONFIGURABLE_WINDOW_LIMIT = 64;
 const MAX_CONFIGURABLE_INTERVAL_MS = 600_000;
 const MAX_CONFIGURABLE_HEALTHY_SAMPLES = 20;
+const PAIR_WINDOW_UTILIZATION_DELAY_FLOOR_MS = 40;
 const ROLE_SOURCE = 'source';
 const ROLE_TARGET = 'target';
 const SAMPLE_ID_PREFIX = 'sample:';
@@ -210,10 +211,9 @@ function isMainThreadCpuQueueCongested(observation, thresholds) {
     isFiniteMetric(observation.initQueueDelayMs) ||
     isFiniteMetric(observation.transferQueueDelayMs);
   if (!hasQueueSensor) return true;
-  return isMetricStrictlyAbove(
-    observation.eventLoopDelayMs,
-    thresholds.healthyEventLoopDelayMs,
-  ) ||
+  const delayFloorMs =
+    thresholds.utilizationCongestionDelayFloorMs ?? thresholds.healthyEventLoopDelayMs;
+  return isMetricStrictlyAbove(observation.eventLoopDelayMs, delayFloorMs) ||
     isMetricStrictlyAbove(observation.initQueueDelayMs, 0) ||
     isMetricStrictlyAbove(observation.transferQueueDelayMs, 0);
 }
@@ -235,8 +235,10 @@ function isEventLoopCongested(observation, thresholds) {
   }
   const elu = observation.eventLoopUtilizationPercent;
   if (!isMetricAtOrAbove(elu, thresholds.congestionEluPercent)) return false;
+  const delayFloorMs =
+    thresholds.utilizationCongestionDelayFloorMs ?? thresholds.healthyEventLoopDelayMs;
   return !isFiniteMetric(observation.eventLoopDelayMs) ||
-    isMetricStrictlyAbove(observation.eventLoopDelayMs, thresholds.healthyEventLoopDelayMs);
+    isMetricStrictlyAbove(observation.eventLoopDelayMs, delayFloorMs);
 }
 
 function classifyDirectSensorCongestion(obs, thresholds) {
@@ -527,14 +529,21 @@ function normalizeWindowDecisionInputs(demand, rawConfig) {
 }
 
 function resolvePressureThresholdsForState(baseState, config) {
-  if (baseState.lastDecreasedAtMs === null || baseState.limit > config.minLimit) {
-    return config.thresholds;
+  if (baseState.lastDecreasedAtMs === null) return config.thresholds;
+  if (baseState.limit <= config.minLimit) {
+    return {
+      ...config.thresholds,
+      healthyEluPercent: config.thresholds.congestionEluPercent,
+      healthyMainThreadCpuPercent: config.thresholds.congestionMainThreadCpuPercent,
+    };
   }
-  return {
-    ...config.thresholds,
-    healthyEluPercent: config.thresholds.congestionEluPercent,
-    healthyMainThreadCpuPercent: config.thresholds.congestionMainThreadCpuPercent,
-  };
+  if (baseState.limit === config.minLimit + config.additiveIncrease) {
+    return {
+      ...config.thresholds,
+      utilizationCongestionDelayFloorMs: PAIR_WINDOW_UTILIZATION_DELAY_FLOOR_MS,
+    };
+  }
+  return config.thresholds;
 }
 
 /**
