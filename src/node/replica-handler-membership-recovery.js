@@ -54,6 +54,7 @@ import {
 import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {
+  collectUnsettledSupersededRecoveries,
   handleMaterializeRecoveryLearner,
   handleObserveRecoveryLearner,
   isNodeEligibleForPermanentLossRecovery,
@@ -80,8 +81,7 @@ function recordReportedTargetBootAndCheckSupersession(
   const explicitBootMismatch =
     materialized?.failureCode === ERROR.SOURCE_GENERATION_MISMATCH &&
     Number.isSafeInteger(actualBoot) &&
-    actualBoot >= 1 &&
-    actualBoot !== recovery.targetNodeBootIncarnation;
+    actualBoot > recovery.targetNodeBootIncarnation;
   const superseded = explicitBootMismatch ||
     isTargetBootSuperseded(handler, leaderService, recovery);
   if (superseded) {
@@ -328,6 +328,12 @@ async function runPermanentMemberLossRecoveryInternal(handler, request) {
       failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
     });
   }
+  await reconcileSupersededRecoveryTargets(
+    handler,
+    leaderService,
+    membership,
+    Math.max(DEFAULT_VALUE.MIN_MATERIALIZE_BUDGET_MS, deadlineAtMs - wallNowMs()),
+  );
   const materializePayload = {
     type: ReplicaOperationMessageType.MATERIALIZE_RECOVERY_LEARNER,
     partitionId: leaderService.partitionId,
@@ -365,18 +371,18 @@ async function runPermanentMemberLossRecoveryInternal(handler, request) {
       {...materializePayload, bootstrapMembership: stamp},
       Math.max(DEFAULT_VALUE.MIN_MATERIALIZE_BUDGET_MS, deadlineAtMs - wallNowMs()),
     );
+    const superseded = recordReportedTargetBootAndCheckSupersession(
+      handler,
+      leaderService,
+      recovery,
+      materialized,
+    );
     if (!materialized ||
         materialized.status !== ReplicaOperationResponseStatus.COMPLETED) {
       const matCode = isNonEmptyString(materialized?.failureCode) ?
         materialized.failureCode : ERROR.TARGET_INVALID;
       const matError = isNonEmptyString(materialized?.error) ?
         materialized.error : DEFAULT_VALUE.MATERIALIZE_FAILED_MSG;
-      const superseded = recordReportedTargetBootAndCheckSupersession(
-        handler,
-        leaderService,
-        recovery,
-        materialized,
-      );
       if (superseded &&
           request?.allowTargetSupersession !== false &&
           wallNowMs() < deadlineAtMs) {
@@ -692,46 +698,70 @@ async function executePermanentMemberLossRecovery(handler, request) {
 }
 
 function isLeaderEligibleForAutonomousRecovery(handler, leaderService) {
-  if (!leaderService) return false;
-  if (leaderService.isShutdown) return false;
+  if (!leaderService || leaderService.isShutdown) return false;
   return !handler.shuttingDown;
 }
 
-async function tryAutonomousPermanentMemberLossRecovery(
+async function reconcileSupersededRecoveryTargets(
   handler,
   leaderService,
-  hintedDeadNodeId = null,
-  hintedDeadReplicaId = null,
-  deadlineAtMs = null,
+  membership = null,
+  timeoutMs = DEFAULT_VALUE.MIN_MATERIALIZE_BUDGET_MS,
 ) {
-  if (!isLeaderEligibleForAutonomousRecovery(handler, leaderService)) {
-    return null;
-  }
-  const publication = await reconcileCompletedMembershipRecoveryPublications(
-    handler,
-    leaderService,
+  if (!leaderService || leaderService.isShutdown || !leaderService.db) return false;
+  const resolvedMembership = membership ?? await readPartitionCommittedMembership(
+    leaderService, COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT,
   );
+  if (resolvedMembership?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) return false;
+  const voterPeerIds = new Set((resolvedMembership.voters || []).map(String));
+  const unsettled = collectUnsettledSupersededRecoveries(leaderService, null, voterPeerIds);
+  if (unsettled.length === 0) return false;
+  const settled = leaderService.settledSupersededTargetReplicaIds instanceof Set ?
+    leaderService.settledSupersededTargetReplicaIds :
+    (leaderService.settledSupersededTargetReplicaIds = new Set());
+  let pendingCleanup = false;
+  for (const record of unsettled) {
+    if (projectPeerRole(resolvedMembership, record.targetPeerId) !==
+        COMMITTED_REPLICA_ROLE.ABSENT) {
+      continue;
+    }
+    const cleaned = await deliverRecoveryHandlerMessage(handler, record.targetNodeId, {
+      type: ReplicaOperationMessageType.MATERIALIZE_RECOVERY_LEARNER,
+      partitionId: leaderService.partitionId, targetNodeId: record.targetNodeId,
+      supersededTargetReplicaId: record.targetReplicaId, retireSupersededOnly: true,
+    }, timeoutMs);
+    if (cleaned?.status === ReplicaOperationResponseStatus.COMPLETED) {
+      settled.add(record.targetReplicaId);
+    } else {
+      pendingCleanup = true;
+    }
+  }
+  return pendingCleanup;
+}
+
+async function tryAutonomousPermanentMemberLossRecovery(
+  handler, leaderService, hintedDeadNodeId = null, hintedDeadReplicaId = null, deadlineAtMs = null,
+) {
+  if (!isLeaderEligibleForAutonomousRecovery(handler, leaderService)) return null;
+  const [publication, pendingCleanup] = await Promise.all([
+    reconcileCompletedMembershipRecoveryPublications(handler, leaderService),
+    reconcileSupersededRecoveryTargets(handler, leaderService),
+  ]);
   const {plan, pendingExpiry} = await planAutonomousPermanentLossRecovery(
-    handler,
-    leaderService,
-    hintedDeadNodeId,
-    hintedDeadReplicaId,
+    handler, leaderService, hintedDeadNodeId, hintedDeadReplicaId,
   );
   if (!plan) {
     const needsPersistenceRetry = publication.pendingPublication === true ||
-      Boolean(
-        leaderService.lastCompletedMembershipRecovery &&
-        leaderService.lastCompletedMembershipRecoveryPersisted !== true,
-      );
+      pendingCleanup === true ||
+      Boolean(leaderService.lastCompletedMembershipRecovery &&
+        leaderService.lastCompletedMembershipRecoveryPersisted !== true);
     return (pendingExpiry || needsPersistenceRetry) ?
-      Object.freeze({success: false, retry: true}) :
-      null;
+      Object.freeze({success: false, retry: true}) : null;
   }
   return executePermanentMemberLossRecovery(handler, {
     ...plan,
     deadlineAtMs: Number.isSafeInteger(deadlineAtMs) ?
-      deadlineAtMs :
-      nowOf(handler) + DEFAULT_RECOVERY_TIMEOUT_MS,
+      deadlineAtMs : nowOf(handler) + DEFAULT_RECOVERY_TIMEOUT_MS,
   });
 }
 

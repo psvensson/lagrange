@@ -853,7 +853,17 @@ test(
         if (address === fencedAddress) {
           fencedDeliveryCount += 1;
           if (fencedDeliveryCount === 1) {
-            await service.handleRemoteQuery(message);
+            const committedInitial = await service.handleRemoteQuery(message);
+            t.equal(
+              committedInitial.success,
+              true,
+              'first delivery commits on replica before reply is lost',
+            );
+            t.equal(
+              fencedReplica.db.prepare('SELECT value FROM counters WHERE id = 1').get().value,
+              1,
+              'first delivery durably applied the write before fence installation',
+            );
             markLocalReplicaExcludedFence(fencedReplica, {
               decisionId: 'recover-counters-p1',
               partitionId: 'counters-p1',

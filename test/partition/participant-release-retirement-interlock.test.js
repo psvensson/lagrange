@@ -9,6 +9,9 @@ import {classifyPlacementClass} from '../../src/bootstrap/system-partition-class
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {
+  persistRecoveredServicesRowsAsync,
+} from '../../src/node/replica-handler-membership-recovery-decision.js';
+import {
   PARTITION_MEMBERSHIP_RECOVERY_ERROR as RECOVERY_ERROR,
   PARTITION_MEMBERSHIP_RECOVERY_OUTCOME as RECOVERY_OUTCOME,
   PARTITION_MEMBERSHIP_RECOVERY_STAGE as RECOVERY_STAGE,
@@ -518,6 +521,8 @@ test('committed recovery application is deterministic across divergent voter met
         replica_id: founderReplicaId,
         partition_id: partitionId,
         node_id: NODE.A,
+        service_type: 'partition',
+        address: group.addressOf(members[0]),
         created_at: 1000,
         status: 'active',
       },
@@ -526,6 +531,8 @@ test('committed recovery application is deterministic across divergent voter met
         replica_id: group.services[1].replicaId,
         partition_id: partitionId,
         node_id: NODE.B,
+        service_type: 'partition',
+        address: group.addressOf(members[1]),
         created_at: 1001,
         status: 'active',
       },
@@ -534,6 +541,8 @@ test('committed recovery application is deterministic across divergent voter met
         replica_id: group.services[2].replicaId,
         partition_id: partitionId,
         node_id: NODE.C,
+        service_type: 'partition',
+        address: group.addressOf(members[2]),
         created_at: 1002,
         status: 'active',
       },
@@ -569,9 +578,31 @@ test('committed recovery application is deterministic across divergent voter met
       },
     ],
   );
-  // Divergent cache: missing founder SERVICES row at first, and conflicting NODES boot_incarnation = 77.
+  // Divergent cache: missing founder SERVICES row at first, and conflicting NODES boot_incarnation = 77,
+  // while retaining the surviving peers' transport addresses so Raft heartbeats remain routable.
   const divergentCache = createMutableSystemTableCache(
-    [],
+    [
+      {
+        service_id: group.services[1].replicaId,
+        replica_id: group.services[1].replicaId,
+        partition_id: partitionId,
+        node_id: NODE.B,
+        service_type: 'partition',
+        address: group.addressOf(members[1]),
+        created_at: 1001,
+        status: 'active',
+      },
+      {
+        service_id: group.services[2].replicaId,
+        replica_id: group.services[2].replicaId,
+        partition_id: partitionId,
+        node_id: NODE.C,
+        service_type: 'partition',
+        address: group.addressOf(members[2]),
+        created_at: 1002,
+        status: 'active',
+      },
+    ],
     [
       {
         node_id: NODE.A,
@@ -767,9 +798,11 @@ test('committed recovery application is deterministic across divergent voter met
   );
 
   // Now simulate target NODE.D restarting to ownerIncarnation = 3 AFTER learner admission!
+  // Do NOT manually shut down materializedBoot2Service in the test; transfer it into targetHandlerBoot3
+  // (and also plant an abandoned superseded runtime on a DIFFERENT node NODE.C for boot-1's target)
+  // so the recovery owner itself must durably reconstruct and close both superseded runtimes.
   await targetHandlerBoot2.participantReleaseRecovery.shutdown();
   targetHandlerBoot2.unregisterFromRouter(transport);
-  await materializedBoot2Service.shutdown();
   const targetHandlerBoot3 = new ReplicaHandler({
     nodeId: NODE.D,
     ownerIncarnation: 3,
@@ -788,28 +821,116 @@ test('committed recovery application is deterministic across divergent voter met
       },
     },
   });
+  // Retain materializedBoot2Service in targetHandlerBoot3 so recovery must shut it down and remove it.
+  targetHandlerBoot3.localServices.set(boot2MaterializedReplicaId, materializedBoot2Service);
+  targetHandlerBoot3.setLocalReplica(boot2MaterializedReplicaId, {
+    replicaId: boot2MaterializedReplicaId,
+    partitionId,
+    tableName: 'schema_operations',
+    status: 'syncing',
+    service: materializedBoot2Service,
+  });
   handlers.set(NODE.D, targetHandlerBoot3);
   targetHandlerBoot3.registerWithRouter(transport);
 
-  // Attempt 3: Leader discovers committed boot-2 learner's node is now at boot 3,
-  // retires the obsolete committed boot-2 learner from Raft, commits superseding boot-3 decision
-  // via the canonical planner, materializes & promotes boot-3 learner, and retires dead voter NODE.A.
-  const supersededRecovery = await handlers.get(firstLeader.nodeId)
+  // Also test cross-node superseded-target cleanup: point boot-1's durable record at NODE.C,
+  // clear the volatile settled-cleanup set to simulate durable reconstruction, and register
+  // a live mock runtime for boot1Decision.targetReplicaId on NODE.C's handler.
+  let crossNodeSupersededShutdownCount = 0;
+  firstLeader.settledSupersededTargetReplicaIds?.clear?.();
+  for (const member of [firstLeader, firstFollower]) {
+    member.db.prepare(
+      'UPDATE _partition_membership_recovery SET target_node_id = ? WHERE decision_id = ?',
+    ).run(NODE.C, boot1Decision.decisionId);
+  }
+  handlers.get(NODE.C).localServices.set(boot1Decision.targetReplicaId, {
+    replicaId: boot1Decision.targetReplicaId,
+    partitionId,
+    timeSource: new VirtualTimeSource({startMs: 3000}),
+    isShutdown: false,
+    async shutdown() {
+      this.isShutdown = true;
+      crossNodeSupersededShutdownCount += 1;
+    },
+  });
+
+  // Step 3a: Leader discovers committed boot-2 learner's node is now at boot 3,
+  // retires the obsolete committed boot-2 learner from Raft, commits superseding boot-3 decision,
+  // materializes and admits boot-3 learner, and stops at the catch-up boundary hook.
+  const admitBoot3LearnerAttempt = await handlers.get(firstLeader.nodeId)
     .executePermanentMemberLossRecovery({
       ...boot2DecisionRecord,
+      failFastOnCatchUpBehind: true,
+      requiredAppliedBoundary: Number.MAX_SAFE_INTEGER,
+      deadlineAtMs: handlers.get(firstLeader.nodeId).timeSource.now() + budgetMs,
+    });
+  assert.equal(admitBoot3LearnerAttempt.success, false);
+  const recoveriesAfterBoot3Admit = readCommittedMembershipRecoveriesIn(firstLeader.db);
+  assert.equal(recoveriesAfterBoot3Admit.length, 3, 'boot-1, boot-2, and boot-3 decisions committed');
+  const boot3DecisionRecord = recoveriesAfterBoot3Admit[2];
+  assert.equal(boot3DecisionRecord.targetNodeBootIncarnation, 3);
+  assert.equal(
+    materializedBoot2Service.isShutdown,
+    true,
+    'recovery owner durably reconstructed and shut down superseded boot-2 learner runtime',
+  );
+  assert.equal(
+    targetHandlerBoot3.getTrackedService(boot2MaterializedReplicaId),
+    null,
+    'superseded boot-2 runtime removed from target handler registry',
+  );
+  assert.equal(
+    crossNodeSupersededShutdownCount,
+    1,
+    'recovery owner sent superseded-target cleanup to the old target node (NODE.C) across target-node change',
+  );
+  assert.equal(
+    handlers.get(NODE.C).getTrackedService(boot1Decision.targetReplicaId),
+    null,
+    'cross-node superseded target removed from NODE.C registry',
+  );
+  for (const member of [firstLeader, firstFollower]) {
+    member.db.prepare(
+      'UPDATE _partition_membership_recovery SET target_node_id = ? WHERE decision_id = ?',
+    ).run(boot1Decision.targetNodeId, boot1Decision.decisionId);
+  }
+
+  // Step 3b (P2 #1 Witness): Simulate a leader whose volatile targetNodeBoots map is empty and whose
+  // NODES cache has a STALE boot_incarnation = 1 (even with status = 'failed') for NODE.D while
+  // the committed recovery record and healthy admitted learner on NODE.D are at boot 3!
+  firstLeader.targetNodeBoots?.clear?.();
+  firstLeader.settledSupersededTargetReplicaIds?.clear?.();
+  leaderCache.applySystemTableChange('nodes', 'INSERT', {
+    node_id: NODE.D,
+    boot_incarnation: 1,
+    status: 'failed',
+    connection_state: 'disconnected',
+    ready_lease_expires_at: null,
+  });
+  const supersededRecovery = await handlers.get(firstLeader.nodeId)
+    .executePermanentMemberLossRecovery({
+      ...boot3DecisionRecord,
+      supersededTargetReplicaId: null,
       deadlineAtMs: handlers.get(firstLeader.nodeId).timeSource.now() + budgetMs,
     });
   assert.equal(supersededRecovery.success, true, JSON.stringify(supersededRecovery));
-  assert.notEqual(
+  assert.equal(
     supersededRecovery.decisionId,
-    boot2DecisionRecord.decisionId,
-    'obsolete committed boot-2 learner must be retired and superseded by a new boot-3 decisionId',
+    boot3DecisionRecord.decisionId,
+    'stale boot-1 NODES row must NOT supersede or retire a healthy boot-3 committed learner',
   );
   assert.equal(
-    supersededRecovery.recovery.targetNodeBootIncarnation,
+    firstLeader.targetNodeBoots.get(NODE.D),
     3,
-    'superseding committed recovery decision must bind targetNodeBootIncarnation = 3',
+    'successful MATERIALIZE response refreshes leader targetNodeBoots to 3',
   );
+  leaderCache.applySystemTableChange('nodes', 'INSERT', {
+    node_id: NODE.D,
+    boot_incarnation: 3,
+    status: 'ready',
+    connection_state: 'connected',
+    ready_lease_expires_at: 999999,
+  });
   assert.equal(
     targetHandlerBoot3.localServices.size,
     1,
@@ -985,5 +1106,77 @@ test('committed recovery application is deterministic across divergent voter met
     divergentCache.get('services', founderReplicaId),
     null,
     'retired source SERVICES row is deleted from metadata projection',
+  );
+
+  // P2 #3 Witness (Effect fence):
+  // (a) Fail-closed when leaderService authority is unavailable (shut down or not leader):
+  const mutationsBeforeClosed = publishedMutations.length;
+  const closedPublished = await persistRecoveredServicesRowsAsync(
+    successorHandler,
+    supersededRecovery.recovery,
+    null,
+    {isShutdown: true},
+  );
+  assert.equal(closedPublished, false, 'unavailable authority must fail closed and retain publication debt');
+  assert.equal(publishedMutations.length, mutationsBeforeClosed, 'unavailable authority submits no mutations');
+
+  // (b) Delayed in-flight INSERT for an older recovery (A -> D) that resolves AFTER a subsequent
+  // recovery (D -> E) has retired D must immediately retract D via deleteSystemTableRow:
+  let releaseDelayedInsert = null;
+  const delayedInsertGate = new Promise((resolve) => {
+    releaseDelayedInsert = resolve;
+  });
+  const baseSubmit = successorHandler.controlPlaneSystemTableGateway.submitMutation;
+  successorHandler.controlPlaneSystemTableGateway.submitMutation = async (mutation) => {
+    if (mutation.tableName === 'services' &&
+        mutation.row?.service_id === supersededRecovery.recovery.targetReplicaId) {
+      await delayedInsertGate;
+    }
+    return baseSubmit(mutation);
+  };
+  const inFlightOldPublish = persistRecoveredServicesRowsAsync(
+    successorHandler,
+    supersededRecovery.recovery,
+    null,
+    successorLeader,
+  );
+  // Wait a tick so inFlightOldPublish passes the pre-check and is suspended inside submitMutation(INSERT D).
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Now record a subsequent committed recovery D -> E in _partition_membership_recovery retiring D!
+  successorLeader.db.prepare(
+    `INSERT INTO _partition_membership_recovery (
+      decision_id, entry_id, partition_id, configuration_key, membership_generation_index,
+      source_peer_id, source_replica_id, source_replica_created_at, source_node_id, source_node_boot_incarnation,
+      target_peer_id, target_replica_id, target_replica_created_at, target_node_id, target_node_boot_incarnation,
+      intent_log_index, intent_term
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    'recover-d-to-e',
+    'recover-d-to-e',
+    partitionId,
+    supersededRecovery.recovery.configurationKey,
+    supersededRecovery.recovery.membershipGenerationIndex + 1,
+    supersededRecovery.recovery.targetPeerId,
+    supersededRecovery.recovery.targetReplicaId,
+    supersededRecovery.recovery.targetReplicaCreatedAt,
+    supersededRecovery.recovery.targetNodeId,
+    supersededRecovery.recovery.targetNodeBootIncarnation,
+    deriveCanonicalPeerIdString('replace-replica-e-final'),
+    'replace-replica-e-final',
+    9000,
+    NODE.B,
+    1,
+    999,
+    3,
+  );
+  divergentCache.applySystemTableChange('services', 'DELETE', {
+    service_id: supersededRecovery.recovery.targetReplicaId,
+  });
+  releaseDelayedInsert();
+  await inFlightOldPublish;
+  assert.equal(
+    divergentCache.get('services', supersededRecovery.recovery.targetReplicaId),
+    null,
+    'post-write effect fence must retract delayed INSERT for a target that was subsequently retired',
   );
 });

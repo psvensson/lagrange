@@ -6,60 +6,41 @@ import {createHash} from 'node:crypto';
 import {createPartitionConstructionHandoff} from
   '../bootstrap/shared/partition-service-construction.js';
 import {
-  SYSTEM_TABLE_NAME,
-  getSchemaByTableName,
+  SYSTEM_TABLE_NAME, getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
-  COLUMN,
-  NODE_STATE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  STATE,
-  TABLES,
+  COLUMN, NODE_STATE, SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES,
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
-import {hasLiveTransportEvidence} from
-  '../control-plane/live-transport-evidence.js';
-import {NodeReadyLeaseAuthority} from
-  '../control-plane/node-ready-lease-authority.js';
-import {projectNodeLivenessSemantics} from
-  '../control-plane/node-liveness-semantic-projection.js';
+import {hasLiveTransportEvidence} from '../control-plane/live-transport-evidence.js';
+import {NodeReadyLeaseAuthority} from '../control-plane/node-ready-lease-authority.js';
+import {projectNodeLivenessSemantics} from '../control-plane/node-liveness-semantic-projection.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   PARTITION_MEMBERSHIP_RECOVERY_DEFAULT as DEFAULT_VALUE,
   PARTITION_MEMBERSHIP_RECOVERY_ERROR as ERROR,
 } from '../partition/partition-membership-recovery-constants.js';
 import {
-  deriveCanonicalPeerIdString,
-  readCommittedMembershipRecoveriesIn,
-  recordPartitionMemberBinding,
-  resolveAuthoritativeMemberBinding,
+  deriveCanonicalPeerIdString, readCommittedMembershipRecoveriesIn,
+  recordPartitionMemberBinding, resolveAuthoritativeMemberBinding,
 } from '../partition/partition-membership-recovery.js';
 import {
   readPartitionCommittedMembership,
 } from '../partition/partition-service-raft-membership-administration.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
-  COMMITTED_MEMBERSHIP_ANSWER_KIND,
-  COMMITTED_MEMBERSHIP_READ_PURPOSE,
+  COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE,
 } from '../raft/raft-committed-membership-constants.js';
 import {
-  replicaIdsOfStamp,
-  validateBootstrapMembershipStamp,
+  replicaIdsOfStamp, validateBootstrapMembershipStamp,
 } from '../raft/raft-committed-membership-stamp.js';
-import {
-  RAFT_OPERATION_OUTCOME,
-} from '../raft/raft-operation-port-constants.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+import {ReplicaOperationResponseStatus} from '../rebalancer/replica-operation-constants.js';
 import {
-  ReplicaOperationResponseStatus,
-} from '../rebalancer/replica-operation-constants.js';
-import {
-  OperationType,
-  ReplicaStatus,
-  isTerminalReplicaOperationRecord,
+  OperationType, ReplicaStatus, isTerminalReplicaOperationRecord,
 } from '../rebalancer/replica-operation-progress.js';
 
 const DIGEST_ALGORITHM = 'sha256';
@@ -209,10 +190,16 @@ function isTargetBootSuperseded(handler, leaderService, unfinished) {
     isPositiveSafeInteger(targetBoot) ? targetBoot : 0,
     isPositiveSafeInteger(rowBoot) ? rowBoot : 0,
   );
-  if (isPositiveSafeInteger(knownBoot) && knownBoot !== unfinished.targetNodeBootIncarnation) {
+  if (isPositiveSafeInteger(knownBoot) && knownBoot > unfinished.targetNodeBootIncarnation) {
     return true;
   }
-  return nodeRow ? observesCommittedNodeLossRow(nodeRow) : false;
+  return Boolean(
+    nodeRow &&
+    isPositiveSafeInteger(rowBoot) &&
+    rowBoot >= unfinished.targetNodeBootIncarnation &&
+    rowBoot >= knownBoot &&
+    observesCommittedNodeLossRow(nodeRow),
+  );
 }
 
 function isUnfinishedRecoveryTargetSuperseded(handler, leaderService, membership, unfinished) {
@@ -375,19 +362,14 @@ async function planAutonomousPermanentLossRecovery(
   return Object.freeze({
     pendingExpiry: false,
     plan: Object.freeze({
-      decisionId,
-      entryId: decisionId,
-      partitionId: leaderService.partitionId,
+      decisionId, entryId: decisionId, partitionId: leaderService.partitionId,
       configurationKey: membership.configurationKey,
       membershipGenerationIndex: Number(membership.membershipGenerationIndex),
-      sourcePeerId,
-      sourceReplicaId,
+      sourcePeerId, sourceReplicaId,
       sourceReplicaCreatedAt: sourceBinding.replicaCreatedAt,
-      sourceNodeId,
-      sourceNodeBootIncarnation: sourceBinding.nodeBootIncarnation,
+      sourceNodeId, sourceNodeBootIncarnation: sourceBinding.nodeBootIncarnation,
       targetPeerId: deriveCanonicalPeerIdString(targetReplicaId),
-      targetReplicaId,
-      targetReplicaCreatedAt,
+      targetReplicaId, targetReplicaCreatedAt,
       targetNodeId: targetSelection.targetNodeId,
       targetNodeBootIncarnation: targetSelection.targetNodeBootIncarnation,
       supersededTargetReplicaId: isNonEmptyString(unfinished?.decisionId) ?
@@ -398,9 +380,7 @@ async function planAutonomousPermanentLossRecovery(
 
 function observeRecoveryTargetReplica(service) {
   const status = service?.raft?.readStatus?.() ?? null;
-  if (!status || status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-    return null;
-  }
+  if (!status || status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return null;
   return Object.freeze({
     replicaIdentity: service.replicaId,
     peerId: deriveCanonicalPeerIdString(service.replicaId),
@@ -419,13 +399,9 @@ function observeRecoveryTargetReplica(service) {
 function resolveTableSchemaForRecovery(handler, request) {
   if (request.schema) return request.schema;
   const tableName = request.tableName;
-  const systemSchema = isNonEmptyString(tableName) ?
-    getSchemaByTableName(tableName) : null;
-  if (systemSchema) {
-    return systemSchema;
-  }
-  const lookupKey = isNonEmptyString(request.tableId) ?
-    request.tableId : tableName;
+  const systemSchema = isNonEmptyString(tableName) ? getSchemaByTableName(tableName) : null;
+  if (systemSchema) return systemSchema;
+  const lookupKey = isNonEmptyString(request.tableId) ? request.tableId : tableName;
   const tableRow = handler.systemTableCache?.get?.(TABLES.TABLES, lookupKey);
   if (tableRow?.schema_json) {
     return typeof tableRow.schema_json === 'string' ?
@@ -439,13 +415,7 @@ function buildRecoveryStorageOption(handler, partitionId, replicaId) {
 }
 
 async function constructRecoveryLearnerPartition(
-  handler,
-  request,
-  stamp,
-  storageOption,
-  schema,
-  tableName,
-  tableId,
+  handler, request, stamp, storageOption, schema, tableName, tableId,
 ) {
   const {partitionId, targetReplicaId} = request;
   const replicaIds = replicaIdsOfStamp(stamp, targetReplicaId);
@@ -476,22 +446,36 @@ async function handleMaterializeRecoveryLearner(handler, request) {
       error: ERROR.TARGET_INVALID, failureCode: ERROR.TARGET_INVALID, nodeId: handler.nodeId,
     });
   }
+  const {
+    partitionId, targetReplicaId, targetNodeBootIncarnation,
+    targetReplicaCreatedAt, bootstrapMembership, supersededTargetReplicaId,
+    retireSupersededOnly,
+  } = request;
+  if (isNonEmptyString(supersededTargetReplicaId) &&
+      (retireSupersededOnly === true || supersededTargetReplicaId !== targetReplicaId)) {
+    await handler.getTrackedService(supersededTargetReplicaId)?.shutdown?.();
+    handler.localServices?.delete?.(supersededTargetReplicaId);
+    handler.localReplicas?.delete?.(supersededTargetReplicaId);
+  }
+  if (retireSupersededOnly === true) {
+    return handler.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, {
+      partitionId, replicaId: supersededTargetReplicaId ?? null, nodeId: handler.nodeId,
+      actualTargetNodeBootIncarnation: handler.ownerIncarnation,
+    });
+  }
   if (isPositiveSafeInteger(handler.ownerIncarnation) &&
-      handler.ownerIncarnation !== request.targetNodeBootIncarnation) {
+      handler.ownerIncarnation !== targetNodeBootIncarnation) {
+    if (isPositiveSafeInteger(targetNodeBootIncarnation) &&
+        handler.ownerIncarnation > targetNodeBootIncarnation &&
+        isNonEmptyString(targetReplicaId)) {
+      await handler.getTrackedService(targetReplicaId)?.shutdown?.();
+      handler.localServices?.delete?.(targetReplicaId);
+      handler.localReplicas?.delete?.(targetReplicaId);
+    }
     return handler.buildReplicaOperationResponse(ReplicaOperationResponseStatus.ERROR, {
       error: ERROR.SOURCE_GENERATION_MISMATCH, failureCode: ERROR.SOURCE_GENERATION_MISMATCH,
       nodeId: handler.nodeId, actualTargetNodeBootIncarnation: handler.ownerIncarnation,
     });
-  }
-  const {
-    partitionId, targetReplicaId, targetNodeBootIncarnation,
-    targetReplicaCreatedAt, bootstrapMembership, supersededTargetReplicaId,
-  } = request;
-  if (isNonEmptyString(supersededTargetReplicaId) &&
-      supersededTargetReplicaId !== targetReplicaId) {
-    await handler.getTrackedService(supersededTargetReplicaId)?.shutdown?.();
-    handler.localServices?.delete?.(supersededTargetReplicaId);
-    handler.localReplicas?.delete?.(supersededTargetReplicaId);
   }
   let service = handler.getTrackedService(targetReplicaId);
   if (!service || service.isShutdown) {
@@ -537,6 +521,7 @@ async function handleMaterializeRecoveryLearner(handler, request) {
       partitionId,
       replicaId: targetReplicaId,
       nodeId: handler.nodeId,
+      actualTargetNodeBootIncarnation: handler.ownerIncarnation,
       targetObservation: observeRecoveryTargetReplica(service),
     },
   );
@@ -544,16 +529,12 @@ async function handleMaterializeRecoveryLearner(handler, request) {
 
 async function handleObserveRecoveryLearner(handler, request) {
   const service = handler.getTrackedService(request?.targetReplicaId);
-  if (!service || service.isShutdown ||
-      service.partitionId !== request?.partitionId) {
-    return handler.buildReplicaOperationResponse(
-      ReplicaOperationResponseStatus.NOT_FOUND,
-      {
-        partitionId: request?.partitionId ?? null,
-        replicaId: request?.targetReplicaId ?? null,
-        nodeId: handler.nodeId,
-      },
-    );
+  if (!service || service.isShutdown || service.partitionId !== request?.partitionId) {
+    return handler.buildReplicaOperationResponse(ReplicaOperationResponseStatus.NOT_FOUND, {
+      partitionId: request?.partitionId ?? null,
+      replicaId: request?.targetReplicaId ?? null,
+      nodeId: handler.nodeId,
+    });
   }
   if (request.promoted === true) {
     if (isCatchupLearnerRaftRole(service.role)) {
@@ -565,30 +546,19 @@ async function handleObserveRecoveryLearner(handler, request) {
     }
     handler.seedLocalReplicaVoterRaftRole?.(service.replicaId);
     handler.setLocalReplica(service.replicaId, {
-      replicaId: service.replicaId,
-      partitionId: service.partitionId,
-      tableName: service.tableName,
-      status: ReplicaStatus.ACTIVE,
-      service,
+      replicaId: service.replicaId, partitionId: service.partitionId,
+      tableName: service.tableName, status: ReplicaStatus.ACTIVE, service,
     });
     handler.seedLocalPriorityServiceRow?.(
-      service.replicaId,
-      service.partitionId,
-      SERVICE_STATUS.ACTIVE,
-      {markLocalOnly: false},
+      service.replicaId, service.partitionId, SERVICE_STATUS.ACTIVE, {markLocalOnly: false},
     );
     handler.seedLocalReplicaVoterRaftRole?.(service.replicaId);
     service.reassertDurableRaftRole?.();
   }
-  return handler.buildReplicaOperationResponse(
-    ReplicaOperationResponseStatus.COMPLETED,
-    {
-      partitionId: service.partitionId,
-      replicaId: service.replicaId,
-      nodeId: handler.nodeId,
-      targetObservation: observeRecoveryTargetReplica(service),
-    },
-  );
+  return handler.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, {
+    partitionId: service.partitionId, replicaId: service.replicaId,
+    nodeId: handler.nodeId, targetObservation: observeRecoveryTargetReplica(service),
+  });
 }
 
 function resolveRecoveryMetadataGateway(handler) {
@@ -596,6 +566,36 @@ function resolveRecoveryMetadataGateway(handler) {
     return handler.controlPlaneSystemTableGateway;
   }
   return handler?.getControlPlaneSystemTableGateway?.() ?? null;
+}
+
+function isTargetSourceOfLaterRecovery(allRecoveries, recovery) {
+  return allRecoveries.some((record) =>
+    record.decisionId !== recovery.decisionId &&
+    (String(record.sourcePeerId) === String(recovery.targetPeerId) ||
+      record.sourceReplicaId === recovery.targetReplicaId));
+}
+
+async function readRecoveryPublicationAuthority(leaderService, recovery) {
+  if (!leaderService || leaderService.isShutdown ||
+      leaderService.raft?.readStatus?.()?.role !== RAFT_ROLE.LEADER) {
+    return {available: false, targetStillVoter: false, sourceStillAbsent: false};
+  }
+  const current = await readPartitionCommittedMembership(
+    leaderService, COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT,
+  );
+  if (current?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
+      leaderService.isShutdown ||
+      leaderService.raft?.readStatus?.()?.role !== RAFT_ROLE.LEADER) {
+    return {available: false, targetStillVoter: false, sourceStillAbsent: false};
+  }
+  const currentVoters = new Set((current.voters || []).map(String));
+  const allRecoveries = readCommittedMembershipRecoveriesIn(leaderService);
+  const targetReplacedLater = isTargetSourceOfLaterRecovery(allRecoveries, recovery);
+  return {
+    available: true,
+    targetStillVoter: !targetReplacedLater && currentVoters.has(String(recovery.targetPeerId)),
+    sourceStillAbsent: !currentVoters.has(String(recovery.sourcePeerId)),
+  };
 }
 
 function persistRecoveredServicesRowsAsync(
@@ -609,17 +609,12 @@ function persistRecoveredServicesRowsAsync(
   const resolvedAddress = isNonEmptyString(targetAddress) ?
     targetAddress : `${recovery.targetNodeId}/partition/${recovery.targetReplicaId}`;
   const targetRow = {
-    service_id: recovery.targetReplicaId,
-    replica_id: recovery.targetReplicaId,
-    partition_id: recovery.partitionId,
-    service_type: SERVICE_TYPE.PARTITION,
-    node_id: recovery.targetNodeId,
-    address: resolvedAddress,
-    status: SERVICE_STATUS.ACTIVE,
-    raft_role: RAFT_ROLE.FOLLOWER,
+    service_id: recovery.targetReplicaId, replica_id: recovery.targetReplicaId,
+    partition_id: recovery.partitionId, service_type: SERVICE_TYPE.PARTITION,
+    node_id: recovery.targetNodeId, address: resolvedAddress,
+    status: SERVICE_STATUS.ACTIVE, raft_role: RAFT_ROLE.FOLLOWER,
     created_at: recovery.targetReplicaCreatedAt,
-    state_entered_at: recovery.targetReplicaCreatedAt,
-    updated_at: nowMs,
+    state_entered_at: recovery.targetReplicaCreatedAt, updated_at: nowMs,
   };
   if (!gateway || !gateway.submitMutation || !gateway.deleteSystemTableRow) {
     return Promise.resolve(false);
@@ -628,21 +623,15 @@ function persistRecoveredServicesRowsAsync(
     workClass: PRESSURE_WORK_CLASS.CRITICAL,
     deliveryPriority: DEFAULT_VALUE.DELIVERY_PRIORITY_CRITICAL,
   };
-  return Promise.resolve().then(async () => {
-    let targetStillVoter = true;
-    let sourceStillAbsent = true;
-    if (leaderService && !leaderService.isShutdown) {
-      const current = await readPartitionCommittedMembership(
-        leaderService, COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT,
-      );
-      if (current?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
-        const currentVoters = new Set((current.voters || []).map(String));
-        targetStillVoter = currentVoters.has(String(recovery.targetPeerId));
-        sourceStillAbsent = !currentVoters.has(String(recovery.sourcePeerId));
-      }
-    }
-    let targetPersisted = !targetStillVoter;
-    if (targetStillVoter) {
+  const chains = handler.recoveryPublicationChains instanceof Map ?
+    handler.recoveryPublicationChains :
+    (handler.recoveryPublicationChains = new Map());
+  const previous = chains.get(recovery.partitionId) ?? Promise.resolve(false);
+  const run = previous.catch(() => false).then(async () => {
+    const pre = await readRecoveryPublicationAuthority(leaderService, recovery);
+    if (!pre.available) return false;
+    let targetPersisted = !pre.targetStillVoter;
+    if (pre.targetStillVoter) {
       try {
         const updatedAt = Number(handler?.timeSource?.now?.() ?? Date.now());
         const inserted = await gateway.submitMutation({
@@ -660,15 +649,23 @@ function persistRecoveredServicesRowsAsync(
           );
           if (updated?.success === false) updatedOk = false;
         }
-        if (inserted?.success !== false && updatedOk) targetPersisted = true;
+        const postTarget = await readRecoveryPublicationAuthority(leaderService, recovery);
+        if (!postTarget.targetStillVoter) {
+          await gateway.deleteSystemTableRow(
+            SYSTEM_TABLE_NAME.SERVICES, {service_id: recovery.targetReplicaId}, writeOptions,
+          );
+          targetPersisted = postTarget.available;
+        } else if (inserted?.success !== false && updatedOk) {
+          targetPersisted = true;
+        }
       } catch (error) {
         handler.logger?.debug?.(ERROR.CONFIGURATION_IN_TRANSITION, {
           partitionId: recovery.partitionId, error: error?.message ?? String(error),
         });
       }
     }
-    let sourceDeleted = !sourceStillAbsent;
-    if (sourceStillAbsent) {
+    let sourceDeleted = !pre.sourceStillAbsent;
+    if (pre.sourceStillAbsent) {
       try {
         const deleted = await gateway.deleteSystemTableRow(
           SYSTEM_TABLE_NAME.SERVICES, {service_id: recovery.sourceReplicaId}, writeOptions,
@@ -690,16 +687,44 @@ function persistRecoveredServicesRowsAsync(
     }
     return published;
   });
+  chains.set(recovery.partitionId, run);
+  return run;
 }
 
-function needsCompletedRecoveryPublication(handler, leaderService, record) {
+function needsCompletedRecoveryPublication(handler, leaderService, record, allRecoveries = []) {
   const persistedSet = leaderService?.persistedCompletedRecoveryDecisionIds;
   if (!(persistedSet instanceof Set) || !persistedSet.has(record.decisionId)) return true;
   const cache = handler?.systemTableCache;
   if (!cache || !cache.get) return false;
   if ((cache.get(TABLES.SERVICES, record.sourceReplicaId) ?? null) !== null) return true;
   const targetRow = cache.get(TABLES.SERVICES, record.targetReplicaId) ?? null;
+  if (isTargetSourceOfLaterRecovery(allRecoveries, record)) {
+    return targetRow !== null;
+  }
   return targetRow === null || targetRow[COLUMN.STATUS] !== SERVICE_STATUS.ACTIVE;
+}
+
+function collectUnsettledSupersededRecoveries(
+  leaderService, allRecoveries = null, voterPeerIds = null,
+) {
+  const records = Array.isArray(allRecoveries) ?
+    allRecoveries : readCommittedMembershipRecoveriesIn(leaderService);
+  if (records.length <= 1) return [];
+  const settled = leaderService?.settledSupersededTargetReplicaIds;
+  const latestBySource = new Map();
+  for (const record of records) {
+    latestBySource.set(String(record.sourcePeerId), record);
+  }
+  return records.filter((record) => {
+    const latest = latestBySource.get(String(record.sourcePeerId));
+    if (!latest || record.decisionId === latest.decisionId ||
+        record.targetReplicaId === latest.targetReplicaId) {
+      return false;
+    }
+    if (settled instanceof Set && settled.has(record.targetReplicaId)) return false;
+    if (voterPeerIds && voterPeerIds.has(String(record.targetPeerId))) return false;
+    return !isTargetSourceOfLaterRecovery(records, record);
+  });
 }
 
 async function reconcileCompletedMembershipRecoveryPublications(
@@ -717,14 +742,16 @@ async function reconcileCompletedMembershipRecoveryPublications(
     return Object.freeze({pendingPublication: false});
   }
   const voterPeerIds = new Set((resolvedMembership.voters || []).map(String));
-  const completedRecoveries = readCommittedMembershipRecoveriesIn(leaderService).filter((record) =>
-    voterPeerIds.has(String(record.targetPeerId)) &&
-    !voterPeerIds.has(String(record.sourcePeerId)));
+  const allRecoveries = readCommittedMembershipRecoveriesIn(leaderService);
+  const completedRecoveries = allRecoveries.filter((record) =>
+    !voterPeerIds.has(String(record.sourcePeerId)) &&
+    (voterPeerIds.has(String(record.targetPeerId)) ||
+      isTargetSourceOfLaterRecovery(allRecoveries, record)));
   if (completedRecoveries.length === 0) return Object.freeze({pendingPublication: false});
   let pendingPublication = false;
   const gateway = resolveRecoveryMetadataGateway(handler);
   for (const record of completedRecoveries) {
-    if (!needsCompletedRecoveryPublication(handler, leaderService, record)) continue;
+    if (!needsCompletedRecoveryPublication(handler, leaderService, record, allRecoveries)) continue;
     leaderService.lastCompletedMembershipRecovery = record;
     leaderService.lastCompletedMembershipRecoveryPersisted = false;
     const published = await persistRecoveredServicesRowsAsync(
@@ -745,11 +772,13 @@ function hasUnpublishedCompletedMembershipRecovery(handler, leaderService) {
   }
   const records = readCommittedMembershipRecoveriesIn(leaderService);
   if (records.length === 0) return false;
+  if (collectUnsettledSupersededRecoveries(leaderService, records).length > 0) return true;
   return records.some((record) =>
-    needsCompletedRecoveryPublication(handler, leaderService, record));
+    needsCompletedRecoveryPublication(handler, leaderService, record, records));
 }
 
 export {
+  collectUnsettledSupersededRecoveries,
   handleMaterializeRecoveryLearner,
   handleObserveRecoveryLearner,
   hasAnyUnreachableOrDeadClusterNode,
