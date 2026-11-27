@@ -107,6 +107,22 @@ const distributedTransactionStatementMethods = {
     this.settledCycleRollbacksBySession?.delete(sessionId);
   },
 
+  recordSettledRecoveryRollback(tx) {
+    if (!tx || typeof tx.sessionId !== 'string' || tx.sessionId.length === 0) {
+      return;
+    }
+    settledCycleRollbacksOf(this).set(tx.sessionId, {
+      success: true,
+      operation: QUERY_OPERATION.ROLLBACK,
+      transactionId: tx.transactionId,
+      transactionEpoch: tx.transactionEpoch,
+      participants: this.getOrderedParticipantIds(tx),
+      failedParticipants: [],
+      participantFailures: [],
+      firstFailedParticipant: null,
+    });
+  },
+
   async rollbackTransaction(sessionId, options = {}) {
     return this.rollback(sessionId, options);
   },

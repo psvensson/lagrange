@@ -197,14 +197,23 @@ async function refreshRecoveryAuthority(coordinator, tx) {
   return true;
 }
 
-async function redriveAuthoritativeRecovery(coordinator, tx) {
+function canDecideUndecidedRecovery(coordinator, tx, prepared, options) {
+  if (prepared || options?.allowLiveSessionRollback === true) {
+    return true;
+  }
+  return Boolean(coordinator.isTransactionBudgetExceeded(tx));
+}
+
+async function redriveAuthoritativeRecovery(coordinator, tx, options = {}) {
   const held = () => ({path: null, result: coordinator.buildDecisionInDoubtResult(tx)});
   if (!await refreshRecoveryAuthority(coordinator, tx)) return held();
   if (!tx.decision) {
     const prepared = tx.participantSetState === PARTICIPANT_SET_STATE.FROZEN &&
       Array.from(tx.participants.values()).every((participant) =>
         participant.prepareEvidenceRetained === true);
-    if (!prepared && !coordinator.isTransactionBudgetExceeded(tx)) return held();
+    if (!canDecideUndecidedRecovery(coordinator, tx, prepared, options)) {
+      return held();
+    }
     try {
       await coordinator.freezeParticipantSet(tx);
     } catch (error) {

@@ -3,8 +3,23 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {test} from 'node:test';
-import {SQL_TRANSACTIONS_SCHEMA, SCHEMA_OPERATIONS_SCHEMA, REPLICA_OPERATIONS_SCHEMA}
-  from '../../src/bootstrap/system-table-schemas-constants.js';
+import Database from 'better-sqlite3';
+import {
+  REPLICA_OPERATIONS_SCHEMA,
+  SCHEMA_OPERATIONS_SCHEMA,
+  SERVICES_SCHEMA,
+  SQL_TRANSACTIONS_SCHEMA,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  registerRecoveryPublicationPartitionService,
+} from '../../src/partition/partition-membership-recovery-store.js';
+import {
+  openParticipantTransactionStore,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {
+  runCommittedPartitionStatement,
+} from '../../src/partition/partition-statement-admission.js';
 import {classifyPlacementClass} from '../../src/bootstrap/system-partition-classification.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
@@ -1002,26 +1017,148 @@ test('committed recovery application is deterministic across divergent voter met
 
   const publishedMutations = [];
   const publishedDeletes = [];
+  const servicesDb = new Database(':memory:');
+  t.after(async () => {
+    await targetHandlerBoot2.shutdown?.();
+    await targetHandlerBoot3.shutdown?.();
+    await crashedLeaderHandler.shutdown?.();
+    for (const h of handlers.values()) {
+      await h.shutdown?.();
+    }
+    servicesDb.close();
+  });
+  servicesDb.exec(`
+    CREATE TABLE services (
+      service_id TEXT PRIMARY KEY,
+      replica_id TEXT,
+      partition_id TEXT,
+      service_type TEXT NOT NULL,
+      node_id TEXT NOT NULL,
+      address TEXT NOT NULL,
+      status TEXT NOT NULL,
+      raft_role TEXT,
+      created_at INTEGER NOT NULL,
+      state_entered_at INTEGER,
+      updated_at INTEGER
+    )
+  `);
+  openParticipantTransactionStore(servicesDb);
+  const servicesPartition = {
+    partitionId: 'services-p1',
+    tableName: 'services',
+    schema: SERVICES_SCHEMA,
+    db: servicesDb,
+    systemTableCache: divergentCache,
+    logger: successorLeader.logger,
+  };
+  registerRecoveryPublicationPartitionService(servicesPartition, divergentCache);
+  registerRecoveryPublicationPartitionService(successorLeader, divergentCache);
+  for (const existingRow of divergentCache.getAll('services')) {
+    servicesDb.prepare(
+      `INSERT OR REPLACE INTO services (
+        service_id, replica_id, partition_id, service_type, node_id, address,
+        status, raft_role, created_at, state_entered_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      existingRow.service_id,
+      existingRow.replica_id ?? existingRow.service_id,
+      existingRow.partition_id ?? partitionId,
+      existingRow.service_type ?? 'partition',
+      existingRow.node_id ?? NODE.A,
+      existingRow.address ?? `${existingRow.node_id ?? NODE.A}/partition/${existingRow.service_id}`,
+      existingRow.status ?? 'active',
+      existingRow.raft_role ?? 'follower',
+      Number(existingRow.created_at) || 1000,
+      Number(existingRow.state_entered_at ?? existingRow.created_at) || 1000,
+      Number(existingRow.updated_at ?? existingRow.created_at) || 1000,
+    );
+  }
+  const executeAuthoritativeServicesSql = (sql, params) =>
+    runCommittedPartitionStatement(servicesPartition, {
+      type: OP.EXECUTE_STATEMENT,
+      sql,
+      params,
+    });
   successorHandler.controlPlaneSystemTableGateway = {
     async submitMutation(mutation) {
       publishedMutations.push(mutation);
       if (mutation.tableName === 'services' && mutation.row) {
-        divergentCache.applySystemTableChange('services', 'INSERT', mutation.row);
+        const row = mutation.row;
+        try {
+          const outcome = executeAuthoritativeServicesSql(
+            `INSERT OR IGNORE INTO services (
+              service_id, replica_id, partition_id, service_type, node_id, address,
+              status, raft_role, created_at, state_entered_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              row.service_id,
+              row.replica_id ?? row.service_id,
+              row.partition_id ?? partitionId,
+              row.service_type ?? 'partition',
+              row.node_id,
+              row.address,
+              row.status ?? 'active',
+              row.raft_role ?? 'follower',
+              Number(row.created_at) || 1000,
+              Number(row.state_entered_at ?? row.created_at) || 1000,
+              Number(row.updated_at ?? row.created_at) || 1000,
+            ],
+          );
+          for (const appliedRow of outcome.affectedRows ?? []) {
+            divergentCache.applySystemTableChange('services', 'INSERT', appliedRow);
+          }
+        } catch (error) {
+          if (error?.refusalLayer === 'excluded_recovery_service_replica') {
+            return {
+              success: false,
+              failureCode: error.code,
+              refusalLayer: error.refusalLayer,
+            };
+          }
+          throw error;
+        }
       }
       return {success: true};
     },
     async updateSystemTableRow(tableName, where, updates) {
       if (tableName === 'services' && where?.service_id) {
-        divergentCache.applySystemTableChange('services', 'UPDATE', {
-          service_id: where.service_id,
-          ...updates,
-        });
+        try {
+          const outcome = executeAuthoritativeServicesSql(
+            `UPDATE services
+                SET status = COALESCE(?, status),
+                    raft_role = COALESCE(?, raft_role),
+                    updated_at = COALESCE(?, updated_at)
+              WHERE service_id = ?`,
+            [
+              updates?.status ?? null,
+              updates?.raft_role ?? null,
+              updates?.updated_at ?? null,
+              where.service_id,
+            ],
+          );
+          for (const appliedRow of outcome.affectedRows ?? []) {
+            divergentCache.applySystemTableChange('services', 'UPDATE', appliedRow);
+          }
+        } catch (error) {
+          if (error?.refusalLayer === 'excluded_recovery_service_replica') {
+            return {
+              success: false,
+              failureCode: error.code,
+              refusalLayer: error.refusalLayer,
+            };
+          }
+          throw error;
+        }
       }
       return {success: true};
     },
     async deleteSystemTableRow(tableName, where) {
       publishedDeletes.push({tableName, where});
       if (tableName === 'services' && where?.service_id) {
+        executeAuthoritativeServicesSql(
+          'DELETE FROM services WHERE service_id = ?',
+          [where.service_id],
+        );
         divergentCache.applySystemTableChange('services', 'DELETE', {
           service_id: where.service_id,
         });
@@ -1035,6 +1172,7 @@ test('committed recovery application is deterministic across divergent voter met
   // and participant cutover succeeds on the ordinary partition.
   const firstLeaderIndex = group.services.indexOf(firstLeader);
   const reopenedFirstLeader = await group.reopen(firstLeaderIndex);
+  t.after(() => reopenedFirstLeader.shutdown());
   assert.equal(reopenedFirstLeader.lastCompletedMembershipRecovery ?? null, null);
   crashedLeaderHandler.localServices.set(reopenedFirstLeader.replicaId, reopenedFirstLeader);
   crashedLeaderHandler.registerWithRouter(transport);
@@ -1281,14 +1419,74 @@ test('committed recovery application is deterministic across divergent voter met
     null,
     successorLeader,
   );
+  const r2CommittedLeaderView = Object.create(successorLeader);
+  r2CommittedLeaderView.raft = {
+    ...successorLeader.raft,
+    readStatus: () => ({...realReadStatus(), role: 'leader'}),
+    readCommittedMembership: async () => ({
+      kind: 'committed',
+      voters: [
+        deriveCanonicalPeerIdString(reopenedFirstLeader.replicaId),
+        deriveCanonicalPeerIdString(successorLeader.replicaId),
+        r2Record.targetPeerId,
+      ],
+      learners: [],
+    }),
+  };
+  await persistRecoveredServicesRowsAsync(
+    successorHandler,
+    r2Record,
+    null,
+    r2CommittedLeaderView,
+  );
+  assert.equal(
+    servicesDb
+      .prepare('SELECT * FROM services WHERE service_id = ?')
+      .get(supersededRecovery.recovery.targetReplicaId),
+    undefined,
+    'new leader R2 publication deletes retired D from authoritative SQLite SERVICES table',
+  );
   assert.equal(
     divergentCache.get('services', supersededRecovery.recovery.targetReplicaId),
     null,
-    'new leader reconciliation after R2 deletes retired D from SERVICES',
+    'new leader reconciliation after R2 deletes retired D from SERVICES cache projection',
   );
   // Now release the crashed old leader's delayed INSERT for D!
   releaseDelayedInsert();
   await inFlightOldPublish;
+  assert.equal(
+    divergentCache.recoveryServiceCacheFenceInstalled,
+    undefined,
+    'systemTableCache must not install a cache-hiding filter on applySystemTableChange',
+  );
+  assert.equal(
+    servicesDb
+      .prepare('SELECT * FROM services WHERE service_id = ?')
+      .get(supersededRecovery.recovery.targetReplicaId),
+    undefined,
+    'authoritative SQLite SERVICES boundary must reject the delayed INSERT for retired D',
+  );
+  assert.equal(
+    servicesDb
+      .prepare('SELECT * FROM services WHERE service_id = ?')
+      .get(r2Record.targetReplicaId)?.status,
+    'active',
+    'successor replacement voter E remains active in authoritative SQLite SERVICES',
+  );
+  const independentObserverCache = new SystemTableCache();
+  for (const authoritativeRow of servicesDb.prepare('SELECT * FROM services').all()) {
+    independentObserverCache.applySystemTableChange('services', 'INSERT', authoritativeRow);
+  }
+  assert.equal(
+    independentObserverCache.get('services', supersededRecovery.recovery.targetReplicaId) ?? null,
+    null,
+    'independent observer hydrated from authoritative SQLite SERVICES must not see retired D',
+  );
+  assert.equal(
+    independentObserverCache.get('services', r2Record.targetReplicaId)?.status,
+    'active',
+    'independent observer hydrated from authoritative SQLite SERVICES sees active replacement E',
+  );
   assert.equal(
     divergentCache.get('services', supersededRecovery.recovery.targetReplicaId),
     null,

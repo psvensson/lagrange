@@ -25,6 +25,8 @@ import {
 } from './distributed-transaction-coordinator-constants.js';
 import {distributedTransactionRecoveryMethods} from
   './distributed-transaction-recovery.js';
+import {redriveAuthoritativeRecovery} from
+  './distributed-transaction-recovery-authority.js';
 import {
   setTransactionStatus,
   getRemainingTransactionBudgetMs,
@@ -605,8 +607,18 @@ class DistributedTransactionCoordinator {
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
       };
     }
-    return this.recoveryObligationStageRefusal(tx, QUERY_OPERATION.ROLLBACK) ??
-      this.runRollbackProtocol(tx);
+    if (tx.recoveryDiscovered === true) {
+      const redriven = await redriveAuthoritativeRecovery(this, tx, {
+        allowLiveSessionRollback: true,
+      });
+      this.clearSettledCycleRollback?.(sessionId);
+      if (redriven.path === QUERY_OPERATION.ROLLBACK &&
+          redriven.result?.success === true) {
+        return redriven.result;
+      }
+      return this.recoveryObligationStageRefusal(tx, QUERY_OPERATION.ROLLBACK);
+    }
+    return this.runRollbackProtocol(tx);
   }
 
   getTransaction(sessionId) {

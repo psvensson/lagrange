@@ -2,7 +2,6 @@
 // fencing for group-bound permanent member loss recovery.
 
 import {
-  CDC_OPERATION,
   COLUMN,
   TABLES,
 } from '../constants/index.js';
@@ -447,24 +446,12 @@ const {
 } = DEFAULT_VALUE;
 
 function prepareRecoveryFenceHolder(holder) {
-  if (!holder || !holder.applySystemTableChange) return false;
+  if (!holder || typeof holder !== 'object') return false;
   if (!(holder.excludedRecoveryServiceReplicas instanceof Map)) {
     holder.excludedRecoveryServiceReplicas = new Map();
   }
   if (!(holder.observedRecoveryPartitionServices instanceof Set)) {
     holder.observedRecoveryPartitionServices = new Set();
-  }
-  if (holder.recoveryServiceCacheFenceInstalled !== true) {
-    const baseApply = holder.applySystemTableChange.bind(holder);
-    holder.applySystemTableChange = (tableName, operation, row, options) => {
-      if (tableName === TABLES.SERVICES &&
-          operation !== CDC_OPERATION.DELETE &&
-          isExcludedRecoveryServiceReplica(row?.service_id, Number(row?.created_at), holder)) {
-        return false;
-      }
-      return baseApply(tableName, operation, row, options);
-    };
-    holder.recoveryServiceCacheFenceInstalled = true;
   }
   return true;
 }
@@ -522,6 +509,17 @@ function isExcludedRecoveryServiceReplica(replicaId, createdAt = null, holder = 
   return createdAt <= fenceCreatedAt;
 }
 
+function hasExcludedRecoveryServiceWriteRows(service, rows = null) {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  const firstHolder = service?.systemTableCache ?? null;
+  return rows.some((row) => {
+    const replicaId = row?.[COLUMN.SERVICE_ID];
+    const createdAt = Number(row?.[COLUMN.CREATED_AT]);
+    return isExcludedRecoveryServiceReplica(replicaId, createdAt, firstHolder) ||
+      isExcludedRecoveryServiceReplica(replicaId, createdAt, service);
+  });
+}
+
 function installRecoveryServiceCacheFence(holder) {
   prepareRecoveryFenceHolder(holder);
 }
@@ -530,9 +528,11 @@ function registerRecoveryPublicationPartitionService(service, holder = null) {
   const firstHolder = service?.systemTableCache ?? null;
   const hasFirst = prepareRecoveryFenceHolder(firstHolder);
   const hasSecond = prepareRecoveryFenceHolder(holder);
+  const hasSelf = prepareRecoveryFenceHolder(service);
   if (service && resolveDatabaseHandle(service)) {
     if (hasFirst) firstHolder.observedRecoveryPartitionServices.add(service);
     if (hasSecond) holder.observedRecoveryPartitionServices.add(service);
+    if (hasSelf) service.observedRecoveryPartitionServices.add(service);
   }
 }
 
@@ -676,6 +676,7 @@ export {
   deriveCanonicalPeerIdString,
   ensureMembershipRecoveryTables,
   excludedMemberFenceRefusalOf,
+  hasExcludedRecoveryServiceWriteRows,
   installRecoveryServiceCacheFence,
   isExcludedRecoveryServiceReplica,
   isLocalReplicaExcludedFenced,

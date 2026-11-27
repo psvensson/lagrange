@@ -324,16 +324,99 @@ function cleanCurrentControlCohort(service, release, attempt, census) {
     releaseCensusDefect(release, census, local, {attempt}) === null;
 }
 
+function isRevalidatableSqlTransactionsCohort(service, census) {
+  return service.tableName === TABLES.SQL_TRANSACTIONS &&
+    service.partitionId === INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS] &&
+    census.every((facts) =>
+      isCurrentOriginRevalidatableQueryCensus(facts, {originRequired: true}));
+}
+
+async function refreshPausedControlCohort(
+  handler,
+  service,
+  release,
+  attempt,
+  pausedCensus,
+) {
+  const local = pausedCensus.find((facts) =>
+    facts?.generation?.replicaId === service.replicaId);
+  if (!(local?.work?.appliedIndex > 0) ||
+      !Number.isSafeInteger(local?.membership?.term)) {
+    return pausedCensus;
+  }
+  const observed = await actOnCohort(
+    handler,
+    release,
+    attempt,
+    ACTION.OBSERVE_APPLIED_POSITION,
+    pausedCensus,
+    {
+      origin: {
+        originIndex: local.work.appliedIndex,
+        originTerm: local.membership.term,
+      },
+    },
+  );
+  if (unavailableCensus(observed) !== null) return pausedCensus;
+  const refreshed = await actOnCohort(
+    handler,
+    release,
+    attempt,
+    ACTION.PAUSE,
+    pausedCensus,
+  );
+  return unavailableCensus(refreshed) === null ? refreshed : pausedCensus;
+}
+
+function refusedRevalidatableControlCohort(
+  service,
+  request,
+  release,
+  attempt,
+  census,
+) {
+  const local = census.find((facts) =>
+    facts?.generation?.replicaId === service.replicaId);
+  const defect = local ?
+    releaseCensusDefect(release, census, local, {attempt}) :
+    null;
+  return attemptRefusal(
+    {...request, release},
+    defect ?? OUTCOME.CENSUS_REFUSED,
+  );
+}
+
 async function proveCurrentControlCohort(handler, service, request,
   release, attempt, pausedCensus) {
-  if (!cleanCurrentControlCohort(service, release, attempt, pausedCensus)) return null;
+  let census = pausedCensus;
+  if (!cleanCurrentControlCohort(service, release, attempt, census)) {
+    if (!isRevalidatableSqlTransactionsCohort(service, census)) return null;
+    census = await refreshPausedControlCohort(
+      handler,
+      service,
+      release,
+      attempt,
+      census,
+    );
+    if (!cleanCurrentControlCohort(service, release, attempt, census)) {
+      return isRevalidatableSqlTransactionsCohort(service, census) ?
+        refusedRevalidatableControlCohort(
+          service,
+          request,
+          release,
+          attempt,
+          census,
+        ) :
+        null;
+    }
+  }
   // Each PAUSE recipient has already closed admission and supplied its fresh
   // membership, generation, origin, work and schema facts. RESUME itself
   // obtains newer local facts and fences OPEN on that complete census, so a
   // second caller-side INSPECT cannot authorize anything RESUME would refuse.
   // Any intervening change keeps the affected recipient closed.
-  return resumeCohort(handler, service, request, release, attempt, pausedCensus,
-    {census: pausedCensus});
+  return resumeCohort(handler, service, request, release, attempt, census,
+    {census});
 }
 
 // The founding facts include the committed configuration, read through the

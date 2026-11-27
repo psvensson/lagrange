@@ -40,6 +40,7 @@ import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.
 import {assertTransactionSchemaWriteEnforced} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {readPartitionWriteOrigin} from './partition-participant-transaction-store.js';
+import {hasExcludedRecoveryServiceWriteRows} from './partition-membership-recovery-store.js';
 import {
   dmlVerbIndex,
   hasRollbackResolution,
@@ -65,6 +66,7 @@ const INSERTING_VERBS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE]);
 const MAIN_VERBS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE, KEYWORD.UPDATE,
   KEYWORD.DELETE, KEYWORD.SELECT]);
 const PUBLICATIONS_TABLE_NAME = 'control_plane_publications';
+const SERVICES_TABLE_NAME = 'services';
 const PROTECTED_FORMATION_KEY = 'cluster_formation';
 const PROTECTED_FORMATION_SELECT_SQL =
   'SELECT * FROM control_plane_publications ' +
@@ -423,9 +425,16 @@ function returningSqlOf(sql, lexed) {
   return `${sql.slice(0, lastToken.start + lastToken.text.length)}${RETURNING_ALL_SUFFIX}`;
 }
 
+function isServicesNonDeleteMutation(tableName, mutationKind) {
+  return tableName === SERVICES_TABLE_NAME && mutationKind !== KEYWORD.DELETE;
+}
+
 function prepareReturningWrite(service, lexed, sql, path) {
-  if (!partitionCapturesCommittedWriteRows(service, path) ||
-      hasTopLevelReturning(lexed)) {
+  const tableName = ownTableName(service);
+  const needsReturning =
+    partitionCapturesCommittedWriteRows(service, path, tableName) ||
+    isServicesNonDeleteMutation(tableName, lexedMutationOperationType(lexed));
+  if (!needsReturning || hasTopLevelReturning(lexed)) {
     return null;
   }
   const returningSql = returningSqlOf(sql, lexed);
@@ -459,10 +468,14 @@ function admitWrite(service, lexed, params, statement, path, sql) {
     service, lexed, sql, path,
   );
   const mutationKind = lexedMutationOperationType(lexed);
+  const protectExcludedRecoveryServiceRow =
+    isServicesNonDeleteMutation(tableName, mutationKind);
   return {admitted: true, kind: KIND.WRITE, statement, returningPrepared,
     mutationKind,
     ceilingChecked: allocating,
-    protectFormationRow, ownShape,
+    protectFormationRow,
+    protectExcludedRecoveryServiceRow,
+    ownShape,
     retainsInsertRowid: INSERTING_VERBS.has(mainVerb(lexed)) &&
       !hasDoUpdateClause(lexed.tokens)};
 }
@@ -581,6 +594,12 @@ function runBelowCeiling(service, admission, params) {
       readProtectedFormationSnapshotJson(service.db) !== beforeFormation) {
     throw statementRefusalError(refusal(LAYER.FORMATION_RECORD_PROTECTED));
   }
+  if (admission.protectExcludedRecoveryServiceRow === true &&
+      hasExcludedRecoveryServiceWriteRows(service, info?.affectedRows)) {
+    throw statementRefusalError(
+      refusal(LAYER.EXCLUDED_RECOVERY_SERVICE_REPLICA),
+    );
+  }
   if (admission.ceilingChecked === true && isAtRowidCeiling(admission.ownShape)) {
     throw statementRefusalError(refusal(LAYER.ROWID_CEILING));
   }
@@ -598,7 +617,9 @@ function runBelowCeiling(service, admission, params) {
  * @return {Object} {admitted: true, info} or the ceiling refusal.
  */
 function runAdmittedPartitionStatement(service, admission, params = []) {
-  if (admission.ceilingChecked !== true && admission.protectFormationRow !== true) {
+  if (admission.ceilingChecked !== true &&
+      admission.protectFormationRow !== true &&
+      admission.protectExcludedRecoveryServiceRow !== true) {
     return {admitted: true, info: executeAdmittedWriteStatement(service, admission, params)};
   }
   try {

@@ -28,7 +28,7 @@
   "censusSize": 2846,
   "digest": "fnv1a32-790ab071",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0343cc50",
+  "observationDigest": "fnv1a32-6707a0bc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18894,10 +18894,12 @@
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-apply.js",
+        "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -18925,6 +18927,7 @@
         "src/transport/transport-semantic-outcome.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },

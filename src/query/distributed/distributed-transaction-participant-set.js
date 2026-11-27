@@ -7,6 +7,8 @@ import {participantIdOf, participantIdentityOf} from
   './distributed-transaction-identity.js';
 import {buildFrozenTransactionDecision} from './distributed-transaction-commit-mode.js';
 import {
+  PARTICIPANT_ANSWER_DISPOSITION,
+  PARTICIPANT_ANSWER_DISPOSITION_FIELD,
   PARTICIPANT_ENLISTMENT_MODE,
   PARTICIPANT_STATUS,
   TRANSACTION_STATUS,
@@ -45,6 +47,41 @@ function readOnlyParticipantsOf(tx) {
   return tx.readOnlyParticipants;
 }
 
+function isDeferredParticipantBeginFailure(error) {
+  return Boolean(
+    error &&
+    (error[PARTICIPANT_ANSWER_DISPOSITION_FIELD] ===
+      PARTICIPANT_ANSWER_DISPOSITION.DEFER ||
+      error.deferRetry === true),
+  );
+}
+
+async function beginParticipantWithDeferRetry(
+  coordinator,
+  tx,
+  sessionId,
+  partitionId,
+) {
+  const invokeBegin = () => coordinator.beginParticipant(
+    sessionId,
+    partitionId,
+    participantIdentityOf(tx, partitionId),
+  );
+  try {
+    return await invokeBegin();
+  } catch (error) {
+    if (!isDeferredParticipantBeginFailure(error)) {
+      throw error;
+    }
+    return coordinator.executeParticipantOperationWithRetry(
+      tx,
+      PARTICIPANT_STATUS.ACTIVE,
+      partitionId,
+      invokeBegin,
+    );
+  }
+}
+
 async function enlistReadOnlyParticipants(coordinator, tx, sessionId, requested) {
   const readOnlyMap = readOnlyParticipantsOf(tx);
   const volatileTargets = requested.filter(
@@ -70,10 +107,11 @@ async function enlistReadOnlyParticipants(coordinator, tx, sessionId, requested)
     (partitionId) => readOnlyMap.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE,
   );
   await settleAllOrThrow(newlyEnlisted.map(async (partitionId) => {
-    await coordinator.beginParticipant(
+    await beginParticipantWithDeferRetry(
+      coordinator,
+      tx,
       sessionId,
       partitionId,
-      participantIdentityOf(tx, partitionId),
     );
     const participant = readOnlyMap.get(partitionId);
     if (participant) {
@@ -120,10 +158,22 @@ const distributedTransactionParticipantSetMethods = {
     const purpose = intended?.participantSetState === PARTICIPANT_SET_STATE.FROZEN ?
       TRANSACTION_METADATA_PERSIST_PURPOSE.MANIFEST_FREEZE :
       TRANSACTION_METADATA_PERSIST_PURPOSE.PARTICIPANT_ADMISSION;
+    const drainBookkeeping = tx?.pendingBookkeepingDrainPromise ?? null;
+    if (tx && drainBookkeeping !== null) {
+      tx.pendingBookkeepingDrainPromise = null;
+    }
     const startedAtMs = resolveNowMs();
     try {
       this.noteMetadataMutation?.(tx, purpose);
-      await this.persistTransactionParticipantSet(intended, tx.participantSetText);
+      const persistPromise = this.persistTransactionParticipantSet(
+        intended,
+        tx.participantSetText,
+      );
+      if (drainBookkeeping !== null) {
+        await settleAllOrThrow([drainBookkeeping, persistPromise]);
+      } else {
+        await persistPromise;
+      }
       this.noteMetadataPersistElapsed?.(
         tx,
         purpose,
@@ -205,10 +255,9 @@ const distributedTransactionParticipantSetMethods = {
     const frozen = shouldAdvanceFrozenSetToPreparing(this, tx, pairs.length, options) ?
       {...baseFrozen, status: TRANSACTION_STATUS.PREPARING, updatedAt: decidedAt} :
       baseFrozen;
-    await settleAllOrThrow([
-      drainBookkeepingPromise,
-      this.persistAdmittedParticipantSet(tx, {...tx, ...frozen}),
-    ]);
+    drainBookkeepingPromise.catch(() => {});
+    tx.pendingBookkeepingDrainPromise = drainBookkeepingPromise;
+    await this.persistAdmittedParticipantSet(tx, {...tx, ...frozen});
     Object.assign(tx, frozen);
   },
 
@@ -239,10 +288,11 @@ const distributedTransactionParticipantSetMethods = {
       tx.participants.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE);
     await settleAllOrThrow(newlyEnlisted.map(async (partitionId) => {
       const participant = tx.participants.get(partitionId);
-      await this.beginParticipant(
+      await beginParticipantWithDeferRetry(
+        this,
+        tx,
         sessionId,
         partitionId,
-        participantIdentityOf(tx, partitionId),
       );
       activeUpserts.push(participant);
     }));

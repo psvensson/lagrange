@@ -13,6 +13,46 @@ const PLAN_HASH = Object.freeze({
 });
 const MAX_STRUCTURAL_PLAN_TEMPLATES = 256;
 
+function deepFreezeValue(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
+    return value;
+  }
+  if (value instanceof Map) {
+    for (const [key, entry] of value.entries()) {
+      deepFreezeValue(key);
+      deepFreezeValue(entry);
+    }
+    return Object.freeze(value);
+  }
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      deepFreezeValue(value[index]);
+    }
+    return Object.freeze(value);
+  }
+  for (const key of Object.keys(value)) {
+    deepFreezeValue(value[key]);
+  }
+  return Object.freeze(value);
+}
+
+function clonePlanStructure(value) {
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => clonePlanStructure(entry));
+  }
+  if (value instanceof Uint8Array) {
+    return new Uint8Array(value);
+  }
+  const copy = {};
+  for (const key of Object.keys(value)) {
+    copy[key] = clonePlanStructure(value[key]);
+  }
+  return copy;
+}
+
 function buildTableStructuralTemplate(
   planner,
   ast,
@@ -86,7 +126,7 @@ function resolveStructuralPlanTemplate(planner, ast) {
     templates.set(templateKey, existing);
     return existing;
   }
-  const created = Object.freeze({
+  const created = deepFreezeValue({
     normalizedAst: planner.normalizePlanPayload(ast),
     selectTemplate: ast.type === QUERY_AST_TYPE.SELECT ?
       buildSelectStructuralTemplate(planner, ast) :
@@ -177,6 +217,7 @@ function createDeterministicPlanId(
 }
 
 export {
+  clonePlanStructure,
   createDeterministicPlanId,
   normalizePlanPayload,
   resolveStructuralPlanTemplate,

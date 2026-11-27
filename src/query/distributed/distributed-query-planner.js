@@ -28,6 +28,7 @@ import {
   extractTableLocalPredicate,
 } from './distributed-query-planner-projection-helpers.js';
 import {
+  clonePlanStructure,
   createDeterministicPlanId,
   normalizePlanPayload,
   resolveStructuralPlanTemplate,
@@ -90,7 +91,7 @@ class DistributedQueryPlanner {
     const structural = this.resolveStructuralTemplate(ast);
     const selectTemplate = structural?.selectTemplate || null;
     const tableGraph = selectTemplate ?
-      selectTemplate.tableGraph :
+      clonePlanStructure(selectTemplate.tableGraph) :
       this.extractTableGraph(ast);
     const tablePlans = this.buildTablePlans(
       tableGraph,
@@ -106,7 +107,7 @@ class DistributedQueryPlanner {
       selectTemplate?.tableTemplates || null,
     );
     const mergePlan = selectTemplate ?
-      selectTemplate.mergePlan :
+      clonePlanStructure(selectTemplate.mergePlan) :
       this.buildMergePlan(ast);
     const diagnostics = this.buildDiagnostics(
       tableGraph,
@@ -452,9 +453,11 @@ class DistributedQueryPlanner {
       tableAlias,
       partitions: partitionIds,
       prunedEmpty,
-      localPredicate,
+      localPredicate: tableTemplate ?
+        clonePlanStructure(tableTemplate.localPredicate) :
+        localPredicate,
       projectedColumns: tableTemplate ?
-        tableTemplate.projectedColumns :
+        clonePlanStructure(tableTemplate.projectedColumns) :
         this.extractProjectedColumns(ast, tableAlias),
       keyPredicateShape: resolutionInfo?.predicateShape ||
         DISTRIBUTED_PREDICATE_SHAPE.SCATTER,
