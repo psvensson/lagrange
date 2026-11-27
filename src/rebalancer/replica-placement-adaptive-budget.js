@@ -525,6 +525,17 @@ function normalizeWindowDecisionInputs(demand, rawConfig) {
   return {config, nowMs, expectedBoot};
 }
 
+function resolvePressureThresholdsForState(baseState, config) {
+  if (baseState.lastDecreasedAtMs === null || baseState.limit > config.minLimit) {
+    return config.thresholds;
+  }
+  return {
+    ...config.thresholds,
+    healthyEluPercent: config.thresholds.congestionEluPercent,
+    healthyMainThreadCpuPercent: config.thresholds.congestionMainThreadCpuPercent,
+  };
+}
+
 /**
  * Pure pressure-aware AIMD decision table for one resource window W_r.
  * @param {Object|null} previousState
@@ -548,7 +559,9 @@ function decideAdaptiveResourceWindow(previousState, observation, demand = {}, r
       observationState: freshness.state, nextState: baseState,
     });
   }
-  const pressure = classifyPlacementPressure(observation, config.thresholds);
+  const pressure = classifyPlacementPressure(
+    observation, resolvePressureThresholdsForState(baseState, config),
+  );
   if (pressure.action === ACTION.DECREASE) {
     return applyCongestionDecrease(baseState, observation, nowMs, pressure.reason, config);
   }

@@ -82,6 +82,11 @@ import {
   createReplicaPlacementOwner,
 } from '../../src/rebalancer/replica-placement-owner.js';
 import {
+  PLACEMENT_ADAPTIVE_BUDGET_REASON as BUDGET_REASON,
+  PLACEMENT_ADAPTIVE_WINDOW_ACTION as WINDOW_ACTION,
+  decideAdaptiveResourceWindow, normalizeWindowConfig,
+} from '../../src/rebalancer/replica-placement-adaptive-budget.js';
+import {
   applyCommitted,
   clearFixtureSingletons,
   resetFixtureSingletons,
@@ -1442,4 +1447,41 @@ test('Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new lea
   } finally {
     clearFixtureSingletons();
   }
+});
+
+test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs then holds in hysteresis band', () => {
+  const floorConfig = normalizeWindowConfig({
+    initialLimit: 2, minLimit: 1, maxLimit: 6,
+    minAdjustIntervalMs: 1_000, requiredHealthySamplesAfterDecrease: 2,
+  });
+  const baseObs = {
+    sampledAtMs: NOW_MS, sampleId: 601, congestionEpochId: 601, bootIncarnation: 1,
+    processCpuCores: 1.08, mainThreadCpuPercent: 25, eventLoopDelayMs: 120,
+    eventLoopUtilizationPercent: 45, availableMemoryBytes: 4096 * 1024 * 1024,
+  };
+  const demand = (occ, nowMs) => ({
+    occupancy: occ, waitingDemandCount: 4, nowMs, expectedBootIncarnation: 1,
+  });
+  const obsAt = (id, nowMs) => ({
+    ...baseObs, sampleId: id, congestionEpochId: id, sampledAtMs: nowMs,
+    eventLoopDelayMs: 15, eventLoopUtilizationPercent: 84, mainThreadCpuPercent: 82,
+  });
+  const decreased = decideAdaptiveResourceWindow(null, baseObs, demand(2, NOW_MS), floorConfig);
+  assert.equal(decreased.action, WINDOW_ACTION.DECREASE);
+  assert.equal(decreased.limit, 1);
+  const sample1 = decideAdaptiveResourceWindow(
+    decreased.nextState, obsAt(602, NOW_MS + 1_100), demand(1, NOW_MS + 1_100), floorConfig,
+  );
+  assert.equal(sample1.reason, BUDGET_REASON.RECOVERY_HYSTERESIS_HOLD);
+  assert.equal(sample1.limit, 1);
+  const sample2 = decideAdaptiveResourceWindow(
+    sample1.nextState, obsAt(603, NOW_MS + 2_200), demand(1, NOW_MS + 2_200), floorConfig,
+  );
+  assert.equal(sample2.action, WINDOW_ACTION.INCREASE);
+  assert.equal(sample2.limit, 2);
+  const holdAboveFloor = decideAdaptiveResourceWindow(
+    sample2.nextState, obsAt(604, NOW_MS + 3_500), demand(2, NOW_MS + 3_500), floorConfig,
+  );
+  assert.equal(holdAboveFloor.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
+  assert.equal(holdAboveFloor.limit, 2);
 });
