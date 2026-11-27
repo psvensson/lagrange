@@ -322,8 +322,9 @@ function isObservationWithinHealthyGrowthBand(observation, thresholds) {
 // still belong to the controller, independent of heartbeat publication.
 function classifyPlacementPressure(observation, thresholds = DEFAULTS.THRESHOLDS) {
   const congestionReason = classifyAttributedCongestion(observation, thresholds);
-  if (congestionReason !== null) return {action: ACTION.DECREASE, reason: congestionReason};
-  if (!isObservationCompleteForGrowth(observation)) {
+  if (congestionReason !== null) {
+    return {action: ACTION.DECREASE, reason: congestionReason};
+  } else if (!isObservationCompleteForGrowth(observation)) {
     return {action: ACTION.HOLD, reason: REASON.OBSERVATION_INCOMPLETE};
   }
   return isObservationWithinHealthyGrowthBand(observation, thresholds) ?
@@ -596,9 +597,12 @@ function isObservationConstrained(obs, config) {
   return classifyAttributedCongestion(obs, config.thresholds) !== null;
 }
 
-function canWindowAdvanceNow(stateEntry, config, nowMs) {
+function canWindowAdvanceNow(stateEntry, stamped, config, nowMs) {
+  if (classifyPlacementPressure(stamped, config.thresholds).action !== ACTION.INCREASE) {
+    return false;
+  }
   if (!stateEntry) return true;
-  if (stateEntry.limit >= config.maxLimit && stateEntry.lastDecreasedAtMs === null) {
+  if (stateEntry.limit >= config.maxLimit) {
     return false;
   }
   if (!Number.isFinite(stateEntry.lastAdjustedAtMs)) return true;
@@ -621,8 +625,8 @@ function canNodeAdvanceAnyWindow(
   nodeId, stamped, sourceStates, targetStates, sourceConfig, targetConfig, nowMs,
 ) {
   if (!isObservationCompleteForGrowth(stamped)) return false;
-  return canWindowAdvanceNow(sourceStates.get(nodeId), sourceConfig, nowMs) ||
-    canWindowAdvanceNow(targetStates.get(nodeId), targetConfig, nowMs);
+  return canWindowAdvanceNow(sourceStates.get(nodeId), stamped, sourceConfig, nowMs) ||
+    canWindowAdvanceNow(targetStates.get(nodeId), stamped, targetConfig, nowMs);
 }
 
 function shouldWakeOnObservation({
