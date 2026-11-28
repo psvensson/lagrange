@@ -1,6 +1,4 @@
-// Public entry: buildPartitionMembershipRecoveryCommand,
-//   isPinnedMembershipRecoveryCommand, membershipRecoveryCommandDigestOf,
-//   stagePartitionMembershipRecoveryIntent,
+// Public entry: stagePartitionMembershipRecoveryIntent,
 //   applyPartitionMembershipRecoveryCommand,
 //   handleMembershipRecoveryFenceNotice, plus store helpers re-exported from
 //   partition-membership-recovery-store.js.
@@ -47,8 +45,6 @@ import {
   checkExcludedMemberEnvelopeFence,
   deriveCanonicalPeerIdString,
   ensureMembershipRecoveryTables,
-  excludedMemberFenceRefusalOf,
-  installRecoveryServiceCacheFence,
   isExcludedRecoveryServiceReplica,
   isLocalReplicaExcludedFenced,
   isPeerExcludedInGroup,
@@ -208,6 +204,50 @@ function recoverySuccessAnswer(service, outcome, record, extra = {}) {
 }
 
 async function stagePartitionMembershipRecoveryIntent(service, payload) {
+  const stageRefusal = membershipRecoveryStageRefusalOf(service, payload);
+  if (stageRefusal !== null) return stageRefusal;
+  const command = buildPartitionMembershipRecoveryCommand(service, payload);
+  if (command === null) {
+    return refusalAnswer(service, ERROR.BYTES);
+  }
+  const admission = admitCommittedCommand(command, {
+    origin: PARTITION_COMMITTED_COMMAND_ORIGIN.MEMBERSHIP_RECOVERY_OWNER,
+  });
+  if (!admission.admitted) {
+    return refusalAnswer(service, admission.code);
+  }
+  ensureMembershipRecoveryTables(service.db);
+  const commandDigest = membershipRecoveryCommandDigestOf(command);
+  const settled = readSettledOwnerCommandIn(service.db, {
+    entryId: command.entryId,
+    commandDigest,
+  });
+  const recorded = recordedMembershipRecoveryAnswerOf(service, command, settled);
+  if (recorded !== null) return recorded;
+  const precheck = validateMembershipRecoveryIntentAtLogEntry(service, command, {
+    checkPendingConfChange: true,
+  });
+  if (!precheck.valid) {
+    return refusalAnswer(service, precheck.failureCode);
+  }
+  if (precheck.replayed === true && precheck.record) {
+    return recoverySuccessAnswer(service, OUTCOME.REPLAYED, precheck.record, {
+      replayed: true,
+    });
+  }
+  return trackPendingOwnerCommand(
+    service,
+    {command, commandDigest},
+    startPartitionRaftWriteCommit(service, {
+      entry: command,
+      phaseTimings: null,
+      applyStartMs: service.timeSource.now(),
+      park: false,
+    }),
+  );
+}
+
+function membershipRecoveryStageRefusalOf(service, payload) {
   if (isLocalReplicaExcludedFenced(service)) {
     return refusalAnswer(service, ERROR.RETIRED_MEMBER_FENCED);
   }
@@ -228,22 +268,10 @@ async function stagePartitionMembershipRecoveryIntent(service, payload) {
       }),
     });
   }
-  const command = buildPartitionMembershipRecoveryCommand(service, payload);
-  if (command === null) {
-    return refusalAnswer(service, ERROR.BYTES);
-  }
-  const admission = admitCommittedCommand(command, {
-    origin: PARTITION_COMMITTED_COMMAND_ORIGIN.MEMBERSHIP_RECOVERY_OWNER,
-  });
-  if (!admission.admitted) {
-    return refusalAnswer(service, admission.code);
-  }
-  ensureMembershipRecoveryTables(service.db);
-  const commandDigest = membershipRecoveryCommandDigestOf(command);
-  const settled = readSettledOwnerCommandIn(service.db, {
-    entryId: command.entryId,
-    commandDigest,
-  });
+  return null;
+}
+
+function recordedMembershipRecoveryAnswerOf(service, command, settled) {
   if (settled.state === SETTLED.OTHER_RECORD) {
     return refusalAnswer(service, ERROR.INTENT_CONFLICT);
   }
@@ -273,27 +301,7 @@ async function stagePartitionMembershipRecoveryIntent(service, payload) {
       });
     }
   }
-  const precheck = validateMembershipRecoveryIntentAtLogEntry(service, command, {
-    checkPendingConfChange: true,
-  });
-  if (!precheck.valid) {
-    return refusalAnswer(service, precheck.failureCode);
-  }
-  if (precheck.replayed === true && precheck.record) {
-    return recoverySuccessAnswer(service, OUTCOME.REPLAYED, precheck.record, {
-      replayed: true,
-    });
-  }
-  return trackPendingOwnerCommand(
-    service,
-    {command, commandDigest},
-    startPartitionRaftWriteCommit(service, {
-      entry: command,
-      phaseTimings: null,
-      applyStartMs: service.timeSource.now(),
-      park: false,
-    }),
-  );
+  return null;
 }
 
 function applyPartitionMembershipRecoveryCommand(service, committed) {
@@ -309,29 +317,8 @@ function applyPartitionMembershipRecoveryCommand(service, committed) {
     entryId: command.entryId,
     commandDigest,
   });
-  if (settled.state === SETTLED.OTHER_RECORD) {
-    const conflictAnswer = refusalAnswer(service, ERROR.INTENT_CONFLICT, {
-      committed: true,
-      logIndex: index,
-      term,
-    });
-    afterCommit(() => service.resolveCommittedWrite(command.entryId, conflictAnswer));
-    return APPLY.REPLAYED;
-  }
-  if (settled.state === SETTLED.SAME_COMMAND) {
-    const parsed = JSON.parse(settled.recorded.ownerResultText);
-    const replayAnswer = parsed?.outcome === OUTCOME.REFUSED ?
-      refusalAnswer(service, parsed.failureCode, {
-        committed: true,
-        logIndex: settled.recorded.logIndex,
-        term: settled.recorded.term,
-      }) :
-      recoverySuccessAnswer(service, OUTCOME.REPLAYED,
-        readCommittedMembershipRecoveryByIdIn(service.db, command.decisionId) ??
-        parsed.recovery, {replayed: true});
-    afterCommit(() => service.resolveCommittedWrite(command.entryId, replayAnswer));
-    return APPLY.REPLAYED;
-  }
+  const replayed = replaySettledMembershipRecovery(service, committed, settled);
+  if (replayed !== null) return replayed;
   try {
     const validation = validateMembershipRecoveryIntentAtLogEntry(service, command, {
       checkPendingConfChange: false,
@@ -436,6 +423,36 @@ function applyPartitionMembershipRecoveryCommand(service, committed) {
   }
 }
 
+// A command already settled at this entry resolves its waiter with the
+// recorded answer and applies nothing (REPLAYED); null when nothing is settled.
+function replaySettledMembershipRecovery(service, committed, settled) {
+  const {command, index, term, afterCommit} = committed;
+  if (settled.state === SETTLED.OTHER_RECORD) {
+    const conflictAnswer = refusalAnswer(service, ERROR.INTENT_CONFLICT, {
+      committed: true,
+      logIndex: index,
+      term,
+    });
+    afterCommit(() => service.resolveCommittedWrite(command.entryId, conflictAnswer));
+    return APPLY.REPLAYED;
+  }
+  if (settled.state === SETTLED.SAME_COMMAND) {
+    const parsed = JSON.parse(settled.recorded.ownerResultText);
+    const replayAnswer = parsed?.outcome === OUTCOME.REFUSED ?
+      refusalAnswer(service, parsed.failureCode, {
+        committed: true,
+        logIndex: settled.recorded.logIndex,
+        term: settled.recorded.term,
+      }) :
+      recoverySuccessAnswer(service, OUTCOME.REPLAYED,
+        readCommittedMembershipRecoveryByIdIn(service.db, command.decisionId) ??
+        parsed.recovery, {replayed: true});
+    afterCommit(() => service.resolveCommittedWrite(command.entryId, replayAnswer));
+    return APPLY.REPLAYED;
+  }
+  return null;
+}
+
 function handleMembershipRecoveryFenceNotice(service, payload) {
   const recovery = payload?.recovery ?? null;
   if (!service || !recovery ||
@@ -454,19 +471,14 @@ function handleMembershipRecoveryFenceNotice(service, payload) {
 
 export {
   applyPartitionMembershipRecoveryCommand,
-  buildPartitionMembershipRecoveryCommand,
   checkExcludedMemberEnvelopeFence,
   deriveCanonicalPeerIdString,
   ensureMembershipRecoveryTables,
-  excludedMemberFenceRefusalOf,
   handleMembershipRecoveryFenceNotice,
-  installRecoveryServiceCacheFence,
   isExcludedRecoveryServiceReplica,
   isLocalReplicaExcludedFenced,
   isPeerExcludedInGroup,
-  isPinnedMembershipRecoveryCommand,
   markLocalReplicaExcludedFence,
-  membershipRecoveryCommandDigestOf,
   noteExcludedRecoveryServiceReplica,
   readCommittedMembershipRecoveriesIn,
   readCommittedMembershipRecoveryByIdIn,
@@ -475,6 +487,4 @@ export {
   registerRecoveryPublicationPartitionService,
   resolveAuthoritativeMemberBinding,
   stagePartitionMembershipRecoveryIntent,
-  validateMembershipRecoveryBinding,
-  validateMembershipRecoveryIntentAtLogEntry,
 };

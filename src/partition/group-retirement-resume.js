@@ -164,7 +164,7 @@ function attachGroupRetirementResume(owner, spec) {
   const claimed = async (workflowId, attempt) => {
     const key = resumeKey(workflowId, attempt);
     const claim = await spec.claim(workflowId, attempt);
-    if (claim?.accepted === true) {
+    if (isAcceptedClaim(claim)) {
       scheduler.clearTimeout(leaseWaits.get(key));
       leaseWaits.delete(key);
     }
@@ -177,17 +177,16 @@ function attachGroupRetirementResume(owner, spec) {
     if (!workflow?.workflowId) {
       return false;
     }
-    if (ownsLiveLease(owner, workflow) &&
-        (attempt === undefined || workflow.metadata?.workflowAttempt === attempt)) {
+    if (ownsLiveAttemptLease(owner, workflow, attempt)) {
       return true;
     }
     // The claim itself refuses a live foreign lease without writing
     // (ACTIVE_OWNER); every refusal then re-reads the durable row.
     let claim = await claimed(workflowId, attempt);
-    if (claim?.accepted === true) {
+    if (isAcceptedClaim(claim)) {
       return true;
     }
-    if (claim?.result === RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH) return false;
+    if (isAttemptMismatchClaim(claim)) return false;
     // A refused claim proves the in-memory workflow stale: re-read the
     // durable row before deciding what to wait for.
     let durable = owner.recoverWorkflowState(workflowId);
@@ -202,10 +201,10 @@ function attachGroupRetirementResume(owner, spec) {
     if (reclaimedVersions.get(workflowId) !== version) {
       reclaimedVersions.set(workflowId, version);
       claim = await claimed(workflowId, attempt);
-      if (claim?.accepted === true) {
+      if (isAcceptedClaim(claim)) {
         return true;
       }
-      if (claim?.result === RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH) return false;
+      if (isAttemptMismatchClaim(claim)) return false;
       durable = owner.recoverWorkflowState(workflowId);
       if (holdsLiveForeignLease(owner, durable)) {
         awaitForeignLease(workflowId, durable, tablesRow, attempt);
@@ -277,6 +276,22 @@ function isResumable(owner, family, retiring) {
 function ownsLiveLease(owner, workflow) {
   return workflow.workflowOwnerId === owner.workflowOwnerId &&
     Number(workflow.leaseExpiresAt) > owner.now();
+}
+
+// This owner holds a live lease on the workflow, for the resumed attempt when
+// one is named.
+function ownsLiveAttemptLease(owner, workflow, attempt) {
+  return ownsLiveLease(owner, workflow) &&
+    (attempt === undefined || workflow.metadata?.workflowAttempt === attempt);
+}
+
+function isAcceptedClaim(claim) {
+  return claim?.accepted === true;
+}
+
+// The claim was refused because the record carries another workflow attempt.
+function isAttemptMismatchClaim(claim) {
+  return claim?.result === RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH;
 }
 
 // Another incarnation holds a lease with a finite expiry still ahead.

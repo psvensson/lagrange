@@ -18,17 +18,17 @@
     "runtime-primitives": 24,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 267,
+    "storage-partition": 268,
     "storage-raft": 166,
     "test-infrastructure": 175,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2849,
-  "digest": "fnv1a32-0f421d86",
+  "censusSize": 2850,
+  "digest": "fnv1a32-aae4b2ea",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9dee38fc",
+  "observationDigest": "fnv1a32-f0004c44",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1514,6 +1514,7 @@
     "test/partition/partition-leader-address-from-raft-status.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
     "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
+    "test/partition/partition-membership-recovery-characterization.test.js": "storage-partition",
     "test/partition/partition-participant-durable-read-dependencies.test.js": "storage-partition",
     "test/partition/partition-participant-release-admission.test.js": "storage-partition",
     "test/partition/partition-participant-transaction-apply.test.js": "storage-partition",
@@ -15850,6 +15851,11 @@
     "test/partition/partition-leader-row-publication-integrity.test.js": {
       "files": [
         "src/logging/wait-bound-spent.js"
+      ]
+    },
+    "test/partition/partition-membership-recovery-characterization.test.js": {
+      "files": [
+        "src/raft/raft-rs-peer-identity.js"
       ]
     },
     "test/partition/partition-participant-durable-read-dependencies.test.js": {

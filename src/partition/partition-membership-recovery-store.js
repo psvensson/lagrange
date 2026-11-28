@@ -45,6 +45,10 @@ function isPositiveSafeInteger(value) {
   return Number.isSafeInteger(value) && value >= 1;
 }
 
+function positiveSafeIntegerOrNull(value) {
+  return isPositiveSafeInteger(value) ? value : null;
+}
+
 function isAbsentValue(value) {
   return value === undefined || value === null || value === '';
 }
@@ -137,16 +141,19 @@ function readMetadataMemberBinding(service, replicaId, suppliedNodeId) {
   const metadataNodeId = serviceRow?.[COLUMN.NODE_ID] ?? null;
   const nodeToRead = isNonEmptyString(suppliedNodeId) ?
     suppliedNodeId : metadataNodeId;
-  const nodeRow = isNonEmptyString(nodeToRead) ?
-    cache.get?.(TABLES.NODES, nodeToRead) ?? null : null;
+  const nodeRow = readCachedNodeRow(cache, nodeToRead);
   const createdAt = Number(serviceRow?.[COLUMN.CREATED_AT]);
   const bootIncarnation = Number(nodeRow?.[COLUMN.BOOT_INCARNATION]);
   return Object.freeze({
     nodeId: metadataNodeId,
-    replicaCreatedAt: isPositiveSafeInteger(createdAt) ? createdAt : null,
-    nodeBootIncarnation: isPositiveSafeInteger(bootIncarnation) ?
-      bootIncarnation : null,
+    replicaCreatedAt: positiveSafeIntegerOrNull(createdAt),
+    nodeBootIncarnation: positiveSafeIntegerOrNull(bootIncarnation),
   });
+}
+
+function readCachedNodeRow(cache, nodeToRead) {
+  return isNonEmptyString(nodeToRead) ?
+    cache.get?.(TABLES.NODES, nodeToRead) ?? null : null;
 }
 
 function resolveAuthoritativeMemberBinding(service, replicaId, suppliedNodeId) {
@@ -166,6 +173,10 @@ function resolveAuthoritativeMemberBinding(service, replicaId, suppliedNodeId) {
       nodeBootIncarnation: durable.nodeBootIncarnation,
     });
   }
+  return metadataMemberBindingOf(service, replicaId, suppliedNodeId);
+}
+
+function metadataMemberBindingOf(service, replicaId, suppliedNodeId) {
   const metadata = readMetadataMemberBinding(
     service,
     replicaId,
@@ -174,13 +185,23 @@ function resolveAuthoritativeMemberBinding(service, replicaId, suppliedNodeId) {
   const metadataCreatedAt = metadata?.replicaCreatedAt ?? null;
   const metadataBoot = metadata?.nodeBootIncarnation ?? null;
   const metadataNodeId = metadata?.nodeId ?? null;
-  if (isNonEmptyString(suppliedNodeId) &&
-      isNonEmptyString(metadataNodeId) &&
-      suppliedNodeId !== metadataNodeId) {
+  if (contradictsMetadataNode(suppliedNodeId, metadataNodeId)) {
     return Object.freeze({available: false, contradicted: true});
   }
   const effectiveNodeId = isNonEmptyString(suppliedNodeId) ?
     suppliedNodeId : metadataNodeId;
+  return metadataMemberBindingAnswerOf(
+    replicaId, effectiveNodeId, metadataCreatedAt, metadataBoot);
+}
+
+function contradictsMetadataNode(suppliedNodeId, metadataNodeId) {
+  return isNonEmptyString(suppliedNodeId) &&
+    isNonEmptyString(metadataNodeId) &&
+    suppliedNodeId !== metadataNodeId;
+}
+
+function metadataMemberBindingAnswerOf(
+  replicaId, effectiveNodeId, metadataCreatedAt, metadataBoot) {
   if (!isNonEmptyString(replicaId) || !isNonEmptyString(effectiveNodeId) ||
       !isPositiveSafeInteger(metadataCreatedAt) ||
       !isPositiveSafeInteger(metadataBoot)) {
@@ -203,6 +224,41 @@ function validateMembershipRecoveryBinding(payload) {
   }
   const decisionId = payload.decisionId ?? payload.entryId;
   const entryId = payload.entryId ?? payload.decisionId;
+  const requiredFieldRefusal =
+    requiredBindingFieldRefusalOf(payload, decisionId, entryId);
+  if (requiredFieldRefusal !== null) return requiredFieldRefusal;
+  const identityRefusal = bindingIdentityRefusalOf(payload, decisionId, entryId);
+  if (identityRefusal !== null) return identityRefusal;
+  const expectedSourcePeerId = deriveCanonicalPeerIdString(payload.sourceReplicaId);
+  const expectedTargetPeerId = deriveCanonicalPeerIdString(payload.targetReplicaId);
+  const suppliedTargetPeerId = isAbsentValue(payload.targetPeerId) ?
+    expectedTargetPeerId : payload.targetPeerId;
+  const peerRefusal = bindingPeerRefusalOf(
+    payload, expectedSourcePeerId, expectedTargetPeerId, suppliedTargetPeerId);
+  if (peerRefusal !== null) return peerRefusal;
+  return Object.freeze({
+    valid: true,
+    normalized: Object.freeze({
+      decisionId,
+      entryId,
+      partitionId: payload.partitionId,
+      configurationKey: payload.configurationKey,
+      membershipGenerationIndex: payload.membershipGenerationIndex,
+      sourcePeerId: expectedSourcePeerId,
+      sourceReplicaId: payload.sourceReplicaId,
+      sourceReplicaCreatedAt: payload.sourceReplicaCreatedAt,
+      sourceNodeId: payload.sourceNodeId,
+      sourceNodeBootIncarnation: payload.sourceNodeBootIncarnation,
+      targetPeerId: expectedTargetPeerId,
+      targetReplicaId: payload.targetReplicaId,
+      targetReplicaCreatedAt: payload.targetReplicaCreatedAt,
+      targetNodeId: payload.targetNodeId,
+      targetNodeBootIncarnation: payload.targetNodeBootIncarnation,
+    }),
+  });
+}
+
+function requiredBindingFieldRefusalOf(payload, decisionId, entryId) {
   if (isAbsentValue(decisionId) || isAbsentValue(entryId) ||
       isAbsentValue(payload.membershipGenerationIndex) ||
       isAbsentValue(payload.sourcePeerId)) {
@@ -224,15 +280,20 @@ function validateMembershipRecoveryBinding(payload) {
       return Object.freeze({valid: false, failureCode: ERROR.BINDING_INVALID});
     }
   }
+  return null;
+}
+
+function bindingIdentityRefusalOf(payload, decisionId, entryId) {
   if (!isNonEmptyString(decisionId) || !isNonEmptyString(entryId) ||
       !isNonNegativeSafeInteger(payload.membershipGenerationIndex) ||
       !isNonEmptyString(payload.sourcePeerId)) {
     return Object.freeze({valid: false, failureCode: ERROR.BINDING_INVALID});
   }
-  const expectedSourcePeerId = deriveCanonicalPeerIdString(payload.sourceReplicaId);
-  const expectedTargetPeerId = deriveCanonicalPeerIdString(payload.targetReplicaId);
-  const suppliedTargetPeerId = isAbsentValue(payload.targetPeerId) ?
-    expectedTargetPeerId : payload.targetPeerId;
+  return null;
+}
+
+function bindingPeerRefusalOf(
+  payload, expectedSourcePeerId, expectedTargetPeerId, suppliedTargetPeerId) {
   if (expectedSourcePeerId === null || expectedTargetPeerId === null ||
       payload.sourcePeerId !== expectedSourcePeerId ||
       suppliedTargetPeerId !== expectedTargetPeerId) {
@@ -243,26 +304,7 @@ function validateMembershipRecoveryBinding(payload) {
       payload.sourcePeerId === suppliedTargetPeerId) {
     return Object.freeze({valid: false, failureCode: ERROR.TARGET_INVALID});
   }
-  return Object.freeze({
-    valid: true,
-    normalized: Object.freeze({
-      decisionId,
-      entryId,
-      partitionId: payload.partitionId,
-      configurationKey: payload.configurationKey,
-      membershipGenerationIndex: payload.membershipGenerationIndex,
-      sourcePeerId: expectedSourcePeerId,
-      sourceReplicaId: payload.sourceReplicaId,
-      sourceReplicaCreatedAt: payload.sourceReplicaCreatedAt,
-      sourceNodeId: payload.sourceNodeId,
-      sourceNodeBootIncarnation: payload.sourceNodeBootIncarnation,
-      targetPeerId: expectedTargetPeerId,
-      targetReplicaId: payload.targetReplicaId,
-      targetReplicaCreatedAt: payload.targetReplicaCreatedAt,
-      targetNodeId: payload.targetNodeId,
-      targetNodeBootIncarnation: payload.targetNodeBootIncarnation,
-    }),
-  });
+  return null;
 }
 
 function rowToRecoveryRecord(row) {
@@ -295,12 +337,20 @@ function recoveryRowMatchesCommand(record, command) {
     record.partitionId === command.partitionId &&
     record.configurationKey === command.configurationKey &&
     record.membershipGenerationIndex === command.membershipGenerationIndex &&
-    record.sourcePeerId === command.sourcePeerId &&
+    recoverySourceMatches(record, command) &&
+    recoveryTargetMatches(record, command);
+}
+
+function recoverySourceMatches(record, command) {
+  return record.sourcePeerId === command.sourcePeerId &&
     record.sourceReplicaId === command.sourceReplicaId &&
     record.sourceReplicaCreatedAt === command.sourceReplicaCreatedAt &&
     record.sourceNodeId === command.sourceNodeId &&
-    record.sourceNodeBootIncarnation === command.sourceNodeBootIncarnation &&
-    record.targetPeerId === command.targetPeerId &&
+    record.sourceNodeBootIncarnation === command.sourceNodeBootIncarnation;
+}
+
+function recoveryTargetMatches(record, command) {
+  return record.targetPeerId === command.targetPeerId &&
     record.targetReplicaId === command.targetReplicaId &&
     record.targetReplicaCreatedAt === command.targetReplicaCreatedAt &&
     record.targetNodeId === command.targetNodeId &&
@@ -340,27 +390,12 @@ function validateMembershipRecoveryIntentAtLogEntry(service, command, options = 
     return Object.freeze({valid: false, failureCode: ERROR.PARTITION_MISMATCH});
   }
   ensureMembershipRecoveryTables(service.db);
-  const existingById = readCommittedMembershipRecoveryByIdIn(
-    service.db, command.decisionId);
-  if (existingById !== null) {
-    return recoveryRowMatchesCommand(existingById, command) ?
-      Object.freeze({valid: true, replayed: true, record: existingById}) :
-      Object.freeze({valid: false, failureCode: ERROR.INTENT_CONFLICT});
-  }
-  const existingByEntry = readCommittedMembershipRecoveryByEntryIn(
-    service.db, command.entryId);
-  if (existingByEntry !== null) {
-    return recoveryRowMatchesCommand(existingByEntry, command) ?
-      Object.freeze({valid: true, replayed: true, record: existingByEntry}) :
-      Object.freeze({valid: false, failureCode: ERROR.INTENT_CONFLICT});
-  }
+  const committed = committedRecoveryValidationOf(service, command);
+  if (committed !== null) return committed;
   const durableRecord = RaftRsDurableStore.readDurableRecordIn(
     service.db, service.partitionId);
   const confState = durableRecord.confState;
-  const status = service.raft?.readStatus?.() ?? null;
-  if ((confState.votersOutgoing || []).length > 0 ||
-      (confState.learnersNext || []).length > 0 ||
-      (options.checkPendingConfChange === true && status?.confChangePending === true)) {
+  if (isRecoveryConfigurationInTransition(service, confState, options)) {
     return Object.freeze({
       valid: false,
       failureCode: ERROR.CONFIGURATION_IN_TRANSITION,
@@ -377,6 +412,39 @@ function validateMembershipRecoveryIntentAtLogEntry(service, command, options = 
     return Object.freeze({valid: false, failureCode: ERROR.SOURCE_NOT_VOTER});
   }
   const reservations = readRaftRsPeerIdentityReservations(service.db);
+  const sourceRefusal = recoverySourceRefusalOf(service, command, reservations, options);
+  if (sourceRefusal !== null) return sourceRefusal;
+  const targetRefusal = recoveryTargetRefusalOf(command, confState, voters, reservations);
+  if (targetRefusal !== null) return targetRefusal;
+  return Object.freeze({valid: true, replayed: false});
+}
+
+function committedRecoveryValidationOf(service, command) {
+  const existingById = readCommittedMembershipRecoveryByIdIn(
+    service.db, command.decisionId);
+  if (existingById !== null) {
+    return recoveryRowMatchesCommand(existingById, command) ?
+      Object.freeze({valid: true, replayed: true, record: existingById}) :
+      Object.freeze({valid: false, failureCode: ERROR.INTENT_CONFLICT});
+  }
+  const existingByEntry = readCommittedMembershipRecoveryByEntryIn(
+    service.db, command.entryId);
+  if (existingByEntry !== null) {
+    return recoveryRowMatchesCommand(existingByEntry, command) ?
+      Object.freeze({valid: true, replayed: true, record: existingByEntry}) :
+      Object.freeze({valid: false, failureCode: ERROR.INTENT_CONFLICT});
+  }
+  return null;
+}
+
+function isRecoveryConfigurationInTransition(service, confState, options) {
+  const status = service.raft?.readStatus?.() ?? null;
+  return (confState.votersOutgoing || []).length > 0 ||
+      (confState.learnersNext || []).length > 0 ||
+      (options.checkPendingConfChange === true && status?.confChangePending === true);
+}
+
+function recoverySourceRefusalOf(service, command, reservations, options) {
   const sourceReservation = reservations.find((item) =>
     String(item.peerId) === command.sourcePeerId ||
     item.replicaIdentity === command.sourceReplicaId) ?? null;
@@ -387,6 +455,10 @@ function validateMembershipRecoveryIntentAtLogEntry(service, command, options = 
         sourceReservation.nodeId !== command.sourceNodeId)) {
     return Object.freeze({valid: false, failureCode: ERROR.SOURCE_NOT_VOTER});
   }
+  return recoverySourceBindingRefusalOf(service, command, options);
+}
+
+function recoverySourceBindingRefusalOf(service, command, options) {
   if (options.checkPendingConfChange === true) {
     const binding = resolveAuthoritativeMemberBinding(
       service, command.sourceReplicaId, command.sourceNodeId);
@@ -420,6 +492,10 @@ function validateMembershipRecoveryIntentAtLogEntry(service, command, options = 
       });
     }
   }
+  return null;
+}
+
+function recoveryTargetRefusalOf(command, confState, voters, reservations) {
   if (voters.includes(command.targetPeerId) ||
       (confState.votersOutgoing || []).map(String).includes(command.targetPeerId)) {
     return Object.freeze({valid: false, failureCode: ERROR.TARGET_INVALID});
@@ -434,7 +510,7 @@ function validateMembershipRecoveryIntentAtLogEntry(service, command, options = 
           targetReservation.nodeId !== command.targetNodeId))) {
     return Object.freeze({valid: false, failureCode: ERROR.TARGET_INVALID});
   }
-  return Object.freeze({valid: true, replayed: false});
+  return null;
 }
 
 const {
@@ -479,13 +555,7 @@ function isReplicaReplacedInObservedService(replicaId, holder) {
     const wasRecoveryTarget = allRows.some((r) => r.target_replica_id === replicaId);
     let absentFromVoters = false;
     if (!wasRecoveryTarget && isNonEmptyString(service?.partitionId)) {
-      const durableRecord = RaftRsDurableStore.readDurableRecordIn(handle, service.partitionId);
-      const confState = durableRecord?.confState;
-      const activeVoters = new Set([
-        ...(confState?.voters || []).map(String),
-        ...(confState?.votersOutgoing || []).map(String),
-      ]);
-      absentFromVoters = !activeVoters.has(String(asSource.source_peer_id));
+      absentFromVoters = isRecoverySourceAbsentFromVoters(handle, service, asSource);
     }
     if (wasRecoveryTarget || absentFromVoters) {
       noteExcludedRecoveryServiceReplica(
@@ -494,6 +564,16 @@ function isReplicaReplacedInObservedService(replicaId, holder) {
     }
   }
   return false;
+}
+
+function isRecoverySourceAbsentFromVoters(handle, service, asSource) {
+  const durableRecord = RaftRsDurableStore.readDurableRecordIn(handle, service.partitionId);
+  const confState = durableRecord?.confState;
+  const activeVoters = new Set([
+    ...(confState?.voters || []).map(String),
+    ...(confState?.votersOutgoing || []).map(String),
+  ]);
+  return !activeVoters.has(String(asSource.source_peer_id));
 }
 
 function isExcludedRecoveryServiceReplica(replicaId, createdAt = null, holder = null) {
@@ -520,10 +600,6 @@ function hasExcludedRecoveryServiceWriteRows(service, rows = null) {
   });
 }
 
-function installRecoveryServiceCacheFence(holder) {
-  prepareRecoveryFenceHolder(holder);
-}
-
 function registerRecoveryPublicationPartitionService(service, holder = null) {
   const firstHolder = service?.systemTableCache ?? null;
   const hasFirst = prepareRecoveryFenceHolder(firstHolder);
@@ -542,6 +618,31 @@ function markLocalReplicaExcludedFence(service, recovery) {
   const replicaId = isNonEmptyString(recovery.sourceReplicaId) ?
     recovery.sourceReplicaId : service?.replicaId;
   if (!isNonEmptyString(replicaId)) return false;
+  const fence = localFenceIdentityOf(service, recovery, replicaId);
+  ensureMembershipRecoveryTables(db);
+  writeLocalFenceRow(db, replicaId, fence, recovery);
+  noteMembershipRecoveryOrFenceRowWritten(db);
+  if (service && service.db) {
+    service.excludedMemberGenerationFenced = true;
+  }
+  return true;
+}
+
+function writeLocalFenceRow(db, replicaId, fence, recovery) {
+  db.prepare(SQL.UPSERT_LOCAL_FENCE).run(
+    replicaId,
+    fence.decisionId,
+    fence.partitionId,
+    fence.sourcePeerId,
+    fence.sourceNodeId,
+    Number(recovery.sourceNodeBootIncarnation) || DEFAULT_BOOT_INCARNATION,
+    Number(recovery.sourceReplicaCreatedAt) || DEFAULT_CREATED_AT,
+    fence.configurationKey,
+    Number(recovery.membershipGenerationIndex) || DEFAULT_GENERATION_INDEX,
+  );
+}
+
+function localFenceIdentityOf(service, recovery, replicaId) {
   const partitionId = isNonEmptyString(recovery.partitionId) ?
     recovery.partitionId : (service?.partitionId ?? EMPTY_STRING);
   const sourceNodeId = isNonEmptyString(recovery.sourceNodeId) ?
@@ -553,23 +654,7 @@ function markLocalReplicaExcludedFence(service, recovery) {
     recovery.decisionId : FENCE_DECISION_ID;
   const configurationKey = isNonEmptyString(recovery.configurationKey) ?
     recovery.configurationKey : EMPTY_STRING;
-  ensureMembershipRecoveryTables(db);
-  db.prepare(SQL.UPSERT_LOCAL_FENCE).run(
-    replicaId,
-    decisionId,
-    partitionId,
-    sourcePeerId,
-    sourceNodeId,
-    Number(recovery.sourceNodeBootIncarnation) || DEFAULT_BOOT_INCARNATION,
-    Number(recovery.sourceReplicaCreatedAt) || DEFAULT_CREATED_AT,
-    configurationKey,
-    Number(recovery.membershipGenerationIndex) || DEFAULT_GENERATION_INDEX,
-  );
-  noteMembershipRecoveryOrFenceRowWritten(db);
-  if (service && service.db) {
-    service.excludedMemberGenerationFenced = true;
-  }
-  return true;
+  return {partitionId, sourceNodeId, sourcePeerId, decisionId, configurationKey};
 }
 
 function isLocalReplicaExcludedFenced(service) {
@@ -598,13 +683,7 @@ function isPeerExcludedInGroup(service, peerQuery = {}) {
   const db = service?.db;
   if (!db || db.open === false) return null;
   if (!hasAnyMembershipRecoveryOrFenceRows(db)) return null;
-  let row = null;
-  if (isNonEmptyString(peerQuery.replicaId)) {
-    row = db.prepare(SQL.SELECT_BY_SOURCE_REPLICA_ID).get(peerQuery.replicaId);
-  }
-  if (!row && isNonEmptyString(peerQuery.peerId)) {
-    row = db.prepare(SQL.SELECT_BY_SOURCE_PEER_ID).get(String(peerQuery.peerId));
-  }
+  const row = readSourceRecoveryRow(db, peerQuery);
   if (!row) return null;
   const durableRecord = RaftRsDurableStore.readDurableRecordIn(
     db, service.partitionId);
@@ -617,6 +696,17 @@ function isPeerExcludedInGroup(service, peerQuery = {}) {
     return null;
   }
   return rowToRecoveryRecord(row);
+}
+
+function readSourceRecoveryRow(db, peerQuery) {
+  let row = null;
+  if (isNonEmptyString(peerQuery.replicaId)) {
+    row = db.prepare(SQL.SELECT_BY_SOURCE_REPLICA_ID).get(peerQuery.replicaId);
+  }
+  if (!row && isNonEmptyString(peerQuery.peerId)) {
+    row = db.prepare(SQL.SELECT_BY_SOURCE_PEER_ID).get(String(peerQuery.peerId));
+  }
+  return row;
 }
 
 function excludedMemberFenceRefusalOf(service) {
@@ -677,7 +767,6 @@ export {
   ensureMembershipRecoveryTables,
   excludedMemberFenceRefusalOf,
   hasExcludedRecoveryServiceWriteRows,
-  installRecoveryServiceCacheFence,
   isExcludedRecoveryServiceReplica,
   isLocalReplicaExcludedFenced,
   isPeerExcludedInGroup,

@@ -704,6 +704,11 @@ async function runReplicaAdmissionDelivery(service, request, signal) {
   if (!isCurrentAdmissionRequest(service, request, signal)) return request;
   admission ??= await service.sendReplicaAdmissionRequest(request);
   if (!isCurrentAdmissionRequest(service, request, signal)) return request;
+  return recordReplicaAdmissionAnswer(service, request, admission);
+}
+
+// The leader's answer settles (or keeps pending) the current request.
+function recordReplicaAdmissionAnswer(service, request, admission) {
   request.lastOutcome = admission.outcome;
   if (admission.reason === PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED) {
     markLocalReplicaExcludedFence(service, {
