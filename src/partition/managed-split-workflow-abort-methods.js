@@ -1,11 +1,11 @@
 import {sameSourceFailure} from './managed-split-descriptor-cleanup.js';
-import {refuseRecordChange} from './managed-workflow-record-store.js';
+import {RECORD_CHANGE_REFUSAL, refuseRecordChange} from './managed-workflow-record-store.js';
 import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
-  RECORD_CHANGE_REFUSAL, abortChange,
+  abortChange,
   refusedStepAs,
 } from './managed-workflow-record-changes.js';
 import {

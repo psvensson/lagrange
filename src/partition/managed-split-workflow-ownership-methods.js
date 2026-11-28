@@ -1,9 +1,9 @@
-import {RESUME_TRIGGER} from './group-retirement-resume.js';
 import {randomUUID} from 'node:crypto';
 
 import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
+  RESUME_TRIGGER,
 } from './partition-constants.js';
 import {registrationInputsRefusalOf} from
   './managed-workflow-registration-inputs.js';

@@ -70,8 +70,9 @@ import {
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
-import {PARTITION_TRANSITION_METADATA_FIELD} from './partition-constants.js';
+import {PARTITION_TRANSITION_METADATA_FIELD, RESUME_TRIGGER, WORKFLOW_FAMILY} from './partition-constants.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
+import {WORKFLOW_CLAIM_RESULT} from '../workflow/workflow-constants.js';
 import {
   readWaitClock,
   reportWaitBoundSpent,
@@ -121,6 +122,20 @@ const RECORD_CHANGE_KIND = Object.freeze({
   TRANSITION: 'transition',
   // The metadata only (a claim or a renewal).
   CLAIM: 'claim',
+});
+
+// Typed refusal reasons of the record changes.
+const RECORD_CHANGE_REFUSAL = Object.freeze({
+  RECORD_GONE: 'record-gone',
+  RECORD_MOVED_SINCE_READ: 'record-moved-since-read',
+  REGISTRATION_INPUT_MOVED: 'registration-input-moved',
+  ATTEMPT_MISMATCH: 'attempt-mismatch',
+  STATE_NOT_EXPECTED: 'state-not-expected',
+  ...WORKFLOW_CLAIM_RESULT,
+  // A source mirror custody grant on the record is still owed its release.
+  SOURCE_MIRROR_RELEASE_PENDING: 'source-mirror-release-pending',
+  // The record's source execution attempt ended; it cannot run again.
+  SOURCE_MIRROR_ATTEMPT_ENDED: 'source-mirror-attempt-ended',
 });
 
 const RECORD_UNCHANGED = Symbol('workflow-record-unchanged');
@@ -501,9 +516,10 @@ async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
   const {metadata, state} = storedRecordOf(row);
   if (action !== MIRROR_RETENTION_CUSTODY_ACTION.RELEASE || !validMirrorCustody(custody) ||
       !(BigInt(logIndex) > 0n) ||
-      custody.workflowId !== metadata.workflowId || custody.workflowAttempt !== metadata.workflowAttempt ||
+      custody.workflowId !== metadata.workflowId ||
+      custody.workflowAttempt !== metadata.workflowAttempt ||
       custody.targetPartitionVersion !== metadata.targetPartitionVersion ||
-      !(custody.family === 'split' ? metadata.sourcePartitionId === partitionId :
+      !(custody.family === WORKFLOW_FAMILY.SPLIT ? metadata.sourcePartitionId === partitionId :
         metadata.sourcePartitionIds?.includes(partitionId)) ||
       !metadata.mirrorCustodyGrants?.some((grant) =>
         grant.partitionId === partitionId && grant.fence === custody.workflowFenceToken &&
@@ -521,13 +537,14 @@ async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
   // Retirement can enqueue more changes on this workflow. Wake it after
   // leaving the record turn.
   if (!endsSourceExecutionAttempt(storedRecordOf(observed).state)) {
-    await owner.resumeGroupRetirement?.(observed, 'source-custody-released');
+    await owner.resumeGroupRetirement?.(observed, RESUME_TRIGGER.SOURCE_CUSTODY_RELEASED);
   }
   return true;
 }
 
 async function commitReleaseReceipt(owner, row, {partitionId, custody}) {
-  const matchesReceipt = (grant) => grant.partitionId === partitionId && grant.fence === custody.workflowFenceToken;
+  const matchesReceipt = (grant) => grant.partitionId === partitionId &&
+      grant.fence === custody.workflowFenceToken;
   let base = await authoritativeRecordOf(owner, row.table_id);
   let lastObservation;
   function unresolved(reason) {
@@ -550,11 +567,13 @@ async function commitReleaseReceipt(owner, row, {partitionId, custody}) {
     }
     const grant = current.metadata.mirrorCustodyGrants.find(matchesReceipt);
     if (!grant) return base;
-    if (!grant.release && !(current.metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(current.state))) {
+    if (!grant.release &&
+        !(current.metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(current.state))) {
       unresolved('release-authorization-changed');
     }
     if (attempt === MAX_COMPARE_AND_SWAP_ATTEMPTS) unresolved('conditional-write-unconfirmed');
-    const remaining = current.metadata.mirrorCustodyGrants.filter((grant) => !matchesReceipt(grant));
+    const remaining = current.metadata.mirrorCustodyGrants.filter((grant) =>
+      !matchesReceipt(grant));
     const encoded = withNextGeneration({data: {partition_transition_metadata:
       JSON.stringify({...current.metadata, mirrorCustodyGrants: remaining})},
     options: {workClass: PRESSURE_WORK_CLASS.CRITICAL}}, base);
@@ -610,15 +629,15 @@ function applyChangeTo(owner, workflowId, change, base) {
   const grants = prior.metadata?.mirrorCustodyGrants;
   if (grants?.length && answer !== RECORD_CLEARED) {
     if (grants.some((owed) => !answer.metadata?.mirrorCustodyGrants?.some(
-          (grant) => grant.partitionId === owed.partitionId && grant.fence === owed.fence &&
+      (grant) => grant.partitionId === owed.partitionId && grant.fence === owed.fence &&
             (!owed.acquired || grant.acquired) && (!owed.release || grant.release)))) {
-      return {refusal: refuseRecordChange('source-mirror-release-pending')};
+      return {refusal: refuseRecordChange(RECORD_CHANGE_REFUSAL.SOURCE_MIRROR_RELEASE_PENDING)};
     }
   }
   if (answer !== RECORD_CLEARED && prior.metadata?.mirrorExecutionEnded &&
       answer.metadata?.workflowAttempt === prior.metadata.workflowAttempt &&
       !endsSourceExecutionAttempt(answer.status)) {
-    return {refusal: refuseRecordChange('source-mirror-attempt-ended')};
+    return {refusal: refuseRecordChange(RECORD_CHANGE_REFUSAL.SOURCE_MIRROR_ATTEMPT_ENDED)};
   }
   if (answer !== RECORD_CLEARED && grants?.length && endsSourceExecutionAttempt(answer.status)) {
     // A scheduled retry registers a fresh attempt. The old source's grant
@@ -652,7 +671,8 @@ function settleRefusal(owner, workflowId, refusal, base) {
     // A stale caller can be superseded by this same process's later attempt.
     // Preserve the authoritative newer projection and its independent retries.
     const ownsObserved = holds && live?.workflowOwnerId === owner.workflowOwnerId &&
-      observed.claim.workflowOwnerId === owner.workflowOwnerId && live.fenceToken === observed.claim.fenceToken &&
+      observed.claim.workflowOwnerId === owner.workflowOwnerId &&
+      live.fenceToken === observed.claim.fenceToken &&
       live.metadata?.workflowAttempt === observed.metadata?.workflowAttempt;
     if (!ownsObserved) relinquishWorkflow(owner, workflowId, base);
     return settled(RECORD_CHANGE_OUTCOME.SUPERSEDED, {refusal});
@@ -897,6 +917,7 @@ export {
   acknowledgeMirrorCustodyRelease,
   RECORD_CHANGE_KIND,
   RECORD_CHANGE_OUTCOME,
+  RECORD_CHANGE_REFUSAL,
   RECORD_CLEARED,
   RECORD_UNCHANGED,
   applyRecordChange,

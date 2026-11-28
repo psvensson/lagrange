@@ -1,6 +1,6 @@
 import {splitDescriptorCommitFields, splitDescriptorFailureFields} from '../split-descriptor-delivery-fields.js';
 import {randomUUID} from 'node:crypto';
-import {deriveParticipantEntryId} from '../../partition/partition-split-descriptor-command.js';
+import {carriesSplitDescriptorIntent, deriveParticipantEntryId} from '../../partition/partition-split-descriptor-command.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {
   affectedRowsField,
@@ -394,7 +394,7 @@ class DistributedWriteCoordinator {
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
         ...lockOverlay,
-        ...(Object.hasOwn(executionOptions, 'splitDescriptorIntent') && participantResults.length === 1 ?
+        ...(carriesSplitDescriptorIntent(executionOptions) && participantResults.length === 1 ?
           splitDescriptorFailureFields(failedParticipants[0]) : {}),
         idempotencyKey: plan.idempotencyKey,
         operationId: plan.operationId,

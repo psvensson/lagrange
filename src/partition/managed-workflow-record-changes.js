@@ -15,7 +15,6 @@ import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
-  WORKFLOW_CLAIM_RESULT,
   WORKFLOW_ERROR_MSG,
   WORKFLOW_TRANSITION_FIELD,
   hasAdvancedParticipantCheckpoint,
@@ -28,6 +27,7 @@ import {
 } from './partition-constants.js';
 import {
   RECORD_CHANGE_OUTCOME,
+  RECORD_CHANGE_REFUSAL,
   RECORD_CLEARED,
   RECORD_UNCHANGED,
   refuseRecordChange,
@@ -36,16 +36,6 @@ import {
 const LEASE_RENEW_FRACTION = 2;
 const WORKFLOW_ID_KEY = 'workflowId';
 const STATE = PARTITION_TRANSITION_STATE;
-
-// Typed refusal reasons of the record changes.
-const RECORD_CHANGE_REFUSAL = Object.freeze({
-  RECORD_GONE: 'record-gone',
-  RECORD_MOVED_SINCE_READ: 'record-moved-since-read',
-  REGISTRATION_INPUT_MOVED: 'registration-input-moved',
-  ATTEMPT_MISMATCH: 'attempt-mismatch',
-  STATE_NOT_EXPECTED: 'state-not-expected',
-  ...WORKFLOW_CLAIM_RESULT,
-});
 
 // The forward order of a split's or merge's phases: a change never moves the
 // record backwards in it. FAILED (the owner's abort) is left only by the
@@ -235,7 +225,7 @@ function isRecordAsRead(stored, read) {
 function registrationChange(owner, registration, read, revalidate) {
   return (_workflow, stored) => {
     if (stored.metadata?.mirrorCustodyGrants?.length) {
-      return refuseRecordChange('source-mirror-release-pending');
+      return refuseRecordChange(RECORD_CHANGE_REFUSAL.SOURCE_MIRROR_RELEASE_PENDING);
     }
     const pendingCleanup = splitCleanupRefusal(stored.state, stored.metadata, stored.row?.table_id);
     if (pendingCleanup) return refuseRecordChange(pendingCleanup);
@@ -637,7 +627,7 @@ function clearChange(owner, fence, attempt, states) {
   return ownedChange(owner, fence, (workflow) => {
     const grants = workflow.metadata.mirrorCustodyGrants ?? [];
     if (grants.length) {
-      return refuseRecordChange('source-mirror-release-pending');
+      return refuseRecordChange(RECORD_CHANGE_REFUSAL.SOURCE_MIRROR_RELEASE_PENDING);
     }
     const pendingCleanup = splitCleanupRefusal(workflow.status, workflow.metadata,
       workflow.tableId);
@@ -744,7 +734,6 @@ function executionOutcomeChange(status, delta, incident) {
 }
 
 export {
-  RECORD_CHANGE_REFUSAL,
   abortChange,
   executionOutcomeChange,
   isCutoverOrLater,

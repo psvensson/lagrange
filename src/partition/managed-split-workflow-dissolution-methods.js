@@ -26,6 +26,7 @@ import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  WORKFLOW_FAMILY,
 } from './partition-constants.js';
 import {
   SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
@@ -270,7 +271,7 @@ class ManagedSplitWorkflowDissolutionMethods {
           PARTITION_TRANSITION_STATE.SPLIT_SOURCE_DISSOLVING) {
       return false;
     }
-    const terminal = terminalMirrorIdentity(terminalWorkflow, 'split');
+    const terminal = terminalMirrorIdentity(terminalWorkflow, WORKFLOW_FAMILY.SPLIT);
     await this.persistTerminalTransitionClear(terminalWorkflow);
     this.emitTerminalSplitCompleted(terminalWorkflow);
     this.workflowCoordinator.removeWorkflow(workflowId);

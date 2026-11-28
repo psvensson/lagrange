@@ -1,6 +1,6 @@
 import {splitDescriptorCommitFields, splitDescriptorFailureFields} from './split-descriptor-delivery-fields.js';
 import {SQLParser} from './sql-parser.js';
-import {SPLIT_DESCRIPTOR_ERROR, splitDescriptorStatement}
+import {SPLIT_DESCRIPTOR_ERROR, carriesSplitDescriptorIntent, splitDescriptorStatement}
   from '../partition/partition-split-descriptor-command.js';
 import {EXPR_TYPE, SQL_STORAGE_CLASS} from './parser-constants.js';
 import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
@@ -110,7 +110,7 @@ function buildDistributedMutationResult(
     ...buildDistributedFailureSummary(failedResults),
     errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
     error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-    ...(Object.hasOwn(options, 'splitDescriptorIntent') && results.length === 1 ?
+    ...(carriesSplitDescriptorIntent(options) && results.length === 1 ?
       splitDescriptorFailureFields(failedResults[0]) : {}),
   };
 }
@@ -226,7 +226,7 @@ function renderWriteExpression(executor, expr, inputParams, outParams) {
 // parentheses. All legs must propose the command owner's original bytes.
 function renderRoutedMutation(executor, renderer, ast, params, options) {
   const rendered = renderer.call(executor, ast, params);
-  if (!Object.hasOwn(options, 'splitDescriptorIntent')) return rendered;
+  if (!carriesSplitDescriptorIntent(options)) return rendered;
   const expected = splitDescriptorStatement(options.splitDescriptorIntent);
   const canonicalAst = new SQLParser(expected.sql).parse();
   if (ast.rawSql !== expected.sql || params.length !== expected.params.length ||

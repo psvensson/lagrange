@@ -1,7 +1,6 @@
 import {createGroupRetirementRedrive} from
   './group-retirement-redrive.js';
 import {
-  WORKFLOW_FAMILY,
   attachGroupRetirementResume,
 } from './group-retirement-resume.js';
 import {
@@ -21,6 +20,7 @@ import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  WORKFLOW_FAMILY,
 } from './partition-constants.js';
 import {resolvePartitionRowKeyRange} from './partition-transition-overlap-guard.js';
 import {resolveDeclaredPartitionKeyType} from './partition-boundary-representation.js';

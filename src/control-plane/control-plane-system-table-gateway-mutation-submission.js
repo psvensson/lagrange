@@ -1,4 +1,4 @@
-import {SPLIT_DESCRIPTOR_ERROR, canonicalSplitDescriptorIntent, splitDescriptorCommandDigest, splitDescriptorStatement,
+import {SPLIT_DESCRIPTOR_ERROR, canonicalSplitDescriptorIntent, carriesSplitDescriptorIntent, splitDescriptorCommandDigest, splitDescriptorStatement,
   descriptorRefusal, isSplitDescriptorReceiptFor, splitDescriptorWriteKey} from
   '../partition/partition-split-descriptor-command.js';
 import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
@@ -201,7 +201,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       operation,
       tableName,
     );
-    const hasDescriptor = Object.hasOwn(options, 'splitDescriptorIntent');
+    const hasDescriptor = carriesSplitDescriptorIntent(options);
     if (hasDescriptor) {
       const intent = canonicalSplitDescriptorIntent(options.splitDescriptorIntent);
       if (!intent) return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);

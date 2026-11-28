@@ -1,6 +1,5 @@
-import {RECORD_CHANGE_REFUSAL} from './managed-workflow-record-changes.js';
-import {storedTransitionOf} from './managed-workflow-record-store.js';
-import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
+import {RECORD_CHANGE_REFUSAL, storedTransitionOf} from './managed-workflow-record-store.js';
+import {PARTITION_TRANSITION_STATE, RESUME_TRIGGER, WORKFLOW_FAMILY} from './partition-constants.js';
 import {PRE_CUTOVER_SPLIT_STATES, cleanupRecord} from './managed-split-descriptor-cleanup.js';
 /**
  * Owner contract:
@@ -37,7 +36,7 @@ import {PRE_CUTOVER_SPLIT_STATES, cleanupRecord} from './managed-split-descripto
  * decides retirement (group-retirement-evidence.js does) or completes a
  * step (the workflow's own finalize/teardown does).
  */
-import {WORKFLOW_FAMILY, retiringWorkflowOf} from
+import {retiringWorkflowOf} from
   './group-retirement-evidence.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
 import {
@@ -47,14 +46,6 @@ import {
 
 const TABLES_TABLE = 'tables';
 const DELETE_OPERATION = 'DELETE';
-const RESUME_TRIGGER = Object.freeze({
-  OWNER_START: 'owner-start',
-  RECORD_CHANGED: 'record-changed',
-  LEASE_EXPIRED: 'lease-expired',
-  // The owner's own start of the workflow was refused (claim before
-  // register): the record it read is handed here.
-  START_REFUSED: 'start-refused',
-});
 const RESUME_LOG_MSG = Object.freeze({
   RESUMED: 'Group retirement resumed from the durable record by the ' +
     'workflow owner',
@@ -308,4 +299,4 @@ function currentRecord(owner, tablesRow) {
     String(row?.table_id || '') === tableId) || tablesRow;
 }
 
-export {RESUME_TRIGGER, WORKFLOW_FAMILY, attachGroupRetirementResume};
+export {attachGroupRetirementResume};

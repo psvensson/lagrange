@@ -1,7 +1,6 @@
 import {createGroupRetirementRedrive} from
   './group-retirement-redrive.js';
 import {
-  WORKFLOW_FAMILY,
   attachGroupRetirementResume,
 } from './group-retirement-resume.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
@@ -18,6 +17,7 @@ import {
   MANAGED_MERGE_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  WORKFLOW_FAMILY,
 } from './partition-constants.js';
 import {MERGE_ACK_STATUS, MERGE_PARTICIPANT_PREFIX} from
   './merge-ack-constants.js';

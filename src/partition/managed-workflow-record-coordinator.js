@@ -26,6 +26,7 @@ import {
 import {
   RECORD_CHANGE_KIND,
   RECORD_CHANGE_OUTCOME,
+  RECORD_CHANGE_REFUSAL,
   applyRecordChange,
   forgetWorkflowRecord,
   recordBytesOf,
@@ -33,7 +34,6 @@ import {
   refuseRecordChange,
 } from './managed-workflow-record-store.js';
 import {
-  RECORD_CHANGE_REFUSAL,
   acknowledgementChange,
   clearChange,
   executionOutcomeChange,

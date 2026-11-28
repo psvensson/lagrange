@@ -3,7 +3,7 @@
 // compares that exact preimage at commit. Restart always uses the issued plan.
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
-import {RECORD_UNCHANGED, refuseRecordChange} from './managed-workflow-record-store.js';
+import {RECORD_CHANGE_REFUSAL, RECORD_UNCHANGED, refuseRecordChange} from './managed-workflow-record-store.js';
 import {SIBLING_DESCRIPTOR_ACTION, canonicalSiblingDescriptorIntent} from './partition-sibling-descriptor-effect.js';
 
 function siblingIntent(tableId, metadata, subject, action) {
@@ -71,10 +71,15 @@ async function issueSplitSiblingPlan(owner, workflow) {
         current.metadata.splitSourceFailure ||
         current.metadata.workflowAttempt !== workflow.metadata.workflowAttempt ||
         current.fenceToken !== workflow.fenceToken ||
-        stored.row.active_partition_version !== activeVersion || !owner.isSplitCutoverAdmissible(current)) return refuseRecordChange('state-not-expected');
+        stored.row.active_partition_version !== activeVersion ||
+        !owner.isSplitCutoverAdmissible(current)) {
+      return refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED);
+    }
     // A parallel issuer may have recorded additional subjects. Re-read its
     // plan before sending anything. A stale calculation may not replace it.
-    if (!sameIssuedSiblingPlan(current, prior)) return refuseRecordChange('state-not-expected');
+    if (!sameIssuedSiblingPlan(current, prior)) {
+      return refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED);
+    }
     for (const subject of subjects.values()) validateSubject(current, subject);
     return subjects.size === prior.length ? RECORD_UNCHANGED : {...current, metadata: {
       ...current.metadata, splitIssuedSiblings: [...subjects.values()]}};

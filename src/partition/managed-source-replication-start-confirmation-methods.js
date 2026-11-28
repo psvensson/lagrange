@@ -3,7 +3,7 @@ import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
 } from '../workflow/workflow-constants.js';
-import {PARTITION_TRANSITION_METADATA_FIELD} from './partition-constants.js';
+import {PARTITION_TRANSITION_METADATA_FIELD, WORKFLOW_FAMILY} from './partition-constants.js';
 import {
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
@@ -34,7 +34,7 @@ function startAck(participantKey, status, metadata, now) {
 
 class ManagedSourceReplicationStartConfirmationMethods {
   async reserveSourceMirrorCustody(family, sourceId, metadata, tableId, tableName) {
-    const split = family === 'split';
+    const split = family === WORKFLOW_FAMILY.SPLIT;
     const workflow = this.resolveWorkflowState(metadata.workflowId);
     if (split ? this.isSplitWorkflowStateUnavailable(workflow) :
       this.isMergeWorkflowStateUnavailable(workflow)) return false;

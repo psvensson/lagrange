@@ -12,6 +12,7 @@ import {
   MIRROR_RETENTION_BARRIER_KIND,
   MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
 } from './partition-committed-statement-outcome-constants.js';
+import {WORKFLOW_FAMILY} from './partition-constants.js';
 
 const DIRECT_MUTATION_KIND_BY_VERB = Object.freeze({
   [KEYWORD.DELETE]: PARTITION_SERVICE_OPERATION.DELETE,
@@ -63,7 +64,7 @@ export function validMirrorCustody(value) {
     ordinal(value.barrierIndex) && typeof value.workflowId === 'string' &&
     value.workflowId.trim().length > 0 && positiveOrdinal(value.workflowAttempt) &&
     positiveOrdinal(value.workflowFenceToken) && positiveOrdinal(value.targetPartitionVersion) &&
-    (value.family === 'split' || value.family === 'merge');
+    (value.family === WORKFLOW_FAMILY.SPLIT || value.family === WORKFLOW_FAMILY.MERGE);
 }
 
 export function decodeMirrorCustodyRow(row) {

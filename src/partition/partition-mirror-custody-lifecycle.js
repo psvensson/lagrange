@@ -1,7 +1,7 @@
 import {authoritativeRecordOf, acknowledgeMirrorCustodyRelease} from './managed-workflow-record-store.js';
 import {parseTablePartitionTransition} from './partition-transition-row.js';
 import {TABLES} from '../constants/tables.js';
-import {endsSourceExecutionAttempt, PARTITION_TRANSITION_STATE} from './partition-constants.js';
+import {endsSourceExecutionAttempt, PARTITION_TRANSITION_STATE, WORKFLOW_FAMILY} from './partition-constants.js';
 import {sameMirrorCustody} from './partition-mirror-custody-codec.js';
 import {
   readDurableMirrorRetentionCustodyIn, releaseSourceMirrorRetentionCustody,
@@ -16,15 +16,15 @@ function terminalGrantForSource(row, partitionId) {
     (grant.release ||
     (metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(transition.state))));
   if (!grants?.length) return null;
-  const family = metadata.sourcePartitionId === partitionId ? 'split' :
-    metadata.sourcePartitionIds?.includes(partitionId) ? 'merge' : null;
+  const family = metadata.sourcePartitionId === partitionId ? WORKFLOW_FAMILY.SPLIT :
+    metadata.sourcePartitionIds?.includes(partitionId) ? WORKFLOW_FAMILY.MERGE : null;
   return family ? {metadata, grants, family} : null;
 }
 
 const pending = new WeakMap();
 
 async function releaseTerminalGrant(service, pin, family) {
-  const owner = family === 'split' ? service.sqlQueryEngine?.managedSplitWorkflow :
+  const owner = family === WORKFLOW_FAMILY.SPLIT ? service.sqlQueryEngine?.managedSplitWorkflow :
     service.sqlQueryEngine?.managedMergeWorkflow;
   if (!owner) return;
   const row = await authoritativeRecordOf(owner, service.tableId);

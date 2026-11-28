@@ -39,9 +39,14 @@ const DIGEST_PREFIX = KIND + ':';
 const FINALIZE_CHILD = 'finalizeChild';
 const KEY_PREFIX = '[' + JSON.stringify(KIND) + ',';
 const FIELDS = Object.freeze(['action', 'tableId', 'partitionId', 'workflowId', 'workflowAttempt']);
+// The field a split descriptor intent travels in (query options and the proposed,
+// replicated command) and the answer field of its destination receipt. Presence is
+// asked through carriesSplitDescriptorIntent / carriesSplitDescriptorReceipt.
+const SPLIT_DESCRIPTOR_INTENT_FIELD = 'splitDescriptorIntent';
+const SPLIT_DESCRIPTOR_RECEIPT_FIELD = 'splitDescriptorReceipt';
 const text = (value) => typeof value === 'string' && value.trim().length > 0;
 const commandFields = new Set(['type', 'sql', 'params', 'entryId', 'operationId',
-  'idempotencyKey', 'splitMirrorOrigin', 'splitDescriptorIntent', 'mutationKind',
+  'idempotencyKey', 'splitMirrorOrigin', SPLIT_DESCRIPTOR_INTENT_FIELD, 'mutationKind',
   'timestamp', 'proposedBy', 'proposedAt']);
 
 function isSiblingDescriptorAction(action) {
@@ -119,10 +124,18 @@ function descriptorRefusal(code, retryable = false) {
     retryable, deferRetry: retryable};
 }
 
+function carriesSplitDescriptorIntent(value) {
+  return Object.hasOwn(value, SPLIT_DESCRIPTOR_INTENT_FIELD);
+}
+
+function carriesSplitDescriptorReceipt(value) {
+  return Object.hasOwn(value, SPLIT_DESCRIPTOR_RECEIPT_FIELD);
+}
+
 // The strict binding is checked at submission and independently at committed
 // apply. Different proposers/timestamps can represent the same command.
 function usesSplitDescriptorIdentity(command) {
-  return Object.hasOwn(command, 'splitDescriptorIntent') ||
+  return carriesSplitDescriptorIntent(command) ||
     (typeof command.idempotencyKey === 'string' && command.idempotencyKey.startsWith(KEY_PREFIX));
 }
 
@@ -200,7 +213,8 @@ function retainedSplitDescriptorAnswer(descriptor, recorded) {
 }
 
 export {DISPOSITION as SPLIT_DESCRIPTOR_DISPOSITION, SPLIT_DESCRIPTOR_ERROR,
-  SPLIT_DESCRIPTOR_FINALIZE_SQL, decodeSplitDescriptorCommand, deriveParticipantEntryId,
+  SPLIT_DESCRIPTOR_FINALIZE_SQL, carriesSplitDescriptorIntent, carriesSplitDescriptorReceipt,
+  decodeSplitDescriptorCommand, deriveParticipantEntryId,
   descriptorRefusal,
   finalizeChildReceipt, isSplitDescriptorDigest, isSplitDescriptorReceiptFor,
   retainedSplitDescriptorAnswer,

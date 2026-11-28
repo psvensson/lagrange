@@ -11,7 +11,7 @@ documentClass: generated
 - [group-retirement-evidence.js](group-retirement-evidence.js) - Owner contract: Owner: whether one REMOVE retires its replica's WHOLE group as a unit (owner decision 2026-10-04,... (importers: many)
 - [group-retirement-members.js](group-retirement-members.js) - Owner contract: Owner: WHICH replicas a whole-group retirement step must hear from before it may complete, and WHICH... (importers: many)
 - [group-retirement-redrive.js](group-retirement-redrive.js) - Owner contract: Owner: the workflow owner's completion of a whole-group retirement step whose REMOVEs some members... (importers: many)
-- [group-retirement-resume.js](group-retirement-resume.js) - Owner contract: Owner: a split/merge workflow owner resuming, from the durable record, a whole-group retirement step... (importers: many)
+- [group-retirement-resume.js](group-retirement-resume.js) - Owner contract: Owner: a split/merge workflow owner resuming, from the durable record, a whole-group retirement step... (importers: few)
 - [index.js](index.js) - Partition module exports. (importers: one)
 - [key-range-manager.js](key-range-manager.js) - Key Range Manager - Manages partition key ranges. (importers: many)
 - [learner-promotion-count-check-evidence.js](learner-promotion-count-check-evidence.js) - The log payload of one learner-side count check: the inputs the decision was actually made on. (importers: few)

@@ -1,4 +1,4 @@
-import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, retainedSplitDescriptorAnswer,
+import {carriesSplitDescriptorIntent, decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, retainedSplitDescriptorAnswer,
   SPLIT_DESCRIPTOR_ERROR} from './partition-split-descriptor-command.js';
 // The terminal outcome of every committed statement: the one owner of what a
 // committed statement's result is, for the partition's committed-entry
@@ -452,7 +452,7 @@ function lockingReadReplayFieldsOf(failureCode) {
 
 function answerSettledStatement(service, {recorded, command}) {
   let descriptorFields;
-  if (Object.hasOwn(command, 'splitDescriptorIntent')) {
+  if (carriesSplitDescriptorIntent(command)) {
     const descriptor = decodeSplitDescriptorCommand(service, command);
     if (!descriptor) return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
     descriptorFields = retainedSplitDescriptorAnswer(descriptor, recorded);

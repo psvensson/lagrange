@@ -1,4 +1,5 @@
 import {splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
+import {carriesSplitDescriptorIntent} from '../partition/partition-split-descriptor-command.js';
 /**
  * The bootstrap-mode path of the CDC integration service (the seed's
  * registration window): reads on the local partition replica, writes through
@@ -133,7 +134,7 @@ async function executeBootstrapDirectSql(service, sql, params = [], options = {}
   // twice (R11: no fallback).
   return normalizeLocalSystemTableWriteResult(
     await submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
-      () => Object.hasOwn(options, 'splitDescriptorIntent') ?
+      () => carriesSplitDescriptorIntent(options) ?
         partitionService.executeQuery(sql, params, {
           ...splitDescriptorIntentFields(options), idempotencyKey: options.idempotencyKey,
           entryId: deriveParticipantEntryId(options.idempotencyKey, partitionService.partitionId),
