@@ -619,7 +619,12 @@ test('Optimization 5C: zero-participant COMMIT persists COMMITTED atomically wit
     assert.equal(breakdown.metadataSubmissionsByPurpose.settlement, 0);
   });
 
-test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert with executeWrite and COMMIT overlaps read-only release with COMMITTED status',
+// Superseded by quest transaction-redundant-progress-writes: the ACTIVE
+// participant row is no longer written, so the statement has nothing to
+// overlap with executeWrite. What the witness kept: write-operation rows are
+// persisted only after executeWrite settles, and COMMIT overlaps the
+// read-only release with the COMMITTED status.
+test('Optimization 5C: executeWriteStatement writes no participant row, persists its write outcome only after executeWrite settles, and COMMIT overlaps read-only release with COMMITTED status',
   async (t) => {
     const gateway = createTransactionPersistenceGateway();
     t.after(() => gateway.db.close());
@@ -631,19 +636,8 @@ test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert 
     });
     t.after(() => engine.shutdown());
     const coordinator = engine.transactionCoordinator;
-
-    const activePersistStarted = deferred();
-    const releaseActivePersist = deferred();
-    const baseSubmit = gateway.submitMutation.bind(gateway);
-    gateway.submitMutation = async (mutation, options) => {
-      if (mutation.tableName === 'sql_transaction_participants' &&
-          mutation.data?.status === undefined &&
-          mutation.row?.status === 'ACTIVE') {
-        activePersistStarted.resolve();
-        await releaseActivePersist.promise;
-      }
-      return baseSubmit(mutation, options);
-    };
+    const participantRowWrites = () => gateway.mutations.filter((mutation) =>
+      mutation.tableName === 'sql_transaction_participants').length;
 
     coordinator.beginParticipant = async () => {};
     coordinator.prepareParticipant = async (_s, partitionId) => ({
@@ -669,26 +663,29 @@ test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert 
       async ({enlist}) => enlist(['p-ro']),
     );
 
-    let sawActiveInFlightDuringWrite = false;
-    let writeOutcomeBeforePersistReleased = 0;
+    const writeStarted = deferred();
+    const releaseWrite = deferred();
+    let writeOutcomeRowsDuringWrite = null;
     const writePromise = coordinator.executeWriteStatement(
       'overlap-tx',
       {operationId: 'op-overlap-1', sql: 'UPDATE t SET v = 1 WHERE id = 1', partitionIds: ['p-rw']},
       async () => {
-        await activePersistStarted.promise;
-        sawActiveInFlightDuringWrite = true;
-        writeOutcomeBeforePersistReleased = gateway.rows('sql_write_operations').length;
+        writeStarted.resolve();
+        await releaseWrite.promise;
+        writeOutcomeRowsDuringWrite = gateway.rows('sql_write_operations').length;
         return {success: true, affectedRows: 1};
       },
     );
-    await activePersistStarted.promise;
-    releaseActivePersist.resolve();
+    await writeStarted.promise;
+    assert.equal(participantRowWrites(), 0,
+      'no sql_transaction_participants write while the statement runs');
+    releaseWrite.resolve();
     const written = await writePromise;
     assert.equal(written.success, true);
-    assert.equal(sawActiveInFlightDuringWrite, true,
-      'upsertParticipant(ACTIVE) must start concurrently with executeWrite');
-    assert.equal(writeOutcomeBeforePersistReleased, 0,
-      'sql_write_operations persistence waits until concurrent upsertParticipant(ACTIVE) and executeWrite settle');
+    assert.equal(writeOutcomeRowsDuringWrite, 0,
+      'sql_write_operations persistence waits until executeWrite settles');
+    assert.equal(participantRowWrites(), 0,
+      'the statement writes no participant row: the manifest is the admitted set');
     assert.equal(
       coordinator.getTransaction('overlap-tx').writeOperations[0].status,
       'SUCCEEDED',
@@ -706,7 +703,13 @@ test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert 
     assert.deepEqual(roRollbacks, ['p-ro']);
   });
 
-test('Finding 1B: parallel ACTIVE persistence waits for all siblings before releasing session queue, CAS-guards upsertParticipant rollback against PREPARED state, and deduplicates overlapped read-only release on status persist failure',
+// Superseded by quest transaction-redundant-progress-writes: parts 1-2 of the
+// original witnessed a failed, delayed or late-rejected ACTIVE participant
+// write; that write no longer exists. Kept: a write promotes read-only
+// participants without a second BEGIN (the in-memory begin gate) and without
+// a participant row, and an overlapped read-only release is not duplicated
+// when setTransactionStatus(COMMITTED) rejects.
+test('Finding 1B: a write promotes read-only participants without a second BEGIN or a participant row, and deduplicates overlapped read-only release on status persist failure',
   async (t) => {
     const gateway = createTransactionPersistenceGateway();
     t.after(() => gateway.db.close());
@@ -719,25 +722,9 @@ test('Finding 1B: parallel ACTIVE persistence waits for all siblings before rele
     t.after(() => engine.shutdown());
     const coordinator = engine.transactionCoordinator;
 
-    const p2ActiveStarted = deferred();
-    const releaseP2Active = deferred();
-    let failP1ActiveOnce = true;
-    let blockP2ActiveOnce = true;
     let failCommittedStatusOnce = false;
     const baseSubmit = gateway.submitMutation.bind(gateway);
     gateway.submitMutation = async (mutation, options) => {
-      if (mutation.tableName === 'sql_transaction_participants' &&
-          mutation.row?.status === 'ACTIVE') {
-        if (mutation.row.partition_id === 'p1' && failP1ActiveOnce) {
-          failP1ActiveOnce = false;
-          throw new Error('p1 ACTIVE persistence failed');
-        }
-        if (mutation.row.partition_id === 'p2' && blockP2ActiveOnce) {
-          blockP2ActiveOnce = false;
-          p2ActiveStarted.resolve();
-          await releaseP2Active.promise;
-        }
-      }
       if (failCommittedStatusOnce &&
           mutation.tableName === 'sql_transactions' &&
           mutation.data?.status === 'COMMITTED') {
@@ -747,16 +734,15 @@ test('Finding 1B: parallel ACTIVE persistence waits for all siblings before rele
       return baseSubmit(mutation, options);
     };
 
-    const preparedPartitions = [];
-    coordinator.beginParticipant = async () => {};
-    coordinator.prepareParticipant = async (_s, partitionId) => {
-      preparedPartitions.push(partitionId);
-      return {
-        preparedDigest: `digest-${partitionId}`.padEnd(64, '0'),
-        prepareIndex: 1,
-        prepareTerm: 1,
-      };
+    const begins = [];
+    coordinator.beginParticipant = async (_s, partitionId) => {
+      begins.push(partitionId);
     };
+    coordinator.prepareParticipant = async (_s, partitionId) => ({
+      preparedDigest: `digest-${partitionId}`.padEnd(64, '0'),
+      prepareIndex: 1,
+      prepareTerm: 1,
+    });
     coordinator.commitParticipant = async () => {};
 
     const roReleaseStarted = deferred();
@@ -776,89 +762,25 @@ test('Finding 1B: parallel ACTIVE persistence waits for all siblings before rele
       async ({enlist}) => enlist(['p1', 'p2', 'p-ro']),
     );
 
-    // 1. Write promotes p1 and p2 from readOnlyParticipants; p1 ACTIVE persist rejects immediately while p2 is delayed.
-    let writeSettled = false;
-    const writePromise = coordinator.executeWriteStatement(
-      'f1b-tx',
-      {
-        operationId: 'op-f1b-1',
-        sql: 'UPDATE t SET v = 1',
-        partitionIds: ['p1', 'p2'],
-      },
-      async () => ({success: true, affectedRows: 2}),
-    ).finally(() => {
-      writeSettled = true;
-    });
-
-    await p2ActiveStarted.promise;
-    let p2ActiveReleased = false;
-    let queuedProbeRan = false;
-    let commitStartedBeforeP2Settled = false;
-    const queuedProbe = coordinator.runTransactionOperation('f1b-tx', async () => {
-      commitStartedBeforeP2Settled = !p2ActiveReleased;
-      queuedProbeRan = true;
-    });
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(
-      writeSettled,
-      false,
-      'executeWriteStatement must hold the session queue until delayed sibling p2 ACTIVE persistence settles',
-    );
-    assert.equal(
-      queuedProbeRan,
-      false,
-      'next queued session operation must not start while p2 ACTIVE persistence is still in flight',
-    );
-
-    p2ActiveReleased = true;
-    releaseP2Active.resolve();
-    await assert.rejects(writePromise, /p1 ACTIVE persistence failed/u);
-    await queuedProbe;
-    assert.equal(queuedProbeRan, true);
-    assert.equal(commitStartedBeforeP2Settled, false);
-
-    // 2. Even if a delayed upsertParticipant(ACTIVE) rejects after a participant advanced to PREPARED,
-    // upsertParticipant must not clobber PREPARED back to stale ACTIVE.
+    // 1. The write promotes p1 and p2 from readOnlyParticipants.
+    for (const operationId of ['op-f1b-1', 'op-f1b-2']) {
+      const written = await coordinator.executeWriteStatement(
+        'f1b-tx',
+        {operationId, sql: 'UPDATE t SET v = 1', partitionIds: ['p1', 'p2']},
+        async () => ({success: true, affectedRows: 2}),
+      );
+      assert.equal(written.success, true);
+    }
+    assert.deepEqual(begins.sort(), ['p-ro', 'p1', 'p2'],
+      'each participant is begun exactly once across the read and both writes');
+    assert.equal(gateway.mutations.filter((mutation) =>
+      mutation.tableName === 'sql_transaction_participants').length, 0,
+    'no participant row before the PREPARE evidence');
     const tx = coordinator.workflowCoordinator.getWorkflowByOwnerKey('f1b-tx');
-    const staleActiveGate = deferred();
-    const origPersistParticipant = coordinator.workflowCoordinator.persistParticipant;
-    let interceptStaleP2 = true;
-    coordinator.workflowCoordinator.persistParticipant = async (participant) => {
-      if (interceptStaleP2 &&
-          participant.partitionId === 'p2' &&
-          participant.status === 'ACTIVE') {
-        interceptStaleP2 = false;
-        await staleActiveGate.promise;
-        throw new Error('late stale ACTIVE persistence rejection');
-      }
-      return origPersistParticipant(participant);
-    };
-    const lateStaleActiveUpsert = coordinator.workflowCoordinator.upsertParticipant(
-      tx.workflowId,
-      {
-        ...tx.participants.get('p2'),
-        status: 'ACTIVE',
-        lastError: null,
-        updatedAt: coordinator.now(),
-      },
-    );
 
-    // Advance p2 to PREPARED during commit, then reject the late stale ACTIVE upsert before decision recording:
-    const origPrepare = coordinator.prepareParticipant;
-    coordinator.prepareParticipant = async (s, partitionId, identity) => {
-      const evidence = await origPrepare(s, partitionId, identity);
-      if (partitionId === 'p2') {
-        queueMicrotask(async () => {
-          staleActiveGate.resolve();
-        });
-      }
-      return evidence;
-    };
-
-    // 3. Also test overlapped read-only release when setTransactionStatus(COMMITTED) rejects:
+    // 2. Overlapped read-only release when setTransactionStatus(COMMITTED) rejects:
     failCommittedStatusOnce = true;
     const failedStatusCommitPromise = coordinator.commit('f1b-tx');
-    await assert.rejects(lateStaleActiveUpsert, /late stale ACTIVE persistence rejection/u);
     await roReleaseStarted.promise;
     // Allow in-flight p-ro rollback to complete after COMMITTED status update has already rejected:
     releaseRoRollback.resolve();
@@ -868,11 +790,7 @@ test('Finding 1B: parallel ACTIVE persistence waits for all siblings before rele
       ['p-ro'],
       'overlapped read-only release must settle before commitOwned catch and never duplicate p-ro rollback',
     );
-    assert.equal(
-      tx.participants.get('p2').status,
-      'COMMITTED',
-      'late stale ACTIVE rejection must not overwrite advanced participant state or cause TRANSACTION_RECOVERY_INCOMPLETE',
-    );
+    assert.equal(tx.participants.get('p2').status, 'COMMITTED');
 
     // Retrying commit completes cleanly to COMMITTED:
     const finalCommit = await coordinator.commit('f1b-tx');

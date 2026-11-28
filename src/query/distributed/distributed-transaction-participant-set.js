@@ -143,6 +143,14 @@ function collectPromotedActiveParticipants(tx, requested) {
   return promoted;
 }
 
+function markParticipantsBegun(participants, now) {
+  for (const participant of participants) {
+    participant.status = PARTICIPANT_STATUS.ACTIVE;
+    participant.lastError = null;
+    participant.updatedAt = now;
+  }
+}
+
 function shouldAdvanceFrozenSetToPreparing(coordinator, tx, participantCount, options) {
   if (options?.advanceToPreparing === false || tx.recoveryDiscovered === true) {
     return false;
@@ -265,7 +273,6 @@ const distributedTransactionParticipantSetMethods = {
     sessionId,
     partitionIds,
     enlistmentMode = PARTICIPANT_ENLISTMENT_MODE.AUTHORITATIVE,
-    options = {},
   ) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx) {
@@ -283,7 +290,7 @@ const distributedTransactionParticipantSetMethods = {
       return enlistReadOnlyParticipants(this, tx, sessionId, requested);
     }
     await this.retainParticipantSet(tx, requested);
-    const activeUpserts = collectPromotedActiveParticipants(tx, requested);
+    const begun = collectPromotedActiveParticipants(tx, requested);
     const newlyEnlisted = requested.filter((partitionId) =>
       tx.participants.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE);
     await settleAllOrThrow(newlyEnlisted.map(async (partitionId) => {
@@ -294,26 +301,19 @@ const distributedTransactionParticipantSetMethods = {
         sessionId,
         partitionId,
       );
-      activeUpserts.push(participant);
+      begun.push(participant);
     }));
-    const persistActiveParticipants = () => settleAllOrThrow(
-      activeUpserts.map((participant) =>
-        this.workflowCoordinator.upsertParticipant(tx.workflowId, {
-          ...participant, status: PARTICIPANT_STATUS.ACTIVE, lastError: null,
-          updatedAt: this.now(),
-        })),
-    );
-    if (options?.deferActivePersistence !== true) {
-      await persistActiveParticipants();
-    }
+    // The begin gate: a participant begun in this transaction is never
+    // begun again (a second BEGIN after its leader lost the session would
+    // open an empty one and drop the writes staged before). The durable
+    // manifest above is the admitted set; no participant row is written
+    // before the PREPARE evidence.
+    markParticipantsBegun(begun, this.now());
     tx.updatedAt = this.now();
     return {
       success: true,
       participants: this.getOrderedParticipantIds(tx),
       newlyEnlisted,
-      ...(options?.deferActivePersistence === true ?
-        {persistActiveParticipants} :
-        {}),
     };
   },
 };

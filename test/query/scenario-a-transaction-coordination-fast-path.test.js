@@ -93,10 +93,13 @@ test('Scenario A fast path: payment transaction breakdown tracer and Priority 1 
     async () => ({success: true, affectedRows: 1}),
   );
   const firstMutations = gateway.mutations.slice(mutationsBeforeFirst);
+  // Superseded by quest transaction-redundant-progress-writes (was: the
+  // newly enlisted participant persisted once): the manifest append is the
+  // admitted set, and no participant row precedes the PREPARE evidence.
   assert.equal(
     firstMutations.filter((m) => m.tableName === 'sql_transaction_participants').length,
-    1,
-    'newly enlisted participant persisted once',
+    0,
+    'newly enlisted participant writes no participant row',
   );
   assert.equal(
     authoritativeReadCount - readsBeforeFirst,
@@ -211,9 +214,10 @@ test('Scenario A fast path: Priority 2 concurrent participant phases while Durab
 
   const wfOrder = [];
   const wf = new DurableWorkflowCoordinator();
-  await wf.registerWorkflow({workflowId: 'wf-1', ownerKey: 's-1', status: 'PREPARING'});
-  await wf.upsertParticipant('wf-1', {participantId: 'p1', participantKey: 'p1', partitionId: 'p1', status: 'PREPARING'});
-  await wf.upsertParticipant('wf-1', {participantId: 'p2', participantKey: 'p2', partitionId: 'p2', status: 'PREPARING'});
+  const seeded = (key) => [key, {workflowId: 'wf-1', participantId: key,
+    participantKey: key, partitionId: key, status: 'PREPARING'}];
+  await wf.registerWorkflow({workflowId: 'wf-1', ownerKey: 's-1', status: 'PREPARING',
+    participants: new Map([seeded('p1'), seeded('p2')])});
   await wf.executeParticipantStage('wf-1', 'PREPARING', 'PREPARED', async (key) => {
     wfOrder.push(`start:${key}`);
     await sleep(10);
@@ -1438,7 +1442,11 @@ test('P2 (Review 2 Finding 3): pre-_partition_write_generation_history storage r
   }
 });
 
-test('Finding 1B: promoted read-only ACTIVE persistence waits for all siblings and CAS-guards against clobbering PREPARED state', async (t) => {
+// Superseded by quest transaction-redundant-progress-writes: the original
+// witnessed failing and delayed ACTIVE participant writes during a promotion,
+// a write that no longer exists. Kept: promoted read-only participants are not
+// begun again, write no participant row, and commit.
+test('Finding 1B: promoted read-only participants are begun once, write no participant row before PREPARE, and commit', async (t) => {
   const gateway = createTransactionPersistenceGateway();
   t.after(() => gateway.db.close());
   const engine = new SQLQueryEngine({
@@ -1449,48 +1457,27 @@ test('Finding 1B: promoted read-only ACTIVE persistence waits for all siblings a
   });
   t.after(() => engine.shutdown());
   const coordinator = engine.transactionCoordinator;
-  coordinator.beginParticipant = async () => {};
+  const begins = [];
+  coordinator.beginParticipant = async (_s, pid) => {
+    begins.push(pid);
+  };
   coordinator.prepareParticipant = async (_s, pid) => buildPrepareEvidence(pid);
   coordinator.commitParticipant = async () => {};
   coordinator.rollbackParticipant = async () => {};
 
-  const p2Started = Promise.withResolvers();
-  const releaseP2 = Promise.withResolvers();
-  let failP1 = true;
-  let holdP2 = true;
-  const origSubmit = gateway.submitMutation.bind(gateway);
-  gateway.submitMutation = async (m, opts) => {
-    if (m.tableName === 'sql_transaction_participants' && m.row?.status === 'ACTIVE') {
-      if (m.row.partition_id === 'p1' && failP1) {
-        failP1 = false;
-        throw new Error('p1 ACTIVE failed');
-      }
-      if (m.row.partition_id === 'p2' && holdP2) {
-        holdP2 = false;
-        p2Started.resolve();
-        await releaseP2.promise;
-      }
-    }
-    return origSubmit(m, opts);
-  };
-
   const begun = await coordinator.begin('f1b-fast');
   await coordinator.executeReadStatement('f1b-fast', begun.transactionId, ({enlist}) => enlist(['p1', 'p2']));
-  let settled = false;
-  const writeP = coordinator.executeWriteStatement(
+  const written = await coordinator.executeWriteStatement(
     'f1b-fast',
     {operationId: 'w-f1b', sql: 'UPDATE t SET v = 1', partitionIds: ['p1', 'p2']},
     async () => ({success: true, affectedRows: 2}),
-  ).finally(() => {
-    settled = true;
-  });
-  await p2Started.promise;
-  await new Promise((r) => setImmediate(r));
-  assert.equal(settled, false);
-  releaseP2.resolve();
-  await assert.rejects(writeP, /p1 ACTIVE failed/u);
+  );
+  assert.equal(written.success, true);
+  assert.deepEqual(begins.sort(), ['p1', 'p2']);
+  assert.equal(gateway.mutations.filter((m) => m.tableName === 'sql_transaction_participants').length, 0);
   const committed = await coordinator.commit('f1b-fast');
   assert.equal(committed.success, true);
+  assert.deepEqual(begins.sort(), ['p1', 'p2']);
 });
 
 test('Review Witness 1: structural plan cache isolates cached templates from caller mutation of returned diagnostics and plan metadata across multi-partition parameter routing', async (t) => {

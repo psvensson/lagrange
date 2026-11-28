@@ -11,7 +11,7 @@ import {readStateField} from '../utils/state-field-read.js';
  * record the store acknowledged.
  * Prohibited: a pre-built update object (throws), persisting the in-memory
  * state as it stands (persistWorkflowState, persistParticipantState,
- * persistParticipants, upsertParticipant, executeParticipantStage throw),
+ * persistParticipants, executeParticipantStage throw),
  * assigning a durable field (status, metadata, participants, claim triple)
  * from anything but a decoded record.
  */
@@ -58,7 +58,6 @@ const REFUSED_ENTRY = Object.freeze({
   PERSIST_WORKFLOW_STATE: 'persistWorkflowState',
   PERSIST_PARTICIPANT_STATE: 'persistParticipantState',
   PERSIST_PARTICIPANTS: 'persistParticipants',
-  UPSERT_PARTICIPANT: 'upsertParticipant',
   EXECUTE_PARTICIPANT_STAGE: 'executeParticipantStage',
 });
 // The answers under which an owner-recorded outcome is on the record.
@@ -533,12 +532,6 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
   async persistParticipants() {
     throw new TypeError(`${COORDINATOR_ERROR_MSG.PERSIST_AS_IS}` +
       `${REFUSED_ENTRY.PERSIST_PARTICIPANTS})`);
-  }
-
-  /** @return {Promise<never>} */
-  async upsertParticipant() {
-    throw new TypeError(`${COORDINATOR_ERROR_MSG.PERSIST_AS_IS}` +
-      `${REFUSED_ENTRY.UPSERT_PARTICIPANT})`);
   }
 
   /** @return {Promise<never>} */

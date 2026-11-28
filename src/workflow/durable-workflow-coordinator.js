@@ -246,48 +246,6 @@ class DurableWorkflowCoordinator {
   }
 
   /**
-   * Upsert and persist one workflow participant record.
-   * @param {string} workflowId - Workflow ID.
-   * @param {Object} record - Participant record.
-   * @return {Promise<Object>} Normalized participant state.
-   */
-  async upsertParticipant(workflowId, record) {
-    const workflow = this.requireWorkflow(workflowId);
-    const existingKey = this.resolveParticipantKey(record);
-    const existing = existingKey ? workflow.participants.get(existingKey) : null;
-    const participant = this.createParticipantRecord(workflowId, record, existing);
-    const attemptedStatus = participant.status;
-    workflow.participants.set(participant.participantKey, participant);
-    if (!existing) {
-      // Monotonic enlistment witness: a workflow that ever enlisted a
-      // participant must never later commit against an empty registry
-      // (the run-23 orphaned-BEGIN shape).
-      workflow.enlistedParticipantCount =
-        (workflow.enlistedParticipantCount || 0) + 1;
-    }
-    try {
-      await this.persistParticipant(participant);
-    } catch (error) {
-      if (
-        workflow.participants.get(participant.participantKey) === participant &&
-        participant.status === attemptedStatus
-      ) {
-        if (existing) {
-          workflow.participants.set(participant.participantKey, existing);
-        } else {
-          workflow.participants.delete(participant.participantKey);
-          workflow.enlistedParticipantCount = Math.max(
-            0,
-            (workflow.enlistedParticipantCount || 1) - 1,
-          );
-        }
-      }
-      throw error;
-    }
-    return participant;
-  }
-
-  /**
    * Persist the current participant state.
    * @param {string} workflowId - Workflow ID.
    * @param {string} participantKey - Participant key.
@@ -359,23 +317,6 @@ class DurableWorkflowCoordinator {
       Array.from(workflow.participants.keys());
     const failureStatus = options.failureStatus || 'FAILED';
     const failedParticipants = [];
-    // A workflow that enlisted participants must never run a stage against
-    // an empty registry: the run-23 coordinator committed with zero
-    // iterations after recovery emptied its participants Map, orphaning a
-    // delivered participant BEGIN forever. Zero-participant stages stay
-    // legal for workflows that never enlisted anyone.
-    if (
-      participantKeys.length === 0 &&
-      (workflow.enlistedParticipantCount || 0) > 0
-    ) {
-      failedParticipants.push({
-        participantId: null,
-        participantKey: null,
-        error: WORKFLOW_ERROR_MSG.ENLISTED_PARTICIPANTS_MISSING,
-      });
-      return failedParticipants;
-    }
-
     for (const participantKey of participantKeys) {
       const currentParticipant = workflow.participants.get(participantKey);
       if (!currentParticipant) {

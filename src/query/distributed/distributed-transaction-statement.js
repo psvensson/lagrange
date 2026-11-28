@@ -175,30 +175,21 @@ const distributedTransactionStatementMethods = {
         sessionId,
         operation.partitionIds,
         PARTICIPANT_ENLISTMENT_MODE.AUTHORITATIVE,
-        {deferActivePersistence: true},
       );
       if (enlistResult.success !== true) {
         return enlistResult;
       }
-      // Retain sql_transaction_participants ACTIVE state concurrently with
-      // partition QUERY execution; beginParticipant already established the
-      // partition session, so both only need to finish before outcome bookkeeping.
-      const persistActivePromise = enlistResult.persistActiveParticipants ?
-        enlistResult.persistActiveParticipants() :
-        Promise.resolve();
       await this.recordWriteOperation(sessionId, operation, {
         deferPersistence: true,
       });
       const tx = this.transactionsBySession.get(sessionId);
-      const [activePersistSettled, , writeSettled] = await Promise.allSettled([
-        persistActivePromise,
+      // Earlier buffered write-operation flushes settle concurrently with the
+      // partition QUERY; both finish before the outcome bookkeeping.
+      const [, writeSettled] = await Promise.allSettled([
         drainPendingWriteOperationPersists(tx),
         Promise.resolve().then(() =>
           executeWrite(tx ? statementTransactionIdentityOf(tx) : null)),
       ]);
-      if (activePersistSettled.status === SETTLED_STATUS_REJECTED) {
-        throw activePersistSettled.reason;
-      }
       if (writeSettled.status === SETTLED_STATUS_REJECTED) {
         throw writeSettled.reason;
       }

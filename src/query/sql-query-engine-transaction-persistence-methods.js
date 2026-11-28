@@ -182,9 +182,6 @@ function resolveTransactionRowPersistPurpose(record, options) {
 
 function resolveParticipantRowPersistPurpose(record) {
   const status = record?.status;
-  if (status === TRANSACTION_STATUS.ACTIVE) {
-    return TRANSACTION_METADATA_PERSIST_PURPOSE.PARTICIPANT_ADMISSION;
-  }
   if (status === TRANSACTION_STATUS.PREPARED || status === TRANSACTION_STATUS.PREPARING) {
     return TRANSACTION_METADATA_PERSIST_PURPOSE.PREPARING;
   }

@@ -182,8 +182,11 @@ const SELECT_SQL = `SELECT id, value FROM ${TABLE} WHERE id = ?`;
 const MEMORY_DB_PATH = ':memory:';
 const RAFT_PARTITION_ID = 'p-fast-path-1';
 
+// Superseded by quest transaction-redundant-progress-writes (was: the newly
+// enlisted participant persisted once): no participant row precedes the
+// PREPARE evidence; the manifest append is the admitted set.
 const MSG_PARTICIPANT_ONCE =
-  'newly enlisted participant must be persisted once, not duplicated';
+  'newly enlisted participant must write no participant row before PREPARE';
 const MSG_CAS_NO_READBACK =
   '1-row guarded participant-set CAS update must not require extra authoritative readback';
 const MSG_NO_PROGRESS_MUTATION =
@@ -329,7 +332,7 @@ async function checkPriority1BookkeepingReduction() {
       firstWriteMutations,
       (m) => m.tableName === TABLE_PARTICIPANTS,
     );
-    assert.equal(participantMutationsOnEnlist.length, ONE, MSG_PARTICIPANT_ONCE);
+    assert.equal(participantMutationsOnEnlist.length, ZERO, MSG_PARTICIPANT_ONCE);
     assert.equal(authoritativeReads - readsBeforeFirst, ZERO, MSG_CAS_NO_READBACK);
 
     const mutationsBeforeSecond = gateway.mutations.length;
@@ -387,19 +390,21 @@ async function checkPriority2ConcurrentParticipantPhases() {
 
   const order = [];
   const wfCoordinator = new DurableWorkflowCoordinator();
+  // The generic workflow is seeded with its participants at registration
+  // (DurableWorkflowCoordinator.upsertParticipant was deleted with its one
+  // production caller, quest transaction-redundant-progress-writes).
   await wfCoordinator.registerWorkflow({
     workflowId: WORKFLOW_ID_SEQ,
     ownerKey: SESSION_WORKFLOW,
     status: STATUS_PREPARING,
-  });
-  for (const key of PARTITIONS_TWO) {
-    await wfCoordinator.upsertParticipant(WORKFLOW_ID_SEQ, {
+    participants: new Map(arrayMap(PARTITIONS_TWO, (key) => [key, {
+      workflowId: WORKFLOW_ID_SEQ,
       participantId: key,
       participantKey: key,
       partitionId: key,
       status: STATUS_PREPARING,
-    });
-  }
+    }])),
+  });
   await wfCoordinator.executeParticipantStage(
     WORKFLOW_ID_SEQ,
     STATUS_PREPARING,

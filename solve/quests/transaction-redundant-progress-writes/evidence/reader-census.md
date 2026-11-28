@@ -173,3 +173,71 @@ The AUTHORITATIVE enlistment callers (all reach the same producer; covered by th
 begin-gate property): `sql-query-engine-select-execution.js:72-87` (locking read),
 `sql-query-engine-global-index-tx1.js:443-450` (global index),
 `sql-query-engine.js:379-385` (`bindTransactionToPartition`).
+
+## Held state: readers of a restored obligation's participant list (stage 1, lead ruling 1)
+
+**The accepted change.** A transaction restored from rows (`recoveryDiscovered`) is
+held, before its first successful authoritative refresh
+(`distributed-transaction-recovery-authority.js:184-198`), on the participants that
+`recoverFromSystemTables` loaded from participant rows
+(`distributed-transaction-recovery.js:700-720`). Three fields show that list:
+`getRecoveryObligation(id).participants` and `.participantDetails`
+(`distributed-transaction-recovery.js:218-221` -> `transactionMetadataOf`,
+`distributed-transaction-coordinator.js:629-648`), and `participants` in the in-doubt
+answer (`buildDecisionInDoubtResult`, `distributed-transaction-decision-protocol.js:681-696`).
+With the ACTIVE row gone, a participant without PREPARE evidence is no longer listed
+there. After the refresh the list is the manifest's participants on both trees.
+
+**Producers of the held answer** (`src`): `distributed-transaction-coordinator.js:548`
+and `:559` (client COMMIT: `recoveryObligationAnswer`, `recoveryObligationStageRefusal`),
+`:603` and `:619` (client ROLLBACK), `distributed-transaction-participant-set.js:282`
+(a statement enlisting on a held transaction is refused with it),
+`distributed-transaction-recovery-authority.js:208` (`held()`: the re-drive's result).
+
+**Readers in `src`: none.** All 122 `.participants` reads in `src` were classified by
+receiver: workflow, transaction, record, payload and decision-record registries;
+`rollbackResult.participants` / `rawRollback?.participants`
+(`distributed-transaction-statement.js:70,85`) belong to the cycle-victim rollback of a
+live session transaction (`runRollbackProtocol`), not to a held obligation;
+`txState?.participants` (`src/query/sql-query-engine.js:297,337,367`) reads
+`getTransaction(sessionId)`, which never reports a recovery-held obligation
+(`distributed-transaction-recovery.js:189-194`). No `src` file reads
+`participantDetails` of an answer. The replay and sweep summaries built from the
+re-drive (`distributed-transaction-recovery.js:298-309`, `:436-455`) carry no
+participant list. `getRecoveryObligation` has no `src` caller.
+
+**Next consumers of the in-doubt answer** (fields read):
+- SQL engine `handleCommit` / `handleRollback` (`src/query/sql-query-engine.js:293-349`):
+  pass the coordinator's answer through, adding `errorCode`/`error` only when absent.
+- PG-wire `answerFailedStatement` (`src/runtime/pgwire-transaction-outcome.js:294-330`,
+  called from `src/runtime/pgwire-protocol-handler.js:718`): statement type, `errorCode`,
+  `error`/`message`, `transactionId` (`:84-90`), `stage` (`:184`),
+  `commitPointReached` (`:202-210`), `sessionTransactionActive` (`:279-282`),
+  `participantFailures` and `firstFailedParticipant` (`:118-130`),
+  `distributedWritePlan` (`:134-140`). Not `participants` or `participantDetails`.
+- Application-database facade (`src/query/application-database.js:127-130,159-215`):
+  `success`, `errorCode`/`code`, `error`/`message`, `stage`, `deferred`/`deferRetry`,
+  `retryAfterMs`, `operation`, `commitPointReached`; it returns `{rows, affectedRows}`
+  or a thrown `{code, message}` cause (`src/query/application-database-result.js:210-238`),
+  so nothing else crosses the public boundary.
+
+**Readers in tests:** `getRecoveryObligation` in
+`test/query/distributed-transaction-coordinator.test.js:259-262` (a payload
+`recover(rows)` obligation: participants come from the payload, unaffected) and
+`:378-380` (restored from a PREPARED participant row, which still exists: unaffected);
+`test/query/distributed-transaction-coordinator.property.test.js:361-367`
+(`transactionEpoch` only); `test/query/transaction-recovery-owner-key.test.js:117,145,194,232-233`
+(existence, `null`, `sessionId`); `test/query/transaction-review-adversarial.test.js:393`
+(existence; it reads the gateway rows). No test asserts the `participants` of an
+in-doubt answer to a held obligation (the files mentioning `TRANSACTION_DECISION_IN_DOUBT`
+were read). This quest's witness pins the new behaviour
+(`test/query/transaction-redundant-progress-writes.test.js`, "held obligation").
+
+**Scripts, `docs/`, `architecture/`, `test/distributed/`:** no mention of
+`getRecoveryObligation`, `heldRecoveryObligation` or `TRANSACTION_DECISION_IN_DOUBT`.
+
+**Conclusion:** no `src` reader and no consumer outside tests. [V]
+
+Correction to row 21 above: "same in-memory values" holds for live transactions; for an
+obligation restored from rows and held before its refresh the list differs as described
+here.

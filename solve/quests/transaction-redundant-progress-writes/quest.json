@@ -2,7 +2,7 @@
   "schema": "solve-quest/2",
   "id": "transaction-redundant-progress-writes",
   "epic": "scenario-a-measured-latency-and-efficiency",
-  "statement": "Remove the ACTIVE row that the transaction coordinator writes on sql_transaction_participants at the first write to each table, at its single producer (enlistParticipantsOwned and the overlap that waits for it in executeWriteStatement). The manifest on sql_transactions, appended by exact compare-and-set before any participant request, remains the admitted participant set; participant rows begin with the PREPARE evidence. The participant's in-memory transition to ACTIVE when its BEGIN succeeds stays and is witnessed: a participant already begun is never begun again, also after a read promoted to a write, after an AUTHORITATIVE enlistment (locking read, global index, bindTransactionToPartition) and after the participant lost its session, so earlier staged writes are never silently dropped by a second BEGIN. Recovery, release, decision and settlement behaviour are unchanged. What the removal leaves without a caller is deleted in the same change (evidence/design-note.md, section C6). Expected effect: a write transaction waits for up to P fewer sequential consensus rounds (new_order 19 -> 14, payment 17 -> 13) and submits P fewer proposals and CDC obligations (new_order 36 -> 31 proposals, payment 30 -> 26).",
+  "statement": "Remove the ACTIVE row that the transaction coordinator writes on sql_transaction_participants at the first write to each table, at its single producer (enlistParticipantsOwned and the overlap that waits for it in executeWriteStatement). The manifest on sql_transactions, appended by exact compare-and-set before any participant request, remains the admitted participant set; participant rows begin with the PREPARE evidence. The participant's in-memory transition to ACTIVE when its BEGIN succeeds stays and is witnessed: a participant already begun is never begun again, also after a read promoted to a write, after an AUTHORITATIVE enlistment (locking read, global index, bindTransactionToPartition) and after the participant lost its session, so earlier staged writes are never silently dropped by a second BEGIN. Recovery, release, decision and settlement behaviour are unchanged, and no answer changes except one field in one state: the participant list of a transaction restored from rows and held before its first authoritative refresh no longer names participants that were never asked to prepare (evidence/design-note.md, transition record item 9; lead ruling 2026-11-28). What the removal leaves without a caller is deleted in the same change (evidence/design-note.md, section C6). Expected effect: a write transaction waits for up to P fewer sequential consensus rounds (new_order 19 -> 14, payment 17 -> 13) and submits P fewer proposals and CDC obligations (new_order 36 -> 31 proposals, payment 30 -> 26).",
   "doneWhen": {
     "probe": "script",
     "args": {
@@ -51,5 +51,6 @@
       "id": "independent-verification",
       "statement": "Every source attempt requires independent verification newer than the attempt, recorded with verifier subagent:<id>, before landing."
     }
-  ]
+  ],
+  "sealedAt": "e30b927da9751a2d2067ab6231fa78a9073b9f39"
 }

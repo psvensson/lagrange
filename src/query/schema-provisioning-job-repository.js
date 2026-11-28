@@ -81,7 +81,6 @@ function serializeWorkflow(workflow) {
     participants: workflow.participants instanceof Map ?
       [...workflow.participants.values()] : [],
     transitionHistory: [...(workflow.transitionHistory ?? [])],
-    enlistedParticipantCount: workflow.enlistedParticipantCount ?? 0,
   });
 }
 
@@ -128,7 +127,6 @@ function rowToWorkflow(row = {}) {
     transitionHistory: Array.isArray(record.transitionHistory) ?
       record.transitionHistory : [],
     participants: buildParticipantMap(participantRows),
-    enlistedParticipantCount: normalizeNumber(record.enlistedParticipantCount),
   };
 }
 

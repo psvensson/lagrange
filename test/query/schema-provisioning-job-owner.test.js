@@ -622,7 +622,6 @@ test('durable schema job atomically records intent and replays one terminal ' +
   t.ok(tableRow, 'worker projects deterministic table metadata');
   t.equal(partitionRow.table_id, first.tableId);
   t.same(Object.keys(JSON.parse(jobRow.workflow_record)).sort(), [
-    'enlistedParticipantCount',
     'participants',
     'transitionHistory',
   ], 'workflow_record contains only non-scalar participant/history state');

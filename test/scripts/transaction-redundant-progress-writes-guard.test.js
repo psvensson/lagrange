@@ -78,22 +78,24 @@ function evidenceDroppingPreload(directory) {
   ]);
 }
 
-// Drops the ACTIVE upsert entirely: no row and no in-memory transition, so
-// the participant record keeps its admission placeholder status.
+// Drops the in-memory begin gate: after every enlistment the participant
+// records fall back to their admission placeholder status, so the next
+// statement begins them again.
 function beginGateDroppingPreload(directory) {
   return writePreload(directory, 'drop-begin-gate.mjs', [
-    'const {DurableWorkflowCoordinator} = await import(' +
-      `${JSON.stringify(moduleUrl('src', 'workflow',
-        'durable-workflow-coordinator.js'))});`,
-    'const upsert = DurableWorkflowCoordinator.prototype.upsertParticipant;',
-    'DurableWorkflowCoordinator.prototype.upsertParticipant =',
-    '  async function(workflowId, record) {',
-    '    if (record?.status !== \'ACTIVE\') {',
-    '      return upsert.call(this, workflowId, record);',
+    'const {DistributedTransactionCoordinator} = await import(' +
+      `${JSON.stringify(moduleUrl('src', 'query', 'distributed',
+        'distributed-transaction-coordinator.js'))});`,
+    'const enlist = DistributedTransactionCoordinator.prototype' +
+      '.enlistParticipantsOwned;',
+    'DistributedTransactionCoordinator.prototype.enlistParticipantsOwned =',
+    '  async function(sessionId, ...rest) {',
+    '    const answer = await enlist.call(this, sessionId, ...rest);',
+    '    const tx = this.transactionsBySession.get(sessionId);',
+    '    for (const participant of tx?.participants?.values() ?? []) {',
+    '      if (participant.status === \'ACTIVE\') participant.status = \'FAILED\';',
     '    }',
-    '    const workflow = this.requireWorkflow(workflowId);',
-    '    return workflow.participants.get(',
-    '      this.resolveParticipantKey(record)) ?? null;',
+    '    return answer;',
     '  };',
   ]);
 }

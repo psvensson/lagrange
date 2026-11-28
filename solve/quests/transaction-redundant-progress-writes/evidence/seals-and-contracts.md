@@ -179,3 +179,114 @@ the captured coordinator instead of `this` (eslint `no-invalid-this`). The funct
 installed as that same instance's method, so the receiver is identical in every call made
 through it. This quest's witnesses and the decisive cone files were rerun with the final
 preload (`td-stage0b/final-preload/`).
+
+## 7. Stage 1: the implemented removal, compared with the unchanged tree
+
+Outputs are in the coordination directory under `lab/td-stage1/` (`T` below). The
+candidate is uncommitted; its lab snapshot is `622c0a7094ed66223d75f243d3ded9c29a0c0bd1`
+(source identical to the experiment snapshot `863a93ea8c53a638392c45376a0fe4d8eada9d34`).
+
+**Answers, base against candidate** (`T/cmp/`: `observe.mjs`, copied from the
+verifier's `tb-verification-1/cmp/` with S11-S14 added; `diff.txt`, `mutation-delta.txt`,
+`deep-diff.mjs`). S1-S13 (COMMIT, ROLLBACK, refused PREPARE, empty COMMIT/ROLLBACK,
+read-write-read, COMMIT after a failed rollback fanout, COMMIT fanout failure then COMMIT,
+two writes to one partition, recovery adoption of a recorded COMMIT, recovery rollback of
+an OPEN row, sweep adoption of a live in-doubt COMMIT): every answer field, delivery,
+log line, timer and async resource is identical; the only gateway difference is one
+`sql_transaction_participants|upsert|ACTIVE` per write scenario, order otherwise preserved.
+**S14 is the exception:** a transaction discovered from rows whose authoritative read is
+unavailable is held in doubt with the participants loaded from rows, so
+`getRecoveryObligation(id).participants`/`participantDetails` and the `participants` of the
+in-doubt answer to a client COMMIT or ROLLBACK naming it are `["p1"]` (the ACTIVE row) on
+the unchanged tree and `[]` here (`T/cmp/s14-field-diff.txt`). Success, error code,
+`decisionReadState`, deferral, deliveries and the resolution once the read is available
+are identical. pgwire does not carry the field; `getRecoveryObligation` has no `src` caller.
+
+**Real participant, base against candidate** (`T/cmp/real-participant-*.json`,
+`real-participant-diff.txt`; the same support code run on both trees): a committed
+transaction, a participant whose BEGIN never arrived, and a participant-leader change
+(sessions discarded) before COMMIT and before ROLLBACK: identical answers, participant
+records, decisions and applied rows; the only difference is the ACTIVE row.
+
+**Recovery entry points** (`T/cmp/recovery-entry-*.json`, `release-*.json`,
+`recovery-release-diff.txt`): startup replay, the sweep's discovery and the release
+settlement reach the same outcome on both trees, with rows as written and with the
+unchanged tree's ACTIVE rows planted. Witnessed in
+`test/query/transaction-redundant-progress-writes-recovery.test.js` (18 tests, green on
+both trees).
+
+**Cone** (161 files: section 6's 154 and 7 that reference the newly touched owners; plus
+17 managed-workflow files reaching the managed coordinator through test supports):
+`T/cone/` and `T/cone-managed/`, compared per failing assertion (name, source line,
+expected/actual) with main's corpus (`T/cmp-assertions.mjs`, `T/cone-assertions-vs-main.json`).
+Result: 161 files: 115 pass on both; 41 fail on both with identical failing assertions
+(including the superseded `scenario-a-transaction-coordination-fast-path.test.js`, the
+three-replica `transaction-leg-a-three-replica.test.js` and
+`transaction-coordinator-restart.integration.test.js`); 1 differs only in text
+(`distributed-transaction-coordinator.property.test.js`: the same failure, its message
+carries the placement worktree's absolute path); 4 have no main record (this quest's own
+files, all pass). The superseded `tx-metadata-pgwire-and-result-representation.test.js`,
+`transaction-participant-set-authority.test.js` and `schema-provisioning-job-owner.test.js`
+pass, as on main. The 17 managed-workflow files: 12 pass on both, 5 fail identically.
+**No subtest changes result.**
+
+**The six changed `src` files:**
+- `src/query/distributed/distributed-transaction-participant-set.js`: `enlistParticipantsOwned`
+  no longer persists an ACTIVE row; the participants begun in this enlistment are marked ACTIVE
+  in memory by `markParticipantsBegun` (the begin gate); the `options`/`deferActivePersistence`
+  parameter and `persistActiveParticipants` are gone.
+- `src/query/distributed/distributed-transaction-statement.js`: `executeWriteStatement` no longer
+  overlaps the ACTIVE write with the partition write; the earlier write-operation flushes still
+  settle concurrently with it.
+- `src/query/sql-query-engine-transaction-persistence-methods.js`: the ACTIVE branch of
+  `resolveParticipantRowPersistPurpose` (`participantAdmission`) is deleted.
+- `src/workflow/durable-workflow-coordinator.js`: `upsertParticipant` (its one production caller
+  was the ACTIVE write) and the unreachable `enlistedParticipantCount` empty-registry branch of
+  `executeParticipantStage` are deleted; the missing-key branch stays.
+- `src/partition/managed-workflow-record-coordinator.js`: the refusal override of the deleted
+  `upsertParticipant`, its `REFUSED_ENTRY` member and its header mention are deleted.
+- `src/query/schema-provisioning-job-repository.js`: the never-incremented
+  `enlistedParticipantCount` key leaves the serialized `workflow_record` and its reader.
+
+**Reproducing the comparisons.** `C=/mnt/data/peter/projects/lagrange-oltp-perf-20261128/lab/td-stage1/cmp`;
+`W` = this worktree; the base is the read-only reference checkout
+`B=/mnt/data/peter/projects/.worktrees/oltp-perf-20261128` at `ab347e962`. Each command runs
+through `tools/heavy.sh`.
+- S1-S14 (answers, deliveries, mutations): `node $C/observe.mjs $B $C/base.json` and
+  `node $C/observe.mjs $W $C/cand.json`; then `node $C/diff.mjs` (per scenario and channel),
+  `node $C/mutation-delta.mjs` (gateway mutations only in one tree, order check) and
+  `node $C/deep-diff.mjs "S14 "` (field-level result differences; generated ids and epochs
+  differ in every scenario and are ignored by `diff.mjs`).
+- Base mirror for the support-module scenarios (the support module and the quest's tests run
+  against the base's `src` and test helpers): `M=$C/base-mirror`;
+  `mkdir -p $M/test/query && cp $W/test/query/transaction-progress-write-witness-support.js $M/test/query/`;
+  `ln -s $B/src $M/src; ln -s $B/test/test-helpers $M/test/test-helpers;
+  ln -s $B/test/control-plane $M/test/control-plane;
+  ln -s $B/test/query/sql-query-engine-test-support.js $M/test/query/;
+  ln -s $B/node_modules $M/node_modules; ln -s $B/package.json $M/package.json`.
+- Real participant: `node $C/real-participant-probe.mjs $W $C/real-participant-cand.json` and
+  `node $C/real-participant-probe.mjs $M $C/real-participant-base.json`
+  (`real-participant-diff.txt`).
+- Recovery entry points and release settlement: `node $C/recovery-entry-probe.mjs <root> <out>`
+  and `node $C/release-probe.mjs <root> <out>` with `<root>` = `$W` or `$M`
+  (`recovery-release-diff.txt`).
+- Held obligation (ruling 1): `node $C/held-obligation-probe.mjs <root> <out>`
+  (`held-cand.json`, `held-base.json`).
+- The quest's tests on the base: copy the two quest test files into `$M/test/query/` and run
+  `node --test $M/test/query/<file>`.
+
+**Held obligation (lead ruling 1, the accepted answer change; `held-base.json`,
+`held-cand.json`).** Setup: two tables; the coordinator stops after the manifest append;
+past the deadline a new coordinator restores the transaction from rows with its
+authoritative read unavailable. Before the refresh, `getRecoveryObligation` and the
+in-doubt answer to a client COMMIT list `["p1","p2"]` with status ACTIVE on the unchanged
+tree, and `[]` here. After the refresh (read available, freeze write still failing, so
+the obligation stays held) both trees list the manifest's `["p1","p2"]` with status
+FAILED, `decisionReadState` absent. Once the freeze goes through, both record one
+ROLLBACK applied by each participant, with no orphaned session. With the unchanged
+tree's ACTIVE rows planted, the candidate's facts equal the unchanged tree's in every
+phase. Tests in `test/query/transaction-redundant-progress-writes.test.js`:
+- the "red: ... held before its authoritative refresh lists no participant ..." test
+  fails on the unchanged tree, by design: its pre-refresh list shows the two ACTIVE-row
+  participants;
+- the "kept: ... ACTIVE rows planted (upgrade) ..." test passes on both trees.

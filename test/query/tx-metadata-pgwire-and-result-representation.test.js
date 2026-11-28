@@ -383,13 +383,16 @@ test('§1 & §2 Witness: 1-participant 1-write explicit transaction executes ' +
     assert.equal(typeof breakdown.metadataPersistMsByPurpose[purpose], 'number');
   }
   assert.equal(breakdown.metadataSubmissionsByPurpose.registration, 1);
-  assert.equal(breakdown.metadataSubmissionsByPurpose.participantAdmission, 2);
+  // One admission write (the manifest append); no ACTIVE participant row is
+  // written before the PREPARE evidence (quest
+  // transaction-redundant-progress-writes).
+  assert.equal(breakdown.metadataSubmissionsByPurpose.participantAdmission, 1);
   assert.equal(breakdown.metadataSubmissionsByPurpose.statementOutcome, 1);
   assert.equal(breakdown.metadataSubmissionsByPurpose.manifestFreeze, 1);
   assert.equal(breakdown.metadataSubmissionsByPurpose.preparing, 2);
   assert.equal(breakdown.metadataSubmissionsByPurpose.decisionAndCommitting, 1);
   assert.equal(breakdown.metadataSubmissionsByPurpose.settlement, 2);
-  assert.equal(harness.gateway.mutations.length, 10);
+  assert.equal(harness.gateway.mutations.length, 9);
 
   const summary = harness.engine.transactionCoordinator.getTransactionTelemetrySummary();
   assert.equal(summary.transactionCount, 1);

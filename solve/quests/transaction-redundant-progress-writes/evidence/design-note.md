@@ -105,6 +105,23 @@ conditions C2-C4 are in `deferred-prepared-status-removal.md`.
    and the periodic sweep. The statement-time contact with
    `sql_transaction_participants-p1` (and its backpressure) moves to COMMIT (review
    item 4) [I].
+9. **The one answer that changes (accepted, lead ruling 1, 2026-11-28).** A transaction
+   that recovery restored from rows and holds before its first successful authoritative
+   refresh reports a participant list: `getRecoveryObligation(id).participants` and
+   `.participantDetails`, and `participants` in the in-doubt answer to a client COMMIT
+   or ROLLBACK naming it. That list was, and is, built from participant rows, not from
+   the manifest. Before, it also named every participant that had only an ACTIVE row.
+   Now it names only participants with a row written from PREPARE on (PREPARED,
+   FAILED, COMMITTED or ROLLED_BACK), so a participant that was never asked to
+   prepare is not listed. No `src` code and no consumer outside tests reads it:
+   PG-wire and the application-database facade read other fields of the answer
+   (`reader-census.md`, "Held state"). Recovery's decisions are unaffected. Recovery
+   acts only after the authoritative refresh, which rebuilds the participants from
+   the manifest, where an ACTIVE row and a missing row both read as a member without
+   evidence (`distributed-transaction-recovery-authority.js:90-122,184-198`). After the
+   refresh both trees list the manifest's participants and resolve identically.
+   Witnessed in `test/query/transaction-redundant-progress-writes.test.js` ("held
+   obligation") and `seals-and-contracts.md` section 7 (S14).
 
 ## Contract and failure analysis
 
@@ -290,3 +307,21 @@ preload, and its comparison with main's corpus log.
    quest (widening) or routed to their owner.
 2. Whether the schema-provisioning field deletion (a persisted JSON key) is taken here or
    by that owner. It is unfed today regardless of this quest.
+
+## Findings for other owners (stage 1)
+
+- **TX1 owner: the held answer's participant list.** Before the authoritative refresh,
+  the participant list of a held recovery obligation (`getRecoveryObligation`, the
+  in-doubt answer of `buildDecisionInDoubtResult`,
+  `distributed-transaction-decision-protocol.js:681-696`) is informational, and is now
+  empty for participants that were not asked to prepare: "unknown" is shown as an empty
+  list. The options are to drop the field from the held answer or to fill it from the
+  manifest of the loaded row (`participant_set_text`, already on the restored
+  transaction). Nothing in `src` reads it today (`reader-census.md`, "Held state").
+- **TX1 owner: begin gate after a partial BEGIN failure (pre-existing, unchanged).** When
+  one sibling's BEGIN fails, `settleAllOrThrow` throws before the siblings that did
+  begin are marked ACTIVE in memory (`distributed-transaction-participant-set.js:296-311`;
+  the unchanged tree marked them only after every BEGIN succeeded). A later statement
+  BEGINs them again, which the participant answers idempotently while the session exists
+  (`partition-participant-transaction-request.js:255-264`), and which opens an empty
+  session if it was lost in between.
