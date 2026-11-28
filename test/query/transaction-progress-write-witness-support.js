@@ -1,6 +1,7 @@
 /**
  * Shared world for the transaction-redundant-progress-writes witnesses
- * (quest transaction-redundant-progress-writes, stage 0) and their guard
+ * (quest transaction-redundant-progress-writes: removal of the ACTIVE
+ * participant row written at the first write to each table) and their guard
  * (scripts/checks/transaction-redundant-progress-writes-guard.js).
  *
  * It composes the same parts as the existing coordinator metadata witnesses
@@ -21,8 +22,11 @@
  *   new engine over the same durable rows recovers it.
  *
  * Fidelity limit: the gateway double runs the production mutation SQL on
- * one local database (no system-partition replication, no CDC), and the
- * participant is a ledger double, not a partition. The witnesses certify the
+ * one local database (no system-partition replication, no CDC). Except in
+ * runParticipantSessionLossScenario (a real participant PartitionService of
+ * test/test-helpers/participant-transaction-fixture.js), the participant is
+ * the ledger double, which answers every request with success: it cannot
+ * lose a session or refuse a request. The witnesses certify the
  * coordinator's write discipline and its recovery decisions, not consensus.
  */
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -42,6 +46,11 @@ import {answerParticipantTransactionRequest, preparedDigestOf} from
   '../test-helpers/participant-protocol-double.js';
 import {createCommittedServeEligibilityOwner} from
   '../control-plane/serve-eligibility-test-support.js';
+import {PARTICIPANT_ENLISTMENT_MODE} from
+  '../../src/query/distributed/distributed-transaction-coordinator-constants.js';
+import {discardParticipantSessions} from
+  '../../src/partition/partition-participant-transaction-session.js';
+import * as fixture from '../test-helpers/participant-transaction-fixture.js';
 
 const NODE_ID = 'progress-write-witness-node';
 const START_CLOCK_MS = 1_000_000;
@@ -391,7 +400,8 @@ async function measureWriteTransaction({tables, finish}) {
       writes: run.writes.map((write) => write.success === true),
       success: result.success === true,
       labels: mutations.map(mutationLabelOf),
-      mutationCount: mutations.length,
+      participantRowsByPartition: participantRowsByPartitionOf(mutations),
+      admission: admissionFactsOf(mutations),
       timeline: [...world.timeline],
       row: world.transactionRow(run.begun.transactionId),
       participantRows: world.participantRows(run.begun.transactionId),
@@ -403,8 +413,102 @@ async function measureWriteTransaction({tables, finish}) {
   }
 }
 
-function countOf(values, value) {
-  return values.filter((entry) => entry === value).length;
+/**
+ * The participant-table statuses each participant's rows were written
+ * with, in submission order, by partition.
+ * @param {Object[]} mutations - gateway.mutations entries.
+ * @return {Object} partitionId -> statuses.
+ */
+function participantRowsByPartitionOf(mutations) {
+  const byPartition = {};
+  for (const mutation of mutations) {
+    if (mutation.tableName !== TABLES.SQL_TRANSACTION_PARTICIPANTS) continue;
+    const partitionId = mutation.row?.partition_id ?? null;
+    (byPartition[partitionId] ??= []).push(mutation.row?.status ?? null);
+  }
+  return byPartition;
+}
+
+/**
+ * Submissions of the participant-admission purpose (manifest appends and
+ * participant rows written before the manifest freeze, the writes the
+ * coordinator's telemetry counts as participantAdmission) against the
+ * number of distinct manifest texts the appends installed.
+ * @param {Object[]} mutations - gateway.mutations entries.
+ * @return {{submissions: number, manifestChanges: number}}
+ */
+function admissionFactsOf(mutations) {
+  const freezeAt = mutations.findIndex((mutation) =>
+    classifyCoordinatorMutation(mutation).kind === MUTATION_KIND.MANIFEST_FREEZE);
+  const beforeFreeze = freezeAt < 0 ? mutations : mutations.slice(0, freezeAt);
+  const appends = beforeFreeze.filter((mutation) =>
+    classifyCoordinatorMutation(mutation).kind === MUTATION_KIND.MANIFEST_APPEND);
+  const participantRows = beforeFreeze.filter((mutation) =>
+    mutation.tableName === TABLES.SQL_TRANSACTION_PARTICIPANTS);
+  return {
+    submissions: appends.length + participantRows.length,
+    manifestChanges: new Set(appends.map((mutation) =>
+      mutation.data?.participant_set_text)).size,
+  };
+}
+
+const BEGIN_GATE_SCENARIO = Object.freeze({
+  REPEATED_WRITES: 'repeatedWrites',
+  READ_THEN_WRITE: 'readThenWrite',
+  AUTHORITATIVE_ENLIST_THEN_WRITE: 'authoritativeEnlistThenWrite',
+});
+
+/**
+ * How many participant BEGINs each partition received in one transaction
+ * that touches its table more than once:
+ * - repeatedWrites: three INSERTs into one table;
+ * - readThenWrite: a transactional SELECT (volatile read enlistment) then
+ *   two INSERTs into the same table (promotion to a write participant);
+ * - authoritativeEnlistThenWrite: an AUTHORITATIVE enlistment (the path of
+ *   a locking read, a global-index write and bindTransactionToPartition)
+ *   then two INSERTs.
+ * @param {string} scenario - A BEGIN_GATE_SCENARIO value.
+ * @return {Promise<Object>} {beginsByPartition, statements, committed}.
+ */
+async function measureBeginGate(scenario) {
+  const world = createProgressWriteWorld({tables: ['users']});
+  try {
+    const {engine} = world.createEngine();
+    const sessionId = `begin-gate-${scenario}`;
+    const partitionId = world.layout.partitionOf.users;
+    const begun = await engine.executeQuery('BEGIN', [], {sessionId});
+    const statements = [];
+    const insert = async (id) => statements.push((await engine.executeQuery(
+      'INSERT INTO users (id, name) VALUES (?, ?)', [id, 'v'],
+      {sessionId})).success === true);
+    if (scenario === BEGIN_GATE_SCENARIO.READ_THEN_WRITE) {
+      statements.push((await engine.executeQuery(
+        'SELECT id FROM users WHERE id = ?', ['r0'], {sessionId})).success === true);
+    }
+    if (scenario === BEGIN_GATE_SCENARIO.AUTHORITATIVE_ENLIST_THEN_WRITE) {
+      const enlisted = await engine.transactionCoordinator.executeReadStatement(
+        sessionId, begun.transactionId, ({enlist}) =>
+          enlist([partitionId], PARTICIPANT_ENLISTMENT_MODE.AUTHORITATIVE));
+      statements.push(enlisted.success === true);
+    }
+    await insert('r1');
+    await insert('r2');
+    if (scenario === BEGIN_GATE_SCENARIO.REPEATED_WRITES) {
+      await insert('r3');
+    }
+    const committed = await engine.executeQuery('COMMIT', [], {sessionId,
+      expectedTransactionId: begun.transactionId});
+    const beginsByPartition = {};
+    for (const event of world.timeline) {
+      if (event.kind === 'delivery' && event.operation === QUERY_OPERATION.BEGIN) {
+        beginsByPartition[event.partitionId] =
+          (beginsByPartition[event.partitionId] ?? 0) + 1;
+      }
+    }
+    return {beginsByPartition, statements, committed: committed.success === true};
+  } finally {
+    await world.close();
+  }
 }
 
 /**
@@ -524,55 +628,128 @@ async function runCrashScenario(options) {
 }
 
 /**
- * A live coordinator's decision write applies but its answer is lost and
- * the decision cannot be read back: the COMMIT is answered in doubt and the
- * transaction stays with its live session. After the budget, the periodic
- * sweep must adopt the recorded decision and complete it.
+ * The coordinator appends the participant to the manifest and stops before
+ * the participant's BEGIN is delivered (the hold is on the delivery); a new
+ * coordinator recovers the OPEN row past its deadline.
  * @param {Object} options - {tables}.
- * @return {Promise<Object>} {answer, sweep, final}.
+ * @return {Promise<Object>} {stopped, atStop, begins, recovery}.
  */
-async function runLiveInDoubtSweepScenario(options) {
+async function runBeginNotDeliveredCrashScenario(options) {
   const world = createProgressWriteWorld({tables: options.tables});
   try {
-    const {engine, gateway} = world.createEngine();
-    const submit = gateway.submitMutation.bind(gateway);
-    const read = gateway.readAuthoritativeRows.bind(gateway);
-    let decisionAnswerLost = false;
-    let decisionUnreadable = false;
-    gateway.submitMutation = async (mutation, mutationOptions) => {
-      const applied = await submit(mutation, mutationOptions);
-      if (!decisionAnswerLost && isDecisionWrite(mutation)) {
-        decisionAnswerLost = true;
-        decisionUnreadable = true;
-        return {success: false, error: 'decision answer lost'};
-      }
-      return applied;
+    const hold = createHold(participantDeliveryOf(QUERY_OPERATION.BEGIN));
+    const {engine} = world.createEngine({deliveryHold: hold});
+    const sessionId = 'begin-not-delivered';
+    const begun = await engine.executeQuery('BEGIN', [], {sessionId});
+    void engine.executeQuery(`INSERT INTO ${options.tables[0]} (id, name) ` +
+      'VALUES (?, ?)', ['never-staged', 'v'], {sessionId});
+    const stopped = (await within(hold.reached, HOLD_WAIT_MS)) !== null;
+    const row = world.transactionRow(begun.transactionId);
+    const atStop = {
+      participantSetState: row?.participant_set_state ?? null,
+      decision: row?.decision ?? null,
+      manifestMembers: JSON.parse(row?.participant_set_text ?? '[]').length,
     };
-    gateway.readAuthoritativeRows = async (tableName, ...rest) =>
-      (decisionUnreadable && tableName === TABLES.SQL_TRANSACTIONS ?
-        {success: false} : read(tableName, ...rest));
-    const run = await startWriteTransaction(engine, 'in-doubt',
-      options.tables, 'COMMIT');
-    const answer = await run.finished;
-    decisionUnreadable = false;
-    world.advancePastDeadline();
-    const sweep = await engine.transactionCoordinator.runRecoverySweep();
-    const row = world.transactionRow(run.begun.transactionId);
-    const ledger = world.ledger.entries();
-    return {
-      answer: {success: answer.success === true, errorCode: answer.errorCode,
-        commitPointReached: answer.commitPointReached},
-      sweep: sweep.results.map((entry) => ({path: entry.sweepPath,
-        success: entry.success, statusAfter: entry.statusAfter})),
-      final: {decision: row?.decision ?? null, status: row?.status ?? null,
-        participantDecisions: ledger.map((entry) =>
-          entry.decisions.map((applied) => applied.decision)),
-        orphanedSessions: ledger.filter((entry) =>
-          LEDGER_OPEN_STATES.has(entry.state)).length,
-        violations: [...world.ledger.violations]},
-    };
+    const recovery = await restartAndRecover(world, begun.transactionId,
+      {pastDeadline: true});
+    return {stopped, atStop,
+      begins: world.ledger.entries().map((entry) => entry.begins), recovery};
   } finally {
     await world.close();
+  }
+}
+
+const SESSION_LOSS_TABLE = 'test_table';
+const SESSION_LOSS_INSERT =
+  `INSERT INTO ${SESSION_LOSS_TABLE} (id, value) VALUES (?, ?)`;
+
+/**
+ * The begin gate against a real participant (a production PartitionService
+ * of the TX1 participant fixture, on its own controllable consensus port):
+ * two writes are staged in one session, the participant then loses its
+ * volatile sessions (what a participant-leader change does; the fixture's
+ * discardParticipantSessions), and a third write follows. The coordinator
+ * must not open a second session with BEGIN, which would silently drop the
+ * first two writes; the participant must refuse the write, and the
+ * transaction must end in one ROLLBACK with nothing applied.
+ * @return {Promise<Object>} Facts.
+ */
+async function runParticipantSessionLossScenario() {
+  fixture.resetFixtureSingletons();
+  const tablesRow = Object.freeze({table_id: SESSION_LOSS_TABLE,
+    table_name: SESSION_LOSS_TABLE, active_partition_version: 1});
+  // The participant's own tables row: the partition-epoch evidence a
+  // routed write is checked against (partition-service-remote-query-methods.js).
+  const participantCache = Object.freeze({getAll: () => [], filter: () => [],
+    get: (type, key) => (type === TABLES.TABLES && key === SESSION_LOSS_TABLE ?
+      tablesRow : null)});
+  try {
+    return await fixture.onFixtureLeader(async (leader, proposed) => {
+      const answers = [];
+      const gateway = createTransactionPersistenceGateway();
+      const cache = createMockSystemCache(
+        [{table_name: SESSION_LOSS_TABLE, primaryKey: 'id'}],
+        [{partition_id: leader.partitionId, table_name: SESSION_LOSS_TABLE,
+          partition_key_start: null, partition_key_end: null}]);
+      const engine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+        systemCache: cache, controlPlaneSystemTableGateway: gateway,
+        autoStartDistributedTransactionRecovery: false,
+        unrefRetryDelayTimers: true, logger: SILENT_LOGGER,
+        messageRouter: {async deliver(_address, message) {
+          const answer = await leader.handleApplicationMessage(
+            structuredClone(message));
+          answers.push({operation: message.operation ?? message.type,
+            success: answer?.success === true,
+            failureCode: answer?.failureCode ?? null});
+          return buildDeliveryEnvelope({acknowledged: true}, answer);
+        }},
+      });
+      engine.transactionCoordinator.sleep = async () => {};
+      engine.transactionCoordinator.logger = SILENT_LOGGER;
+      try {
+        const sessionId = 'session-loss';
+        const begun = await engine.executeQuery('BEGIN', [], {sessionId});
+        const statements = [];
+        for (const id of ['s1', 's2']) {
+          statements.push((await engine.executeQuery(SESSION_LOSS_INSERT,
+            [id, 'v'], {sessionId})).success === true);
+        }
+        discardParticipantSessions(leader);
+        const lossFrom = answers.length;
+        const afterLoss = await engine.executeQuery(SESSION_LOSS_INSERT,
+          ['s3', 'v'], {sessionId});
+        statements.push(afterLoss.success === true);
+        const lossAnswers = answers.slice(lossFrom);
+        const rollingBack = engine.executeQuery('ROLLBACK', [], {sessionId,
+          expectedTransactionId: begun.transactionId});
+        await fixture.applyProposal(leader, proposed, fixture.isDecisionCommand);
+        const rolledBack = await rollingBack;
+        const participantRows = leader.db.prepare('SELECT state, decision ' +
+          'FROM _participant_transactions WHERE participant_id = ?')
+          .all(`${begun.transactionId}:${leader.partitionId}`);
+        return {
+          begins: answers.filter((answer) =>
+            answer.operation === QUERY_OPERATION.BEGIN).length,
+          statements,
+          beginsAfterLoss: lossAnswers.filter((answer) =>
+            answer.operation === QUERY_OPERATION.BEGIN).length,
+          refusalAfterLoss: lossAnswers.find((answer) =>
+            answer.success !== true)?.failureCode ?? null,
+          rolledBack: rolledBack.success === true,
+          appliedRows: leader.db.prepare(
+            `SELECT COUNT(*) AS n FROM ${SESSION_LOSS_TABLE}`).get().n,
+          participantRows,
+          row: (({status, decision}) => ({status, decision}))(
+            gateway.rows(TABLES.SQL_TRANSACTIONS)[0] || {}),
+        };
+      } finally {
+        await engine.shutdown();
+        gateway.db.close();
+      }
+    }, {systemTableCache: participantCache});
+  } finally {
+    fixture.clearFixtureSingletons();
   }
 }
 
@@ -602,20 +779,15 @@ function timelinePositionsOf(timeline) {
 }
 
 export {
-  MUTATION_KIND,
-  classifyCoordinatorMutation,
-  countOf,
-  createHold,
-  createProgressWriteWorld,
+  BEGIN_GATE_SCENARIO,
   isDecisionWrite,
   isManifestFreezeWrite,
+  measureBeginGate,
   measureWriteTransaction,
-  mutationLabelOf,
   nthParticipantRowWrite,
   participantDeliveryOf,
-  restartAndRecover,
+  runBeginNotDeliveredCrashScenario,
   runCrashScenario,
-  runLiveInDoubtSweepScenario,
-  startWriteTransaction,
+  runParticipantSessionLossScenario,
   timelinePositionsOf,
 };

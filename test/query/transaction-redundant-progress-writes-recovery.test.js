@@ -1,11 +1,13 @@
 /**
- * Quest transaction-redundant-progress-writes, stage 0 recovery regression
- * net. Written against the unchanged tree and green there; each must stay
- * green after the ACTIVE participant row and the PREPARED status write are
- * removed, so every assertion names only durable facts both trees produce.
+ * Quest transaction-redundant-progress-writes, recovery regression net.
+ * Written against the unchanged tree and green there; each must stay green
+ * after the ACTIVE participant row is removed, so every assertion names only
+ * durable facts both trees produce. (The live in-doubt sweep witness of
+ * stage 0 belonged to the deferred PREPARED-status removal; it is kept as
+ * text in evidence/deferred-prepared-status-removal.md.)
  *
- * A coordinator stops (a hold that is never released) during COMMIT of a
- * two-table write transaction; a new coordinator over the same durable rows
+ * A coordinator stops (a hold that is never released) during a statement or
+ * the COMMIT of a write transaction; a new coordinator over the same durable rows
  * recovers it through the production startup path. Each case ends in
  * exactly one consistent outcome: every participant applied one decision,
  * the recorded one, and no participant session is left open.
@@ -19,8 +21,8 @@ import {
   isManifestFreezeWrite,
   nthParticipantRowWrite,
   participantDeliveryOf,
+  runBeginNotDeliveredCrashScenario,
   runCrashScenario,
-  runLiveInDoubtSweepScenario,
 } from './transaction-progress-write-witness-support.js';
 
 const TWO_TABLES = Object.freeze(['users', 'orders']);
@@ -102,15 +104,23 @@ test('restart after the decision and before participant COMMIT: recovery ' +
   assert.deepEqual(facts.recovery, settledAs('COMMIT'));
 });
 
-test('live in-doubt decision: the sweep adopts the recorded COMMIT through ' +
-  'the commit path and reports it completed', async () => {
-  const facts = await runLiveInDoubtSweepScenario({tables: TWO_TABLES});
-  assert.deepEqual(facts, {
-    answer: {success: false, errorCode: 'TRANSACTION_DECISION_IN_DOUBT',
-      commitPointReached: true},
-    sweep: [{path: 'COMMIT', success: true, statusAfter: 'COMMITTED'}],
-    final: {decision: 'COMMIT', status: 'COMMITTED',
-      participantDecisions: [['COMMIT'], ['COMMIT']], orphanedSessions: 0,
-      violations: []},
+test('restart after the manifest append and before the participant BEGIN ' +
+  'is delivered: past the deadline the never-begun member receives one ' +
+  'bound ROLLBACK (its tombstone)', async () => {
+  const facts = await runBeginNotDeliveredCrashScenario({tables: TWO_TABLES});
+  assert.deepEqual({stopped: facts.stopped, atStop: facts.atStop,
+    begins: facts.begins}, {
+    stopped: true,
+    atStop: {participantSetState: 'OPEN', decision: null, manifestMembers: 1},
+    begins: [0],
+  });
+  assert.deepEqual(facts.recovery, {
+    replay: RECOVERED_ONCE,
+    decision: 'ROLLBACK',
+    status: 'ROLLED_BACK',
+    participantRowStatuses: ['ROLLED_BACK'],
+    participantDecisions: [['ROLLBACK']],
+    orphanedSessions: [],
+    violations: [],
   });
 });

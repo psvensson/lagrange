@@ -1,5 +1,12 @@
 # Reader census: participant rows and the coordinator transaction status
 
+> **Stage 0b scope note (2026-11-28).** The lead ruled that only removal **(a)**, the
+> ACTIVE participant row, proceeds in this quest; removal **(b)**, `status = PREPARED`,
+> is a recorded proposal for the TX1 owner (`deferred-prepared-status-removal.md`).
+> The census below covered both and is kept whole; every "(b)" column and the rows
+> 13-17 concern the deferred proposal only. The design review's corrections are in
+> section 6 at the end.
+
 Quest `transaction-redundant-progress-writes`, stage 0. Code read at
 `ab347e9625a64ed24b7700b8f958bd54d8e3db06` in the quest worktree; every
 `path:line` is at that head. **[V]** = verified by reading the code or by a
@@ -143,3 +150,26 @@ Each one was read; disposition in `seals-and-contracts.md` section 3.
 4. Visible side effects: `engine_stage` text on an in-doubt COMMIT, telemetry
    purpose counts, `P + 1` fewer CDC obligations, fewer rows in admin SQL views
    of `sql_transaction_participants` before PREPARE.
+
+## 6. Corrections after the independent design review (stage 0b)
+
+The review's own search confirmed that no reader depends on either write. Its
+additions and one misclassification, each re-read here at `ab347e962`:
+
+| Reader | Use | Effect of (a) |
+| --- | --- | --- |
+| `src/partition/partition-participant-release-contract.js:124-139,191-202` | the release contract consumes the release census result (state, schema and semantic version, row digest) | none: the census never reads participant rows (reader 8) [V] |
+| `src/query/sql-locking-read-execution.js:337-339` (`getConflictingReservations`) | iterates live transactions by id for in-memory reservations | none: ids only [V] |
+| `src/query/sql-query-engine-lifecycle-and-callback-dispatch.js:247` (`releasePendingReservations`) | iterates live transactions by id at shutdown | none: ids only [V] |
+| `src/partition/managed-merge-topology-adapter.js:257` | exposes the coordinator to the merge adapter | none [V] |
+| `isOpenDecisionState` (`src/query/distributed/distributed-transaction-recovery-validation.js:125-130`) | validates a restored OPEN candidate's status (ACTIVE, ROLLING_BACK, FAILED) | none for (a); a (b) reader of the restored transaction status [V] |
+
+Misclassified in section 5: `test/query/distributed-transaction-coordinator.test.js:335`
+("emits persistence callbacks") **asserts the PREPARED status write**; it belongs to the
+deferred removal (b) and is untouched by (a) (the review measured 109/109 on the
+baseline and 1 failure only under the simulated (b)).
+
+The AUTHORITATIVE enlistment callers (all reach the same producer; covered by the
+begin-gate property): `sql-query-engine-select-execution.js:72-87` (locking read),
+`sql-query-engine-global-index-tx1.js:443-450` (global index),
+`sql-query-engine.js:379-385` (`bindTransactionToPartition`).

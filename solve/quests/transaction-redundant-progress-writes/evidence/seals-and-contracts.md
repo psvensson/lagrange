@@ -1,90 +1,181 @@
-# Seal and contract check
+# Seal and contract check (removal (a)), supersession list (C5)
 
-Quest `transaction-redundant-progress-writes`, stage 0, at `ab347e962`.
-**[V]** verified (read, or measured with the output path named), **[I]** inferred.
-Measurements are under `/mnt/data/peter/projects/lagrange-oltp-perf-20261128/lab/td-stage0/`
-(coordination dir, outside the repository). "Simulated removal" = a scratch
-`--import` preload that elides the ACTIVE participant row at
-`persistDistributedTransactionParticipantRow` and skips
-`setTransactionStatus(PREPARED)`, run against the unchanged `src` (no file
-under `src/` was changed).
+Quest `transaction-redundant-progress-writes`, stage 0b, at `ab347e962`. **[V]** verified
+(read, or measured with the output named), **[I]** inferred. Outputs are in
+`/mnt/data/peter/projects/lagrange-oltp-perf-20261128/lab/` (`td-stage0/`,
+`td-stage0b/`, `td-design-review/`). Scope: removal (a), the ACTIVE participant row,
+only; what stage 0 found for the deferred removal (b) is in
+`deferred-prepared-status-removal.md`.
 
-Verdict legend: **untouched** (the change cannot contradict it),
-**consistent** (the record already describes the target state),
-**supersession** (an assertion or record must be explicitly superseded in
-this quest, naming the original; the closed record stays untouched, R09/R21).
+Verdicts: **untouched** (the change cannot contradict it), **consistent** (the record
+already describes the target state), **supersession** (an assertion or record is
+explicitly superseded in this quest, naming the original; closed records stay
+untouched, R09/R21), **coordination** (no assertion changes, but the record makes
+another owner a party to the change).
 
-## 1. Closed quests and epics
+## 1. Closed quests
 
 ### `scenario-a-transaction-coordination-fast-path` (sealed `4dc6db6b9`, terminal)
 
 | Item | Verdict | Why |
 | --- | --- | --- |
-| Constraint `preserve-participant-set-cas-authority` | untouched | The manifest CAS and its readback rules are not changed; only the participant progress row goes. [V] |
-| Constraint `preserve-two-phase-decision-protocol` ("insert-once decision recording after all participant PREPARE digests/coordinates are durably retained") | untouched | The PREPARED participant rows (C3) stay and still precede the decision; witness `prepare-evidence-precedes-decision` green today and under the simulated removal. [V] |
-| Constraint `preserve-generic-workflow-sequential-default` | untouched | `DurableWorkflowCoordinator` stage semantics unchanged. [V] |
-| Statement priority (1): "eliminate duplicated participant persistence, redundant ACTIVE progress writes" | consistent in intent | The epic removed the duplicate participant write and the ACTIVE *status* rewrites on `sql_transactions` (`solve/epics/scenario-a-transaction-coordination-fast-path.md:58-61`); it kept one ACTIVE participant row. Removing that row goes further than the epic, in the same direction. [V] |
-| Probe `scripts/checks/scenario-a-transaction-coordination-fast-path-guard.js:333-338` (`participantMutationsOnEnlist.length === ONE`, "newly enlisted participant must be persisted once") | **supersession** | Becomes 0. Precedent: ruling 3 (a supersession finding in the new quest names the closed quest and the exact assertion; the closed record stays). The guard file is outside this stage's writable paths: the implementation stage needs it added to its assignment. [V] |
-| Witness `test/query/scenario-a-transaction-coordination-fast-path.test.js:95-99` (one participant mutation on first write) | **supersession** | Same assertion in the witness test. [V] |
-| Witness `test/query/scenario-a-transaction-coordination-fast-path.test.js:1441-1484` (Finding 1B: ACTIVE persistence fails / is delayed) | **supersession** | It waits for an ACTIVE write that no longer exists (would hang on `p2Started`). The hazard it witnesses (a failed or late ACTIVE upsert) disappears with the write. [V by reading; I that it hangs] |
-| Epic `doneWhen` (this guard at metric 0) | **pre-existing red, finding** | Measured on clean `ab347e962`: **metric 2** (`priority-1`: "executeWriteStatement must persist sql_write_operations once with outcome, 0 !== 1"; `priority-5`: "Missing canonical index idx_orders_customer_latest on orders"). Under the simulated removal still 2 (`priority-1` now fails one assertion earlier, on the participant count). Ruling 3 assumes this guard measures 0; it does not on main. Not this quest's to repair. [V `scenario-a-transaction-coordination-fast-path-guard-{ab347e962,simulated}.json`] |
+| Constraints `preserve-participant-set-cas-authority`, `preserve-two-phase-decision-protocol`, `preserve-generic-workflow-sequential-default` | untouched | The manifest CAS, the PREPARED evidence before the decision and the sequential generic stage are all unchanged. [V] |
+| Statement priority (1) "eliminate duplicated participant persistence, redundant ACTIVE progress writes" | consistent in intent | It removed the duplicate participant write and the ACTIVE *status* rewrites on `sql_transactions`, and kept one ACTIVE participant row; (a) removes that row, going further in the same direction. [V] |
+| Probe `scripts/checks/scenario-a-transaction-coordination-fast-path-guard.js:333-338` (`checkPriority1BookkeepingReduction`: "newly enlisted participant must be persisted once", `participantMutationsOnEnlist.length === ONE`) | **supersession** | Becomes 0. Precedent ruling 3: a supersession finding names the closed quest, the assertion and why. [V] |
+| Same probe `:385-406` (`checkPriority2ConcurrentParticipantPhases` seeds a generic workflow with `wfCoordinator.upsertParticipant`) | **supersession of the setup only** | C6 deletes `DurableWorkflowCoordinator.upsertParticipant`; the check seeds through `registerWorkflow({participants: Map})` and its assertion (sequential generic stage order) is unchanged. [V] |
+| Witness `test/query/scenario-a-transaction-coordination-fast-path.test.js:95-99` (one participant mutation on first write) | **supersession** | Same assertion. [V] |
+| Witness same file `:215-216` (generic upsert seeding) | **supersession of the setup only** | As for the probe. [V] |
+| Witness same file `:1441-1484` (Finding 1B with failing and delayed ACTIVE writes) | **supersession** | It waits for an ACTIVE write that no longer exists; the hazard it witnesses disappears with the write. The begin-gate witnesses of this quest take over its safety claim. [V] |
+| Epic `doneWhen` (this guard at 0) | **pre-existing red** | Measures 2 on clean `ab347e962` (`priority-1` on the write-operation assertion after `49e9a4b75`, `priority-5` missing index). (a) adds one more failing assertion inside `priority-1`, so the count stays 2. Landing condition L2: its owner repairs it first. [V `td-stage0/scenario-a-transaction-coordination-fast-path-guard-{ab347e962,simulated}.json`] |
 
 ### `scenario-a-deep-stack-throughput-and-latency` (sealed `b41d4ccec`, terminal)
 
 | Item | Verdict | Why |
 | --- | --- | --- |
-| Constraint `preserve-cas-and-prepared-evidence-authority` | untouched | CAS writes still run on every set change and freeze; PREPARED participant rows with digest, index and term are still persisted before a COMMIT decision. [V] |
-| Constraint `preserve-raft-ready-persistence-ordering` | untouched | No Raft change. [V] |
-| Constraint `preserve-row-key-conflict-and-read-your-own-writes` | untouched | No partition change; the row-key hold only gets shorter (fewer rounds between the first write and C6). [V code, I effect] |
-| Epic Quest 2 plan "Coalesce non-decision-bearing intermediate coordinator status transitions (`PREPARING`, `PREPARED`, `COMMITTING` on `sql_transactions` ...)" (`solve/epics/scenario-a-deep-stack-throughput-and-latency.md:104-111`) | consistent | Removal (b) completes the PREPARED part the quest did not do (R1 section 2). The plan's four preserve-conditions (initial-lineage trigger, CAS and `decision IS NULL` fencing, PREPARED participant evidence before the decision, terminal semantics) all hold. [V] |
-| Probe `scripts/checks/scenario-a-deep-stack-throughput-and-latency-guard.js` | untouched | Metric 0 on the unchanged tree and 0 under the simulated removal. [V `scenario-a-deep-stack-throughput-and-latency-guard-{ab347e962,simulated}.json`] |
-| Witness `test/query/scenario-a-deep-stack-throughput-and-latency.test.js:244-288` | untouched | Counts only after the first enlist and only transient statuses. [V] |
+| Constraints `preserve-cas-and-prepared-evidence-authority`, `preserve-raft-ready-persistence-ordering`, `preserve-row-key-conflict-and-read-your-own-writes` | untouched | CAS on every set change, PREPARED rows before COMMIT, Raft ordering, row-key semantics unchanged (the hold only shortens). [V] |
+| Probe and witness (`...-deep-stack-...-guard.js`, `...-deep-stack-...test.js:244-288`) | untouched | Count only after the first enlist and only transient statuses; metric 0 today and under the stage-0 simulation. [V] |
 
-## 2. TX1 quests (open, no terminal entry)
+## 2. Open quests and epics
 
-### `replicated-transaction-decision-and-apply` and `tx1-single-path-alpha`
-
-| Item | Verdict | Why |
+| Record | Verdict | Why |
 | --- | --- | --- |
-| Constraints (`existing-owner-chain`, `coordinator-seam-agreed-first`, `no-weakened-fault-cases`, `single-semantic-owner`, `preserve-current-safety` incl. "PREPARED custody") | untouched | No new protocol, ledger or path; "PREPARED custody" is the participant-side reservation on the workload partition, not the coordinator status. Changes to the coordinator's persistence belong to the query lane under the agreed seam (`seam-2026-10-10.md`): the change must be recorded as a seam-consistent change, see below. [V] |
-| Design `design-query-recovery-set-2026-10-11.md:36-51,73-81` ("This column is the admitted set ... Participant rows supply PREPARE evidence/progress; they never establish the set ... status remains a progress hint ... do not infer absence from status") | consistent | Both removals are what this design says the rows and the status already are. [V] |
-| Design `design-query-begin-uncertain-insert-resolution-2026-10-11.md:1538-1545,2132-2137,2676-2678` ("a missing progress row remains a legitimate unknown member") | consistent | Recovery with no participant row is a designed case; witnessed today by `restart after the manifest append ... (no participant row exists)`. [V] |
-| Seam item E (participant PREPARE evidence retained on the coordinator's participant row before the decision; `seam-2026-10-10.md:215`) | untouched | The PREPARED row is kept. [V] |
-| Receipt witness `test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js:194-232` (A2) and `:473-474` (A5 `afterPrepare`): hold at `statusWriteOf(TRANSACTION_STATUS.PREPARED)` | **supersession** | The hold is never reached once the write is gone. The crash point it names, "after the PREPARE evidence, before the decision", still exists; the hold moves to `isDecisionWrite` (same durable state today except the PREPARED status). Named by both TX1 receipts; `replicated-transaction-decision-and-apply/evidence/receipt.json` binds `testFileDigests`, so editing the file invalidates that receipt's digest binding: the TX1 owners must re-measure or record the supersession. Measured on clean `ab347e962` (lab host tv-dator): A1-A4 pass (A2 with the hold at the PREPARED write, released later); **A5 is red on main**: `afterPrepare` stops at the hold but the recovering coordinator records no decision (`decision: null`, status PREPARING, participants PREPARED on all three replicas) because discovery waits for the deadline (`5f84f0eff`), and the stuck PREPARED reservation then refuses the next two crash cases' PREPARE (`afterDecision`, `duringFanout`: `stopped: false`, ROLLBACK). Pre-existing, route to the TX1 owner (R17). After this quest, A2 would also turn red (hold never reached) unless its hold moves with this supersession. [V `lab-leg-a-ab347e962.log`] |
-| Receipt witness `test/integration/transaction-coordinator-restart.integration.test.js:117,261` (hold at `statusWriteOf(COMMITTING)`, expects `{status: 'PREPARED', decision: 'COMMIT'}` at the interruption) | **supersession, and a pre-existing red (finding)** | Measured red on clean `ab347e962` (lab host tv-dator): at the interruption the row is `{status: PREPARED, decision: null}` and recovery recovers nothing (`totalRecovered: 0`). Cause [V by reading, consistent with the run]: since `8897efeca` (2026-11-24) the decision UPDATE carries `status: COMMITTING` (`sql-query-engine-transaction-persistence-methods.js:463-470`), so the hold intercepts the decision write itself before it applies; and since `5f84f0eff` (2026-11-16) discovery waits for the persisted deadline for an undecided row (`distributed-transaction-recovery.js:86-98`), which the test does not advance. The test was last edited in `54dd2d7ce` (2026-10-27). Route: TX1 owner (R17). After this quest the expected status at that point would be PREPARING, so its repair and this supersession must be done together. [V `lab-restart-witness-ab347e962.log`] |
-| `test/integration/helpers/pgwire-rollback-recovery.js:89-93`, `tx1-postkill-coordinator-reader.js`, `seed-migration-cutover-persisted.integration.test.js:217-227` | untouched | Terminal or post-decision participant rows only. [V] |
+| `replicated-transaction-decision-and-apply`, `tx1-single-path-alpha`: constraints, recovery-set design ("Participant rows supply PREPARE evidence/progress; they never establish the set", `design-query-recovery-set-2026-10-11.md:73-81`), "a missing progress row remains a legitimate unknown member" (`design-query-begin-uncertain-insert-resolution-2026-10-11.md:2132-2137`) | consistent | (a) is what these designs say the rows already are. [V] |
+| TX1 receipt witnesses `test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js`, `test/integration/transaction-coordinator-restart.integration.test.js` | untouched by (a); **pre-existing red** | Their holds are on PREPARED and COMMITTING status writes and on PREPARED and COMMITTED participant rows, never on ACTIVE rows, so (a) changes no hold point. Both are red on clean `ab347e962` (A5; the restart milestone), and their repair lands first (L1). Correction from the review: leg-a is named in the TX1 receipt's commands, not digest-bound; only the restart witness is digest-bound, and that receipt already fails its digest check on main. [V `td-stage0/lab-*-ab347e962.log`] |
+| `locking-read-authoritative-reservations` constraint `shared-transaction-owners` ("Coordinate existing open replicated-transaction-decision-and-apply, tx1-single-path-alpha and participant-release-permanent-refusal owners before changing participant admission, apply or release. One writer owns that interaction.") | **coordination** | (a) keeps the participant admission authority (manifest CAS, BEGIN, refusals), apply and release unchanged, but it changes the coordinator-side bookkeeping of admission and removes the statement-time overlap the locking read's AUTHORITATIVE enlistment shares (`sql-query-engine-select-execution.js:72-87`). Read as the constraint intends, the TX1 owners are the one writer of that interaction: the change is coordinated with them (L1 already makes them a landing dependency); no assertion of the locking-read quest changes. Under the simulated removal `test/query/locking-read-authoritative-reservations.test.js` (13/13) and `test/transaction/queryable-core-j4-locking-read-journey.test.js` (8/8) pass. `test/query/locking-read-execution-lifecycle.test.js` fails one test identically with and without the simulation, and is red on main in the corpus (section 6). [V] |
+| Epic `es6-owner-safety` (open, deterministic): its receipt binds `test/query/scenario-a-transaction-coordination-fast-path.test.js` by digest (`solve/epics/es6-owner-safety/evidence/receipt.json:6`, `b8a01137...`) | **supersession, already diverged** | The file at `ab347e962` hashes to `2b487031...`: the receipt is already stale on main. (a) changes the file again (section 1). The supersession finding names the epic, and the epic owner re-measures its receipt. [V sha256] |
+| Quest `transaction-path-telemetry-export` (draft on its own branch; its constraint `production-unchanged`: "the gateway mutation sequence and purposes ... are identical to ab347e962", test `test/bootstrap/transaction-telemetry-production-defaults.test.js`, pinned sequence in one fixture file per the lead) | **supersession, after it lands** (L3) | (a) removes P ACTIVE rows from that pinned sequence and changes the purpose counts (`participantAdmission` falls from 2P to P). That is a one-file supersession of the fixture after the export has landed, and this quest's red is re-measured on that base. Its catalogued COMMIT sub-phase `PREPARED_STATUS` is untouched by (a). [V `git show work/oltp-telemetry-export-20261128:solve/quests/transaction-path-telemetry-export/quest.json`] |
 
-## 3. Tests and guards that assert these writes or their counts
+## 3. Unsealed tests and probes that pin the ACTIVE write or its counts
 
-| Witness | Verdict | Change in the implementation stage |
+| Witness | Verdict | Change |
 | --- | --- | --- |
-| `test/query/tx-metadata-pgwire-and-result-representation.test.js:323-333` (6 `sql_transactions` mutations incl. `status='PREPARED'`, decision at index 4) | **supersession** | 5 mutations, decision at index 3. The atomic freeze+PREPARING and decision+COMMITTING assertions (`:335-352`) are unchanged. |
-| same file `:354-362` (row at the PREPARE boundary is FROZEN/PREPARING) | untouched | The freeze still precedes PREPARE (R1 rank 4 is not in scope). [V] |
-| same file `:385-392` (`participantAdmission` 2, `preparing` 2, 10 mutations) | **supersession** | 1, 1, 8. Note: this block reads `getLastTransactionBreakdown`, which the telemetry export quest replaces (ruling 7); the two quests edit the same assertions and must be sequenced (the brief already orders the export first). |
-| `test/query/transaction-participant-set-authority.test.js:586-620` (zero-participant COMMIT, 3 mutations) | untouched | No participant, no PREPARED. [V] |
-| same file `:622-707` (ACTIVE upsert overlaps `executeWrite`) | **supersession** | The overlap no longer exists; the witness's remaining claims (write-operation rows wait for the statement, COMMITTED overlaps read-only release) need a rewritten witness that does not wait on an ACTIVE write. |
-| same file `:709-881` (Finding 1B: failed / delayed / stale ACTIVE persistence) | **supersession** | Parts 1-2 witness a hazard that disappears with the write; part 3 (failed COMMITTED status persist with an overlapped read-only release) is independent and must be kept in the rewritten witness. |
-| same file `:87-116` (every stale status incl. PREPARED re-drives the exact decision) | untouched | Recovery input tolerance stays. [V] |
-| `test/query/transaction-release-census.test.js:144`, `test/runtime/pgwire-transaction-outcome.test.js:64`, recovery fixtures seeding PREPARED (`reader-census.md` section 5) | untouched | They exercise reading of durable rows and labels, which stays. [V] |
-| New witnesses of this quest (`test/query/transaction-redundant-progress-writes*.test.js`, guard and its test) | new | See `design-note.md` "Evidence". |
+| `test/query/tx-metadata-pgwire-and-result-representation.test.js:385-392` (`participantAdmission` 2, 10 mutations) | **supersession** | `participantAdmission` 1, 9 mutations. `:323-333` (6 `sql_transactions` mutations incl. PREPARED) and `:389` (`preparing` 2) are **untouched** by (a). If the telemetry export moves these counts into its fixture first, the supersession happens there. [V; cone result in section 6] |
+| `test/query/transaction-participant-set-authority.test.js:622-707` (ACTIVE upsert overlaps `executeWrite`) | **supersession** | The overlap goes. The witness's other claims (write-operation rows wait for the statement; COMMITTED overlaps the read-only release) are kept in a rewritten witness that does not wait on an ACTIVE write. [V; it hangs under the simulation, section 6] |
+| same file `:709-881` (Finding 1B) | **supersession** | Parts 1-2 witness a hazard that disappears; part 3 (a failed COMMITTED status write with an overlapped read-only release) is kept. [V] |
+| `test/query/schema-provisioning-job-owner.test.js:625` (workflow_record keys include `enlistedParticipantCount`) | **supersession** (C6) | The field is deleted with its unreachable producer. [V] |
+| `test/query/distributed-transaction-coordinator.test.js:335` | untouched by (a) | It asserts the PREPARED status write, which belongs to (b) (review correction). [V] |
+| Recovery inputs seeding ACTIVE or PREPARED participant rows (`reader-census.md` section 5) | untouched | Readers keep accepting rows of earlier builds. [V] |
 
 ## 4. Architecture, contracts, guidelines, models
 
-| Source | Verdict | Why |
-| --- | --- | --- |
-| `architecture/postgres-wire.md:320-323` ("The durable manifest is the complete admitted participant set; participant progress rows are recovery hints") | consistent | Removal (a) makes the first progress row the PREPARE evidence. No text change is required; a clarifying sentence ("participant rows begin with the PREPARE evidence") is optional documentation in the implementation stage. [V] |
-| `architecture/postgres-wire.md:331-337` (evidence retained before deciding; "`COMMITTING` and other progress labels are projections of that record and never decision authority") | consistent | Removal (b) drops one progress label that was never authority. [V] |
-| `architecture/postgres-wire.md:342-347` (recovery restores missing participant hints from the manifest; FROZEN undecided commits only with complete retained evidence) | consistent | Unchanged and witnessed. [V] |
-| `architecture/postgres-wire.md:370-377` (schema cutover envelope; "A terminal status by itself never proves disposition") | untouched | The release census keeps accepting PREPARED rows written by earlier builds (reader 8). [V] |
-| `architecture/overview.md:236-241` (recovery from the three tables) | untouched | Still true. [V] |
-| `architecture/contracts/authority-and-recovery.md` (one owner per authoritative fact, disposable projections) | consistent | Removes two projections of facts owned elsewhere. No contract names either write (searched all of `architecture/contracts/`, `invariants.json`). [V] |
-| `architecture/runtime-contracts.md`, `test/guidelines/*.md` | untouched | No mention of these tables' rows or statuses (searched). [V] |
-| `models/` (TLA+) | untouched | No model names transactions, participants or these states (searched `models/**`). [V] |
-| `docs/benchmarks/tx1-service-time-decomposition.md:270` (prerequisite: frozen manifest and PREPARED participant evidence durable before the decision CAS; COMMITTED only after all commits acknowledged) | consistent | Both conditions hold after the change. [V] |
-| Release semantic version `tx1-query-set-v1` (`distributed-transaction-release-census.js:20`) | untouched | Only if the census's accepted status sets are narrowed would the release contract change; the design keeps them (design note, open question 2). [V] |
+`architecture/postgres-wire.md:320-323` ("participant progress rows are recovery
+hints") is **consistent**; an optional sentence that participant rows begin with the
+PREPARE evidence. The following are **untouched**, since none names the ACTIVE row
+(searched):
 
-## 5. Seals that need explicit supersession (summary)
+- `architecture/contracts/` and `invariants.json`
+- `architecture/runtime-contracts.md`
+- `test/guidelines/`
+- `models/`
 
-1. Fast-path quest probe `scenario-a-transaction-coordination-fast-path-guard.js:333-338` and its witness test `:95-99`, `:1441-1484` (closed quest; supersession finding in this quest; the guard file needs to enter the implementation assignment).
-2. TX1 receipt witnesses `transaction-leg-a-three-replica.test.js` A2 and A5 hold points, and `transaction-coordinator-restart.integration.test.js:261` (open TX1 quests; their receipts bind these files; the restart witness is already red on main).
-3. Non-sealed but asserting: `tx-metadata-pgwire-and-result-representation.test.js:323-333,385-392`; `transaction-participant-set-authority.test.js:622-707,709-881`.
+`docs/benchmarks/tx1-service-time-decomposition.md:270` (manifest and PREPARED evidence
+before the decision CAS) is **consistent**. [V]
+
+## 5. Supersession list (summary)
+
+1. Closed fast-path quest:
+   - probe `checkPriority1BookkeepingReduction` assertion (`guard.js:333-338`);
+   - probe `checkPriority2` setup (`:385-406`);
+   - witnesses `scenario-a-transaction-coordination-fast-path.test.js:95-99`, `:215-216` (setup) and `:1441-1484`.
+2. `es6-owner-safety` receipt binding of that test file (already diverged on main).
+3. Telemetry export's pinned mutation sequence fixture and purpose counts (after L3).
+4. `tx-metadata-pgwire-and-result-representation.test.js:385-392`.
+5. `transaction-participant-set-authority.test.js:622-707,709-881`.
+6. `schema-provisioning-job-owner.test.js:625` (C6).
+7. Coordination, not supersession: `locking-read-authoritative-reservations`
+   `shared-transaction-owners` (TX1 owners), and the TX1 witnesses' repair first (L1).
+
+## 6. C5 confirmation: the transaction cone under the retained preload
+
+**Why not on the lab.** The lab runner forwards only `retry`, `tapTimeout` and
+`checkBase` to the remote host (`scripts/lab/probe.js` `forwardedPolicy`, reached through
+`tools/focused.mjs`). It cannot carry `--import` or `NODE_OPTIONS`, so the preload
+cannot be injected there without changing a repository file. As the lead allowed, the
+cone's light files were run locally, one at a time through the shared lock.
+
+**Cone.** The repository's proof-cone selector does not narrow the selection for these
+files (`scripts/select-proof-cone.js --changed ...` answers `tier=unknown
+fullSuite=true`, all 2850 files). The cone was therefore defined as every `*.test.js`
+whose own source references the changed producers or their test harnesses:
+`DistributedTransactionCoordinator`, `transactionCoordinator`, `executeWriteStatement`,
+`enlistParticipants`, `upsertParticipant`, `DurableWorkflowCoordinator`, the participant
+table, `managed-workflow-record-coordinator`,
+`persistDistributedTransactionParticipantRow`, `transaction-persistence-gateway`,
+`participant-protocol-double`, `transaction-coordinator-group-fixture`. That gives
+**154 files**, of which **139** are `ordinary/unit` (light). Lists:
+`td-stage0b/cone-simulated-a/cone-all-files.txt`, `cone-files.txt`.
+
+**Runs.** The candidate snapshot was `c3414281c67d16a46a2af7f12e815d1975d9e2b1`. Each
+light file ran once with `node --import evidence/simulate-removal-a.mjs --test`
+(`results.tsv`, `taps/`). Every file that failed was rerun without the preload
+(`results-unchanged.tsv`, `taps-unchanged/`), and the failing test names were compared
+(`comparison.json`). Each failure was also looked up in main's corpus log
+(`lab/main-corpus-ab347e962/lab-test-all.log`, read while that run was still in progress
+with 2786 file results; every file of interest had its entry; `failed-vs-corpus.txt`).
+Tests hidden behind a hang or a runner failure were run in isolation with
+`--test-name-pattern`, both ways (`isolated/`).
+
+**Result.** 139 files: 100 pass under the preload; 39 fail.
+
+- **35 of the 39 fail identically** without the preload (same failing tests, same
+  counts), and all 35 are `not ok` on main in the corpus: pre-existing reds, none
+  changed by (a). They include `test/workflow/durable-workflow-coordinator.test.js`,
+  `test/query/locking-read-execution-lifecycle.test.js`,
+  `test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js` and 17 rebalancer,
+  control-plane, convergence or node files (`failed-vs-corpus.txt`, `comparison.json`).
+- `test/query/distributed-transaction-coordinator.property.test.js`: the same
+  pre-existing failure both ways ("TableCreationService systemCache must implement
+  find()"); only fast-check's random counterexample differs. Not changed.
+- `test/query/scenario-a-transaction-coordination-fast-path.test.js` (corpus `not ok`):
+  - changed by (a), test 1 ("payment transaction breakdown tracer and Priority 1
+    bookkeeping reduction"): `newly enlisted participant persisted once, 0 !== 1`
+    (`:95-99`, supersession 1);
+  - changed by (a), test 12 (Finding 1B): it waits for an ACTIVE write that never comes
+    (`:1441-1484`, supersession 1). Tests 13-16 were then cancelled by their parent; in
+    isolation they pass both ways;
+  - unchanged: test 9 (the depcruise boundary witness) fails both ways on a
+    pre-existing rule violation
+    (`partition-decision-and-store-no-indirect-nondeterministic-capabilities`, from
+    `partition-participant-transaction-store.js`). On the unchanged tree it also crashes
+    the test runner's IPC (`Unable to deserialize cloned data`), reproducibly; tests 10-11
+    pass both ways.
+- `test/query/transaction-participant-set-authority.test.js` (corpus `ok`):
+  - changed by (a): "Optimization 5C: executeWriteStatement overlaps participant ACTIVE
+    upsert ..." (`:622-707`) and "Finding 1B ..." (`:709-881`), which wait for the ACTIVE
+    write (supersession 5);
+  - the two "P2:" tests after them were cancelled by the hang; in isolation under the
+    preload they pass (2/2).
+- `test/query/tx-metadata-pgwire-and-result-representation.test.js` (corpus `ok`): changed
+  by (a), the "§1 & §2" witness fails at `:386` (`participantAdmission` 1 !== 2; `:392`
+  would follow: 9 !== 10) (supersession 4).
+
+**Every test that changes result under the removal is on the supersession list (section
+5). No other test in the light cone changes result.** [V]
+
+**Not run under the preload**, either too heavy for the workstation or (the last three)
+this quest's own tests, run separately:
+
+- `test/bootstrap/node-joining-service-join-lifecycle-resume.test.js`
+- `test/bootstrap/node-joining-service.test.js`
+- `test/bootstrap/shared/control-plane-setup.test.js`
+- `test/integration/node-join-replica-activation.integration.test.js`
+- `test/integration/pgwire-command-tag-real-engine.integration.test.js`
+- `test/integration/priority-spread-one-authority-rebalance.integration.test.js`
+- `test/integration/seed-migration-cutover-persisted.integration.test.js`
+- `test/integration/transaction-coordinator-restart.integration.test.js` (red on main)
+- `test/migration/migration-workflow.integration.test.js`
+- `test/query/internal-sql-adapter.integration.test.js`
+- `test/query/postgres-wire-adapter.integration.test.js`
+- `test/rebalancer/message-group-operation-routing.integration.test.js`
+- this quest's: `test/query/transaction-redundant-progress-writes.test.js`,
+  `test/query/transaction-redundant-progress-writes-recovery.test.js`,
+  `test/scripts/transaction-redundant-progress-writes-guard.test.js`
+
+The three-replica TX1 witnesses (leg-a, restart) wait for L1 on the lab, from an
+implementation candidate.
+
+**Preload revision.** After the cone run, the preload's inner function was changed to use
+the captured coordinator instead of `this` (eslint `no-invalid-this`). The function is
+installed as that same instance's method, so the receiver is identical in every call made
+through it. This quest's witnesses and the decisive cone files were rerun with the final
+preload (`td-stage0b/final-preload/`).
