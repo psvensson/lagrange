@@ -55,6 +55,13 @@ async function readMembership(nodes, partitionIds) {
   return replies.flat();
 }
 
+function hasOwnDistinctVoters(row) {
+  return row.voterReplicaIds.length > 0 &&
+    new Set(row.voterReplicaIds).size === row.voterReplicaIds.length &&
+    row.voterReplicaIds.every((id) => typeof id === 'string' && id.length > 0) &&
+    row.voterReplicaIds.includes(row.replicaId);
+}
+
 function assertSurvivingMajority(rows, partitionId, ownerNodeId, requiresRf3) {
   const group = rows.filter((row) => row.partitionId === partitionId);
   assert.equal(new Set(group.map((row) => row.replicaId)).size, group.length,
@@ -64,10 +71,7 @@ function assertSurvivingMajority(rows, partitionId, ownerNodeId, requiresRf3) {
     Number.isSafeInteger(row.generation) && row.generation >= 0 &&
     typeof row.configurationKey === 'string' && row.configurationKey.length > 0 &&
     row.outgoingVoters.length === 0 && row.nextLearners.length === 0 &&
-    row.voterReplicaIds.length > 0 &&
-    new Set(row.voterReplicaIds).size === row.voterReplicaIds.length &&
-    row.voterReplicaIds.every((id) => typeof id === 'string' && id.length > 0) &&
-    row.voterReplicaIds.includes(row.replicaId));
+    hasOwnDistinctVoters(row));
   const leaders = voters.filter((row) => row.leaderRead && row.replicaId === row.leaderReplicaId);
   assert.equal(leaders.length, 1, `expected one confirmed stable leader for ${partitionId}`);
   const [leader] = leaders;

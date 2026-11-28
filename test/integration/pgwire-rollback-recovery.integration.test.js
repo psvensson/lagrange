@@ -69,6 +69,27 @@ async function startRuntime(t, mark) {
     partitionServices: runtime.partitionServices};
 }
 
+function errorFields(error) {
+  return {name: error?.name, code: error?.code, message: error?.message,
+    errorCode: error?.errorCode, detail: error?.detail};
+}
+
+function causeFields(error) {
+  return {causeCode: error?.cause?.code, causeMessage: error?.cause?.message,
+    response: error?.response ?? error?.details ?? error};
+}
+
+function witnessFailure(error, phase, evidence) {
+  // TAP annotates exceptions. Product errors may be frozen, so preserve
+  // the typed observation on a fresh, extensible test failure.
+  const failure = new Error('PG-wire rollback witness failed during ' + phase);
+  failure.phase = phase;
+  const observed = {...errorFields(error), ...causeFields(error), ...evidence};
+  failure.observed = inspect(observed, {depth: 3, maxStringLength: 320, maxArrayLength: 16,
+    customInspect: false, getters: false}).slice(0, 4096);
+  return failure;
+}
+
 test('failed participant rollback recovers on the same live PG-wire session',
   {timeout: TEST_TIMEOUT_MS}, async (t) => {
     refuseUnderProbe(PROBE_GUARD_SUBJECT);
@@ -83,16 +104,7 @@ test('failed participant rollback recovers on the same live PG-wire session',
       mark('create witness tables');
       await witnessPgwireRollbackRecovery(runtime, mark, evidence);
     } catch (error) {
-      // TAP annotates exceptions. Product errors may be frozen, so preserve
-      // the typed observation on a fresh, extensible test failure.
-      const failure = new Error('PG-wire rollback witness failed during ' + phase);
-      failure.phase = phase;
-      const observed = {name: error?.name, code: error?.code, message: error?.message,
-        errorCode: error?.errorCode,
-        detail: error?.detail, causeCode: error?.cause?.code, causeMessage: error?.cause?.message,
-        response: error?.response ?? error?.details ?? error, ...evidence};
-      failure.observed = inspect(observed, {depth: 3, maxStringLength: 320, maxArrayLength: 16,
-        customInspect: false, getters: false}).slice(0, 4096);
+      const failure = witnessFailure(error, phase, evidence);
       t.comment(failure.observed);
       throw failure;
     }

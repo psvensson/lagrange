@@ -49,11 +49,22 @@ function retain(history, entry) {
 
 function describe(value) {
   const summary = value?.provisioningSummary ?? value;
+  return {...describeOutcome(value), ...describeReasons(value, summary),
+    ...describeReplicaCounts(summary)};
+}
+
+function describeOutcome(value) {
   return {state: value?.contractState, nextAction: value?.nextAction,
-    code: value?.code ?? value?.errorCode, message: value?.message ?? value?.error,
-    reasons: value?.detail?.reasons ?? summary?.reasonCodes,
-    admissionReason: value?.placementResult?.reason, entryId: value?.entryId,
-    requested: summary?.requestedReplicaCount, committed: summary?.committedReplicaCount,
+    code: value?.code ?? value?.errorCode, message: value?.message ?? value?.error};
+}
+
+function describeReasons(value, summary) {
+  return {reasons: value?.detail?.reasons ?? summary?.reasonCodes,
+    admissionReason: value?.placementResult?.reason, entryId: value?.entryId};
+}
+
+function describeReplicaCounts(summary) {
+  return {requested: summary?.requestedReplicaCount, committed: summary?.committedReplicaCount,
     routable: summary?.routableReplicaCount, minimum: summary?.minimumRoutableReplicaCount};
 }
 const release = Promise.withResolvers();

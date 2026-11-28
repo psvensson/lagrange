@@ -68,25 +68,35 @@ function liveReady(row, at) {
     Number(row.boot_incarnation) > 0 && Number(row.ready_lease_expires_at) > at;
 }
 
+function remoteHopMatches(hop, write, witness, leader) {
+  return hop?.entryId === write.entryId && hop.idempotencyKey === write.idempotencyKey &&
+    hop.originNodeId === write.originNodeId && write.originNodeId !== leader.nodeId &&
+    hop.commitWitness.term === witness.term &&
+    hop.commitWitness.logIndex === witness.logIndex &&
+    hop.address === leader.nodeId + '/partition/' + leader.replicaId;
+}
+
+function writeCoversRow(write, row, restoredAt) {
+  return write.bootIncarnation === row.boot_incarnation && write.lastHeartbeat >= restoredAt &&
+    write.lastHeartbeat <= row.last_heartbeat &&
+    write.readyLeaseExpiresAt <= row.ready_lease_expires_at;
+}
+
+function witnessesLeader(write, witness, leader) {
+  return write.entryId && write.idempotencyKey && witness?.entryId === write.entryId &&
+    witness.partitionId === 'nodes-p1' && witness.leaderReplicaId === leader.replicaId &&
+    witness.term === leader.term && witness.logIndex > 0 &&
+    witness.logIndex <= leader.appliedIndex;
+}
+
 function confirmedRenewal(views, leader, row, restoredAt, requireRemote = false) {
   return views.some((view) => {
     const write = view.trace.committedByNode[row.node_id];
     const witness = write?.commitWitness;
     const hop = view.trace.lastRenewalByNode[row.node_id];
     return write?.normalPublisher && write.changes === 1 &&
-      (!requireRemote ||
-      (hop?.entryId === write.entryId && hop.idempotencyKey === write.idempotencyKey &&
-        hop.originNodeId === write.originNodeId && write.originNodeId !== leader.nodeId &&
-        hop.commitWitness.term === witness.term &&
-        hop.commitWitness.logIndex === witness.logIndex &&
-        hop.address === leader.nodeId + '/partition/' + leader.replicaId)) &&
-      write.bootIncarnation === row.boot_incarnation && write.lastHeartbeat >= restoredAt &&
-      write.lastHeartbeat <= row.last_heartbeat &&
-      write.readyLeaseExpiresAt <= row.ready_lease_expires_at &&
-      write.entryId && write.idempotencyKey && witness?.entryId === write.entryId &&
-      witness.partitionId === 'nodes-p1' && witness.leaderReplicaId === leader.replicaId &&
-      witness.term === leader.term && witness.logIndex > 0 &&
-      witness.logIndex <= leader.appliedIndex;
+      (!requireRemote || remoteHopMatches(hop, write, witness, leader)) &&
+      writeCoversRow(write, row, restoredAt) && witnessesLeader(write, witness, leader);
   });
 }
 

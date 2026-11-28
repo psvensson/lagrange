@@ -64,9 +64,7 @@ const update = CDCIntegrationService.prototype.updateSystemTableRow;
 CDCIntegrationService.prototype.updateSystemTableRow = async function(table, where, data, options) {
   gateLeaderUpdate(table, where, data);
   const key = options?.idempotencyKey;
-  if (table !== TABLES.NODES || typeof where?.node_id !== 'string' ||
-      !Number.isFinite(data?.ready_lease_expires_at) || !Number.isFinite(data.last_heartbeat) ||
-      data.ready_lease_expires_at <= data.last_heartbeat) {
+  if (isOtherThanLeaseRenewal(table, where, data)) {
     return update.call(this, table, where, data, options);
   }
   // All ordinary renewals enter here, including a CDC write satisfied by a
@@ -79,9 +77,7 @@ CDCIntegrationService.prototype.updateSystemTableRow = async function(table, whe
   }
   if (typeof key !== 'string' || !key) return update.call(this, table, where, data, options);
   const plan = publication.getStore();
-  const normalPublisher = plan?.nodeId === where.node_id &&
-    plan.update.ready_lease_expires_at === data.ready_lease_expires_at &&
-    plan.update.last_heartbeat === data.last_heartbeat;
+  const normalPublisher = isNormalPublisher(plan, where, data);
   const renewal = {nodeId: where.node_id, originNodeId: this.nodeId, idempotencyKey: key,
     entryId: deriveParticipantEntryId(key, NODES), lastHeartbeat: data.last_heartbeat,
     readyLeaseExpiresAt: data.ready_lease_expires_at, bootIncarnation: where.boot_incarnation,
@@ -90,15 +86,31 @@ CDCIntegrationService.prototype.updateSystemTableRow = async function(table, whe
   const result = await activeWrite.run(invocation,
     () => update.call(this, table, where, data, options));
   if (result?.committed === true && result.success === true) {
-    const receipt = publicationReceipt(invocation, result.partitionResult);
-    const previous = trace.committedByNode[renewal.nodeId];
-    if (receipt &&
-        (!previous || receipt.commitWitness.logIndex >= previous.commitWitness.logIndex)) {
-      trace.committedByNode[renewal.nodeId] = receipt;
-    }
+    retainCommittedReceipt(invocation, result);
   }
   return result;
 };
+
+function isOtherThanLeaseRenewal(table, where, data) {
+  return table !== TABLES.NODES || typeof where?.node_id !== 'string' ||
+    !Number.isFinite(data?.ready_lease_expires_at) || !Number.isFinite(data.last_heartbeat) ||
+    data.ready_lease_expires_at <= data.last_heartbeat;
+}
+
+function isNormalPublisher(plan, where, data) {
+  return plan?.nodeId === where.node_id &&
+    plan.update.ready_lease_expires_at === data.ready_lease_expires_at &&
+    plan.update.last_heartbeat === data.last_heartbeat;
+}
+
+function retainCommittedReceipt(invocation, result) {
+  const receipt = publicationReceipt(invocation, result.partitionResult);
+  const previous = trace.committedByNode[invocation.renewal.nodeId];
+  if (receipt &&
+      (!previous || receipt.commitWitness.logIndex >= previous.commitWitness.logIndex)) {
+    trace.committedByNode[invocation.renewal.nodeId] = receipt;
+  }
+}
 
 function recordWithheld(hop) {
   trace.withheldCount++;
@@ -110,33 +122,45 @@ function confirmedReceipt(renewal, answer) {
   const witness = answer?.durableCommitWitness;
   if (!renewal.normalPublisher || answer?.success !== true ||
       (answer.affectedRows ?? answer.changes) !== 1 ||
-      witness?.partitionId !== NODES || witness.entryId !== renewal.entryId ||
-      witness.idempotencyKey !== renewal.idempotencyKey || !Number.isSafeInteger(witness.term) ||
-      witness.term <= 0 || !Number.isSafeInteger(witness.logIndex) || witness.logIndex <= 0) {
+      isUnconfirmedWitness(witness, renewal)) {
     return null;
   }
   return {...renewal, changes: 1, commitWitness: witness, at: Date.now()};
 }
 
+function isUnconfirmedWitness(witness, renewal) {
+  return witness?.partitionId !== NODES || witness.entryId !== renewal.entryId ||
+    witness.idempotencyKey !== renewal.idempotencyKey || !Number.isSafeInteger(witness.term) ||
+    witness.term <= 0 || !Number.isSafeInteger(witness.logIndex) || witness.logIndex <= 0;
+}
+
 function publicationReceipt({renewal, returnedRemoteReceipt}, result) {
   if (!Array.isArray(result?.participantResults)) return confirmedReceipt(renewal, result);
-  if (result.success !== true || result.affectedRows !== 1 ||
-      result.idempotencyKey !== renewal.idempotencyKey ||
-      result.partitions?.length !== 1 || result.partitions[0] !== NODES ||
-      result.mirrorPartitions?.length !== 0 ||
-      result.participantResults.length !== 1 || !returnedRemoteReceipt) return null;
+  if (isNotSingleNodesParticipant(result, renewal, returnedRemoteReceipt)) return null;
   const participant = result.participantResults[0];
   if (participant?.role !== 'primary' || participant.partitionId !== NODES) return null;
   const receipt = confirmedReceipt(renewal, participant);
   const witness = receipt?.commitWitness;
   const returned = returnedRemoteReceipt.commitWitness;
-  if (!witness || witness.term !== returned.term || witness.logIndex !== returned.logIndex ||
-      witness.leaderReplicaId !== returned.leaderReplicaId ||
-      witness.leaderNodeId !== returned.leaderNodeId) {
+  if (!witness || isDifferentWitness(witness, returned)) {
     return null;
   }
   return {...receipt, address: returnedRemoteReceipt.address,
     targetNodeId: returnedRemoteReceipt.targetNodeId};
+}
+
+function isNotSingleNodesParticipant(result, renewal, returnedRemoteReceipt) {
+  return result.success !== true || result.affectedRows !== 1 ||
+    result.idempotencyKey !== renewal.idempotencyKey ||
+    result.partitions?.length !== 1 || result.partitions[0] !== NODES ||
+    result.mirrorPartitions?.length !== 0 ||
+    result.participantResults.length !== 1 || !returnedRemoteReceipt;
+}
+
+function isDifferentWitness(witness, returned) {
+  return witness.term !== returned.term || witness.logIndex !== returned.logIndex ||
+    witness.leaderReplicaId !== returned.leaderReplicaId ||
+    witness.leaderNodeId !== returned.leaderNodeId;
 }
 
 function closedReply(beforeSend) {
@@ -144,13 +168,29 @@ function closedReply(beforeSend) {
     error: 'READY lease delivery connection closed', deferRetry: true, recoverableBeforeSend: beforeSend});
 }
 
+function recordReplay(hop, request, answer) {
+  if (trace.lost?.entryId === request.entryId) {
+    trace.lastReplay = {...hop, success: answer?.success === true,
+      commitWitness: answer?.durableCommitWitness};
+  }
+}
+
+function isNotTrackedRenewal(renewal, request) {
+  return !renewal || renewal.idempotencyKey !== request?.idempotencyKey ||
+    renewal.entryId !== request.entryId ||
+    !/^\s*UPDATE\s+["`]?nodes["`]?\s+SET\s/i.test(request.sql);
+}
+
+function isRemoteLeaderRoute(receipt, targetNodeId, localNodeId) {
+  return receipt && targetNodeId !== localNodeId &&
+    targetNodeId === receipt.commitWitness.leaderNodeId;
+}
+
 const deliver = MessageRouter.prototype.deliver;
 MessageRouter.prototype.deliver = async function(address, request, options) {
   const invocation = activeWrite.getStore();
   const renewal = invocation?.renewal;
-  if (!renewal || renewal.idempotencyKey !== request?.idempotencyKey ||
-      renewal.entryId !== request.entryId ||
-      !/^\s*UPDATE\s+["`]?nodes["`]?\s+SET\s/i.test(request.sql)) {
+  if (isNotTrackedRenewal(renewal, request)) {
     return deliver.call(this, address, request, options);
   }
   const targetNodeId = options?.targetNodeId ?? this.parseAddress(address).nodeId;
@@ -166,8 +206,7 @@ MessageRouter.prototype.deliver = async function(address, request, options) {
   const receipt = confirmedReceipt(hop, answer);
   // Arm only on a proven remote route from the actual publisher. The local
   // fast path can supply recovery receipts but never the transport loss.
-  if (receipt && targetNodeId !== this.nodeId &&
-      targetNodeId === receipt.commitWitness.leaderNodeId) {
+  if (isRemoteLeaderRoute(receipt, targetNodeId, this.nodeId)) {
     trace.lastRenewal = trace.lastRenewalByNode[renewal.nodeId] = receipt;
     if (armed && modeFor(renewal.nodeId) === 'lose_next') {
       modes.set(renewal.nodeId, 'withhold');
@@ -176,10 +215,7 @@ MessageRouter.prototype.deliver = async function(address, request, options) {
     }
     invocation.returnedRemoteReceipt = receipt;
   }
-  if (trace.lost?.entryId === request.entryId) {
-    trace.lastReplay = {...hop, success: answer?.success === true,
-      commitWitness: answer?.durableCommitWitness};
-  }
+  recordReplay(hop, request, answer);
   return delivery;
 };
 
@@ -188,12 +224,22 @@ function replicas(partitionId) {
       !s.isShutdown);
 }
 
+function isUnavailableReplica(replica, error) {
+  return !replica.initialized || replica.isShutdown ||
+    error.message === 'no such table: ' + replica.tableName;
+}
+
+function isInvalidLocalAnswer(answer, replica) {
+  return answer?.success !== true || answer.partitionId !== replica.partitionId ||
+    answer.rowSetComplete !== true || !Array.isArray(answer.rows);
+}
+
 async function localRows(replica, sql, params = []) {
   let answer;
   try {
     answer = await replica.executeLocalQuery(sql, params);
   } catch (error) {
-    if (!replica.initialized || replica.isShutdown || error.message === 'no such table: ' + replica.tableName) {
+    if (isUnavailableReplica(replica, error)) {
       return {state: 'unavailable', reason: error.message, rows: null};
     }
     throw error;
@@ -201,11 +247,26 @@ async function localRows(replica, sql, params = []) {
   if (answer?.success === false) {
     return {state: 'refused', reason: answer.failureCode ?? answer.errorCode ?? answer.error, rows: null};
   }
-  if (answer?.success !== true || answer.partitionId !== replica.partitionId ||
-      answer.rowSetComplete !== true || !Array.isArray(answer.rows)) {
+  if (isInvalidLocalAnswer(answer, replica)) {
     throw new Error('Invalid local applied row answer from ' + replica.replicaId);
   }
   return {state: 'applied', rows: answer.rows};
+}
+
+function replicaLeaseRow(replica, membership, read) {
+  const status = replica.initialized && !replica.isShutdown ? replica.getStatus() : null;
+  return {...membership, nodeId: replica.nodeId, replicaId: replica.replicaId,
+    partitionId: NODES,
+    isLeader: status?.isLeader === true && status.term === membership.term,
+    rowReadState: read.state, rowReadReason: read.reason, rows: read.rows};
+}
+
+function leaderPartitionOwner(leader, tenure, row) {
+  if (row && tenure && leader.leadershipTenure === tenure && leader.isLeader) {
+    return {...row, nodeId: leader.nodeId, replicaId: leader.replicaId,
+      term: tenure.term};
+  }
+  return null;
 }
 
 async function nodesLeaseView({nodeId}) {
@@ -216,11 +277,7 @@ async function nodesLeaseView({nodeId}) {
     const sql = 'SELECT node_id, boot_incarnation, last_heartbeat, ready_lease_expires_at, connection_state, status FROM nodes';
     const read = await localRows(replica, sql + (nodeId ? ' WHERE node_id = ?' : ' ORDER BY node_id'),
       nodeId ? [nodeId] : []);
-    const status = replica.initialized && !replica.isShutdown ? replica.getStatus() : null;
-    result.push({...membership, nodeId: replica.nodeId, replicaId: replica.replicaId,
-      partitionId: NODES,
-      isLeader: status?.isLeader === true && status.term === membership.term,
-      rowReadState: read.state, rowReadReason: read.reason, rows: read.rows});
+    result.push(replicaLeaseRow(replica, membership, read));
   }
   let partitionOwner = null;
   let partitionOwnerRead = {state: 'no_local_leader'};
@@ -231,10 +288,7 @@ async function nodesLeaseView({nodeId}) {
       'SELECT partition_id, leader_node_id, leader_term FROM partitions WHERE partition_id = ?', [NODES]);
     const row = read.rows?.[0];
     partitionOwnerRead = {state: read.state, reason: read.reason};
-    if (row && tenure && leader.leadershipTenure === tenure && leader.isLeader) {
-      partitionOwner = {...row, nodeId: leader.nodeId, replicaId: leader.replicaId,
-        term: tenure.term};
-    }
+    partitionOwner = leaderPartitionOwner(leader, tenure, row);
   }
   const cache = (nodes[0] ?? leader)?.systemTableCache;
   const projectedLeaderNodeId = cache?.get(TABLES.PARTITIONS, NODES)?.leader_node_id ?? null;

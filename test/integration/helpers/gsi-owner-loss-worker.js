@@ -189,21 +189,27 @@ SchemaProvisioningJobRepository.prototype.persistWorkflowCandidate = async funct
 const update = GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord;
 GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord = async function(checkpoint) {
   const record = this.catalog.get(target?.indexName);
+  const attempt = terminalAttemptOf(record, checkpoint);
+  if (attempt) firstTerminalAttemptNs ??= attempt.startedNs;
+  const result = await update.call(this, checkpoint);
+  if (completesBackfillFirst(attempt)) completed = attempt;
+  return result;
+};
+
+function terminalAttemptOf(record, checkpoint) {
   const sameIndex = record && target && record.table_name === target.tableName &&
     record.index_id === target.indexId && record.index_generation === target.generation &&
     record.index_id === checkpoint.indexId;
-  const attempt = sameIndex && checkpoint.state === 'READ_WRITE' ?
+  return sameIndex && checkpoint.state === 'READ_WRITE' ?
     {indexId: record.index_id, generation: record.index_generation,
       priorState: record.state, rows: checkpoint.backfill_total_rows,
       startedNs: process.hrtime.bigint().toString()} : null;
-  if (attempt) firstTerminalAttemptNs ??= attempt.startedNs;
-  const result = await update.call(this, checkpoint);
-  if (attempt?.priorState === 'BACKFILLING' && attempt.rows === 2 &&
-      (!completed || BigInt(attempt.startedNs) < BigInt(completed.startedNs))) {
-    completed = attempt;
-  }
-  return result;
-};
+}
+
+function completesBackfillFirst(attempt) {
+  return attempt?.priorState === 'BACKFILLING' && attempt.rows === 2 &&
+    (!completed || BigInt(attempt.startedNs) < BigInt(completed.startedNs));
+}
 
 async function observeMembership(replica) {
   // The leader's read also refuses an unapplied configuration change. Each
