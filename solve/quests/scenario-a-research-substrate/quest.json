@@ -1,0 +1,51 @@
+{
+  "schema": "solve-quest/2",
+  "id": "scenario-a-research-substrate",
+  "epic": "developer-journey-and-measured-comparisons",
+  "statement": "Scenario A latency and efficiency research has a valid substrate and honest records. A research profile class, dispatch family and subkind exist that admission refuses by one explicit reason and the record writer refuses to place in the published store. The runner accepts --profile research (one fresh deployment per run on the existing lifecycle; the dry run prints the frozen plan and that nothing is admissible; --storage-root and a passed semantic gate are required). Three Lagrange nodes run on one lab host, declared truthfully: one host, the machine's real host name on every node, declared host count 1, a port block per node, the load generator on the same host, refused for every non-research plan. Every run records a substrate descriptor and a round-trip matrix measured before and after the window, never during it. The dataset reset method is reported by the adapter that performed it. Every statement carries a monotonic start and end in a per-attempt timeline indexed into a per-run statement catalog. Retained statement evidence of every profile is brought into the campaign evidence beside the raw record, digest-verified, before the load-generator worktree is released, and a missing or mismatching file is a typed evidence failure. An unverified seed is never warmed up or measured. Physical evidence: one research run on one lab host and one on three hosts.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/oltp-research-substrate-guard.js --metric",
+      "target": 0,
+      "artifacts": [
+        "solve/quests/scenario-a-research-substrate/evidence/lab-single-host/raw-observations.ndjson",
+        "solve/quests/scenario-a-research-substrate/evidence/lab-three-host/raw-observations.ndjson"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "planning-only-until-sealed",
+      "statement": "Unsealed draft. The measured red value is 11 unmet properties (stage 1, one WIP commit). The lead seals and lands; no implementer runs start or land. The guard imports harness modules in process, reads the two declared retained artifacts and starts no cluster (R27); the two physical runs are the lead's and are retained as artifacts, never produced by the guard."
+    },
+    {
+      "id": "harness-only-never-src",
+      "statement": "Proof apparatus never changes src/. A product refusal of replication factor three on one declared host would be reported, not worked around. Writable paths are the harness, reference-client adapter, runner CLI, runbook, home-lab single-host paragraph, the guard, the recompute check and the reset-method constant of the paired-sweep runner guard named in the brief; data/tidb-comparison/ is never touched."
+    },
+    {
+      "id": "no-fallback-no-second-path",
+      "statement": "One version of any logic (R11). resetMethodOf(system) is deleted, not kept beside the adapter-reported method. The single-host substrate is a named substrate value consumed by the planner, host facts and descriptor; any non-research plan refuses it. The five single-host blockers are lifted for the research class only, never by a silent relaxation. Statement-evidence custody has one bound and one mechanism for every profile; only the timeline is always inline. No flag, mode, compatibility alias or default standing in for something not measured."
+    },
+    {
+      "id": "truthful-single-host-identity",
+      "statement": "No synthetic host identity (ruling 14): one host, three nodes, the machine's real host name on every node, declared host count 1, the development harness convention (HOST_NETWORK_PORT_BLOCK) for ports. The inter-node path of the single-host substrate is loopback and a record that claims lan is rejected."
+    },
+    {
+      "id": "published-records-stay-byte-identical",
+      "statement": "The smoke and capacity profiles stay byte-identical where plan digests of published records are recomputed by admission: stage 2 adds the golden digests of the smoke profile as a witness. Published records are append-only history; the 22 fresh-formation and 15 truncate-and-reload values in data/tidb-comparison/raw-observations.ndjson stay as written."
+    },
+    {
+      "id": "witness-before-implementation",
+      "statement": "Stage 1: guard and in-process red witnesses only. Stage 2: profile class and barriers, reset method, timeline, custody and seed gate with their witnesses green and the existing campaign tests green. Stage 3: single-host substrate, descriptor and round trip. The guard's negative controls (a missing timeline entry, a reset method contradicting its per-table outcomes, a single-host record claiming lan, a round trip inside the window, a research record placed in a scratch copy of the published store) must be seen rejected by the verifier."
+    },
+    {
+      "id": "seal-check-before-change",
+      "statement": "Before changing a pinned value, search solve/quests, architecture/contracts, test/guidelines and scripts/checks. Stage 1 found no sealed quest, invariant or guideline that pins the reset-method strings; the consumers are the fixtures and assertions listed in evidence/stage1-findings.md."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}
