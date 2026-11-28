@@ -247,10 +247,29 @@ const MIRROR_RETENTION_CUSTODY_COMMAND_ERROR = Object.freeze({
   ORIGIN: 'mirror_retention_custody_origin_refused',
   BYTES: 'mirror_retention_custody_bytes_invalid',
 });
+// Persisted mirror-custody formats: the custody record (written by
+// partition-mirror-effect-retention.js, decoded by partition-mirror-custody-codec.js)
+// and the release singleton, which crosses snapshot installation as
+// application state. The record has exactly seven fields: format,
+// barrierIndex, workflowId, workflowAttempt, workflowFenceToken,
+// targetPartitionVersion and family.
+const MIRROR_CUSTODY_FORMAT = 'partition-mirror-custody/1';
+const MIRROR_CUSTODY_FIELD_COUNT = 7;
+const MIRROR_RELEASE_SQL = Object.freeze({
+  TABLE: '_partition_mirror_release',
+  SELECT_ATTEMPT: 'SELECT attempt FROM _partition_mirror_release WHERE singleton = 1',
+  CREATE_TABLE: 'CREATE TABLE IF NOT EXISTS _partition_mirror_release ' +
+    '(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), attempt INTEGER NOT NULL)',
+  RECORD_ATTEMPT: 'INSERT INTO _partition_mirror_release VALUES (1, ?) ' +
+    'ON CONFLICT(singleton) DO UPDATE SET attempt = MAX(attempt, excluded.attempt)',
+});
 
 export {
   committedCommandDigest,
   committedStatementResult,
+  MIRROR_CUSTODY_FIELD_COUNT,
+  MIRROR_CUSTODY_FORMAT,
+  MIRROR_RELEASE_SQL,
   MIRROR_RETENTION_BARRIER_ENTRY_KEY,
   MIRROR_RETENTION_BARRIER_KIND,
   MIRROR_RETENTION_CUSTODY_ACTION,

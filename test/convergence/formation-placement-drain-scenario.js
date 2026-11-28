@@ -321,6 +321,7 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
     initialized: true,
     proposalQueue: {size: 0},
     pendingWriteOutcomes: pendingOutcomes,
+    pendingOwnerCommandDigests: new WeakMap(),
     systemTableCache: cache,
     rebalanceCoordinator: seedHosts.rebalanceCoordinator,
     timeSource: {

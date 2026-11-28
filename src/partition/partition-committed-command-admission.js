@@ -1,4 +1,3 @@
-import {hasObsoleteMirrorCustodyField} from './partition-mirror-custody-codec.js';
 // The one owner of "may this committed command enter consensus": every path
 // in the partition that proposes a committed command asks it first, and a
 // refusal answers the caller at once and proposes nothing.
@@ -59,10 +58,9 @@ import {
   LOCKING_READ_RESERVATION_COMMAND_ERROR,
   LOCKING_READ_RESERVATION_TYPE,
 } from './partition-locking-read-command-constants.js';
-import {
-  MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
-  isPinnedMirrorRetentionCustodyCommand,
-} from './partition-mirror-effect-retention.js';
+import {MIRROR_RETENTION_CUSTODY_COMMAND_ERROR} from
+  './partition-committed-statement-outcome-constants.js';
+import {isPinnedMirrorRetentionCustodyCommand} from './partition-mirror-effect-retention.js';
 import {
   PARTITION_MEMBERSHIP_RECOVERY_ERROR,
   PARTITION_MEMBERSHIP_RECOVERY_TYPE,
@@ -134,10 +132,6 @@ function refused(code, reason) {
 }
 
 function sqlCommandRefusal(command) {
-  if (hasObsoleteMirrorCustodyField(command)) {
-    return refused(MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES,
-      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES);
-  }
   if (!isNonEmptyString(command.sql)) {
     return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
       PARTITION_SERVICE_ERROR_MSG.WRITE_STATEMENT_MISSING);

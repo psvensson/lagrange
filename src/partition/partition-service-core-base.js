@@ -167,6 +167,9 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.proposalQueue = new ProposalQueue({timeSource: this.timeSource,
       reservedCapacities: PARTITION_DRAIN_CAPACITIES});
     this.pendingWriteOutcomes = /* @__PURE__ */ new Map();
+    // The command digest of each pending owner-command registration, keyed by
+    // its commit promise (partition-committed-statement-outcome.js).
+    this.pendingOwnerCommandDigests = /* @__PURE__ */ new WeakMap();
     this.cdcDelivery = new PartitionCDCDelivery(this);
     this.migrationColumnDefaultsByTable = /* @__PURE__ */ new Map();
     this.hlcClock = new HLCClockService(this.replicaId, {

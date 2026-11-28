@@ -37,7 +37,6 @@ import {
 import {LOCKING_READ_ERROR_CODE, LOCKING_READ_SQL_STATE} from
   '../query/sql-locking-read-constants.js';
 import {
-  MIRROR_RETENTION_CUSTODY_ACTION,
   STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
   applyMirrorRetentionCustodyCommand,
   partitionOwesDurableMirrorEffects,
@@ -45,8 +44,6 @@ import {
   readDurableMirrorRetentionCustodyIn,
   reconcileCommittedStatementMirrorEffects,
   registerMirrorRetentionRaftHooks,
-  releaseSourceMirrorRetentionCustody,
-  replicateSourceMirrorRetentionCustody,
   resolveActiveMirrorRetentionBarrierIndex,
 } from './partition-mirror-effect-retention.js';
 
@@ -242,13 +239,14 @@ function readSettledOwnerCommandIn(db, {entryId, commandDigest}) {
       recordClass: committedRecordClassOf(recorded)});
 }
 
-// The promise identifies the exact pending registration, even if a later
-// leadership tenure registers the same entry before the old caller settles.
-const pendingOwnerCommandDigests = new WeakMap();
 const PROPOSE = Object.freeze({state: PARTITION_OWNER_COMMAND_PRELUDE.PROPOSE});
 
-function pendingOwnerDigestOf(promise) {
-  return pendingOwnerCommandDigests.get(promise);
+// The partition's pendingOwnerCommandDigests (created with its pending-write
+// registry) is keyed by the commit promise: the promise identifies the exact
+// pending registration, even if a later leadership tenure registers the same
+// entry before the old caller settles.
+function pendingOwnerDigestOf(service, promise) {
+  return service.pendingOwnerCommandDigests.get(promise);
 }
 
 function answered(answer) {
@@ -283,7 +281,7 @@ function ownerCommandPrelude(service, request) {
   if (paused !== null) return answered(paused);
   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
   if (pending === null) return PROPOSE;
-  return answered(pendingOwnerDigestOf(pending) ===
+  return answered(pendingOwnerDigestOf(service, pending) ===
     commandDigest ? pending : request.answerCollision());
 }
 
@@ -296,7 +294,7 @@ function ownerCommandPrelude(service, request) {
  * @return {Promise<Object>} The commit.
  */
 function trackPendingOwnerCommand(service, {commandDigest}, commitPromise) {
-  pendingOwnerCommandDigests.set(commitPromise, commandDigest);
+  service.pendingOwnerCommandDigests.set(commitPromise, commandDigest);
   return commitPromise;
 }
 
@@ -312,6 +310,12 @@ function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
   throw error;
 }
 
+// A statement result whose captured effects the partition must retain.
+function owesCapturedEffects(service, result) {
+  return Boolean(result?.typedEffects) &&
+      partitionOwesDurableMirrorEffects(service);
+}
+
 /**
  * Record an entry key's terminal outcome inside the application transaction.
  * @param {Object} service - The partition (its `db`).
@@ -322,8 +326,7 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
   command = null}) {
   assertOwnerIdentity(entryKey, ownerResultText, commandDigest);
   const state = sqliteConnectionState(service.db);
-  const captureEffects = Boolean(result?.typedEffects) &&
-      partitionOwesDurableMirrorEffects(service);
+  const captureEffects = owesCapturedEffects(service, result);
   const insert = state.statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
   insert.run(
     entryKey, outcome, index, term,
@@ -604,19 +607,16 @@ function settleLockingReadRefusedCommittedStatement(service, {
 }
 
 export {
-  MIRROR_RETENTION_CUSTODY_ACTION,
   STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
   applyMirrorRetentionCustodyCommand,
-  committedStatementEntryKey, committedStatementOutcomeFormatError,
-  detectCommittedStatementOutcomeFormat, isCommittedStatementKeyed,
-  ownerCommandPrelude, pendingOwnerDigestOf, partitionOwesDurableMirrorEffects,
+  committedStatementEntryKey, isCommittedStatementKeyed,
+  ownerCommandPrelude, pendingOwnerDigestOf,
   readCommittedStatementCensusIn,
   readDurableMirrorRetentionCustodyIn,
   readSettledOwnerCommandIn, answerSettledStatement,
   createCommittedStatementOutcomeTable, isDeterministicStatementFailure,
-  readCommittedStatementOutcome, reconcileCommittedStatementMirrorEffects,
+  readCommittedStatementOutcome,
   recordCommittedStatementOutcome, registerMirrorRetentionRaftHooks,
-  releaseSourceMirrorRetentionCustody, replicateSourceMirrorRetentionCustody,
   resolveActiveMirrorRetentionBarrierIndex,
   settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
   settleRecordedCommittedStatement, statementEnvironmentFailure,

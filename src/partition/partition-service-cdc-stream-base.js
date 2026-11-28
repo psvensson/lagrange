@@ -405,7 +405,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     // A previous leader's committed entry may arrive ahead of the entry of
     // this local waiter. It settles its own effect, never the other's success.
     if (result?.success === true) {
-      const pendingDigest = pendingOwnerDigestOf(this.pendingWriteOutcomes.get(entryId));
+      const pendingDigest = pendingOwnerDigestOf(this, this.pendingWriteOutcomes.get(entryId));
       if ((isSplitDescriptorDigest(pendingDigest) || isSplitDescriptorDigest(commandDigest)) &&
           pendingDigest !== commandDigest) {
         return this.proposalQueue.resolve(entryId,

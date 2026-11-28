@@ -580,7 +580,6 @@ export {
   clearRemoteLiveQueryCdcSubscribers,
   decodeRemoteCdcEnvelopePayload,
   decodeRemoteCdcEventsFromWire,
-  encodeRemoteCdcEventsForWire,
   handleRemoteLiveQueryCdcSubscribe,
   handleRemoteLiveQueryCdcUnsubscribe,
 };

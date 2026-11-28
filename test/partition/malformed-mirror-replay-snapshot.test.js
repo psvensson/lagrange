@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
 import {ENTITY_TYPE} from '../../src/constants/addresses.js';
-import {MIRROR_CUSTODY_FORMAT} from '../../src/partition/partition-mirror-custody-codec.js';
 import {
+  MIRROR_CUSTODY_FORMAT,
   MIRROR_RETENTION_BARRIER_ENTRY_KEY, MIRROR_RETENTION_BARRIER_KIND,
   MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
 } from '../../src/partition/partition-committed-statement-outcome-constants.js';
@@ -65,7 +65,6 @@ test('pinned snapshot and source replay reject a malformed retained statement ef
           key, 3, PARTITION_SERVICE_OPERATION.DELETE,
           JSON.stringify({command: injected, typedEffects: encodeTypedRowSet(['id'], removed)}));
       },
-      change('$.command.mirrorRetentionBarrierIndex', 1),
       change('$.command.type', 'UNKNOWN'),
       change('$.command.entryId', 'wrong-key'),
       change('$.command.sql', 'SELECT id FROM orders'),

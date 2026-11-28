@@ -791,5 +791,4 @@ export {
   encodeCanonicalPkTupleKey,
   extractStatementWriteFootprint,
   isStatementWriteFootprintRecord,
-  normalizePkScalar,
 };

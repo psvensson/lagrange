@@ -732,7 +732,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
     }
     const pendingOutcome = this.getPendingCommittedWriteOutcome(entry.entryId);
     if (pendingOutcome) {
-      const digest = pendingOwnerDigestOf(pendingOutcome);
+      const digest = pendingOwnerDigestOf(this, pendingOutcome);
       if ((descriptor || isSplitDescriptorDigest(digest)) && descriptor?.digest !== digest) {
         return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.COLLISION);
       }

@@ -8,11 +8,21 @@ import {
 } from './partition-service-constants.js';
 import {decodeTypedParams, decodeTypedRowSet} from '../query/sql-value-codec.js';
 import {
+  MIRROR_CUSTODY_FIELD_COUNT,
+  MIRROR_CUSTODY_FORMAT,
   MIRROR_RETENTION_BARRIER_ENTRY_KEY,
   MIRROR_RETENTION_BARRIER_KIND,
   MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
 } from './partition-committed-statement-outcome-constants.js';
 import {WORKFLOW_FAMILY} from './partition-constants.js';
+
+// The optional typed parameter field of a committed SQL command.
+const TYPED_PARAMS_FIELD = 'typedParams';
+const MIRROR_REPLAY_ERROR_MSG = Object.freeze({
+  COMMAND: 'Invalid mirror command',
+  PARAMS: 'Invalid mirror params',
+  RECORD: 'Invalid mirror replay record',
+});
 
 const DIRECT_MUTATION_KIND_BY_VERB = Object.freeze({
   [KEYWORD.DELETE]: PARTITION_SERVICE_OPERATION.DELETE,
@@ -47,20 +57,12 @@ export function extractLexedSqlMutationType(sql) {
     null;
 }
 
-export const MIRROR_CUSTODY_FORMAT = 'partition-mirror-custody/1';
-
 const ordinal = (value) => Number.isSafeInteger(value) && value >= 0;
 const positiveOrdinal = (value) => Number.isSafeInteger(value) && value > 0;
 
-export function hasObsoleteMirrorCustodyField(command) {
-  return Object.hasOwn(command, 'mirrorRetentionBarrierIndex') ||
-    Object.hasOwn(command, 'mirrorRetentionRelease') ||
-    Object.hasOwn(command, 'mirrorRetentionCustody');
-}
-
 export function validMirrorCustody(value) {
   return value !== null && typeof value === 'object' && value.format === MIRROR_CUSTODY_FORMAT &&
-    Object.keys(value).length === 7 &&
+    Object.keys(value).length === MIRROR_CUSTODY_FIELD_COUNT &&
     ordinal(value.barrierIndex) && typeof value.workflowId === 'string' &&
     value.workflowId.trim().length > 0 && positiveOrdinal(value.workflowAttempt) &&
     positiveOrdinal(value.workflowFenceToken) && positiveOrdinal(value.targetPartitionVersion) &&
@@ -99,27 +101,32 @@ function invalidReplay(message, cause) {
     {code: MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES});
 }
 
+// A retained command that is not an applied SQL statement keyed by its own
+// entry key at a positive log index.
+function isInvalidMirrorCommand(row, command) {
+  return !positiveOrdinal(row.log_index) ||
+    !PARTITION_COMMITTED_SQL_COMMAND_TYPES.includes(command?.type) ||
+    command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||
+    typeof command.entryId !== 'string' || command.entryId.length === 0 ||
+    row.entry_key !== `entry:${command.entryId}` ||
+    typeof command.sql !== 'string' || command.sql.trim().length === 0;
+}
+
 export function decodeMirrorReplayRecord(row) {
   try {
     const record = JSON.parse(row.typed_effects_json);
     const command = record.command;
-    if (!positiveOrdinal(row.log_index) ||
-        !PARTITION_COMMITTED_SQL_COMMAND_TYPES.includes(command?.type) ||
-        command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||
-        hasObsoleteMirrorCustodyField(command) ||
-        typeof command.entryId !== 'string' || command.entryId.length === 0 ||
-        row.entry_key !== `entry:${command.entryId}` ||
-        typeof command.sql !== 'string' || command.sql.trim().length === 0) {
-      throw new TypeError('Invalid mirror command');
+    if (isInvalidMirrorCommand(row, command)) {
+      throw new TypeError(MIRROR_REPLAY_ERROR_MSG.COMMAND);
     }
-    if (Object.hasOwn(command, 'typedParams')) decodeTypedParams(command.typedParams);
+    if (Object.hasOwn(command, TYPED_PARAMS_FIELD)) decodeTypedParams(command.typedParams);
     if (command.params != null && !Array.isArray(command.params)) {
-      throw new TypeError('Invalid mirror params');
+      throw new TypeError(MIRROR_REPLAY_ERROR_MSG.PARAMS);
     }
     decodeTypedRowSet(record.typedEffects);
     return record;
   } catch (cause) {
-    throw invalidReplay('Invalid mirror replay record', cause);
+    throw invalidReplay(MIRROR_REPLAY_ERROR_MSG.RECORD, cause);
   }
 }
 
