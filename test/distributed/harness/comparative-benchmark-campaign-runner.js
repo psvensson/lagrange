@@ -31,11 +31,17 @@
  * the deployer's setup failure. An exhaustion the deployer could not describe
  * is a failed run.
  */
+import fs from 'node:fs';
+import path from 'node:path';
+
+import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
+import {DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH} from './raw-observation-store.js';
 import {resolveRunExitCode} from './scenario-outcome.js';
 import {canonicalJson} from './comparative-benchmark-campaign-manifest.js';
 import {
   arrayEvery,
   arrayFilter,
+  arrayFind,
   arrayFlatMap,
   arrayIncludes,
   arrayMap,
@@ -249,10 +255,12 @@ function stateOfFailure(failure, attempt) {
   return RUN_STATE.FAILED;
 }
 
+// A role's probe `address` is the endpoint's host on the campaign bridge (its `host` is the
+// machine that runs it); elsewhere the two are the same.
 function assertEndpointBound(deployment) {
   const containerId = deployment?.endpoint?.containerId;
   const bound = arraySome(deployment?.roles || [], (role) => role.containerId === containerId &&
-    role.host === deployment.endpoint.host);
+    (role.address ?? role.host) === deployment.endpoint.host);
   if (!containerId || !bound) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.ENDPOINT_UNBOUND,
       'the client endpoint is not owned by a recorded role container',
@@ -417,15 +425,39 @@ function recordRoleChangeIfNeeded(events, rolesBefore, rolesAfter, nowFn) {
   }
 }
 
+const GATE_PASSED = 'passed';
+const ROUND_TRIP_ONLY_SCOPE = 'round-trip-only';
+const RESEARCH_GATE_REFUSAL = 'refused_research_requires_passed_gate';
+
+// Speed of a build that fails its proofs is not information: a research run
+// measures nothing unless the semantic gate passed (owner ruling 21).
+function requirePassedGateForResearch(manifest, gate) {
+  if (manifest.plan.profileClass !== BENCHMARK_PROFILE_CLASS.RESEARCH ||
+      gate?.status === GATE_PASSED) return;
+  throw deploymentFailure(RESEARCH_GATE_REFUSAL,
+    `a research run needs a passed semantic gate, the gate is ${gate?.status ?? 'absent'}`,
+    {gateStatus: gate?.status ?? null});
+}
+
+// The round trip measured right after the containers started, before the readiness wait.
+async function deploymentRoundTripOf(deps, run) {
+  const atDeployment = await deps.deploymentRoundTrip?.(run);
+  return atDeployment ? {atDeployment} : {};
+}
+
 async function measureRun({run, manifest, deps, events, signal}) {
   const deadlineAtMs = deps.deadlineAt ?? null;
+  const formationStartedMs = deps.now();
   const attempt = {
     deployment: await deps.deployRun(run, {signal, deadlineAtMs}),
+    // The measured time to ready (a research record states it, from the containers started).
+    readyAfterMs: null,
     workload: null,
     semanticGate: null,
     productsAfter: null,
     roleObservations: null,
   };
+  attempt.readyAfterMs = readyAfterMsOf(attempt.deployment, deps.now() - formationStartedMs);
   // The deployment stays in the record (and pins its identity) when refused.
   await withAttempt(attempt, () => assertEndpointBound(attempt.deployment));
   const staged = await withAttempt(attempt, () => semanticGateStage({run, manifest, deps,
@@ -434,8 +466,14 @@ async function measureRun({run, manifest, deps, events, signal}) {
   attempt.semanticGate = staged.gate ?? null;
   const deployment = attempt.deployment;
   assertEndpointBound(deployment);
+  await withAttempt(attempt, () => requirePassedGateForResearch(manifest, attempt.semanticGate));
   const rolesBefore = await withAttempt(attempt, () => observeRolesSafely(deployment, events,
     'before-window', {signal, deadlineAtMs, now: deps.now}));
+  // A research run's round trips are measured before and after the workload's
+  // window and never inside it.
+  const research = manifest.plan.profileClass === BENCHMARK_PROFILE_CLASS.RESEARCH;
+  const roundTripBefore = research ?
+    await withAttempt(attempt, () => deps.measureRoundTrip({deployment, signal})) : null;
   attempt.workload = await withAttempt(attempt, () => deps.executeWorkloadRun({
     run,
     manifest,
@@ -444,6 +482,12 @@ async function measureRun({run, manifest, deps, events, signal}) {
     deadlineAtMs,
     semanticGate: staged.gate,
   }));
+  if (research) {
+    const after = await withAttempt(attempt, () => deps.measureRoundTrip({deployment, signal}));
+    attempt.workload.observations = {...attempt.workload.observations,
+      network: {scope: ROUND_TRIP_ONLY_SCOPE, roundTrip: {...await deploymentRoundTripOf(deps, run),
+        before: roundTripBefore, after}}};
+  }
   events.push(...(attempt.workload.events || []));
   attempt.productsAfter = await withAttempt(attempt, () => deps.inspectProducts(deployment));
   const identityEvents = compareProductIdentity(deployment.identity.products,
@@ -551,8 +595,79 @@ function optionalTopLevelRunStatusFields({
   };
 }
 
+/**
+ * Start the round-trip matrix of the moment the containers are up, beside the readiness wait:
+ * returns at once (the deployer's next step is its first readiness poll) and the run record
+ * awaits the result. A failed measurement is a typed `unavailable` entry, never a throw.
+ * @param {Map} store run id to the pending (then settled) matrix
+ * @param {string} runId
+ * @param {Function} measure async, resolves the matrix {startedAt, endedAt, entries}
+ */
+function beginDeploymentRoundTrip(store, runId, measure) {
+  store.set(runId, (async () => {
+    try {
+      const matrix = await measure();
+      return {...matrix, durationMs: Date.parse(matrix.endedAt) - Date.parse(matrix.startedAt)};
+    } catch (error) {
+      return {unavailable: errorText(error)};
+    }
+  })());
+}
+
+// The time from the containers started to the readiness owner's verdict when the deployer
+// stated both; else the time the deployment call took.
+function readyAfterMsOf(deployment, callMs) {
+  const times = deployment?.formationTimes;
+  const started = Date.parse(times?.containersStartedAt);
+  const ready = Date.parse(times?.readyObservedAt);
+  return Number.isFinite(started) && Number.isFinite(ready) ? ready - started : callMs;
+}
+
+// The facts needed to read the formation time honestly: the clock the deployer stated and the
+// moments each readiness stage reported ready.
+function formationFacts(deployment) {
+  const times = deployment?.formationTimes ?? {};
+  const stages = {};
+  for (const [name, stage] of Object.entries(deployment?.readiness?.evidence ?? {})) {
+    const one = Array.isArray(stage) ? stage[stage.length - 1] : stage;
+    if (one?.timeToReadyMs !== undefined) {
+      stages[name] = {component: one.component, observedAt: one.observedAt,
+        timeToReadyMs: one.timeToReadyMs};
+    }
+  }
+  return {containersStartedAt: times.containersStartedAt ?? null,
+    firstPollAt: times.firstPollAt ?? null, readyObservedAt: times.readyObservedAt ?? null,
+    pollIntervalMs: times.pollIntervalMs ?? null, stages};
+}
+
+// A research run that never reached its window still keeps what the network looked like
+// at deployment: the matrix joins the (unissued) observations of a failed setup.
+function withDeploymentRoundTrip(observations, atDeployment) {
+  if (!atDeployment || observations?.network?.roundTrip?.atDeployment) return observations;
+  const network = observations?.network ?? {scope: ROUND_TRIP_ONLY_SCOPE};
+  return {...observations, network: {...network,
+    roundTrip: {...network.roundTrip, atDeployment}}};
+}
+
+const REVISION_LABEL = 'org.opencontainers.image.revision';
+const FULL_COMMIT_LABEL = /^[0-9a-f]{40}$/u;
+
+// The product source a research run declared, beside what its containers booted and the image
+// said about itself: a label that is not a full commit id is recorded as not available.
+function recordedProduct(header, deployment) {
+  if (!header.product) return {};
+  const node = arrayFind(deployment?.identity?.products ?? [], (one) => one.bootProvenance);
+  const label = node?.imageLabels?.[REVISION_LABEL] ?? null;
+  const available = FULL_COMMIT_LABEL.test(label ?? '');
+  return {product: {declaredCommit: header.product.declaredCommit,
+    harnessCommit: header.product.harnessCommit,
+    sourceFingerprintExpected: header.product.sourceFingerprintExpected,
+    sourceFingerprintBooted: node?.bootProvenance?.bootedSrcFingerprint ?? null,
+    revisionLabel: available ? label : null, revisionLabelAvailable: available}};
+}
+
 function runRecord({run, manifest, header, state, failure, attempt, events, closure,
-  startedAt, endedAt, recordOwner}) {
+  startedAt, endedAt, recordOwner, roundTripAtDeployment = null, diagnostics = null}) {
   const workload = attempt?.workload ?? null;
   const deployment = recordedDeployment({attempt, header, events, closure});
   const failureClass = resolveRecordFailureClass(failure, state);
@@ -563,6 +678,8 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
     campaignId: manifest.campaignId, runId: run.runId, claimKey: run.claimKey,
     targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
     executionTarget: header.executionTarget,
+    ...(header.substrate ? {substrate: header.substrate} : {}),
+    ...recordedProduct(header, attempt?.deployment),
     ...optionalTopLevelRunStatusFields({failureClass, timedOut, lastObservation, recordedClosure}),
     execution: {
       state,
@@ -575,8 +692,14 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
     identity: recordedIdentity(run, header, attempt),
     plan: recordedPlan(run, manifest, workload),
     deployment,
-    observations: workload ? workload.observations : null,
+    observations: withDeploymentRoundTrip(workload?.observations ?? null, roundTripAtDeployment),
     correctness: resolveRecordCorrectness(workload, attempt),
+    ...(manifest.plan.formationWaitSeconds === undefined ? {} : {formation: {
+      declaredWaitSeconds: manifest.plan.formationWaitSeconds,
+      deadlineMs: manifest.plan.formationWaitSeconds * 1000,
+      readyAfterMs: attempt?.readyAfterMs ?? null,
+      ...formationFacts(attempt?.deployment)}}),
+    ...(diagnostics ? {diagnostics} : {}),
     harnessEvents: arrayFilter(events,
       (event) => !arrayIncludes(DEPLOYMENT_EVENT_KINDS, event.kind))};
   record.rawObservationsDigest = recordOwner.computeRunObservationsDigest(record);
@@ -704,10 +827,66 @@ async function attemptRun({run, manifest, header, deps, watchdog}) {
   }
   const {attempt, failure} = await settleAttempt({run, manifest, deps, events,
     signal: watchdog.controller.signal});
-  const closure = await teardownSafely(deps, run, attempt?.deployment ?? null);
   const outcome = outcomeOfAttempt(attempt, failure);
+  // A research run keeps what its nodes logged, formed or not, collected before the
+  // containers go.
+  const diagnostics = deps.collectNodeLogs ?
+    await deps.collectNodeLogs({run, deployment: attempt?.deployment ?? null}) : null;
+  // The matrix measured beside the formation is settled before the containers go.
+  const roundTripAtDeployment = await deps.deploymentRoundTrip?.(run) ?? null;
+  const closure = await teardownSafely(deps, run, attempt?.deployment ?? null);
   return {attempt, record: runRecord({run, manifest, header, events, closure, attempt,
-    ...outcome, recordOwner: deps.recordOwner, startedAt, endedAt: iso(deps.now())})};
+    ...outcome, recordOwner: deps.recordOwner, startedAt, endedAt: iso(deps.now()),
+    roundTripAtDeployment, diagnostics})};
+}
+
+const RESEARCH_STORE_REFUSAL = 'refused_research_store_is_published_store';
+const UTF8_LINE_END = '\n';
+
+function isInsideDirectory(target, directory) {
+  const relative = path.relative(directory, target);
+  return relative !== '' && !stringStartsWith(relative, '..') && !path.isAbsolute(relative);
+}
+
+const COMPARATIVE_EVIDENCE_ROOT = 'test-output/bench';
+
+/**
+ * Where a campaign keeps the statement evidence it takes custody of: a research
+ * campaign beside its raw record in the session directory, every other
+ * campaign in its campaign evidence directory. Never inside the published store.
+ * @param {{rootDir: string, profileClass: string, rawObservationsPath: string,
+ *   campaignId: string}} input
+ * @return {string} the absolute evidence root; custody paths are relative to it
+ */
+function campaignEvidenceDirOf({rootDir, profileClass, rawObservationsPath, campaignId}) {
+  return profileClass === BENCHMARK_PROFILE_CLASS.RESEARCH ?
+    path.dirname(path.resolve(rootDir, rawObservationsPath)) :
+    path.resolve(rootDir, COMPARATIVE_EVIDENCE_ROOT, campaignId);
+}
+
+/**
+ * The one record writer of a campaign: appends JSON lines to the raw
+ * observation file. A research campaign never writes into the published store
+ * (the file or any file under its directory), whatever path spelling names it.
+ * @param {{rootDir: string, file: string, profileClass: string}} input
+ * @return {{appendRecords: Function}}
+ */
+function createCampaignRecordWriter({rootDir, file, profileClass}) {
+  const target = path.resolve(rootDir, file);
+  const storeFile = path.resolve(rootDir, DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH);
+  if (profileClass === BENCHMARK_PROFILE_CLASS.RESEARCH &&
+      (target === storeFile || isInsideDirectory(target, path.dirname(storeFile)))) {
+    throw deploymentFailure(RESEARCH_STORE_REFUSAL,
+      `a research campaign never writes to the published store: ${file}`, {file});
+  }
+  return {
+    async appendRecords(records) {
+      fs.mkdirSync(path.dirname(target), {recursive: true});
+      fs.appendFileSync(target,
+        `${arrayMap(records, (record) => JSON.stringify(record)).join(UTF8_LINE_END)}` +
+        UTF8_LINE_END);
+    },
+  };
 }
 
 /**
@@ -723,7 +902,10 @@ function createCampaignLog({manifest, header, deps}) {
     campaignId: manifest.campaignId, startedAt: iso(deps.now()),
     manifestDigest: manifest.manifestDigest, comparable: manifest.comparable, manifest,
     harness: header.harness, executionTarget: header.executionTarget,
-    physicalHosts: header.physicalHosts, products: null, unpinnedTargets: null};
+    physicalHosts: header.physicalHosts, ...(header.substrate ? {substrate: header.substrate} : {}),
+    ...(header.product ? {product: header.product} : {}),
+    products: null, unpinnedTargets: null};
+  const research = manifest.plan.profileClass === BENCHMARK_PROFILE_CLASS.RESEARCH;
   let written = false;
 
   function pin(run, deployment) {
@@ -738,7 +920,9 @@ function createCampaignLog({manifest, header, deps}) {
   }
 
   async function writeHeader() {
-    if (pins.size === 0) {
+    // A research campaign keeps its raw record whatever pinned: the unpinned
+    // targets are listed with their failure (a comparative campaign writes nothing).
+    if (pins.size === 0 && !research) {
       // Nothing is written, so each attempted run's own outcome travels in
       // the refusal: the operator's only evidence of what happened.
       throw deploymentFailure(PRODUCTS_UNPINNED,
@@ -764,7 +948,8 @@ function createCampaignLog({manifest, header, deps}) {
       pin(run, attempt?.deployment);
       if (written) return deps.appendRecords([record]);
       held.push(record);
-      if (arrayEvery(manifest.targets, (targetId) => pins.has(targetId))) await writeHeader();
+      const allPinned = arrayEvery(manifest.targets, (targetId) => pins.has(targetId));
+      if (research || allPinned) await writeHeader();
       return undefined;
     },
     async close() {
@@ -810,5 +995,8 @@ async function runComparativeCampaign({manifest, header, deps}) {
 }
 
 export {
+  beginDeploymentRoundTrip,
+  campaignEvidenceDirOf,
+  createCampaignRecordWriter,
   runComparativeCampaign,
 };

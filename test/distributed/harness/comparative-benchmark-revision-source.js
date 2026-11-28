@@ -42,3 +42,26 @@ export function localRevisionSourceFingerprint(root, revision) {
       'cannot verify requested image revision source', {revision, reason: error.message});
   }
 }
+
+const FULL_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+export const PRODUCT_COMMIT_ABSENT = 'product_commit_absent';
+
+/**
+ * What a research plan declares about the product source it tests, read from the commit's
+ * tree through the one fingerprint function above: the expected source fingerprint and the
+ * package version of that commit. An absent commit is a typed refusal.
+ * @param {string} root the repository holding the commit
+ * @param {string} commit a full 40-hex commit id
+ * @return {{declaredCommit: string, sourceFingerprintExpected: string, version: string}}
+ */
+export function productCommitProvenance(root, commit) {
+  const git = {cwd: root, env: gitProcessEnvironment()};
+  const fingerprint = FULL_COMMIT_PATTERN.test(commit) ?
+    localRevisionSourceFingerprint(root, commit) : null;
+  if (!fingerprint) {
+    throw deploymentFailure(PRODUCT_COMMIT_ABSENT,
+      `the product commit ${commit} is not a commit of the load generator repository`, {commit});
+  }
+  const version = JSON.parse(execGit(['show', `${commit}:package.json`], git).toString()).version;
+  return {declaredCommit: commit, sourceFingerprintExpected: fingerprint, version};
+}

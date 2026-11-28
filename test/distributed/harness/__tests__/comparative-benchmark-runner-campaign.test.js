@@ -98,7 +98,7 @@ function harness(overrides = {}) {
       clock += 10000;
       return {observations: {accounting: {offered: 1}}, correctness: {semanticGate: null},
         plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
-        dataset: {resetMethod: 'fresh-formation'},
+        dataset: {resetMethod: 'created-and-loaded'},
         loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}}};
     },
     inspectProducts: async () => [product('c1')],
@@ -132,7 +132,7 @@ test('campaign: header first, one v2 run record per attempted run, append only',
       assert.deepEqual(record.deployment.events, []);
       assert.equal(record.deployment.closure.status, 'complete');
       assert.equal(record.deployment.loadGenerator.host, '10.0.0.9');
-      assert.equal(record.deployment.dataset.resetMethod, 'fresh-formation');
+      assert.equal(record.deployment.dataset.resetMethod, 'created-and-loaded');
       assert.equal(record.plan.profileClass, 'smoke');
       assert.equal(record.plan.operationSliceDigest, 'sha256:slice');
       assert.equal(record.plan.manifestDigest, MANIFEST.manifestDigest);
@@ -182,7 +182,7 @@ test('J7: readiness exhausted - measurement never starts; the record is a comple
       correctness: {semanticGate: null, finalState: null},
       plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
       endpoint: null, harness: {driverSourceSha256: 'feed', adapterIds: ['a']},
-      dataset: {resetMethod: 'fresh-formation', verification: {status: 'failed'}},
+      dataset: {resetMethod: 'created-and-loaded', verification: {status: 'failed'}},
       placement: null, loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
       events: [], failure: null,
       productFailure: {runStatus: 'setup-failed', setup: input.setupFailure}};
@@ -359,7 +359,7 @@ test('a product setup failure is a complete, validated product-failure record, n
       }},
       executeWorkloadRun: async () => ({observations: {runStatus: 'setup-failed'},
         correctness: {semanticGate: null}, plan: {operationSliceDigest: 's',
-          plannedOperationCounts: {}}, dataset: {resetMethod: 'fresh-formation'},
+          plannedOperationCounts: {}}, dataset: {resetMethod: 'created-and-loaded'},
         harness: {driverSourceSha256: 'feed', adapterIds: ['a']},
         loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
         events: [], failure: null,
@@ -378,7 +378,7 @@ test('a product setup failure is a complete, validated product-failure record, n
 test('a workload failure (e.g. unverified dataset) keeps the attempt in the record', async () => {
   const {deps, records} = harness({executeWorkloadRun: async () => ({
     observations: {runStatus: 'completed'}, correctness: null, plan: null,
-    dataset: {resetMethod: 'fresh-formation', keyCoverage: {present: null}},
+    dataset: {resetMethod: 'created-and-loaded', keyCoverage: {present: null}},
     loadGenerator: {host: '10.0.0.9'}, events: [], productFailure: null,
     failure: {code: 'dataset_unverified', message: 'loaded dataset mismatch'}})});
   await run(deps);
@@ -545,7 +545,7 @@ async () => {
           plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
           endpoint: null,
           harness: {driverSourceSha256: 'feed', adapterIds: ['a']},
-          dataset: {resetMethod: 'fresh-formation', verification: {status: 'failed'}},
+          dataset: {resetMethod: 'created-and-loaded', verification: {status: 'failed'}},
           placement: null,
           loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
           events: [],
@@ -557,7 +557,7 @@ async () => {
         observations: {accounting: {offered: 1}},
         correctness: {semanticGate: null},
         plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
-        dataset: {resetMethod: 'fresh-formation'},
+        dataset: {resetMethod: 'created-and-loaded'},
         loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
       };
     },
@@ -653,7 +653,7 @@ test('watchdog cancellation & deadline inside semantic gate (remote loadGenerato
           plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
           endpoint: null,
           harness: {driverSourceSha256: 'feed', adapterIds: ['a']},
-          dataset: {resetMethod: 'fresh-formation', verification: {status: 'failed'}},
+          dataset: {resetMethod: 'created-and-loaded', verification: {status: 'failed'}},
           placement: null,
           loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
           events: [],
@@ -665,7 +665,7 @@ test('watchdog cancellation & deadline inside semantic gate (remote loadGenerato
         observations: {accounting: {offered: 1}},
         correctness: {semanticGate: input.semanticGate},
         plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
-        dataset: {resetMethod: 'fresh-formation'},
+        dataset: {resetMethod: 'created-and-loaded'},
         loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
       };
     },

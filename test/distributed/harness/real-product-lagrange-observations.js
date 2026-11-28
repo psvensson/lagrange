@@ -478,7 +478,9 @@ function topologyObservationFailure(answer) {
   };
 }
 
-function membershipReady(ctx, seedHost, nodeCount) {
+// The host count a formation declares differs from its node count where several
+// nodes share a machine (the first look).
+function membershipReady(ctx, seedHost, nodeCount, declaredHostCount) {
   return readinessOf(ctx, 'lagrange-membership', async (pollContext) => {
     const answer = await getFacts(ctx, seedHost, pollContext);
     const failure = topologyObservationFailure(answer);
@@ -487,7 +489,7 @@ function membershipReady(ctx, seedHost, nodeCount) {
     return {
       ready:
         facts?.topology?.readyNodeCount === nodeCount &&
-        isFormationFactReady(facts, nodeCount),
+        isFormationFactReady(facts, declaredHostCount),
       diagnostic: answer,
     };
   });
@@ -499,7 +501,7 @@ function healthyListener(services, roles) {
   const replica = arrayFind(replicas, (one) => one?.serviceId === PG_WIRE_SERVICE_ID &&
     one?.healthStatus === HEALTHY && numberIsInteger(Number(one?.port)) && one?.port > 0);
   const node = replica && arrayFind(roles, (role) => role.nodeId === replica.nodeId);
-  return node ? {host: node.host, port: Number(replica.port), nodeId: replica.nodeId} : null;
+  return node ? {host: node.address, port: Number(replica.port), nodeId: replica.nodeId} : null;
 }
 
 function isUnusableProbeHttpAnswer(answer) {
@@ -729,7 +731,7 @@ async function controlSnapshots(ctx, roles, pollContext = null) {
   const snapshotTimeoutMs = boundedTimeoutMs(
     callOptions.timeoutMs, CONTROL_SNAPSHOT_SERVE_LANE_TIMEOUT_MS);
   const queryUrlForRole = (role) =>
-    `http://${role.host}:${PORT.ADMIN}/api/admin/control-snapshot` +
+    `http://${role.address}:${PORT.ADMIN}/api/admin/control-snapshot` +
     `?scope=local&view=serve-lane&timeoutMs=${snapshotTimeoutMs}`;
   const answers = await settleConcurrentBatch(roles, async (role) => ({
     role,
@@ -797,7 +799,7 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
   const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
   const startedAt = clock();
   const tableReadyAt = {};
-  const seedHost = nodeRoles[0]?.host ?? null;
+  const seedHost = nodeRoles[0]?.address ?? null;
   let lastTablesObservedAt = null;
   let lastVerdictReady = false;
   let nextFactsAttempt = 0;
@@ -1003,7 +1005,7 @@ function reportedVersionOf(facts) {
 
 async function reportedVersions(ctx, products) {
   await settleConcurrentBatch(products, async (product) => {
-    const facts = await getFacts(ctx, product.host);
+    const facts = await getFacts(ctx, product.address);
     Object.assign(product, reportedVersionOf(facts));
     product.bootProvenance = await bootProvenance(ctx, product, facts);
   }, ctx.settleInFlight ?? null);

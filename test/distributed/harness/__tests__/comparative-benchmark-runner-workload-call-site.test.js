@@ -46,7 +46,7 @@ function b1Record(overrides = {}) {
       operationSliceDigest: 'slice', plannedOperationCounts: {payment: 2},
       workloadProfileId: 'scenario-a-smoke-v1'},
     deployment: {endpoint: {host: '10.0.0.1', port: 5433}, dataset: {
-      resetMethod: 'fresh-formation', verification: {status: 'verified',
+      resetMethod: 'created-and-loaded', verification: {status: 'verified',
         method: 'm', observedLogicalChecksum: 'k', expectedLogicalChecksum: 'k',
         expectedTableRows: {item: 3}, observedTableRows: {item: 3}}}},
     observations: {runStatus: 'completed', requests: []},
@@ -102,7 +102,7 @@ test('a product setup failure (SQLSTATE 55P03) is a product failure with a compl
     const run = createWorkloadRunExecutor({clientHost: '10.0.0.9',
       runWorkload: async () => b1Record({observations: {runStatus: 'setup-failed',
         setup: {sqlstate: '55P03'}, requests: []}, deployment: {endpoint:
-        {host: '10.0.0.1', port: 5433}, dataset: {resetMethod: 'fresh-formation',
+        {host: '10.0.0.1', port: 5433}, dataset: {resetMethod: 'created-and-loaded',
         verification: {status: 'unobserved'}}}}),
       describeLoadGenerator: async () => ({hostname: 'lg', bootId: 'b'})});
     const deployed = {...deployment(), operations: {observePlacement: async () => {
@@ -127,7 +127,7 @@ test('refusals, non-executions, foreign endpoints, plan drift and unverified dat
         'endpoint_unbound', false],
       [b1Record({plan: {...b1Record().plan, datasetDigest: 'other'}}), 'plan_mismatch', false],
       [b1Record({deployment: {endpoint: {host: '10.0.0.1', port: 5433}, dataset: {
-        resetMethod: 'fresh-formation', verification: {status: 'mismatch'}}}}),
+        resetMethod: 'created-and-loaded', verification: {status: 'mismatch'}}}}),
       'dataset_unverified', false],
     ];
     for (const [record, code, throws] of cases) {
@@ -175,7 +175,7 @@ test('an exhausted deployment is run unopened: the request names the setup failu
   const execute = createWorkloadRunExecutor({clientHost: '10.0.0.9',
     runWorkload: async (request) => {
       seen.push(request);
-      return b1Record({deployment: {endpoint: null, dataset: {resetMethod: 'fresh-formation',
+      return b1Record({deployment: {endpoint: null, dataset: {resetMethod: 'created-and-loaded',
         verification: {status: 'failed', failure: setupFailure}}},
       observations: {runStatus: 'setup-failed', setup: setupFailure,
         requests: [{outcome: 'unissued'}]}});

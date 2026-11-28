@@ -13,7 +13,8 @@ import {
 
 const HOSTS = ['10.0.0.1', '10.0.0.2'];
 const META = new Map(arrayMap(HOSTS, (ip) => [ip, {primaryIface: 'ens4'}]));
-const PING = 'rtt min/avg/max/mdev = 9.801/10.204/10.900/0.300 ms';
+const PING = '20 packets transmitted, 20 received, 0% packet loss, time 19030ms\n' +
+  'rtt min/avg/max/mdev = 9.801/10.204/10.900/0.300 ms';
 
 function input(sshRun) {
   return {hosts: HOSTS, rttMs: 10, hostMetaByIp: META, sshRun, opts: {}};
@@ -47,7 +48,8 @@ test('D22: a verified impairment records configured and achieved RTT', async () 
   assert.equal(impairment.kind, 'tc-netem');
   assert.equal(impairment.configured.rttMs, 10);
   assert.equal(impairment.configured.oneWayDelayMs, 5);
-  assert.equal(impairment.achieved.rttMs, 10.204);
+  assert.equal(impairment.achieved.avgMs, 10.204);
+  assert.equal(impairment.achieved.received, 20);
 });
 
 test('D22: an RTT that cannot be measured is a typed failure', async () => {

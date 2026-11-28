@@ -243,6 +243,39 @@ function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimu
     lock, role: index < dataHostCount ? HOST_ROLE.DATA : HOST_ROLE.CLIENT}));
 }
 
+/**
+ * The first look's one host: the named registered harness host runs the three
+ * nodes and the load generator. The same host is returned twice, as the data
+ * host and as the load generator, so the campaign's roles stay explicit; it
+ * must be eligible as a data host and as a load generator, or the campaign is
+ * refused naming why, never given another host.
+ * @param {{state: Object, fleet?: Array<Object>|null, hostName: string,
+ *   nodeMinimum?: string|null, loadGeneratorRequirement: Object}} input
+ * @return {Array<Object>} [data entry, client entry]
+ */
+function selectSingleLabBenchmarkHost({state, fleet = null, hostName, nodeMinimum = null,
+  loadGeneratorRequirement = null}) {
+  if (!Number.isSafeInteger(loadGeneratorRequirement?.requiredBytes)) {
+    throw deploymentFailure(LOAD_GENERATOR_REQUIREMENT_UNMEASURED,
+      `${LOAD_GENERATOR_REQUIREMENT_UNMEASURED}: lab host selection needs the measured ` +
+      'load-generator requirement (measureLoadGeneratorRequirement)', {loadGeneratorRequirement});
+  }
+  const {eligible, excluded} = partitionEligibleHosts(state, fleet);
+  const entry = explicitLoadGenerator({state, eligible, excluded, name: hostName, nodeMinimum,
+    requirement: loadGeneratorRequirement});
+  if (dockerDiskLow(entry.facts)) {
+    throw deploymentFailure(LOAD_GENERATOR_SELECTION_REFUSED,
+      `${LOAD_GENERATOR_SELECTION_REFUSED}: ${hostName}: host-ineligible: docker_disk_low ` +
+      `(${entry.facts.capability.dockerRootFreeBytes ?? 'unknown'} bytes free on the docker ` +
+      `data root, a data host needs ${DATA_HOST_MIN_DOCKER_FREE_BYTES})`, {hostName});
+  }
+  const host = {name: entry.node.name, ip: entry.node.ip, sshTarget: entry.node.ssh,
+    bootId: entry.facts.capability.bootId ?? null,
+    repoPath: entry.facts.capability.repoPath ?? null,
+    nodePath: entry.facts.capability.nodePath ?? null, lock: entry.lock};
+  return [{...host, role: HOST_ROLE.DATA}, {...host, role: HOST_ROLE.CLIENT}];
+}
+
 // The operator's named load generator (--load-generator), or null when none
 // was named (automatic selection). It must be an eligible harness host that
 // can be a load generator; otherwise the campaign is refused with the reason,
@@ -421,4 +454,5 @@ export {
   readLabHolderRecords,
   releaseLabBenchmarkHosts,
   selectLabBenchmarkHosts,
+  selectSingleLabBenchmarkHost,
 };

@@ -47,14 +47,24 @@ import {
 } from '../../../test/distributed/harness/raw-observation-campaign-specs.js';
 import {
   COMPARATIVE_CAPACITY_PROFILE,
+  COMPARATIVE_RESEARCH_PROFILE,
   COMPARATIVE_SMOKE_PROFILE,
   buildComparativeCampaignManifest,
+  researchProfileWithFormationWait,
+  researchProfileWithProduct,
+  researchReadinessBudget,
 } from '../../../test/distributed/harness/comparative-benchmark-campaign-manifest.js';
-import {runComparativeCampaign} from
-  '../../../test/distributed/harness/comparative-benchmark-campaign-runner.js';
 import {
+  beginDeploymentRoundTrip,
+  campaignEvidenceDirOf,
+  createCampaignRecordWriter,
+  runComparativeCampaign,
+} from '../../../test/distributed/harness/comparative-benchmark-campaign-runner.js';
+import {
+  buildSubstrateDescriptor,
   campaignImagesByRole,
   collectHostFacts,
+  observeLinkTypes,
   describeLoadGenerator,
   ensureProductImages,
   resolvePinnedImage,
@@ -68,6 +78,7 @@ import {
   readLabHolderRecords,
   releaseLabBenchmarkHosts,
   selectLabBenchmarkHosts,
+  selectSingleLabBenchmarkHost,
 } from '../../../test/distributed/harness/comparative-benchmark-lab-hosts.js';
 import {
   createRemoteWorkloadRunner,
@@ -96,10 +107,26 @@ import {SCENARIO_OUTCOME} from '../../../test/distributed/harness/scenario-outco
 import {
   COMPARATIVE_TARGET,
   LAGRANGE_IMAGE_DEFAULT,
+  POSTGRES_IMAGE_DEFAULT,
   TARGET_DATA_HOSTS,
   deployComparativeTarget,
   teardownCampaignDeployment,
 } from '../../../test/distributed/harness/real-product-cluster-deployers.js';
+import {
+  collectContainerLogs,
+} from '../../../test/distributed/harness/real-product-campaign-cleanup.js';
+import {
+  DECLARED_HOST_IDENTITY,
+  EVIDENCE_USE,
+  EVIDENCE_USE_NOTE,
+  INTER_NODE_PATH,
+  NODE_COUNT,
+  SUBSTRATE_KIND,
+} from '../../../test/distributed/harness/raw-observation-research-fields.js';
+import {
+  measureRoundTripMatrix,
+  nodeNamespaceShell,
+} from '../../../test/distributed/harness/real-product-network-impairment.js';
 import {
   DEFAULT_INSPECT_TIMEOUT_MS,
   DEPLOYMENT_FAILURE,
@@ -112,13 +139,14 @@ import {
   sshOptions,
 } from '../../../test/distributed/harness/real-product-remote-shell.js';
 import {
+  planLagrangeNodePlacement,
   resolveLagrangeContainerImage,
 } from '../../../test/distributed/harness/real-product-deployer-lagrange.js';
 import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
 import {measureCheckoutSourceFingerprint} from '../../../src/diagnostics/runtime-content-fingerprint.js';
-import {localRevisionSourceFingerprint} from
+import {localRevisionSourceFingerprint, productCommitProvenance} from
   '../../../test/distributed/harness/comparative-benchmark-revision-source.js';
 import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
 import {discoverFleet, fleetRequirement} from '../../../scripts/lab/probe.js';
@@ -127,7 +155,15 @@ import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const TARGET = Object.freeze({LAB: 'lab', GCP: 'gcp'});
 const PROFILES = Object.freeze({smoke: COMPARATIVE_SMOKE_PROFILE,
-  capacity: COMPARATIVE_CAPACITY_PROFILE});
+  capacity: COMPARATIVE_CAPACITY_PROFILE, research: COMPARATIVE_RESEARCH_PROFILE});
+const RESEARCH_PROFILE = 'research';
+const RUNG_USE = Object.freeze({[SUBSTRATE_KIND.SINGLE_HOST]: EVIDENCE_USE.FIRST_LOOK,
+  [SUBSTRATE_KIND.MULTI_HOST]: EVIDENCE_USE.WORKING, [SUBSTRATE_KIND.GCP]: EVIDENCE_USE.FINAL});
+const RESEARCH_NOT_ADMISSIBLE = 'research: not admissible, published store refused';
+const RESEARCH_PRODUCT_NOTE = '; a run whose product commit differs from the harness commit ' +
+  'is research only';
+const researchAdmissionNote = (manifest) => manifest.plan.product ?
+  `${RESEARCH_NOT_ADMISSIBLE}${RESEARCH_PRODUCT_NOTE}` : RESEARCH_NOT_ADMISSIBLE;
 // The smoke targets of stream A's coverage manifest.
 const DEFAULT_TARGETS = Object.freeze([COMPARATIVE_TARGET.LAGRANGE,
   COMPARATIVE_TARGET.TIDB_TIKV, COMPARATIVE_TARGET.PG_SINGLE_PRIMARY]);
@@ -163,8 +199,28 @@ Options:
                                 client's npm cache, verify them, and exit (no campaign)
   --targets <a,b,...>           ${Object.values(COMPARATIVE_TARGET).join(', ')}
                                 (default: ${DEFAULT_TARGETS.join(',')})
-  --profile <smoke|capacity>    smoke (default): one run per arm, not a comparison;
-                                capacity: the counter-balanced paired sweep
+  --profile <smoke|capacity|research>
+                                smoke (default): one run per arm, not a comparison;
+                                capacity: the counter-balanced paired sweep;
+                                research: one run per target on a fresh deployment,
+                                never admissible, never in the published store;
+                                needs --storage-root and a passed semantic gate
+  --substrate <kind>            research only, lab: lab-multi-host (default; three
+                                separate lab hosts, one node each, the load generator
+                                on a fourth machine) or lab-single-host (a first look:
+                                three nodes on one lab host on a campaign Docker
+                                bridge, the load generator on that host; needs
+                                --single-host). --execution-target gcp is gcp-same-zone.
+  --single-host <name>          with --substrate lab-single-host: the registered lab host
+  --formation-wait-seconds <n>  research only: the formation readiness deadline of the plan, in
+                                whole seconds, 1 to 1800 (default: the shared comparative
+                                deadline); recorded in the manifest and each run
+  --product-commit <sha>        research only: the full 40-hex commit of the product source
+                                the image under test was built from (default: the harness
+                                checkout); its source fingerprint and version become the
+                                expectation, the booted fingerprint must still match it
+                                exactly; refused with --lagrange-version, --lagrange-revision
+                                and --lagrange-src-fingerprint
   --campaign-id <id>            Campaign id (default: generated)
   --storage-root <path>         Host directory for product data volumes; without it
                                 data lives in the container layer (smoke only)
@@ -177,7 +233,9 @@ Options:
   --lagrange-version <v>        Product version the image must report (needed for a digest)
   --lagrange-revision <sha>     org.opencontainers.image.revision the image must carry
   --raw-observations <path>     Append-only record store
-                                (default: ${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH})
+                                (default: ${DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH};
+                                research: test-output/research-sessions/<campaign-id>/
+                                raw-observations.ndjson)
   --output <path>               Campaign summary JSON
   --lock-wait-minutes <n>       Bounded wait for each lab host lock (default: 30)
   --dry-run                     Print the manifest and the hosts it would lock (lab: the
@@ -198,7 +256,9 @@ const VM_FLAGS = Object.freeze([['--vm-image-family', 'vmImageFamily'],
 const VALUE_FLAGS = Object.freeze({
   '--execution-target': 'executionTarget', '--hosts': 'hostsRaw',
   '--ssh-hosts': 'sshHostsRaw', '--ssh-user': 'sshUser', '--ssh-key': 'sshKey',
-  '--targets': 'targetsRaw', '--profile': 'profile', '--campaign-id': 'campaignId',
+  '--targets': 'targetsRaw', '--profile': 'profile', '--substrate': 'substrate',
+  '--single-host': 'singleHostName', '--product-commit': 'productCommit',
+  '--formation-wait-seconds': 'formationWaitRaw', '--campaign-id': 'campaignId',
   '--storage-root': 'storageRoot', '--lagrange-image': 'lagrangeImage',
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
   '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
@@ -243,7 +303,53 @@ function validateCliOptions(opts) {
       JSON.stringify(opts.loadGeneratorName));
   }
   if (!PROFILES[opts.profile]) throw new UsageError(`unknown profile ${opts.profile}`);
+  validateSubstrateOptions(opts);
+  if (opts.profile === RESEARCH_PROFILE && opts.targetsRaw !== COMPARATIVE_TARGET.LAGRANGE) {
+    throw new UsageError('--profile research measures one product: --targets lagrange');
+  }
+  if (opts.profile === RESEARCH_PROFILE && !opts.storageRoot) {
+    throw new UsageError('--profile research needs --storage-root: the durability proof of the ' +
+      'semantic gate needs storage that survives its container');
+  }
   if (opts.provision) validateProvisionOptions(opts);
+}
+
+// The substrate of a research campaign names its rung of the ladder; no other
+// profile has one. The GCP target is the final-verification rung.
+function validateSubstrateOptions(opts) {
+  if (opts.profile !== RESEARCH_PROFILE) {
+    if (opts.substrate || opts.singleHostName || opts.formationWaitRaw || opts.productCommit) {
+      throw new UsageError('--substrate, --single-host, --formation-wait-seconds and ' +
+        '--product-commit are only for --profile research');
+    }
+    return;
+  }
+  if (opts.productCommit && (opts.lagrangeVersion || opts.lagrangeRevision ||
+      opts.lagrangeSrcFingerprint)) {
+    throw new UsageError('--product-commit is the one source of the expected version, revision ' +
+      'and source fingerprint: not with --lagrange-version, --lagrange-revision or ' +
+      '--lagrange-src-fingerprint');
+  }
+  const gcp = opts.executionTarget === TARGET.GCP;
+  const rung = opts.substrate || (gcp ? SUBSTRATE_KIND.GCP : SUBSTRATE_KIND.MULTI_HOST);
+  const allowed = gcp ? [SUBSTRATE_KIND.GCP] : [SUBSTRATE_KIND.MULTI_HOST,
+    SUBSTRATE_KIND.SINGLE_HOST];
+  if (!allowed.includes(rung)) {
+    throw new UsageError(`--substrate ${rung} is not a substrate of --execution-target ` +
+      `${opts.executionTarget} (${allowed.join(', ')})`);
+  }
+  if ((rung === SUBSTRATE_KIND.SINGLE_HOST) !== Boolean(opts.singleHostName)) {
+    throw new UsageError('--single-host <name> goes with --substrate lab-single-host, and only ' +
+      'with it');
+  }
+  opts.substrate = rung;
+  if (opts.formationWaitRaw !== '') {
+    try {
+      opts.profileOverride = researchProfileWithFormationWait(Number(opts.formationWaitRaw));
+    } catch (error) {
+      throw new UsageError(`--formation-wait-seconds: ${error.message}`);
+    }
+  }
 }
 
 function validateProvisionOptions(opts) {
@@ -274,11 +380,11 @@ function parseCliArgs(argv, env) {
   rejectRepeatedLoadGenerator(argv);
   const opts = {executionTarget: env.EXECUTION_TARGET || TARGET.LAB, hostsRaw: '',
     sshHostsRaw: '', sshUser: env.SSH_USER || '', sshKey: env.SSH_KEY || '',
-    targetsRaw: DEFAULT_TARGETS.join(','), profile: 'smoke', campaignId: '',
+    targetsRaw: '', profile: 'smoke', campaignId: '',
     storageRoot: '', lagrangeImage: LAGRANGE_IMAGE_DEFAULT,
-    rawObservationsPath: DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH, outputPath: '',
+    rawObservationsPath: '', outputPath: '',
     lockWaitMinutes: String(DEFAULT_LOCK_WAIT_MINUTES), clientCheckout: '', clientNode: 'node',
-    loadGeneratorName: null, dryRun: false, provision: false, help: false};
+    loadGeneratorName: null, substrate: '', singleHostName: '', formationWaitRaw: '', productCommit: '', dryRun: false, provision: false, help: false};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (BOOLEAN_FLAGS[arg]) opts[BOOLEAN_FLAGS[arg]] = true;
@@ -287,8 +393,13 @@ function parseCliArgs(argv, env) {
       index += 1;
     } else throw new UsageError(`unknown or incomplete option ${arg}`);
   }
+  opts.targetsRaw = opts.targetsRaw || (opts.profile === RESEARCH_PROFILE ?
+    COMPARATIVE_TARGET.LAGRANGE : DEFAULT_TARGETS.join(','));
   validateCliOptions(opts);
   opts.campaignId = opts.campaignId || generatedCampaignId();
+  opts.rawObservationsPath = opts.rawObservationsPath || (opts.profile === RESEARCH_PROFILE ?
+    `test-output/research-sessions/${opts.campaignId}/raw-observations.ndjson` :
+    DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH);
   opts.targets = list(opts.targetsRaw);
   opts.outputPath = opts.outputPath ||
     `test-output/cloud-benchmarks/comparative-campaign-${opts.campaignId}.json`;
@@ -334,17 +445,12 @@ function harnessIdentity(manifest) {
     checkoutDirty: git(['status', '--porcelain']) !== '', systems: manifest.plan.systems});
 }
 
-function appendRecords(file, records) {
-  fs.mkdirSync(path.dirname(file), {recursive: true});
-  fs.appendFileSync(file, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
-}
-
 async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   if (manifest.targets.includes(COMPARATIVE_TARGET.LAGRANGE)) {
     opts.lagrangeImage = resolveLagrangeContainerImage(opts);
   }
   const sshRun = createSshRun(hosts, opts);
-  const facts = await collectHostFacts({hosts, sshRun, opts});
+  const facts = await collectHostFacts({hosts, sshRun, opts, substrate: opts.substrate});
   const physicalHosts = facts.map((fact, index) => ({...fact, name: hosts[index].name,
     role: hosts[index].role, ...(physicalExtras[hosts[index].name] || {})}));
   const pinned = opts.lagrangeImageContent ? await resolvePinnedImage({
@@ -396,7 +502,13 @@ function recordPendingStorageSubdir(pendingStorageByHost, hosts, subDir) {
 const SEMVER_IMAGE_TAG_PATTERN = /:(\d+\.\d+\.\d+)$/u;
 const SOURCE_FINGERPRINT_PATTERN = /^(?:sha256:[0-9a-f]{4,64}|[0-9a-f]{16,64})$/u;
 
-async function resolveCheckoutLagrangeProvenance(opts, manifest) {
+async function resolveCheckoutLagrangeProvenance(opts, manifest, product) {
+  // A research plan that declares its product source expects that commit's tree.
+  if (product) {
+    return {lagrangeVersion: product.version,
+      lagrangeSrcFingerprint: product.sourceFingerprintExpected,
+      productCommit: product.declaredCommit};
+  }
   if (!manifest.targets.includes(COMPARATIVE_TARGET.LAGRANGE)) {
     return {lagrangeVersion: opts.lagrangeVersion || null,
       lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint || null};
@@ -426,9 +538,54 @@ async function resolveCheckoutLagrangeProvenance(opts, manifest) {
   return {lagrangeVersion, lagrangeSrcFingerprint};
 }
 
+// The research campaign's substrate descriptor from the observed host facts.
+async function describeSubstrate({opts, hosts, facts, sshRun}) {
+  const single = opts.substrate === SUBSTRATE_KIND.SINGLE_HOST;
+  const dataFacts = facts.filter((fact, index) => hosts[index].role === 'data');
+  const clientFact = facts[hosts.findIndex((host) => host.role === 'client')];
+  const linkTypes = await observeLinkTypes({facts: dataFacts, sshRun, opts});
+  const placed = single ? Array.from({length: NODE_COUNT}, () => dataFacts[0]) : dataFacts;
+  // The declared identity of each node, from the one placement owner.
+  const plan = planLagrangeNodePlacement({hosts: placed.map((fact) => fact.ip),
+    substrate: opts.substrate, campaignId: opts.campaignId});
+  return buildSubstrateDescriptor({kind: opts.substrate,
+    interNodePath: single ? INTER_NODE_PATH.BRIDGE : (opts.substrate === SUBSTRATE_KIND.GCP ?
+      INTER_NODE_PATH.VPC : INTER_NODE_PATH.LAN),
+    hosts: dataFacts.map((fact, index) => ({hostId: fact.hostId, ip: fact.ip,
+      bootId: fact.bootId, cpus: fact.cpus, memGb: fact.memGb, primaryIface: fact.primaryIface,
+      linkType: linkTypes[index]})),
+    loadGeneratorHostId: clientFact.hostId,
+    nodeHostMap: placed.map((fact, nodeIndex) => ({nodeIndex, hostId: fact.hostId,
+      declaredHostId: plan.nodes[nodeIndex].declaredHostId ?? fact.hostname,
+      machineHostName: fact.hostname, declaredHostIdentity: plan.declaredHostIdentity})),
+    declaredHostCount: plan.declaredHostCount,
+    storage: {root: opts.storageRoot, kind: 'bind'}});
+}
+
+// The round-trip matrix of a deployed research cluster: its nodes' addresses and the
+// load generator to the endpoint; on the bridge the pairs are measured from inside
+// the node's own network namespace (a campaign-labelled helper container).
+function roundTripMeasurer({opts, manifest, sshRun, client, parallel = false}) {
+  const single = opts.substrate === SUBSTRATE_KIND.SINGLE_HOST;
+  return async ({deployment}) => {
+    const nodes = deployment.roles.filter((role) => role.role === 'lagrange-node');
+    const roleOf = new Map(nodes.map((role) => [role.address, role]));
+    return measureRoundTripMatrix({dataHosts: nodes.map((role) => role.address),
+      loadGenerator: client.ip, endpointHost: deployment.endpoint.host, sshRun, opts, parallel,
+      shellOf: single ? (address) => nodeNamespaceShell({campaignId: manifest.campaignId,
+        image: POSTGRES_IMAGE_DEFAULT, host: roleOf.get(address).host,
+        containerId: roleOf.get(address).containerId}) : () => null});
+  };
+}
+
 async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,
   pinned, recordOwner, client, harness, loadGeneratorHost}) {
   const dataIps = hosts.filter((host) => host.role === 'data').map((host) => host.ip);
+  const single = opts.substrate === SUBSTRATE_KIND.SINGLE_HOST;
+  // The first look places all three nodes on its one host.
+  const nodeIps = single ? Array.from({length: NODE_COUNT}, () => dataIps[0]) : dataIps;
+  const substrate = manifest.plan.profileClass === RESEARCH_PROFILE ?
+    await describeSubstrate({opts, hosts, facts, sshRun}) : null;
   // The semantic proof journey runs here, on the controller; PostgreSQL admits
   // the controller's address (as the data host sees it) next to the load generator.
   const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
@@ -437,11 +594,29 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
     storageRoot: opts.storageRoot || null,
     lagrangeVersion: opts.lagrangeVersion,
     lagrangeRevision: opts.lagrangeRevision || null,
+    productCommit: opts.productCommit || null,
     lagrangeImageContent: opts.lagrangeImageContent || null,
     lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint,
     lagrangeImageByHost: pinned ? Object.fromEntries(Object.entries(pinned).map(
       ([ip, entry]) => [ip, entry.runRef])) : null,
+    substrate: opts.substrate || null,
+    // A research plan declares its formation wait; the one readiness owner takes it.
+    ...(manifest.plan.formationWaitSeconds === undefined ? {} :
+      {readiness: researchReadinessBudget(manifest.plan.formationWaitSeconds)}),
     proofClientIps: controllerIp ? [controllerIp] : []};
+  const evidenceDir = campaignEvidenceDirOf({rootDir: REPO_ROOT,
+    profileClass: manifest.plan.profileClass, rawObservationsPath: opts.rawObservationsPath,
+    campaignId: manifest.campaignId});
+  // What the network looked like right after the containers started, kept per run even if
+  // the formation then fails (the seed node stands for the endpoint, which is not yet bound).
+  const atDeployment = new Map();
+  const roundTrip = substrate ? roundTripMeasurer({opts, manifest, sshRun, client}) : null;
+  const roundTripBesideFormation = substrate ?
+    roundTripMeasurer({opts, manifest, sshRun, client, parallel: true}) : null;
+  const measureAtDeployment = (run, roles) => beginDeploymentRoundTrip(atDeployment, run.runId,
+    () => roundTripBesideFormation({deployment: {roles, endpoint: {host: roles[0].address}}}));
+  const recordWriter = createCampaignRecordWriter({rootDir: REPO_ROOT,
+    file: opts.rawObservationsPath, profileClass: manifest.plan.profileClass});
   let deploymentSeq = 0;
   const pendingStorageByHost = new Map();
   const deployArm = (run, {signal = null, deadlineAtMs = null} = {}) => {
@@ -454,7 +629,7 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
       ...(subDir ? {storageRoot: `${opts.storageRoot}/${subDir}`} : {}),
     });
     return deployComparativeTarget(run.targetId, {
-      hosts: dataIps,
+      hosts: nodeIps,
       clientIp: client.ip,
       sshRun,
       opts: cleanOpts,
@@ -462,11 +637,13 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
       deadlineAtMs,
       campaignId: manifest.campaignId,
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      ...(substrate ? {onNodesStarted: ({roles}) => measureAtDeployment(run, roles)} : {}),
     });
   };
   const teardown = async () => teardownCampaignDeployment({
     hosts: hosts.map((host) => host.ip),
     campaignId: manifest.campaignId,
+    campaignNetwork: single,
     storageRoot: opts.storageRoot,
     pendingStorageByHost,
     sshRun,
@@ -510,9 +687,12 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
         host: loadGeneratorHost,
         harnessCommit: harness.gitCommit,
         campaignId: manifest.campaignId,
+        // The retained statement files of every run come into the campaign evidence.
+        campaignEvidenceDir: evidenceDir,
       });
       return createWorkloadRunExecutor({
         clientHost: client.ip,
+        colocationAllowed: single,
         runWorkload: (request, run, callOpts = {}) => remoteRunner(request, run, callOpts),
         evidenceDirOf: (run) =>
           `test-output/bench/${manifest.campaignId}/${run.runId}/evidence`,
@@ -529,8 +709,13 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
       timeoutMs: DEFAULT_INSPECT_TIMEOUT_MS,
     }),
     teardownRun: teardown,
-    appendRecords: (records) => appendRecords(
-      path.resolve(REPO_ROOT, opts.rawObservationsPath), records),
+    appendRecords: (records) => recordWriter.appendRecords(records),
+    ...(substrate ? {measureRoundTrip: roundTrip,
+      deploymentRoundTrip: (run) => atDeployment.get(run.runId) ?? null,
+      // A failed formation keeps what its nodes logged, collected before teardown.
+      collectNodeLogs: async ({run, deployment}) => ({nodeLogs: await collectContainerLogs({
+        containers: (deployment?.roles ?? []).filter((role) => role.role === 'lagrange-node'),
+        runId: run.runId, evidenceDir, sshRun, opts})})} : {}),
   };
   // A signal stops issuing new runs; the run in flight finishes its teardown.
   const stop = () => {
@@ -540,10 +725,21 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
   process.once('SIGTERM', stop);
   try {
     const summary = await runComparativeCampaign({manifest,
-      header: {executionTarget: opts.executionTarget, physicalHosts, harness}, deps});
+      header: {executionTarget: opts.executionTarget, physicalHosts, harness,
+        ...(substrate ? {substrate} : {}),
+        ...(manifest.plan.product ? {product: {...manifest.plan.product,
+          harnessCommit: harness.gitCommit}} : {})}, deps});
+    const {header: _header, records: _records, ...rest} = summary;
+    if (manifest.plan.profileClass === RESEARCH_PROFILE) {
+      // The exit code of a research campaign comes from its runs: admission has
+      // no claim to read (the explicit reason, the store refusal).
+      return {...rest, admission: {status: 'not-admissible', note: researchAdmissionNote(manifest)},
+        substrate: {kind: substrate.kind, evidenceUse: substrate.evidenceUse,
+          declaredHostIdentity: substrate.declaredHostIdentity, note: substrate.note},
+        exitCode: summary.exitCode};
+    }
     const admitted = recordOwner.campaignOutcome({header: summary.header,
       runs: summary.records, file: opts.rawObservationsPath, rootDir: REPO_ROOT, manifest});
-    const {header: _header, records: _records, ...rest} = summary;
     return {...rest, admission: admitted, exitCode: campaignExitCode(summary.exitCode,
       admitted.outcome)};
   } finally {
@@ -582,23 +778,40 @@ async function provisionGcpHosts({opts, manifest, dataHostCount}) {
       sshCommand: ['ssh', ...sshOptions(opts)]})});
 }
 
+// The lab hosts a campaign runs on: the named single host (as data host and as
+// load generator) for the first look, the usual selection otherwise.
+function selectCampaignLabHosts({opts, state, fleet, dataHostCount, requirement,
+  loadGeneratorRequirement}) {
+  return opts.substrate === SUBSTRATE_KIND.SINGLE_HOST ?
+    selectSingleLabBenchmarkHost({state, fleet, hostName: opts.singleHostName,
+      nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement}) :
+    selectLabBenchmarkHosts({state, fleet, dataHostCount, nodeMinimum: requirement.nodeMinimum,
+      loadGeneratorRequirement, loadGeneratorName: opts.loadGeneratorName});
+}
+
+// One entry per machine: the first look names its host twice (data and load generator).
+function distinctHosts(hosts) {
+  return hosts.filter((host, index) => hosts.findIndex((one) => one.name === host.name) === index);
+}
+
 async function runLabCampaign({opts, manifest, dataHostCount}) {
   const state = await loadState({allowMissing: false});
   const {requirement, fleet} = await discoverLabFleet(state);
   // Measured now, from the tree the load generator will check out; recorded
   // with the load generator in the campaign header.
   const loadGeneratorRequirement = measureLoadGeneratorRequirement(REPO_ROOT);
-  const hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
-    nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement,
-    loadGeneratorName: opts.loadGeneratorName});
+  const hosts = selectCampaignLabHosts({opts, state, fleet, dataHostCount, requirement,
+    loadGeneratorRequirement});
   const budgetMs = manifest.campaignBudgetMinutes * MS_PER_MINUTE;
-  const sessions = await holdLabBenchmarkHosts({hosts, campaignId: manifest.campaignId,
+  const sessions = await holdLabBenchmarkHosts({hosts: distinctHosts(hosts),
+    campaignId: manifest.campaignId,
     waitMs: Number(opts.lockWaitMinutes) * MS_PER_MINUTE, expectedMs: budgetMs});
   try {
     const sshRun = createSshRun(hosts, opts);
-    const thermal = await checkLabThermalHeadroom({hosts, sshRun, opts});
-    const holders = await readLabHolderRecords({hosts, sshRun, opts});
-    const extras = Object.fromEntries(hosts.map((host) => [host.name,
+    const held = distinctHosts(hosts);
+    const thermal = await checkLabThermalHeadroom({hosts: held, sshRun, opts});
+    const holders = await readLabHolderRecords({hosts: held, sshRun, opts});
+    const extras = Object.fromEntries(held.map((host) => [host.name,
       {lab: {holder: holders[host.name], thermal: thermal[host.name],
         ...(host.role === 'client' ? {loadGeneratorDiskRequirement: loadGeneratorRequirement} :
           {})}}]));
@@ -616,6 +829,16 @@ async function discoverLabFleet(state) {
     nodeMinimum: requirement.nodeMinimum})};
 }
 
+// What the dry run says of a research campaign's rung: the kind, what its evidence
+// may be used for and which host plays which role.
+function dryRunSubstrate(opts, hosts) {
+  const use = RUNG_USE[opts.substrate];
+  return {kind: opts.substrate, evidenceUse: use, note: EVIDENCE_USE_NOTE[use],
+    declaredHostIdentity: opts.substrate === SUBSTRATE_KIND.SINGLE_HOST ?
+      DECLARED_HOST_IDENTITY.SYNTHETIC : DECLARED_HOST_IDENTITY.OBSERVED,
+    hostRoles: hosts.map(({name, ip, role}) => ({name, ip, role}))};
+}
+
 async function dryRunPlan({opts, manifest, dataHostCount}) {
   const lab = opts.executionTarget === TARGET.LAB;
   let hosts;
@@ -625,15 +848,19 @@ async function dryRunPlan({opts, manifest, dataHostCount}) {
     const {requirement, fleet} = opts.fromRecordedFacts ?
       {requirement: fleetRequirement(REPO_ROOT), fleet: null} : await discoverLabFleet(state);
     loadGeneratorRequirement = measureLoadGeneratorRequirement(REPO_ROOT);
-    hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
-      nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement,
-      loadGeneratorName: opts.loadGeneratorName});
+    hosts = selectCampaignLabHosts({opts, state, fleet, dataHostCount, requirement,
+      loadGeneratorRequirement});
   } else {
     hosts = gcpHosts(opts, dataHostCount);
   }
+  const research = manifest.plan.profileClass === RESEARCH_PROFILE;
   return {schema: PLAN_SCHEMA, executionTarget: opts.executionTarget,
     campaignId: manifest.campaignId, manifestDigest: manifest.manifestDigest,
     rawObservationsPath: opts.rawObservationsPath,
+    ...(research ? {admission: {status: 'not-admissible', note: researchAdmissionNote(manifest)},
+      storageRoot: opts.storageRoot, substrate: dryRunSubstrate(opts, hosts),
+      formationWaitSeconds: manifest.plan.formationWaitSeconds,
+      ...(manifest.plan.product ? {product: manifest.plan.product} : {})} : {}),
     hostSource: lab ? `registered lab inventory (${opts.fromRecordedFacts ?
       'recorded facts' : 'facts discovered now'})` :
       '--hosts (no infrastructure is created)',
@@ -711,9 +938,16 @@ async function main() {
     process.stdout.write(USAGE);
     return;
   }
+  // The declared product commit is read from the repository before any host is touched.
+  const product = opts.productCommit ?
+    productCommitProvenance(REPO_ROOT, opts.productCommit) : null;
   const manifest = buildComparativeCampaignManifest({campaignId: opts.campaignId,
-    profile: PROFILES[opts.profile], targets: opts.targets});
-  Object.assign(opts, await resolveCheckoutLagrangeProvenance(opts, manifest));
+    profile: product ? researchProfileWithProduct(opts.profileOverride ?? PROFILES[opts.profile],
+      product) : opts.profileOverride ?? PROFILES[opts.profile], targets: opts.targets});
+  // The store refusal of a research campaign is met before any host is touched.
+  createCampaignRecordWriter({rootDir: REPO_ROOT, file: opts.rawObservationsPath,
+    profileClass: manifest.plan.profileClass});
+  Object.assign(opts, await resolveCheckoutLagrangeProvenance(opts, manifest, product));
   const dataHostCount = dataHostCountOf(manifest.targets);
   if (opts.dryRun) {
     const plan = await dryRunPlan({opts, manifest, dataHostCount});
@@ -739,6 +973,10 @@ async function main() {
     await regenerateAllBenchmarkArtifactsFromAdmitted(REPO_ROOT);
     process.stdout.write('[bench] regenerated comparative benchmark artifacts in ' +
       'data/tidb-comparison and docs/benchmarks\n');
+  }
+  if (summary.substrate) {
+    process.stdout.write(`[bench] ${summary.substrate.kind} (host identities ` +
+      `${summary.substrate.declaredHostIdentity}): ${summary.substrate.note}\n`);
   }
   process.stdout.write(`[bench] campaign ${summary.campaignId}: ${summary.attempted.length} ` +
     `runs attempted, summary ${opts.outputPath}\n`);

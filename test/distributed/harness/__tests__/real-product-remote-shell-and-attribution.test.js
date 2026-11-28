@@ -676,7 +676,7 @@ function buildHealthyWorkloadRecordJson() {
     },
     deployment: {
       endpoint: {host: '10.0.0.1', port: 5432},
-      dataset: {resetMethod: 'fresh-formation', verification: {status: 'verified'}},
+      dataset: {resetMethod: 'created-and-loaded', verification: {status: 'verified'}},
     },
     identity: {harness: {driverSourceSha256: 'feed', adapterIds: ['lagrange']}},
     loadGenerator: {

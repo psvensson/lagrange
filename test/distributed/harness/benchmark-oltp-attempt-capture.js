@@ -5,6 +5,7 @@
 // transaction ended unresolved or on a transport failure is destroyed and is
 // never reused; the next transaction on that worker opens a fresh one.
 import {AsyncLocalStorage} from 'node:async_hooks';
+import {performance} from 'node:perf_hooks';
 
 import {
   FAILURE_CLASS,
@@ -18,6 +19,9 @@ import {
 } from './oltp-error-classification.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayPush = Function.call.bind(Array.prototype.push);
+const mapGet = Function.call.bind(Map.prototype.get);
+const mapSet = Function.call.bind(Map.prototype.set);
 const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -40,6 +44,9 @@ const DESTROYING_FAILURE_CLASSES = Object.freeze(new Set([
 
 const attemptStorage = new AsyncLocalStorage();
 
+const END_INDEX = 2;
+const STATUS_INDEX = 3;
+
 const WIRE_FAMILY = Object.freeze({PGWIRE: 'pgwire', MYSQL: 'mysql'});
 // The product's acknowledgement of one statement as the client received it.
 // A receipt is recorded, never read as a durability witness (ledger D30):
@@ -61,9 +68,24 @@ const COLUMN_ENCODING = Object.freeze({
 const CANONICAL_DECIMAL_TEXT = /^-?(0|[1-9][0-9]*)$/u;
 const STATEMENT_VERB = /^\s*([A-Za-z]+)/u;
 
+// The catalog index of a statement text within the run: the distinct SQL texts
+// of the run, each once, in order of first use.
+function catalogIndexOf(registry, sql) {
+  const known = mapGet(registry.statementIndex, sql);
+  if (known !== undefined) return known;
+  const index = registry.statementCatalog.length;
+  arrayPush(registry.statementCatalog, sql);
+  mapSet(registry.statementIndex, sql, index);
+  return index;
+}
+
 function createAttemptTrace() {
   return {
     statements: [],
+    // [catalogIndex, startedMs, endedMs, status] per statement, on the clock of
+    // the open-loop step owner (performance.now()), so every entry lies inside
+    // its attempt's interval.
+    timeline: [],
     connections: new Set(),
     commitSent: false,
     commitAcknowledged: false,
@@ -150,8 +172,16 @@ async function traceStatement(connection, sql, send) {
   if (word === TRANSACTION_CONTROL.COMMIT) trace.commitSent = true;
   const statement = {sql: String(sql), status: STATEMENT_STATUS.PENDING};
   trace.statements.push(statement);
+  const entry = [catalogIndexOf(connection.registry, statement.sql), performance.now(), null,
+    STATEMENT_STATUS.PENDING];
+  arrayPush(trace.timeline, entry);
+  const settle = (status) => {
+    entry[END_INDEX] = performance.now();
+    entry[STATUS_INDEX] = status;
+  };
   try {
     const result = await send();
+    settle(STATEMENT_STATUS.OK);
     statement.status = STATEMENT_STATUS.OK;
     statement.affectedRows = affectedRowsOfResult(result.raw);
     statement.rows = rowsOfResult(result.raw);
@@ -160,6 +190,7 @@ async function traceStatement(connection, sql, send) {
     if (word === TRANSACTION_CONTROL.COMMIT) trace.commitAcknowledged = true;
     return result;
   } catch (error) {
+    settle(STATEMENT_STATUS.ERROR);
     statement.status = STATEMENT_STATUS.ERROR;
     statement.sqlState = resolveOltpErrorSqlState(error);
     statement.code = typeof error?.code === 'string' ? error.code : null;
@@ -177,6 +208,10 @@ function createConnectionRegistry() {
   return {
     connections: new Set(),
     inFlight: new Set(),
+    // The run's distinct statement texts and their index; every attempt's
+    // timeline entries point into the catalog.
+    statementCatalog: [],
+    statementIndex: new Map(),
     destroyed: 0,
     // A destroyed connection whose close also failed: kept, never swallowed.
     destroyFailures: [],
@@ -188,6 +223,7 @@ function createConnectionRegistry() {
 function createLifecycle(registry, family, open, closeInner, destroyInner) {
   const connection = {
     family,
+    registry,
     inner: null,
     destroyed: false,
     inTransaction: false,
@@ -334,6 +370,7 @@ function attemptEvidenceOf(trace) {
     productAnsweredError: trace.productAnsweredError,
     statements: Object.freeze(arrayMap(trace.statements, (statement) =>
       Object.freeze({...statement}))),
+    timeline: Object.freeze(arrayMap(trace.timeline, (entry) => Object.freeze([...entry]))),
   });
 }
 
@@ -384,7 +421,93 @@ function createBenchmarkOutcomeAdapter(adapter, registry) {
   });
 }
 
+const CALIBRATION_STATEMENTS = 10000;
+const CALIBRATION_SQL = 'SELECT 1';
+const CALIBRATION_ENDPOINT = Object.freeze({host: 'calibration', port: 0});
+const CALIBRATION_BOUND = 0.001;
+const P99 = 0.99;
+const CLOCK_PROBES = 1000;
+
+function immediatePgClient() {
+  return {async connect() {}, async query() {
+    return {rows: [], rowCount: 0, command: CALIBRATION_SQL};
+  }, async end() {}};
+}
+
+function smallestClockStepMs() {
+  let smallest = Infinity;
+  let previous = performance.now();
+  for (let probe = 0; probe < CLOCK_PROBES; probe += 1) {
+    const now = performance.now();
+    if (now > previous && now - previous < smallest) smallest = now - previous;
+    previous = now;
+  }
+  return smallest;
+}
+
+/**
+ * The measured cost of the statement timeline: traced statements against an
+ * in-process client that answers immediately, set against the same calls
+ * untraced. A trial reports `statements x meanCost / summed statement time`
+ * against `boundShare`; there is no untraced variant of a real run.
+ * @param {{statements?: number}} options
+ * @return {Promise<Object>} {statements, clockResolutionMs, meanCostMs, p99CallMs, boundShare}
+ */
+async function measureStatementTraceCalibration({statements = CALIBRATION_STATEMENTS} = {}) {
+  const registry = createConnectionRegistry();
+  const client = createTrackedPgClientFactory(immediatePgClient, registry)(CALIBRATION_ENDPOINT);
+  const bare = immediatePgClient();
+  const trace = createAttemptTrace();
+  const calls = [];
+  let tracedMs = 0;
+  await attemptStorage.run(trace, async () => {
+    for (let index = 0; index < statements; index += 1) {
+      const startedMs = performance.now();
+      await client.query(CALIBRATION_SQL);
+      const callMs = performance.now() - startedMs;
+      tracedMs += callMs;
+      arrayPush(calls, callMs);
+    }
+  });
+  const untracedStartedMs = performance.now();
+  for (let index = 0; index < statements; index += 1) await bare.query(CALIBRATION_SQL);
+  const untracedMs = performance.now() - untracedStartedMs;
+  const sorted = [...calls].sort((left, right) => left - right);
+  return Object.freeze({
+    statements,
+    clockResolutionMs: smallestClockStepMs(),
+    meanCostMs: Math.max(0, tracedMs - untracedMs) / statements,
+    p99CallMs: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * P99))],
+    boundShare: CALIBRATION_BOUND,
+  });
+}
+
+/**
+ * The share of the summed statement time the timeline capture itself cost:
+ * calibrated mean cost per traced statement times the traced statements, over
+ * the summed statement time. null where no statement completed.
+ * @param {Array<Object>} requests the run's request records
+ * @param {number} meanCostMs the calibrated mean cost per traced statement
+ * @return {{tracedStatements: number, summedStatementMs: number, share: (number|null)}}
+ */
+function statementTraceOverhead(requests, meanCostMs) {
+  let tracedStatements = 0;
+  let summedStatementMs = 0;
+  for (const request of requests) {
+    for (const attempt of request.attempts) {
+      for (const [, startedMs, endedMs] of attempt.timeline) {
+        tracedStatements += 1;
+        if (endedMs !== null) summedStatementMs += endedMs - startedMs;
+      }
+    }
+  }
+  return Object.freeze({tracedStatements, summedStatementMs,
+    share: summedStatementMs > 0 ? (meanCostMs * tracedStatements) / summedStatementMs : null});
+}
+
 export {
+  measureStatementTraceCalibration,
+  statementTraceOverhead,
   createBenchmarkOutcomeAdapter,
   createConnectionRegistry as createBenchmarkConnectionRegistry,
   createTrackedMysqlConnectionFactory,

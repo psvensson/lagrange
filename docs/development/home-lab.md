@@ -612,6 +612,21 @@ The adapter always disables fast-local mode for a physical-host run. The source
 image is therefore the normal built harness image, rather than a bind mount from
 the controller's local source tree.
 
+### Research runs: three nodes on one lab host (a first look)
+
+A benchmark research run (`run-comparative-benchmarks.mjs --profile research --substrate
+lab-single-host --single-host <registered host>`) is the one case that puts three Lagrange nodes
+and the load generator on a single lab host. The nodes run on a Docker bridge network named for
+the campaign, each at its own bridge address on the standard ports. Each node declares its own
+synthetic host identity (`<campaign-id>-synthetic-host-<n>`, declared host count 3): a one-host
+cluster declared truthfully never becomes ready, and a one-host cluster is only ever a research
+artifact. The synthetic identities are for the research class and the first look only, and are
+recorded as synthetic, beside the machine's real host name, in the run's header and record.
+This is a first look: there is no network between the nodes, so it is never speed or
+efficiency evidence. Speed and efficiency work runs on three separate lab hosts
+(`--substrate lab-multi-host`) and is verified on same-zone cloud VMs; see
+`docs/benchmarks/cloud-reproduction-guide.md`.
+
 ### Certification formations: one node per distinct machine
 
 A run is certification evidence only when it asks for it and every

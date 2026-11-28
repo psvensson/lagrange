@@ -40,9 +40,12 @@ const MAX_PGCONNECT_TIMEOUT_SECONDS = 4;
 const CONNECT_TIMEOUT_DIVISOR_MS = 3000;
 const SQL_SSH_TRANSPORT_GRACE_MS = 2000;
 const BIND_ENDPOINT_PROBE_TIMEOUT_MS = 10000;
-// Inode(s) of the LISTEN (state 0A) socket on the port, from the host network
+// Inode(s) of the LISTEN (state 0A) socket on the port, from a network
 // namespace's tables, matched against the fds of the processes in the target
-// container's pid namespace (the probe joins it with --pid container:ID).
+// container's pid namespace (the probe joins it with --pid container:ID) and read
+// from the target's own network namespace (--network container:ID): a bridge
+// container's sockets are not in the host's tables; on host networking the two
+// namespaces are the same.
 const LISTENER_OWNER_SCRIPT = [
   'hex=$(printf %04X "$1")',
   'inodes=$(awk -v p=":$hex" \'$4 == "0A" && substr($2, length($2) - 4) == p ' +
@@ -253,11 +256,12 @@ async function bindEndpointToContainer({
       let probeError = null;
       try {
         out = await sshRun(
-          endpoint.host,
+          candidate.host,
           callOpts,
           dockerRunOnceCommand({
             campaignId,
             image: SQL_CLIENT_IMAGE,
+            network: `container:${candidate.containerId}`,
             dockerArgs: ['--pid', `container:${candidate.containerId}`, '--cap-add', 'SYS_PTRACE'],
             commandArgs: ['sh', '-c', LISTENER_OWNER_SCRIPT, 'listener-probe',
               String(endpoint.port)],

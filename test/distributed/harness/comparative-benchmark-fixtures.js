@@ -376,7 +376,7 @@ function buildFixtureRun(options = {}) {
       storage: arrayMap(products, (p) => ({containerId: p.containerId, mount: '/data',
         kind: STORAGE_KIND.HOST_VOLUME})),
       readiness: {state: READINESS_STATE.READY, observedAt: FIXTURE_TIME, evidence: {}},
-      dataset: {resetMethod: 'fresh-formation', verification: {
+      dataset: {resetMethod: 'created-and-loaded', verification: {
         status: OLTP_DATASET_VERIFICATION_STATUS.VERIFIED,
         method: 'oltp-state-snapshot-integer-normalized-v1',
         expectedLogicalChecksum: `sha256:${hexDigits('5')}`,

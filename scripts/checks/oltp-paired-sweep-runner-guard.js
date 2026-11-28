@@ -44,7 +44,7 @@ const WATCHDOG = Object.freeze({boundMs: 10000, derivation: Object.freeze({rule:
 const FAILING_SYSTEM = OLTP_SCENARIO_A_SYSTEM.POSTGRESQL;
 const RATES = Object.freeze([100, 200]);
 const REPETITIONS = 6;
-const RESET_METHOD = 'truncate-and-reload';
+const RESET_METHOD = 'truncated-and-reloaded';
 
 function plan() {
   return buildScenarioAPairedSweepPlan({

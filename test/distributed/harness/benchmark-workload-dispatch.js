@@ -12,6 +12,7 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const FAMILY = Object.freeze({
   SCENARIO_A_OLTP: 'scenario-a-oltp',
   SCENARIO_A_SMOKE: 'scenario-a-smoke',
+  SCENARIO_A_RESEARCH: 'scenario-a-research',
   SCENARIO_B_RISK_DECISION: 'scenario-b-risk-decision',
   SCENARIO_C_STREAMING_FEATURE: 'scenario-c-streaming-feature',
 });
@@ -35,13 +36,15 @@ const NON_EXECUTION_REASON = Object.freeze({
 const PUBLICATION = Object.freeze({
   SMOKE: 'smoke',
   SCENARIO_A: 'scenario-a',
+  RESEARCH: 'research',
 });
 
 // The profile class admission reads: a smoke profile never carries a
-// capacity metric.
+// capacity metric; a research profile is never admissible and never published.
 const PROFILE_CLASS = Object.freeze({
   SMOKE: 'smoke',
   CAPACITY: 'capacity',
+  RESEARCH: 'research',
 });
 
 const WORKLOAD_PROFILE = Object.freeze({
@@ -61,6 +64,13 @@ const WORKLOAD_PROFILE = Object.freeze({
       itemCount: 200,
     }),
   }),
+  [FAMILY.SCENARIO_A_RESEARCH]: Object.freeze({
+    id: 'scenario-a-research-v1',
+    publication: PUBLICATION.RESEARCH,
+    profileClass: PROFILE_CLASS.RESEARCH,
+    ownsWorkload: false,
+    workload: null,
+  }),
   [FAMILY.SCENARIO_A_OLTP]: Object.freeze({
     id: 'scenario-a-oltp-baseline-v1',
     publication: PUBLICATION.SCENARIO_A,
@@ -78,6 +88,7 @@ const SCENARIO = Object.freeze({
 const SCENARIO_A_SUBKIND = Object.freeze({
   MAIN: 'main',
   SMOKE: 'smoke',
+  RESEARCH: 'research',
 });
 
 const SYSTEMS = Object.freeze(Object.values(OLTP_SCENARIO_A_SYSTEM));
@@ -103,6 +114,9 @@ function familyOf(scenario, subkind, details) {
   }
   if (scenario === SCENARIO.A && subkind === SCENARIO_A_SUBKIND.SMOKE) {
     return FAMILY.SCENARIO_A_SMOKE;
+  }
+  if (scenario === SCENARIO.A && subkind === SCENARIO_A_SUBKIND.RESEARCH) {
+    return FAMILY.SCENARIO_A_RESEARCH;
   }
   if (scenario === SCENARIO.B && typeof subkind === 'string' && subkind !== '') {
     return FAMILY.SCENARIO_B_RISK_DECISION;

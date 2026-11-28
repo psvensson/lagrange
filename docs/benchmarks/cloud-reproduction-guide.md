@@ -241,6 +241,56 @@ node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --help
 default `lagrange,tidb-tikv,pg-single-primary`). The PostgreSQL HA arm is a primary with two
 synchronous streaming standbys; clients connect to the primary directly and no HA manager runs.
 
+### Research runs and the substrate ladder
+
+`--profile research` measures one product (`--targets lagrange`, the default) for speed and
+efficiency research. Its records are never admissible (admission names
+`research-profile-not-admissible`) and the runner refuses to write them into
+`data/tidb-comparison/`: the default store is
+`test-output/research-sessions/<campaign-id>/raw-observations.ndjson`, and the statement files
+of that session sit beside it as `<runId>/<sha256>.json` (the record's `custody.path` is relative
+to that directory). `--storage-root` is required, and a run needs a passed semantic gate. Every
+research plan and record names its substrate kind, and each kind states what its evidence is for:
+
+- `lab-single-host` (`--substrate lab-single-host --single-host <registered lab host>`): three
+  nodes on one lab host on a campaign-scoped Docker bridge, the load generator on that host. A
+  first look: quick, no network between the nodes, and never evidence of speed or efficiency.
+  A truthfully declared one-host cluster never becomes ready (the readiness contract demands
+  spread priority partitions), so each node declares its own SYNTHETIC host identity
+  (`<campaign-id>-synthetic-host-<n>`, declared host count 3). Three guarantees: only the
+  research class gets synthetic identities (every non-research and every multi-host plan
+  declares each node's observed machine name); only the first look does (`evidenceUse:
+  first-look`); and it is recorded as synthetic in the campaign header, the run record and the
+  report line, beside each node's observed `machineHostName`.
+- `lab-multi-host` (the default on the lab): three separate lab hosts, one node each, the load
+  generator on a fourth machine, run repeatedly with the network as it is. Every run records
+  the round trip it measured (every ordered node pair and the load generator to the endpoint,
+  20 packets each, before and after the measurement window, never during it) under
+  `observations.network.roundTrip`. This is the working evidence.
+- `gcp-same-zone` (`--execution-target gcp`): the final verification once the problems are
+  solved, on same-zone cloud VMs.
+
+A research plan declares its formation wait (`--formation-wait-seconds <n>`, 1 to 1800, default the
+shared comparative deadline; refused for other profiles), because formation time is a
+measurement there, not a gate: the plan and every run record carry it, with the measured time to
+ready. The run's `formation` states its clock: `containersStartedAt` (the containers are up),
+`firstPollAt` (the first readiness poll, issued at once), `pollIntervalMs`, `readyObservedAt` (the
+readiness owner's verdict) and `readyAfterMs`, defined as `readyObservedAt` minus
+`containersStartedAt`; `stages` gives the moment each readiness stage reported ready (nodes,
+membership, partition leaders, system tables, write probe) with its own time to ready. The
+round-trip matrix of the moment right after the containers start is measured beside the
+readiness wait (every pair at once; it never delays a poll) and recorded with its own start, end
+and duration as `observations.network.roundTrip.atDeployment`. The complete log of every
+product container (up to 48 MiB per node; a log over the cap is recorded as truncated, with the
+bytes kept and the bytes it held) is written under the session directory
+(`<runId>/node-logs/`) before teardown for every research run, formed or not, and listed in the
+run record's `diagnostics` with size and sha256 (a log that could not be collected is a typed
+entry).
+
+The dry run (`--dry-run`) prints the frozen plan, the rung and what its evidence may be used for,
+and each host's role. The first look removes its Docker network with its containers; a network
+left behind is reported as an unclosed resource of the campaign.
+
 ---
 
 ## 5. Single-machine quick comparison (no cluster)

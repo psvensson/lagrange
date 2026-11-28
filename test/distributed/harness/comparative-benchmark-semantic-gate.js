@@ -36,6 +36,7 @@ import {
 import {
   buildCanonicalSemanticGateCaseRecord,
 } from './raw-observation-record.js';
+import {datasetResetEventMethod} from './raw-observation-research-fields.js';
 import {
   DateConstructor, MapConstructor, arrayEvery, arrayFilter, arrayFind, arrayIncludes,
   arrayIsArray, arrayJoin, arrayMap, arrayPush, arraySome, dateNow, dateParse, dateToISOString,
@@ -364,6 +365,11 @@ function buildObservedFaultEvidence({deployment, target, beforeProduct, afterPro
     storageContinuity,
     retainedObligations,
   });
+}
+
+// Readiness is judged whole (every key ready); a restart's address moves are a record.
+function splitRestartReadiness({addressChanges, ...readiness}) {
+  return {readiness, addressChanges};
 }
 
 function normalizeRestartRequest(request) {
@@ -1208,10 +1214,6 @@ function hasOuterDatasetReset(run) {
     Boolean(run.adapter && typeof run.adapter.resetDataset === 'function');
 }
 
-function datasetResetMethodForSystem(system) {
-  return system === SYSTEM.LAGRANGE ? 'adapter truncate-and-reload' : 'adapter drop-and-reload';
-}
-
 function assignProvisioningResetTimings(event, provisioning) {
   if (!isRecordObject(provisioning)) return event;
   if (provisioning.resetStartedAt) event.startedAt = provisioning.resetStartedAt;
@@ -1238,13 +1240,13 @@ function resolveCanonicalResetProvisioning(adapter, resetOutcome) {
   return isRecordObject(adapterProvisioning) ? adapterProvisioning : null;
 }
 
-function buildPreparedCaseDatasetResetEvent({caseId, system, adapter, resetOutcome, at}) {
+function buildPreparedCaseDatasetResetEvent({caseId, adapter, resetOutcome, at}) {
   const provisioning = resolveCanonicalResetProvisioning(adapter, resetOutcome);
   return assignProvisioningResetTimings({
     kind: EVENT.DATASET_RESET,
     at: provisioning?.resetEndedAt ?? at(),
     caseId,
-    method: datasetResetMethodForSystem(system),
+    method: datasetResetEventMethod([resetOutcome, adapter]),
   }, provisioning);
 }
 
@@ -1295,16 +1297,15 @@ function attachStageErrorContext(error, events, current, gate) {
 
 async function performStageDatasetReset({run, current, manifest, caseId, resetControl}) {
   if (typeof run.resetDataset === 'function') {
-    await awaitWithGateSignal(() => run.resetDataset({
+    return {outcome: await awaitWithGateSignal(() => run.resetDataset({
       caseId, connection: connectionOf(current), binding: bindingOf(manifest, current),
-    }), resetControl);
-    return true;
+    }), resetControl)};
   }
   if (run.adapter && typeof run.adapter.resetDataset === 'function') {
-    await awaitWithGateSignal(() => run.adapter.resetDataset({caseId}), resetControl);
-    return true;
+    return {outcome: await awaitWithGateSignal(() => run.adapter.resetDataset({caseId}),
+      resetControl)};
   }
-  return false;
+  return null;
 }
 
 function createStageProductRestarter({
@@ -1340,12 +1341,12 @@ function createStageProductRestarter({
     );
     const awaitReadyControl = {...gateControl, stage: 'product-restart-await-ready'};
     assertSemanticGateActive(awaitReadyControl);
-    const readiness = await awaitWithGateSignal(
+    const {readiness, addressChanges} = splitRestartReadiness(await awaitWithGateSignal(
       () => current.operations.awaitReady({
         signal: effectiveSignal, deadlineAtMs: effectiveDeadlineAtMs,
       }),
       awaitReadyControl,
-    );
+    ));
     const inspectControl = {...gateControl, stage: 'product-restart-inspect'};
     assertSemanticGateActive(inspectControl);
     const inspectStep = stepOpts();
@@ -1368,6 +1369,7 @@ function createStageProductRestarter({
     arrayPush(events, {
       kind: EVENT.PRODUCT_RESTART, at: restartedAt, containerId: target.containerId,
       host: target.host, role: faultEvidence.faultTarget.role,
+      ...(addressChanges === undefined ? {} : {addressChanges}),
       startedAtBefore: beforeStartedAt, startedAtAfter: afterStartedAt,
     });
     return objectFreeze({
@@ -1424,10 +1426,10 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
       const resetControl = {...gateControl, stage: 'dataset-reset', caseId};
       assertSemanticGateActive(resetControl);
       const resetStartedAt = at();
-      const didReset = await performStageDatasetReset({
+      const reset = await performStageDatasetReset({
         run, current, manifest, caseId, resetControl,
       });
-      if (!didReset) return;
+      if (reset === null) return;
       assertSemanticGateActive(resetControl);
       const resetEndedAt = at();
       arrayPush(events, {
@@ -1436,7 +1438,7 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
         startedAt: resetStartedAt,
         endedAt: resetEndedAt,
         caseId,
-        method: datasetResetMethodForSystem(run.system),
+        method: datasetResetEventMethod([reset.outcome, run.adapter]),
       });
     };
     const onCaseDatasetPrepared = ({caseId, adapter, resetOutcome}) => {
@@ -1445,7 +1447,7 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
         arrayPush(
           events,
           buildPreparedCaseDatasetResetEvent({
-            caseId, system: run.system, adapter, resetOutcome, at,
+            caseId, adapter, resetOutcome, at,
           }),
         );
       }
@@ -1491,6 +1493,7 @@ export {
   TIDB_CASE_EXECUTORS,
   TIDB_EXECUTED_CASE_IDS,
   buildObservedFaultEvidence,
+  splitRestartReadiness,
   createSemanticGateStage,
   executeRemoteGateAction,
   runTiDbSemanticGate,

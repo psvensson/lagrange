@@ -6,6 +6,7 @@
  * pulled or streamed by a run - the running containers' image ids are the
  * identity, D18); and the machine identity of the load generator's host.
  */
+import {SUBSTRATE_KIND, buildSubstrateDescriptor} from './raw-observation-research-fields.js';
 import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
 import {
   arrayFilter,
@@ -14,6 +15,7 @@ import {
   jsonParse,
   arrayIncludes,
   arrayMap,
+  arrayPush,
   stringSplit,
   stringTrim,
 } from './real-product-captured-intrinsics.js';
@@ -55,10 +57,11 @@ function numericFact(host, name, text) {
 
 /**
  * @param {{hosts: Array<{ip: string, name?: string}>, sshRun: Function,
- *   opts: Object}} input
+ *   opts: Object, substrate?: string}} input; the first-look substrate
+ *   (lab-single-host) is the one case that accepts the same machine more than once
  * @return {Promise<Array<Object>>} one entry per host, in order
  */
-async function collectHostFacts({hosts, sshRun, opts}) {
+async function collectHostFacts({hosts, sshRun, opts, substrate = null}) {
   const facts = [];
   for (const host of hosts) {
     const [hostname, bootId, cpus, memGb, primaryIface] = stringSplit(
@@ -67,11 +70,42 @@ async function collectHostFacts({hosts, sshRun, opts}) {
       cpus: numericFact(host, 'cpus', cpus), memGb: numericFact(host, 'memGb', memGb),
       primaryIface: primaryIface || null});
   }
-  if (new Set(arrayMap(facts, (fact) => fact.bootId)).size !== facts.length) {
+  const machines = new Set(arrayMap(facts, (fact) => fact.bootId)).size;
+  // The first look runs every node and the load generator on one machine.
+  if (substrate === SUBSTRATE_KIND.SINGLE_HOST) {
+    if (machines !== 1) {
+      throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
+        'the single-host substrate names more than one machine', {facts});
+    }
+    return facts;
+  }
+  if (machines !== facts.length) {
     throw deploymentFailure(SCENARIO_REFUSAL.INSUFFICIENT_HOST_TOPOLOGY,
       'two campaign hosts are the same machine (equal boot ids)', {facts});
   }
   return facts;
+}
+
+const LINK_TYPE = Object.freeze({WIFI: 'wifi', WIRED: 'wired', UNKNOWN: 'unknown'});
+
+/**
+ * The observed link type of each host's primary interface (wifi when the
+ * interface has a wireless directory), for the substrate descriptor.
+ * @param {{facts: Array<Object>, sshRun: Function, opts: Object}} input
+ * @return {Promise<Array<string>>} one link type per fact, in order
+ */
+async function observeLinkTypes({facts, sshRun, opts}) {
+  const types = [];
+  for (const fact of facts) {
+    if (!fact.primaryIface) {
+      arrayPush(types, LINK_TYPE.UNKNOWN);
+      continue;
+    }
+    const probe = `[ -e /sys/class/net/${fact.primaryIface}/wireless ] && ` +
+      `echo ${LINK_TYPE.WIFI} || echo ${LINK_TYPE.WIRED}`;
+    arrayPush(types, stringTrim(String(await sshRun(fact.ip, opts, probe))));
+  }
+  return types;
 }
 
 /**
@@ -132,7 +166,8 @@ async function ensureProductImages({hosts, role, images, sshRun, opts}) {
 
 const IMAGE_DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const CONFIG_BLOB = /^(?:blobs\/sha256\/([0-9a-f]{64})|([0-9a-f]{64})\.json)$/u;
-const IMAGE_FIELDS = "docker image inspect --format '{{.Id}}|{{json .RepoDigests}}|{{json .RootFS.Layers}}'";
+const IMAGE_FIELDS = 'docker image inspect --format ' +
+  '\'{{.Id}}|{{json .RepoDigests}}|{{json .RootFS.Layers}}\'';
 
 function refuseImage(host, reason, detail) {
   throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
@@ -148,7 +183,8 @@ function parseImage(line, host) {
     const repoDigests = jsonParse(digests) ?? [];
     if (IMAGE_DIGEST.test(id) && arrayIsArray(repoDigests) &&
         arrayEvery(repoDigests, (value) => typeof value === 'string') &&
-        arrayIsArray(layers) && layers.length && arrayEvery(layers, (value) => IMAGE_DIGEST.test(value))) {
+        arrayIsArray(layers) && layers.length &&
+        arrayEvery(layers, (value) => IMAGE_DIGEST.test(value))) {
       return {id, repoDigests, contentIdentity: contentIdentityOf(layers)};
     }
   } catch (error) {
@@ -201,7 +237,8 @@ async function loadedConfig(ctx, configDigest, contentIdentity) {
       const image = await inspectLocalImage(ctx, id);
       if (!image) continue;
       if (image.id !== id) refuseImage(ctx.host, 'invalid_inventory', {id, observed: image.id});
-      if (image.contentIdentity !== contentIdentity || await configOf(ctx, image) !== configDigest) continue;
+      if (image.contentIdentity !== contentIdentity ||
+          await configOf(ctx, image) !== configDigest) continue;
       if (match) refuseImage(ctx.host, 'ambiguous_config', {configDigest});
       match = image;
     }
@@ -256,8 +293,10 @@ function describeLoadGenerator({host, hostFacts}) {
 }
 
 export {
+  buildSubstrateDescriptor,
   campaignImagesByRole,
   collectHostFacts,
+  observeLinkTypes,
   describeLoadGenerator,
   ensureProductImages,
   resolvePinnedImage,

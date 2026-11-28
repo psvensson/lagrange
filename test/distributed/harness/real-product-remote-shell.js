@@ -53,6 +53,8 @@ const FIXED_LOCALE_PREFIX = 'export LC_ALL=C; ';
 const SINGLE_QUOTE = '\'';
 const ESCAPED_SINGLE_QUOTE = '\'\\\'\'';
 const HTTP_STATUS_MARKER = 'http_status=';
+// The network a product container joins: the host's, or a campaign bridge (the first look).
+const HOST_NETWORK = 'host';
 const EXIT_MARKER = '__exit_code=';
 // A campaign container runs only from an image already on the host: a run
 // never pulls (owner decision D1, 2026-11-14); placing images is provisioning.
@@ -540,13 +542,13 @@ function createRemoteDockerProvider({sshRun, opts, hostOf}) {
  * name and both labels are the only handles cleanup and evidence use.
  */
 async function dockerRunDetached({sshRun, opts, host, campaignId, role, ordinal = 1, image,
-  dockerArgs = [], commandArgs = []}) {
+  network = HOST_NETWORK, dockerArgs = [], commandArgs = []}) {
   requireCampaignId(campaignId);
   const name = `bench-${campaignId}-${role}-${ordinal}`;
   const command = ['docker run -d', '--name', name,
     '--label', `${BENCH_LABEL.CAMPAIGN}=${campaignId}`, '--label', `${BENCH_LABEL.ROLE}=${role}`,
-    '--network host', NEVER_PULL, ...arrayMap(dockerArgs, shellWord), shellWord(image),
-    ...arrayMap(commandArgs, shellWord)].join(' ');
+    '--network', shellWord(network), NEVER_PULL, ...arrayMap(dockerArgs, shellWord),
+    shellWord(image), ...arrayMap(commandArgs, shellWord)].join(' ');
   let out;
   try {
     out = await sshRun(host, opts, command);
@@ -570,10 +572,11 @@ async function dockerRunDetached({sshRun, opts, host, campaignId, role, ordinal 
  * A one-shot, campaign-labelled client container on `host` (psql, mysql):
  * `docker run --rm`, so its lifetime is the command's.
  */
-function dockerRunOnceCommand({campaignId, image, dockerArgs = [], commandArgs = []}) {
+function dockerRunOnceCommand({campaignId, image, network = HOST_NETWORK, dockerArgs = [],
+  commandArgs = []}) {
   requireCampaignId(campaignId);
   return ['docker run --rm', '--label', `${BENCH_LABEL.CAMPAIGN}=${campaignId}`,
-    '--network host', NEVER_PULL, ...arrayMap(dockerArgs, shellWord), shellWord(image),
+    '--network', shellWord(network), NEVER_PULL, ...arrayMap(dockerArgs, shellWord), shellWord(image),
     ...arrayMap(commandArgs, shellWord)].join(' ');
 }
 

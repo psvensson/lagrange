@@ -49,6 +49,14 @@ import {
   isCanonicalScenarioAProofId,
 } from './oltp-scenario-a-semantic-gate.js';
 // The storage vocabulary is the deployment contract's (one declaration).
+import {
+  loadGeneratorSharesProductHost,
+  validateEvidenceCustody,
+  validateRoundTrip,
+  validateStatementCatalog,
+  validateSubstrate,
+  validateTimeline,
+} from './raw-observation-research-fields.js';
 import {STORAGE_KIND} from './real-product-deployment-contract.js';
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
@@ -83,7 +91,8 @@ const EXECUTION_TARGET = Object.freeze({LAB: 'lab', GCP: 'gcp'});
 const READINESS_STATE = Object.freeze({READY: 'ready', EXHAUSTED: 'exhausted'});
 
 
-const NETWORK_SCOPE = Object.freeze({HOST_NIC_TOTAL: 'host-nic-total'});
+const NETWORK_SCOPE = Object.freeze({HOST_NIC_TOTAL: 'host-nic-total',
+  ROUND_TRIP_ONLY: 'round-trip-only'});
 
 // The enumerated business-operation families a run may claim (D11): a run whose
 // scenario is not one of these is refused, never routed to a default family.
@@ -105,6 +114,7 @@ const UNRESOLVED_FAILURE_CLASSES = Object.freeze([
 const RUNS_WITHOUT_WINDOW = Object.freeze([
   BENCHMARK_RUN_STATUS.SETUP_FAILED,
   BENCHMARK_RUN_STATUS.WARMUP_FAILED,
+  BENCHMARK_RUN_STATUS.SEED_UNVERIFIED,
 ]);
 
 const CLOSURE_STATUS = Object.freeze({COMPLETE: 'complete', INCOMPLETE: 'incomplete'});
@@ -236,6 +246,7 @@ const OBSERVATIONS_FIELD = Object.freeze({
   NETWORK: 'network',
   EXECUTED_OPERATIONS_DIGEST: 'executedOperationsDigest',
   RUN_STATUS: 'runStatus',
+  STATEMENT_CATALOG: 'statementCatalog',
   SETUP: 'setup',
 });
 
@@ -266,6 +277,7 @@ const ATTEMPT_FIELD = Object.freeze({
   SQLSTATE: 'sqlstate',
   ERROR_CODE: 'errorCode',
   RESPONSE_DIGEST: 'responseDigest',
+  TIMELINE: 'timeline',
 });
 
 const CORRECTNESS_FIELD = Object.freeze({
@@ -357,6 +369,11 @@ function requireIsoTime(value, at) {
   }
   return value;
 }
+
+// What the research-field validators call back into: the validator's own checks.
+const FIELD_CHECKS = Object.freeze({reject, requireArray, requireCount, requireIsoTime,
+  requireObject, requireText, requireTiming, digestMismatch: RECORD_REJECTION.DIGEST_MISMATCH,
+  invalidTiming: RECORD_REJECTION.INVALID_TIMING});
 
 function requireEnum(value, allowed, at) {
   if (!arrayIncludes(allowed, value)) {
@@ -579,19 +596,21 @@ function validateDeployment(deployment) {
   requireNullableObject(deployment[DEPLOYMENT_FIELD.PLACEMENT] ?? null, 'deployment.placement');
 }
 
-function validateAttemptTimings(attempts, at) {
+function validateAttemptTimings(attempts, at, catalogSize) {
   attempts.forEach((attempt, idx) => {
     requireObject(attempt, `${at}[${idx}]`);
     const started = requireTiming(attempt[ATTEMPT_FIELD.STARTED_MS], `${at}[${idx}].startedMs`);
     const ended = requireTiming(attempt[ATTEMPT_FIELD.ENDED_MS], `${at}[${idx}].endedMs`);
     if (ended < started) reject(RECORD_REJECTION.INVALID_TIMING, `${at}[${idx}] ends early`);
     requireText(attempt[ATTEMPT_FIELD.RESPONSE_DIGEST], `${at}[${idx}].responseDigest`);
+    validateTimeline(FIELD_CHECKS, attempt[ATTEMPT_FIELD.TIMELINE] ?? [],
+      `${at}[${idx}].timeline`, catalogSize);
   });
 }
 
 // Typed record-level checks; every other request invariant is owned by
 // validateBenchmarkAccounting (benchmark-operation-outcome.js).
-function validateRequests(requests) {
+function validateRequests(requests, catalogSize = Infinity) {
   const seen = new Set();
   requests.forEach((request, idx) => {
     const at = `observations.requests[${idx}]`;
@@ -601,7 +620,9 @@ function validateRequests(requests) {
     seen.add(opId);
     requireTiming(request[REQUEST_FIELD.INTENDED_START_MS], `${at}.intendedStartMs`);
     validateAttemptTimings(requireArray(request[REQUEST_FIELD.ATTEMPTS], `${at}.attempts`),
-      `${at}.attempts`);
+      `${at}.attempts`, catalogSize);
+    validateEvidenceCustody(FIELD_CHECKS, request[REQUEST_FIELD.RESPONSE_EVIDENCE],
+      `${at}.custody`);
     if (request[REQUEST_FIELD.OUTCOME] === OPERATION_OUTCOME.UNRESOLVED) {
       requireEnum(request[REQUEST_FIELD.FAILURE_CLASS], UNRESOLVED_FAILURE_CLASSES,
         `${at}.failureClass`);
@@ -642,7 +663,11 @@ function validateObservations(observations) {
     objectValues(BENCHMARK_RUN_STATUS), 'observations.runStatus');
   const requests = requireArray(observations[OBSERVATIONS_FIELD.REQUESTS],
     'observations.requests');
-  validateRequests(requests);
+  const catalog = observations[OBSERVATIONS_FIELD.STATEMENT_CATALOG];
+  if (catalog !== undefined) {
+    validateStatementCatalog(FIELD_CHECKS, catalog, 'observations.statementCatalog');
+  }
+  validateRequests(requests, catalog?.length ?? Infinity);
   validateAccountingMatchesRequests(observations[OBSERVATIONS_FIELD.ACCOUNTING], requests);
   if (arrayIncludes(RUNS_WITHOUT_WINDOW, runStatus)) {
     if (observations.accounting.issued !== 0) {
@@ -662,6 +687,7 @@ function validateObservations(observations) {
   const network = requireNullableObject(observations[OBSERVATIONS_FIELD.NETWORK] ?? null,
     'observations.network');
   if (network) requireEnum(network.scope, objectValues(NETWORK_SCOPE), 'observations.network.scope');
+  validateRoundTrip(FIELD_CHECKS, network?.roundTrip, 'observations.network.roundTrip');
 }
 
 function validateCorrectness(correctness) {
@@ -911,7 +937,7 @@ function checkRunHostMembership(host, run) {
   const deployment = ownProp(run, 'deployment');
   const identity = ownProp(run, 'identity');
   const loadGenHost = ownProp(ownProp(deployment, 'loadGenerator'), 'host');
-  if (!host || host === loadGenHost) return false;
+  if (!host || (host === loadGenHost && !loadGeneratorSharesProductHost(run))) return false;
   const inRoles = listContainsKeyValue(listOrEmpty(ownProp(deployment, 'roles')), 'host', host);
   const inProducts = listContainsKeyValue(listOrEmpty(ownProp(identity, 'products')), 'host', host);
   const inHosts = listContainsKeyValue(listOrEmpty(ownProp(deployment, 'hosts')), 'ip', host);
@@ -1354,8 +1380,13 @@ function validateCampaignHeader(header) {
   requireEnum(header[HEADER_FIELD.EXECUTION_TARGET], objectValues(EXECUTION_TARGET),
     'executionTarget');
   validateHosts(header[HEADER_FIELD.PHYSICAL_HOSTS], 'physicalHosts');
+  validateSubstrate(FIELD_CHECKS, header.substrate, 'substrate');
   const pinned = requireArray(header[HEADER_FIELD.PRODUCTS], 'products');
-  if (pinned.length === 0) reject(RECORD_REJECTION.MISSING_FIELD, 'products must not be empty');
+  // A research header may pin nothing when it lists the unpinned targets.
+  const research = header.manifest?.plan?.profileClass === BENCHMARK_PROFILE_CLASS.RESEARCH;
+  if (pinned.length === 0 && !(research && header.unpinnedTargets?.length > 0)) {
+    reject(RECORD_REJECTION.MISSING_FIELD, 'products must not be empty');
+  }
   const keys = new Set();
   pinned.forEach((pin, idx) => {
     const at = `products[${idx}]`;

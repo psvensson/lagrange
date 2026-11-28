@@ -211,7 +211,7 @@ test('an unopened run (the deployer\'s readiness exhausted) records every planne
   assert.ok(observed.accounting.offered > 0);
   assert.equal(output.deployment.endpoint, null);
   assert.equal(output.deployment.dataset.verification.status, 'failed');
-  assert.equal(output.deployment.dataset.resetMethod, 'fresh-formation');
+  assert.equal(output.deployment.dataset.resetMethod, 'not-performed');
   assert.equal(output.correctness.finalState, null);
 });
 

@@ -5,7 +5,10 @@
 // derived from the product timing ladder, and product-content dataset
 // verification and final-state reconciliation on a separate connection.
 import {loadMysql2Promise} from '../reference-client/native-clients.js';
-import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
+import {
+  OLTP_ADAPTER_KEEP_DATASET,
+  OLTP_DATASET_PREPARATION_METHOD,
+} from '../reference-client/oltp-adapter-contract.js';
 import {createPgWireClient} from '../reference-client/pg-wire-client.js';
 import {
   QUERY_DEFAULTS,
@@ -33,6 +36,8 @@ import {
   createBenchmarkOutcomeAdapter,
   createTrackedMysqlConnectionFactory,
   createTrackedPgClientFactory,
+  measureStatementTraceCalibration,
+  statementTraceOverhead,
 } from './benchmark-oltp-attempt-capture.js';
 import {
   benchmarkCanonicalDigest,
@@ -41,6 +46,7 @@ import {
   describePlannedOperationSlice,
 } from './benchmark-operation-outcome.js';
 import {
+  OLTP_DATASET_VERIFICATION_STATUS,
   OLTP_RECONCILIATION_STATUS,
   observeOltpStateSnapshot,
   reconcileOltpFinalState,
@@ -92,12 +98,7 @@ const RUN_STATUS = Object.freeze({
   WATCHDOG_STOPPED: 'watchdog-stopped',
   SETUP_FAILED: 'setup-failed',
   WARMUP_FAILED: 'warmup-failed',
-});
-
-const DATASET_RESET_METHOD = Object.freeze({
-  FRESH_FORMATION: 'fresh-formation',
-  TRUNCATE_AND_RELOAD: 'truncate-and-reload',
-  NONE: 'none',
+  SEED_UNVERIFIED: 'seed-unverified',
 });
 
 const ENDPOINT_DISCOVERY = Object.freeze({
@@ -163,15 +164,8 @@ async function resolveLagrangeConnection(connection) {
   };
 }
 
-// How the system's dataset is made fresh. Lagrange cannot DROP TABLE: the
-// dataset is fresh only on a fresh formation.
-function resetMethodOf(system) {
-  return system === OLTP_SCENARIO_A_SYSTEM.LAGRANGE ?
-    DATASET_RESET_METHOD.FRESH_FORMATION : DATASET_RESET_METHOD.TRUNCATE_AND_RELOAD;
-}
-
 // The system's native adapter beneath the wire capture, its separate
-// snapshot reader and its dataset reset method.
+// snapshot reader; the adapter reports how it made the dataset canonical.
 async function openSystem(system, connection, workload, registry, drivers) {
   if (system === OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV) {
     const endpoint = requireEndpoint(connection?.endpoint, 'TiDB');
@@ -181,7 +175,6 @@ async function openSystem(system, connection, workload, registry, drivers) {
     return {
       endpoint,
       discovery: ENDPOINT_DISCOVERY.CALLER,
-      resetMethod: resetMethodOf(system),
       open: () => createTiDbOltpAdapter(adapterOptions),
       snapshot: (adapter) => observeTiDbOltpStateSnapshot({endpoint,
         databaseName: adapter.databaseName, createConnection: baseConnect}),
@@ -199,7 +192,6 @@ async function openSystem(system, connection, workload, registry, drivers) {
   return {
     endpoint: resolved.endpoint,
     discovery: resolved.discovery,
-    resetMethod: resetMethodOf(system),
     open: () => createAdapter(adapterOptions),
     snapshot: () => observeLagrangeOltpStateSnapshot({endpoint: resolved.endpoint,
       connection: resolved.credentials, createClient: baseClient}),
@@ -423,8 +415,13 @@ function finalStateObservationOf(measured) {
     measured.reconciliation : null;
 }
 
-function observationsOf(measured, registry, profileClass) {
+function observationsOf(measured, registry, profileClass, calibration) {
   const {step} = measured;
+  const timingCalibration = Object.freeze({...calibration,
+    overhead: statementTraceOverhead(step ? step.records : measured.unissued.records,
+      calibration.meanCostMs)});
+  // The run's distinct statement texts; every attempt's timeline entries index it.
+  const statementCatalog = Object.freeze([...registry.statementCatalog]);
   if (!step) {
     return Object.freeze({
       runStatus: measured.status,
@@ -437,6 +434,8 @@ function observationsOf(measured, registry, profileClass) {
       window: measured.unissued.window,
       executedOperationsDigest: computeExecutedOperationsDigest(measured.unissued.records),
       errorRate: null,
+      statementCatalog,
+      timingCalibration,
     });
   }
   return Object.freeze({
@@ -451,6 +450,8 @@ function observationsOf(measured, registry, profileClass) {
     accounting: step.accounting,
     window: step.window,
     watchdog: step.watchdog,
+    statementCatalog,
+    timingCalibration,
     // A smoke run never carries a capacity metric.
     ...(profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ? {} :
       {completedPerSec: step.completedPerSec}),
@@ -491,11 +492,14 @@ function requireSetupFailure(value) {
 // answered with; an unopened run (options.setupFailure: the deployment never
 // became ready) never connects.
 async function openAndMeasure(options, context) {
-  const {dispatch, workload, workloadPlan, rate, startedAtIso, registry} = context;
+  const {dispatch, dataset, workload, workloadPlan, rate, startedAtIso, registry} = context;
+  const verifySeed = (loaded, setup) => verifyOltpLoadedDataset(dataset, loaded, setup);
   if (Object.hasOwn(options, 'setupFailure')) {
     const setup = requireSetupFailure(options.setupFailure);
-    return {system: {endpoint: null, discovery: null, resetMethod: resetMethodOf(dispatch.system)},
-      adapter: null, setupError: null, loaded: {snapshot: null, error: 'run never opened'},
+    const loaded = {snapshot: null, error: 'run never opened'};
+    return {system: {endpoint: null, discovery: null},
+      resetMethod: OLTP_DATASET_PREPARATION_METHOD.NOT_PERFORMED,
+      adapter: null, setupError: null, loaded, verification: await verifySeed(loaded, setup),
       measured: {status: RUN_STATUS.SETUP_FAILED, setup, warmup: null, step: null,
         reconciliation: null,
         unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)},
@@ -508,17 +512,27 @@ async function openAndMeasure(options, context) {
   try {
     adapter = await system.open();
   } catch (error) {
-    return {system, adapter: null, loaded: {snapshot: null, error: 'dataset not loaded'},
-      measured: {status: RUN_STATUS.SETUP_FAILED, setup: setupFailure(error), warmup: null,
+    const loaded = {snapshot: null, error: 'dataset not loaded'};
+    const setup = setupFailure(error);
+    return {system, adapter: null, loaded, verification: await verifySeed(loaded, setup),
+      resetMethod: OLTP_DATASET_PREPARATION_METHOD.NOT_PERFORMED,
+      measured: {status: RUN_STATUS.SETUP_FAILED, setup, warmup: null,
         step: null, reconciliation: null,
         unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)},
       provisioning: provisioningEvidenceOf(dispatch.system, null, error)};
   }
   const loaded = await observeOltpStateSnapshot(() => system.snapshot(adapter));
-  const measured = await measure({adapter, startedAtIso,
-    outcomeAdapter: createBenchmarkOutcomeAdapter(adapter, registry), system, workloadPlan,
-    rate, runtime: options.runtime || {}, evidence: {evidenceDir: options.evidenceDir}});
-  return {system, adapter, loaded, measured,
+  // An unverified seed is never warmed up or measured: every planned request
+  // stays unissued under the typed outcome.
+  const verification = await verifySeed(loaded, null);
+  const measured = verification.status === OLTP_DATASET_VERIFICATION_STATUS.VERIFIED ?
+    await measure({adapter, startedAtIso,
+      outcomeAdapter: createBenchmarkOutcomeAdapter(adapter, registry), system, workloadPlan,
+      rate, runtime: options.runtime || {}, evidence: {evidenceDir: options.evidenceDir}}) :
+    {status: RUN_STATUS.SEED_UNVERIFIED, setup: null, warmup: null, step: null,
+      reconciliation: null, unissued: unissuedMeasurement(workloadPlan, rate, startedAtIso)};
+  return {system, adapter, loaded, verification, measured,
+    resetMethod: adapter.datasetPreparationMethod,
     provisioning: provisioningEvidenceOf(dispatch.system, adapter, null)};
 }
 
@@ -531,9 +545,10 @@ async function executeScenarioARun(options) {
   const workloadPlan = buildOltpBaselinePlan(workload);
   const dataset = buildOltpBaselineDataset(workload);
   const registry = createBenchmarkConnectionRegistry();
+  const timingCalibration = await measureStatementTraceCalibration();
   const identity = planIdentity(profile, plan, workload, rate);
-  const {system, adapter, loaded, measured, provisioning} = await openAndMeasure(options,
-    {dispatch, workload, workloadPlan, rate, registry,
+  const {system, adapter, verification, measured, provisioning, resetMethod} =
+    await openAndMeasure(options, {dispatch, dataset, workload, workloadPlan, rate, registry,
       startedAtIso: new Date().toISOString()});
   const cleanup = await closeAdapter(adapter);
   return Object.freeze({
@@ -543,12 +558,12 @@ async function executeScenarioARun(options) {
       endpoint: system.endpoint,
       endpointDiscovery: system.discovery,
       dataset: Object.freeze({
-        resetMethod: system.resetMethod,
+        resetMethod,
         provisioning,
-        verification: await verifyOltpLoadedDataset(dataset, loaded, measured.setup),
+        verification,
       }),
     }),
-    observations: observationsOf(measured, registry, profile.profileClass),
+    observations: observationsOf(measured, registry, profile.profileClass, timingCalibration),
     correctness: Object.freeze({
       semanticGate: null,
       // An unobserved snapshot leaves no final state; the reason is kept.

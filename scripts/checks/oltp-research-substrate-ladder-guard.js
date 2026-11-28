@@ -79,7 +79,7 @@ const METRIC_FLAG = '--metric';
 const ARGV_OFFSET = 2;
 const REASON_PREVIEW = 3;
 const FIELD_JOIN = '; ';
-const MATRIX_SIDES = Object.freeze(['before', 'after']);
+const MATRIX_SIDES = Object.freeze(['atDeployment', 'before', 'after']);
 const TABLE_OUTCOME_RESET = 'reset-and-routable';
 const TABLE_OUTCOME_CREATED = 'created';
 const HEADER_TYPE = 'campaign-header';
@@ -107,12 +107,27 @@ const TEXT = Object.freeze({
   NO_RUN: 'the file holds no run record',
   STORE_CONTROL: 'a research record in a scratch copy of the published store was not found',
   MET: 'met',
+  PRODUCT: 'the run booted a source fingerprint other than the one its declared product commit expects',
+  NO_FORMATION: 'the run states no measured time to ready and the deadline that applied',
   IDENTITY: 'the declared host identities do not match the rung: synthetic and marked for ' +
     'the first look, the observed machine name for every other rung',
   SHARED_ID: 'two nodes of the first look share one declared host id',
   NOT_COMPLETED: 'the run did not complete',
+  CUSTODY_ABSENT: 'the custody file of the retained statements is absent',
+  CUSTODY_DIFFERS: 'the custody file differs from the recorded size or digest',
+  CUSTODY_SHAPE: 'the custody file holds no statements for the attempt',
+  CONTROL_CUSTODY_REJECTED: 'control: a record whose statements are in custody was rejected',
+  CONTROL_DIGEST_ACCEPTED: 'control: a custody file with a different digest was accepted',
+  CONTROL_ABSENT_ACCEPTED: 'control: an absent custody file was accepted',
+  OVERHEAD: 'the timeline capture overhead share is missing or above its bound:',
 });
+const OVERHEAD_BOUND = 0.001;
+const IDEAL_OVERHEAD_SHARE = 0.0001;
+const OVERHEAD_EXCESS = 10;
+const COMMIT_LENGTH = 40;
+const FINGERPRINT_LENGTH = 16;
 const CONTROL_STORE_LABEL = 'control-store';
+const CONTROL_CUSTODY_LABEL = 'control-custody';
 const TABLE_WAREHOUSE = 'warehouse';
 const TABLE_ITEM = 'item';
 const SQL_BEGIN = 'BEGIN';
@@ -133,9 +148,29 @@ function parseNdjson(text) {
     (line) => jsonParse(line));
 }
 
-function attemptTimelineIssue(request, attempt, catalog) {
+// The statements of an attempt: inline, or, where the request's evidence is in
+// custody, the attempt's statements in the custody file, whose size and digest
+// are verified against the record. A file that is absent or differs is a named
+// reason, never a pass.
+function statementsOfAttempt(request, attemptIndex, attempt, baseDir) {
+  if (arrayIsArray(attempt.statements)) return {statements: attempt.statements};
+  const evidence = request.responseEvidence;
+  const file = evidence?.custody?.path ? path.join(baseDir, evidence.custody.path) : null;
+  if (!file || !fs.existsSync(file)) {
+    return {problem: `${request.opId}: ${TEXT.CUSTODY_ABSENT}`};
+  }
+  const payload = fs.readFileSync(file, UTF8);
+  const size = Buffer.byteLength(payload);
+  if (sha256Of(payload) !== evidence.sha256 || size !== evidence.custody.bytes) {
+    return {problem: `${request.opId}: ${TEXT.CUSTODY_DIFFERS}`};
+  }
+  const statements = jsonParse(payload)[attemptIndex];
+  return arrayIsArray(statements) ? {statements} : {problem: `${request.opId}: ${TEXT.CUSTODY_SHAPE}`};
+}
+
+function attemptTimelineIssue(request, attempt, statementCount, catalog) {
   const timeline = attempt.timeline;
-  if (!arrayIsArray(timeline) || timeline.length !== attempt.statements?.length) {
+  if (!arrayIsArray(timeline) || timeline.length !== statementCount) {
     return `${request.opId}: timeline lacks an entry`;
   }
   const inside = arrayEvery(timeline, ([index, started, ended]) =>
@@ -144,17 +179,40 @@ function attemptTimelineIssue(request, attempt, catalog) {
   return inside ? null : `${request.opId}: a timeline entry is outside its attempt`;
 }
 
-function timelineIssues(run) {
+function timelineIssues(run, baseDir) {
   const catalog = run.observations?.statementCatalog;
   if (!arrayIsArray(catalog)) return [TEXT.NO_CATALOG];
   const issues = [];
   for (const request of run.observations.requests ?? []) {
-    for (const attempt of request.attempts ?? []) {
-      const issue = attemptTimelineIssue(request, attempt, catalog);
+    (request.attempts ?? []).forEach((attempt, attemptIndex) => {
+      const {statements, problem} = statementsOfAttempt(request, attemptIndex, attempt, baseDir);
+      const issue = problem ?? attemptTimelineIssue(request, attempt, statements.length, catalog);
       if (issue) arrayPush(issues, issue);
-    }
+    });
   }
   return issues;
+}
+
+// The timeline capture's own cost, measured per run, must stay within its bound.
+function overheadIssues(run) {
+  const share = run.observations?.timingCalibration?.overhead?.share;
+  return typeof share === 'number' && share <= OVERHEAD_BOUND ? [] :
+    [`${TEXT.OVERHEAD} ${JSON.stringify(share)}`];
+}
+
+// The measured time to ready and the deadline that applied.
+function formationIssues(run) {
+  const formation = run.formation;
+  return typeof formation?.readyAfterMs === 'number' &&
+    typeof formation.deadlineMs === 'number' ? [] : [TEXT.NO_FORMATION];
+}
+
+// A run that declares its product source booted exactly the fingerprint expected of it.
+function productIssues(run) {
+  const product = run.product;
+  if (product === undefined) return [];
+  return typeof product.sourceFingerprintExpected === 'string' &&
+    product.sourceFingerprintBooted === product.sourceFingerprintExpected ? [] : [TEXT.PRODUCT];
 }
 
 function resetIssues(run) {
@@ -183,11 +241,14 @@ function matrixIssue(side, matrix, wanted) {
 function roundTripIssues(run) {
   const window = run.observations?.window;
   const roundTrip = run.observations?.network?.roundTrip;
-  if (!roundTrip?.before || !roundTrip?.after) return [TEXT.NO_MATRICES];
+  if (!roundTrip?.atDeployment || !roundTrip?.before || !roundTrip?.after) {
+    return [TEXT.NO_MATRICES];
+  }
   const wanted = MATRIX_ENTRIES;
   const issues = arrayFilter(arrayMap(MATRIX_SIDES,
     (side) => matrixIssue(side, roundTrip[side], wanted)), (issue) => issue !== null);
-  if (!(roundTrip.before.endedAt <= window?.startedAt &&
+  if (!(roundTrip.atDeployment.endedAt <= roundTrip.before.startedAt &&
+      roundTrip.before.endedAt <= window?.startedAt &&
       roundTrip.after.startedAt >= window?.endedAt)) {
     arrayPush(issues, TEXT.MATRIX_IN_WINDOW);
   }
@@ -266,7 +327,8 @@ function runIssues(run, expectedKind, baseDir) {
   if (run.deployment?.closure?.status !== CLOSURE_COMPLETE) {
     arrayPush(issues, TEXT.CLOSURE);
   }
-  arrayPush(issues, ...timelineIssues(run), ...resetIssues(run),
+  arrayPush(issues, ...timelineIssues(run, baseDir), ...overheadIssues(run), ...resetIssues(run),
+    ...formationIssues(run), ...productIssues(run),
     ...roundTripIssues(run), ...custodyIssues(run, baseDir));
   return issues;
 }
@@ -320,6 +382,10 @@ const PROPERTY = Object.freeze([
 
 // --- negative controls --------------------------------------------------------
 
+const ISO_AT_DEPLOYMENT = '2026-11-28T09:59:00.000Z';
+const IDEAL_WAIT_SECONDS = 900;
+const MS_PER_SECOND = 1000;
+const IDEAL_READY_MS = 5000;
 const ISO_BEFORE = '2026-11-28T10:00:00.000Z';
 const ISO_WINDOW_START = '2026-11-28T10:00:10.000Z';
 const ISO_WINDOW_END = '2026-11-28T10:01:10.000Z';
@@ -342,6 +408,8 @@ function idealMatrix(at) {
 function idealRun(kind, resetMethod, tableOutcome) {
   return {recordType: RUN_TYPE, subkind: RESEARCH.CLASS,
     execution: {state: RUN_COMPLETED},
+    formation: {declaredWaitSeconds: IDEAL_WAIT_SECONDS,
+      deadlineMs: IDEAL_WAIT_SECONDS * MS_PER_SECOND, readyAfterMs: IDEAL_READY_MS},
     plan: {profileClass: RESEARCH.CLASS},
     correctness: {semanticGate: {status: GATE_PASSED}},
     deployment: {closure: {status: CLOSURE_COMPLETE}, dataset: {resetMethod,
@@ -352,7 +420,9 @@ function idealRun(kind, resetMethod, tableOutcome) {
       requests: [{opId: IDEAL_OP_ID, attempts: [IDEAL_ATTEMPT],
         responseEvidence: {encoding: INLINE}}],
       window: {startedAt: ISO_WINDOW_START, endedAt: ISO_WINDOW_END},
-      network: {roundTrip: {before: idealMatrix(ISO_BEFORE),
+      timingCalibration: {overhead: {share: IDEAL_OVERHEAD_SHARE}},
+      network: {roundTrip: {atDeployment: idealMatrix(ISO_AT_DEPLOYMENT),
+        before: idealMatrix(ISO_BEFORE),
         after: idealMatrix(ISO_AFTER)}}}};
 }
 
@@ -443,8 +513,22 @@ const MUTANT = Object.freeze({
     records[0].substrate.nodeHostMap[2].declaredHostId =
       records[0].substrate.nodeHostMap[1].declaredHostId;
   },
+  'a run without its round trip at deployment': (records) => {
+    delete records[1].observations.network.roundTrip.atDeployment;
+  },
+  'a run without its measured formation time': (records) => {
+    delete records[1].formation;
+  },
+  'a run whose booted source fingerprint is not the expected one': (records) => {
+    records[1].product = {declaredCommit: 'c'.repeat(COMMIT_LENGTH),
+      sourceFingerprintExpected: 'a'.repeat(FINGERPRINT_LENGTH),
+      sourceFingerprintBooted: 'b'.repeat(FINGERPRINT_LENGTH)};
+  },
   'a run that did not complete': (records) => {
     records[1].execution.state = RUN_FAILED;
+  },
+  'a run whose timeline overhead share is above its bound': (records) => {
+    records[1].observations.timingCalibration.overhead.share = OVERHEAD_BOUND * OVERHEAD_EXCESS;
   },
   'a single-host record without its first-look marking': (records) => {
     records[0].substrate.evidenceUse = EVIDENCE_USE.WORKING;
@@ -466,6 +550,48 @@ const MULTI_MUTANT = Object.freeze({
     records[0].substrate.evidenceUse = EVIDENCE_USE.FIRST_LOOK;
   },
 });
+
+const CUSTODY_RUN_ID = 'bench-control-r001';
+const CUSTODY_TAMPER = ' ';
+const CUSTODY_STATEMENTS = Object.freeze([Object.freeze([
+  Object.freeze({sql: SQL_BEGIN, status: STATUS_OK}),
+  Object.freeze({sql: SQL_COMMIT, status: STATUS_OK})])]);
+
+// A record whose request keeps its statements in custody, in a scratch directory.
+function custodyRecords(directory) {
+  const payload = JSON.stringify(CUSTODY_STATEMENTS);
+  const sha256 = sha256Of(payload);
+  const relative = path.join(CUSTODY_RUN_ID, `${sha256}.json`);
+  fs.mkdirSync(path.join(directory, CUSTODY_RUN_ID), {recursive: true});
+  fs.writeFileSync(path.join(directory, relative), payload);
+  const records = idealRecords(SUBSTRATE_KIND.SINGLE_HOST);
+  const request = records[1].observations.requests[0];
+  request.attempts = [{...request.attempts[0], statements: null}];
+  request.responseEvidence = {encoding: RETAINED_FILE, sha256, bytes: payload.length,
+    custody: {path: relative, sha256, bytes: payload.length}};
+  return {records, file: path.join(directory, relative)};
+}
+
+function custodyProblems() {
+  const directory = scratchDir(CONTROL_CUSTODY_LABEL);
+  const context = {expectedKind: SUBSTRATE_KIND.SINGLE_HOST, baseDir: directory};
+  try {
+    const {records, file} = custodyRecords(directory);
+    const problems = evaluateRetainedRecords(records, context).length === 0 ? [] :
+      [TEXT.CONTROL_CUSTODY_REJECTED];
+    fs.appendFileSync(file, CUSTODY_TAMPER);
+    if (evaluateRetainedRecords(records, context).length === 0) {
+      arrayPush(problems, TEXT.CONTROL_DIGEST_ACCEPTED);
+    }
+    fs.rmSync(file);
+    if (evaluateRetainedRecords(records, context).length === 0) {
+      arrayPush(problems, TEXT.CONTROL_ABSENT_ACCEPTED);
+    }
+    return problems;
+  } finally {
+    removeDir(directory);
+  }
+}
 
 function controlProblems() {
   const problems = [];
@@ -489,6 +615,7 @@ function controlProblems() {
       arrayPush(problems, `control: ${name} was accepted`);
     }
   }
+  arrayPush(problems, ...custodyProblems());
   const storeProblem = storeControl();
   if (storeProblem) arrayPush(problems, `control: ${storeProblem}`);
   return problems;

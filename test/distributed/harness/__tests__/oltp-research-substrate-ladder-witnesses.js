@@ -32,7 +32,9 @@ import {
 import * as manifestOwner from '../comparative-benchmark-campaign-manifest.js';
 import * as runnerOwner from '../comparative-benchmark-campaign-runner.js';
 import * as hostPreparation from '../comparative-benchmark-host-preparation.js';
+import * as cleanupOwner from '../real-product-campaign-cleanup.js';
 import * as callSite from '../comparative-benchmark-workload-call-site.js';
+import {TARGET_DATA_HOSTS} from '../real-product-cluster-deployers.js';
 import * as deployerLagrange from '../real-product-deployer-lagrange.js';
 import * as networkImpairment from '../real-product-network-impairment.js';
 import {
@@ -137,6 +139,7 @@ const TEXT = Object.freeze({
     'evidence, final verification), or accepts two nodes of a multi-host record on one host',
   DESCRIPTOR: 'the descriptor builder does not state kind and path, or accepts a lan or loopback ' +
     'path for one host',
+  NO_NODE_LOGS: 'the campaign cleanup owner collects no container logs of a failed formation',
   NO_RETAINED_FILE: 'the guard workload retained no statement file',
   RUN_NOT_RESEARCH: 'a run of the manifest is not of subkind research',
   COMPARABLE: 'the manifest is comparable',
@@ -201,6 +204,48 @@ function sha256Of(text) {
 
 const MANIFEST_CAMPAIGN = 'bench-research-guard';
 
+// A research plan declares its formation wait (the default is the shared deadline); the
+// readiness owner takes it from the plan; no other profile carries it.
+const DEFAULT_WAIT_SECONDS = 240;
+const DECLARED_WAIT_SECONDS = 900;
+const WAIT_OUT_OF_BOUNDS = Object.freeze([0, 1801, 1.5]);
+
+function formationWaitProblems(profile) {
+  const withWait = manifestOwner.researchProfileWithFormationWait;
+  const budget = manifestOwner.researchReadinessBudget;
+  if (typeof withWait !== 'function' || typeof budget !== 'function') {
+    return ['the manifest owner has no declared formation wait for a research plan'];
+  }
+  const planOf = (one) => manifestOwner.buildComparativeCampaignManifest({
+    campaignId: MANIFEST_CAMPAIGN, profile: one, targets: [TARGET.LAGRANGE]}).plan;
+  const problems = [];
+  if (planOf(profile).formationWaitSeconds !== DEFAULT_WAIT_SECONDS) {
+    arrayPush(problems, 'the default research plan does not carry the shared deadline');
+  }
+  if (planOf(withWait(DECLARED_WAIT_SECONDS)).formationWaitSeconds !== DECLARED_WAIT_SECONDS) {
+    arrayPush(problems, 'the plan does not carry the declared formation wait');
+  }
+  const declared = budget(DECLARED_WAIT_SECONDS);
+  if (declared.formationDeadlineMs !== DECLARED_WAIT_SECONDS * 1000 ||
+      declared.attempts < DECLARED_WAIT_SECONDS) {
+    arrayPush(problems, `the readiness budget of the wait is ${show(declared)}`);
+  }
+  for (const seconds of WAIT_OUT_OF_BOUNDS) {
+    try {
+      withWait(seconds);
+      arrayPush(problems, `a formation wait of ${seconds} seconds was accepted`);
+    } catch {
+      // refused: the bound holds
+    }
+  }
+  const smoke = manifestOwner.buildComparativeCampaignManifest({campaignId: MANIFEST_CAMPAIGN,
+    profile: manifestOwner.COMPARATIVE_SMOKE_PROFILE, targets: [TARGET.LAGRANGE]});
+  if (Object.hasOwn(smoke.plan, 'formationWaitSeconds')) {
+    arrayPush(problems, 'the smoke plan carries a formation wait');
+  }
+  return problems;
+}
+
 async function witnessManifest() {
   const profile = manifestOwner.COMPARATIVE_RESEARCH_PROFILE;
   if (!profile) return TEXT.NO_PROFILE;
@@ -218,6 +263,7 @@ async function witnessManifest() {
       !arrayEvery(manifest.runs, (run) => run.subkind === RESEARCH.CLASS)) {
     arrayPush(problems, TEXT.RUN_NOT_RESEARCH);
   }
+  arrayPush(problems, ...formationWaitProblems(profile));
   return problems.length === 0 ? null : arrayJoin(problems, FIELD_JOIN);
 }
 
@@ -456,6 +502,18 @@ function custodyRun({repoDir, evidenceDir, campaignEvidenceDir, afterRun}) {
   return runWorkload(request, CUSTODY_RUN);
 }
 
+// One statement-custody run against the fake load-generator host, taking custody
+// into `campaignEvidenceDir`; the host's scratch directory goes away afterwards.
+async function runCustodyCampaign(campaignEvidenceDir) {
+  const repoDir = scratchDir('custody-campaign');
+  try {
+    return await custodyRun({repoDir, evidenceDir: path.join(repoDir, EVIDENCE_SUBDIR),
+      campaignEvidenceDir});
+  } finally {
+    removeDir(repoDir);
+  }
+}
+
 function failureCodeOf(promise) {
   return promise.then(() => null, (error) => error?.code ?? 'untyped');
 }
@@ -466,6 +524,28 @@ function alterEvidenceFiles(evidenceDir) {
       fs.appendFileSync(path.join(evidenceDir, name), SQL_WORD_SEPARATOR);
     }
   };
+}
+
+// A research run keeps what its nodes logged: whole up to a byte cap, in the campaign
+// evidence, with size and digest, and a typed entry where a log could not be collected.
+async function nodeLogProblem(evidenceDir) {
+  const collect = cleanupOwner.collectContainerLogs;
+  if (typeof collect !== 'function') return TEXT.NO_NODE_LOGS;
+  const commands = [];
+  const entries = await collect({runId: 'bench-logs-r001', evidenceDir, opts: {},
+    containers: [{host: 'h', containerId: 'c1'.repeat(6), role: 'lagrange-node'},
+      {host: 'h', containerId: 'c2'.repeat(6), role: 'lagrange-node'}],
+    sshRun: async (_host, _opts, command) => {
+      arrayPush(commands, command);
+      if (stringIncludes(command, 'c2')) throw new Error('no such container');
+      return 'a log line\n';
+    }});
+  const [kept, missing] = entries;
+  const text = kept.path ? fs.readFileSync(path.join(evidenceDir, kept.path), UTF8) : '';
+  return stringIncludes(commands[FIRST], 'docker logs ') &&
+    stringIncludes(commands[FIRST], '| head -c ') && !stringIncludes(commands[FIRST], '--tail') &&
+    kept.bytes === Buffer.byteLength(text) && kept.sha256 === sha256Of(text) &&
+    missing.unavailable && !missing.path ? null : `node logs answered ${show(entries)}`;
 }
 
 async function witnessCustody() {
@@ -482,8 +562,10 @@ async function witnessCustody() {
       campaignEvidenceDir: missingDir, afterRun: () => removeDir(evidenceDir)}));
     const altered = await failureCodeOf(custodyRun({repoDir, evidenceDir,
       campaignEvidenceDir: alteredDir, afterRun: alterEvidenceFiles(evidenceDir)}));
-    return removed === RESEARCH.EVIDENCE_MISSING && altered === RESEARCH.EVIDENCE_MISMATCH ?
-      null : `a missing file answered ${show(removed)}, a changed file ${show(altered)}`;
+    if (removed !== RESEARCH.EVIDENCE_MISSING || altered !== RESEARCH.EVIDENCE_MISMATCH) {
+      return `a missing file answered ${show(removed)}, a changed file ${show(altered)}`;
+    }
+    return nodeLogProblem(campaignEvidenceDir);
   } finally {
     for (const dir of [repoDir, campaignEvidenceDir, missingDir, alteredDir]) removeDir(dir);
   }
@@ -687,8 +769,7 @@ async function descriptorProblem() {
   const lanRefused = await refusedBy(() => build({...input,
     interNodePath: INTER_NODE_PATH.LAN})) && await refusedBy(() => build({...input,
     interNodePath: INTER_NODE_PATH.LOOPBACK}));
-  return hostPreparation.COMPARATIVE_SUBSTRATE_KIND?.SINGLE_HOST === SUBSTRATE_KIND.SINGLE_HOST &&
-    single.kind === SUBSTRATE_KIND.SINGLE_HOST &&
+  return single.kind === SUBSTRATE_KIND.SINGLE_HOST &&
     single.interNodePath === INTER_NODE_PATH.BRIDGE && lanRefused &&
     multi.kind === SUBSTRATE_KIND.MULTI_HOST && identityRefused ? null : TEXT.DESCRIPTOR;
 }
@@ -703,9 +784,45 @@ function multiInput(kind, interNodePath, hostOfNode) {
     declaredHostCount: NODE_COUNT, storage: {root: STORAGE_ROOT, kind: 'bind'}};
 }
 
+// A multi-host research plan reaches the existing comparative rules: three data
+// hosts with one node each (the target's host count), distinct machines (boot
+// ids) and a load generator that is not a product host. No second copy of them.
+const COLOCATED_CODE = 'load_generator_colocated';
+
+async function researchTopologyProblem() {
+  const profile = manifestOwner.COMPARATIVE_RESEARCH_PROFILE;
+  if (!profile) return TEXT.NO_PROFILE;
+  const manifest = manifestOwner.buildComparativeCampaignManifest({
+    campaignId: MANIFEST_CAMPAIGN, profile, targets: [TARGET.LAGRANGE]});
+  if (TARGET_DATA_HOSTS[TARGET.LAGRANGE] !== NODE_COUNT) {
+    return 'the Lagrange target no longer places one node on each of three data hosts';
+  }
+  const executor = callSite.createWorkloadRunExecutor({
+    runWorkload: async () => {
+      throw new Error('a research run on a colocated load generator started');
+    },
+    describeLoadGenerator: async () => ({}), clientHost: DATA_HOSTS[0]});
+  const colocated = await failureCodeOf(executor({run: manifest.runs[0], manifest,
+    deployment: {roles: arrayMap(DATA_HOSTS, (host) => ({host}))}}));
+  if (colocated !== COLOCATED_CODE) {
+    return `a research run with the load generator on a product host answered ${show(colocated)}`;
+  }
+  return sameMachineProblem();
+}
+
+async function sameMachineProblem() {
+  const hosts = [{ip: LAB_HOST_IP, name: LAB_HOST_NAME}, {ip: LAB_HOST_IP, name: LAB_HOST_NAME}];
+  const sshRun = async () => `${LAB_HOST_NAME}|${LAB_BOOT_ID}|12|15.0|eth0`;
+  const refused = await refusedBy(() => hostPreparation.collectHostFacts({hosts, sshRun,
+    opts: {}}));
+  return refused ? null : TEXT.UNREFUSED_FACTS;
+}
+
 async function witnessLadder() {
   const build = hostPreparation.buildSubstrateDescriptor;
   if (typeof build !== 'function') return TEXT.NO_SUBSTRATE;
+  const topology = await researchTopologyProblem();
+  if (topology) return topology;
   const lab = build(multiInput(SUBSTRATE_KIND.MULTI_HOST, INTER_NODE_PATH.LAN, OWN_HOST));
   const gcp = build(multiInput(SUBSTRATE_KIND.GCP, INTER_NODE_PATH.VPC, OWN_HOST));
   const single = build(singleHostInput());
@@ -744,6 +861,8 @@ const WITNESS = Object.freeze({
 export {
   EVIDENCE_USE,
   IDENTITY,
+  runCustodyCampaign,
+  researchTopologyProblem,
   INTER_NODE_PATH,
   MATRIX_ENTRIES,
   NODE_COUNT,

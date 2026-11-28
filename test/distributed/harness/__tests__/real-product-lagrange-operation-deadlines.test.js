@@ -446,7 +446,7 @@ test('settleConcurrentBatch prevents overlapping probes across attempts, preserv
     signal: null,
     deadlineAtMs: null,
     now: Date.now,
-  }, arrayMap(HOSTS, (host, idx) => ({host, containerId: `c${idx + 1}`}))),
+  }, arrayMap(HOSTS, (host, idx) => ({host, address: host, containerId: `c${idx + 1}`}))),
   (error) => error.deadlineExpired === true);
   assert.equal(versionSiblingSettled, true);
   assert.equal(versionsTracker.inFlightOps.size, 0);

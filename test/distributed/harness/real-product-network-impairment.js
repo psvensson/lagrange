@@ -15,12 +15,18 @@ import {
   DEPLOYMENT_FAILURE,
   deploymentFailure,
 } from './real-product-deployment-contract.js';
-import {errorText, shellWord} from './real-product-remote-shell.js';
+import {dockerRunOnceCommand, errorText, shellWord} from './real-product-remote-shell.js';
 
 const IMPAIRMENT_KIND = 'tc-netem';
-const PING_COUNT = 5;
+const PING_COUNT = 20;
 const DELAY_PATTERN = /delay (\d+(?:\.\d+)?)(us|ms|s)\b/u;
-const PING_AVG_PATTERN = /= [\d.]+\/([\d.]+)\/[\d.]+\/[\d.]+ ms/u;
+// iputils: `rtt min/avg/max/mdev = a/b/c/d ms`; busybox has no mdev and the
+// statistics are then taken from the per-packet `time=` lines.
+const PING_RTT_PATTERN = /min\/avg\/max(?:\/mdev)? = ([\d.]+)\/([\d.]+)\/([\d.]+)(?:\/([\d.]+))? ms/u;
+const PING_COUNTS_PATTERN =
+  /(\d+) packets transmitted, (\d+)(?: packets)? received.*?(\d+(?:\.\d+)?)% packet loss/u;
+const PING_TIME_PATTERN = /time=([\d.]+) ms/gu;
+const ROUND_TRIP_SAMPLE_PRECISION = 1000;
 const UNIT_TO_MS = Object.freeze({us: 0.001, ms: 1, s: 1000});
 const DELAY_TOLERANCE = 0.01;
 
@@ -49,11 +55,84 @@ async function applyOnHost({host, iface, oneWayDelayMs, sshRun, opts}) {
   return {host, iface, qdisc};
 }
 
-async function measureRtt({from, to, sshRun, opts}) {
-  const out = String(await sshRun(from, opts, `ping -c ${PING_COUNT} -q ${shellWord(to)}`));
-  const match = PING_AVG_PATTERN.exec(out);
-  if (!match) throw new Error(`no ping summary from ${from} to ${to}: ${out}`);
-  return {rttMs: Number(match[1]), from, to, samples: PING_COUNT, summary: match[0]};
+function summaryOfTimes(out) {
+  const times = arrayMap([...String(out).matchAll(PING_TIME_PATTERN)], (match) => Number(match[1]));
+  if (times.length === 0) return null;
+  const mean = times.reduce((sum, value) => sum + value, 0) / times.length;
+  const variance = times.reduce((sum, value) => sum + (value * value), 0) / times.length -
+    (mean * mean);
+  return [Math.min(...times), mean, Math.max(...times), Math.sqrt(Math.max(0, variance))];
+}
+
+function roundMs(value) {
+  return Math.round(value * ROUND_TRIP_SAMPLE_PRECISION) / ROUND_TRIP_SAMPLE_PRECISION;
+}
+
+function parsePing(out, {from, to}) {
+  const counts = PING_COUNTS_PATTERN.exec(out);
+  const rtt = PING_RTT_PATTERN.exec(out);
+  const stats = rtt && rtt[4] !== undefined ? arrayMap([rtt[1], rtt[2], rtt[3], rtt[4]], Number) :
+    summaryOfTimes(out);
+  if (!counts || !stats) throw new Error(`no ping summary from ${from} to ${to}: ${out}`);
+  const [minMs, avgMs, maxMs, mdevMs] = arrayMap(stats, roundMs);
+  return {from, to, transmitted: Number(counts[1]), received: Number(counts[2]),
+    lossPercent: Number(counts[3]), minMs, avgMs, maxMs, mdevMs, samples: PING_COUNT};
+}
+
+/**
+ * Round trip from `from` to `to`: PING_COUNT packets, answered as transmitted,
+ * received, loss and min/avg/max/mdev. The one measurement; `shell` only moves where
+ * ping runs, from `from` itself to a command built from the ping arguments on `shell.host`
+ * (a helper container in a node's network namespace).
+ * @param {{from: string, to: string, sshRun: Function, opts: Object,
+ *   shell?: ({host: string, wrap: Function}|null)}} input
+ * @return {Promise<Object>}
+ */
+async function measureRtt({from, to, sshRun, opts, shell = null}) {
+  const argv = ['ping', '-c', String(PING_COUNT), to];
+  const out = String(await sshRun(shell ? shell.host : from, opts,
+    shell ? shell.wrap(argv) : arrayMap(argv, shellWord).join(' ')));
+  return parsePing(out, {from, to});
+}
+
+/**
+ * Where a node's pings run on the campaign bridge: a campaign-labelled, throwaway
+ * helper container in the node's own network namespace (the product image has no
+ * shell and no ping), started on the node's Docker host.
+ * @param {{campaignId: string, image: string, host: string, containerId: string}} input
+ * @return {{host: string, wrap: Function}} the `shell` of measureRtt
+ */
+function nodeNamespaceShell({campaignId, image, host, containerId}) {
+  return {host, wrap: (argv) => dockerRunOnceCommand({campaignId, image,
+    network: `container:${containerId}`, commandArgs: argv})};
+}
+
+/**
+ * The round trips of one measurement moment: every ordered pair of the three
+ * nodes' addresses and the load generator to the endpoint, in this order, one
+ * after the other, or all at once with `parallel` (never during a measurement window, which
+ * the caller owns).
+ * @param {{dataHosts: Array<string>, loadGenerator: string, endpointHost: string,
+ *   sshRun: Function, opts: Object, shellOf?: Function, now?: Function}} input
+ * @return {Promise<{startedAt: string, endedAt: string, entries: Array<Object>}>}
+ */
+async function measureRoundTripMatrix({dataHosts, loadGenerator, endpointHost, sshRun, opts,
+  shellOf = () => null, now = Date.now, parallel = false}) {
+  const startedAt = new Date(now()).toISOString();
+  // One chain of probes per source address (a source's pings share one network namespace and
+  // would answer each other's ICMP identifiers if they ran at once); the chains of different
+  // sources run at once under `parallel`.
+  const chains = dataHosts.map((from) => dataHosts.filter((to) => to !== from).map((to) => () =>
+    measureRtt({from, to, sshRun, opts, shell: shellOf(from)})));
+  chains.push([() => measureRtt({from: loadGenerator, to: endpointHost, sshRun, opts})]);
+  const runChain = async (chain) => {
+    const done = [];
+    for (const probe of chain) done.push(await probe());
+    return done;
+  };
+  const entries = parallel ?
+    (await Promise.all(chains.map(runChain))).flat() : (await runChain(chains.flat()));
+  return {startedAt, endedAt: new Date(now()).toISOString(), entries};
 }
 
 /**
@@ -105,4 +184,4 @@ async function applyNetworkImpairment({hosts, rttMs, hostMetaByIp, sshRun, opts,
   }
 }
 
-export {applyNetworkImpairment};
+export {applyNetworkImpairment, measureRoundTripMatrix, measureRtt, nodeNamespaceShell};

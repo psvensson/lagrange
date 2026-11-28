@@ -17,11 +17,18 @@
  * The semantic gate ran before this call (comparative-benchmark-semantic-gate.js);
  * its record is placed in correctness.semanticGate.
  */
+import {createHash} from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
 import {
   OLTP_DATASET_VERIFICATION_STATUS,
 } from './benchmark-oltp-state-reconciliation.js';
 import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
-import {BENCHMARK_DISPATCH_STATUS} from './benchmark-workload-dispatch.js';
+import {
+  BENCHMARK_DISPATCH_STATUS,
+  BENCHMARK_PROFILE_CLASS,
+} from './benchmark-workload-dispatch.js';
 import {
   arrayFilter,
   arrayIncludes,
@@ -81,7 +88,15 @@ const FAILURE = Object.freeze({
   COMMIT_MISMATCH: 'load_generator_commit_mismatch',
   COMMIT_ABSENT: 'load_generator_commit_absent',
   DRIVER_MISSING: 'load_generator_driver_missing',
+  EVIDENCE_MISSING: 'statement_evidence_missing',
+  EVIDENCE_MISMATCH: 'statement_evidence_digest_mismatch',
+  EVIDENCE_UNRETAINED: 'statement_evidence_unretained',
 });
+const RETAINED_FILE_ENCODING = 'retained-file';
+const BASE64 = 'base64';
+const SHA256 = 'sha256';
+const HEX = 'hex';
+const EXIT_OK = 0;
 const OFFLINE_CACHE_INCOMPLETE = 'offline_cache_incomplete';
 // npm's own words for a tarball the offline cache lacks (npm 10, ENOTCACHED).
 const NOT_CACHED_MARK = 'failed: cache mode is \'only-if-cached\'';
@@ -122,9 +137,10 @@ function workloadRequestOf({run, manifest, deployment, evidenceDir, setupFailure
       orderIndex: run.orderIndex,
       sweepPlanSha256: manifest.plan.sweepPlanDigest ?
         bareDigest(manifest.plan.sweepPlanDigest) : null,
-      // The smoke family owns its workload; the capacity family takes the
-      // manifest's.
-      ...(manifest.plan.profileClass === 'capacity' ? {workload: manifest.plan.workload} : {})},
+      // The smoke family owns its workload; the capacity and research
+      // families take the manifest's.
+      ...(manifest.plan.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ? {} :
+        {workload: manifest.plan.workload})},
     evidenceDir};
 }
 
@@ -194,12 +210,61 @@ async function runLoadGeneratorCliProcess({sshRun, host, cd, effectiveOpts, time
     `${cd} && tail -n 1 ${shellQuote(`${dir}/records.ndjson`)}`, timeoutMs)));
 }
 
+function retainedEvidenceRequests(record) {
+  return arrayFilter(record.observations?.requests ?? [],
+    (request) => request.responseEvidence?.encoding === RETAINED_FILE_ENCODING);
+}
+
+// The retained statement file of one request, read from the load generator,
+// verified against the digest and size the load generator recorded, and kept
+// in the campaign evidence beside the raw record. A missing or different file
+// is a typed evidence failure; the request's statements are never lost silently.
+async function fetchRetainedEvidence({sshRun, host, cd, effectiveOpts, timeoutMs, request}) {
+  const evidence = request.responseEvidence;
+  const result = await execWithStatus(sshRun, host.ip, effectiveOpts,
+    `${cd} && base64 -w0 ${shellQuote(evidence.path)}`, timeoutMs);
+  if (result.exitCode !== EXIT_OK) {
+    throw deploymentFailure(FAILURE.EVIDENCE_MISSING,
+      `statement evidence ${evidence.path} of ${request.opId} is not on ${host.ip}`,
+      {path: evidence.path, opId: request.opId, exitCode: result.exitCode});
+  }
+  const payload = Buffer.from(stringTrim(result.stdout), BASE64);
+  const digest = createHash(SHA256).update(payload).digest(HEX);
+  if (digest !== evidence.sha256 || payload.length !== evidence.bytes) {
+    throw deploymentFailure(FAILURE.EVIDENCE_MISMATCH,
+      `statement evidence ${evidence.path} of ${request.opId} differs from its recorded digest`,
+      {path: evidence.path, opId: request.opId, expected: evidence.sha256, observed: digest});
+  }
+  return payload;
+}
+
+async function bringEvidenceIntoCampaign({record, runId, campaignEvidenceDir, fetchContext}) {
+  const requests = retainedEvidenceRequests(record);
+  if (requests.length === 0) return;
+  if (typeof campaignEvidenceDir !== 'string' || campaignEvidenceDir === '') {
+    throw deploymentFailure(FAILURE.EVIDENCE_UNRETAINED,
+      `${requests.length} requests retain statement files and no campaign evidence ` +
+      'directory takes custody of them', {runId});
+  }
+  const directory = path.join(campaignEvidenceDir, runId);
+  fs.mkdirSync(directory, {recursive: true});
+  for (const request of requests) {
+    const payload = await fetchRetainedEvidence({...fetchContext, request});
+    const relative = path.join(runId, `${request.responseEvidence.sha256}.json`);
+    fs.writeFileSync(path.join(campaignEvidenceDir, relative), payload);
+    request.responseEvidence = {...request.responseEvidence,
+      custody: {path: relative, sha256: request.responseEvidence.sha256,
+        bytes: payload.length}};
+  }
+}
+
 /**
  * Run B1's load-generator CLI on the load-generator host, from its checkout,
  * after proving that checkout is at the harness commit.
  */
 function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaignId,
-  now = dateNow, settleInFlight = null, workloadTimeoutMs = WORKLOAD_TIMEOUT_MS}) {
+  campaignEvidenceDir = null, now = dateNow, settleInFlight = null,
+  workloadTimeoutMs = WORKLOAD_TIMEOUT_MS}) {
   const cd = `cd ${shellQuote(host.repoPath)}`;
   const clock = typeof now === 'function' ? now : dateNow;
   return async (request, runOrOpts = {}, perRunOpts = {}) => {
@@ -216,8 +281,11 @@ function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaign
         harnessCommit});
       const dir = `test-output/bench/${campaignId}/${run.runId}`;
       await stageLoadGeneratorRequest({sshRun, host, cd, effectiveOpts, timeoutMs, dir, request});
-      return await runLoadGeneratorCliProcess({sshRun, host, cd, effectiveOpts, timeoutMs,
-        signal, dir});
+      const record = await runLoadGeneratorCliProcess({sshRun, host, cd, effectiveOpts,
+        timeoutMs, signal, dir});
+      await bringEvidenceIntoCampaign({record, runId: run.runId, campaignEvidenceDir,
+        fetchContext: {sshRun, host, cd, effectiveOpts, timeoutMs}});
+      return record;
     } finally {
       if (settle) await settle();
     }
@@ -469,23 +537,23 @@ async function placementAfterWindow(deployment, outcome,
 async function recordedLoadGenerator({describeLoadGenerator, clientHost, productHosts,
   generator}) {
   return {...await describeLoadGenerator(), host: clientHost, productHosts,
-    notProductHost: true, nodeVersion: generator.nodeVersion,
+    notProductHost: !arrayIncludes(productHosts, clientHost), nodeVersion: generator.nodeVersion,
     driverVersions: generator.nativeClients, checkout: generator.checkout,
     reportedHostname: generator.hostname};
 }
 
 /**
  * @param {{runWorkload: Function, describeLoadGenerator: Function,
- *   clientHost: string, evidenceDirOf?: Function}} input
+ *   clientHost: string, colocationAllowed?: boolean, evidenceDirOf?: Function}} input
  * @return {Function} executeWorkloadRun({run, manifest, deployment,
  *   semanticGate, setupFailure?}): setupFailure runs the deployment unopened
  */
 function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHost,
-  evidenceDirOf = (run) => `test-output/bench/${run.runId}`}) {
+  colocationAllowed = false, evidenceDirOf = (run) => `test-output/bench/${run.runId}`}) {
   return async ({run, manifest, deployment, semanticGate = null, setupFailure = null,
     signal = null, deadlineAtMs = null}) => {
     const productHosts = productHostsOf(deployment);
-    if (arrayIncludes(productHosts, clientHost)) {
+    if (!colocationAllowed && arrayIncludes(productHosts, clientHost)) {
       throw deploymentFailure(DEPLOYMENT_FAILURE.LOAD_GENERATOR_COLOCATED,
         `load generator ${clientHost} is a product host of ${run.targetId}`, {productHosts});
     }

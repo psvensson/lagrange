@@ -1,5 +1,8 @@
 import {createHash} from 'node:crypto';
-import {dropsDataset} from './oltp-adapter-contract.js';
+import {
+  OLTP_DATASET_PREPARATION_METHOD,
+  dropsDataset,
+} from './oltp-adapter-contract.js';
 import {createPgWireClient} from './pg-wire-client.js';
 
 import {
@@ -939,7 +942,8 @@ async function prepareDataset(
       await createSchema(client, tables);
       await validateAllCanonicalTableSchemas(client, lockingReadMode);
       await loadDataset(client, dataset);
-      return evidence();
+      return {provisioning: evidence(),
+        method: OLTP_DATASET_PREPARATION_METHOD.DROPPED_CREATED_AND_LOADED};
     }
     const presentTables = new Set();
     let preservedCohort = false;
@@ -954,11 +958,13 @@ async function prepareDataset(
     }
     if (preservedCohort) {
       const resetTimings = await resetCanonicalDataset(client, dataset, tables, lockingReadMode);
-      return Object.freeze({...evidence(), ...resetTimings});
+      return {provisioning: Object.freeze({...evidence(), ...resetTimings}),
+        method: OLTP_DATASET_PREPARATION_METHOD.TRUNCATED_AND_RELOADED};
     }
     await validateAllCanonicalTableSchemas(client, lockingReadMode);
     await loadDataset(client, dataset);
-    return evidence();
+    return {provisioning: evidence(),
+      method: OLTP_DATASET_PREPARATION_METHOD.CREATED_AND_LOADED};
   } catch (error) {
     throw provisioningFailure(error, evidence());
   } finally {
@@ -1024,14 +1030,16 @@ async function createLagrangeOltpAdapter(options = {}) {
   let closed = false;
   let datasetPrepared = false;
   let schemaProvisioning = null;
+  let datasetPreparationMethod = null;
 
   try {
-    schemaProvisioning = await prepareDataset(
-      createClient,
-      resolvedClientOptions,
-      dataset,
-      resolvedLockingReadMode,
-    );
+    ({provisioning: schemaProvisioning, method: datasetPreparationMethod} =
+      await prepareDataset(
+        createClient,
+        resolvedClientOptions,
+        dataset,
+        resolvedLockingReadMode,
+      ));
     datasetPrepared = true;
     for (let index = ZERO; index < config.workers; index += ONE) {
       const client = await openClient(createClient, resolvedClientOptions);
@@ -1075,6 +1083,7 @@ async function createLagrangeOltpAdapter(options = {}) {
     datasetSummary,
     workerSessionIds,
     schemaProvisioning,
+    datasetPreparationMethod,
     async executeTransaction(operation) {
       if (closed) throw new Error('Lagrange OLTP adapter is closed');
       const workerIndex = Number(operation?.workerId) - ONE;
@@ -1121,6 +1130,7 @@ async function createLagrangeOltpAdapter(options = {}) {
         );
         return Object.freeze({
           outcome: OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE,
+          datasetPreparationMethod: OLTP_DATASET_PREPARATION_METHOD.TRUNCATED_AND_RELOADED,
           schemaSha256: CANONICAL_SCHEMA_SHA256,
           tables: Object.freeze([...tables]),
           ...resetTimings,

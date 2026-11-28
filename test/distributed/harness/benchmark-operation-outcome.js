@@ -222,6 +222,7 @@ function buildBenchmarkAttemptRecord(options) {
     serverConnectionId: options.serverConnectionId ?? null,
     commitSent: options.commitSent === true,
     statements,
+    timeline: Array.isArray(options.timeline) ? options.timeline : [],
   };
   return Object.freeze({
     ...attempt,

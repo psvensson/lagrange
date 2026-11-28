@@ -1,5 +1,8 @@
 import {loadMysql2Promise} from './native-clients.js';
-import {dropsDataset} from './oltp-adapter-contract.js';
+import {
+  OLTP_DATASET_PREPARATION_METHOD,
+  dropsDataset,
+} from './oltp-adapter-contract.js';
 import {
   buildOltpBaselineDataset,
   hashOltpBaselineDataset,
@@ -479,6 +482,8 @@ async function createTiDbOltpAdapter(options = {}) {
     databaseName,
     datasetSha256,
     datasetSummary,
+    // The database is dropped (if present), created and loaded.
+    datasetPreparationMethod: OLTP_DATASET_PREPARATION_METHOD.DROPPED_CREATED_AND_LOADED,
     workerConnectionIds: Object.freeze([...initialConnectionIds]),
     translationAudit: TIDB_OLTP_TRANSLATION_AUDIT,
     async executeTransaction(operation) {

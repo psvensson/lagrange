@@ -31,12 +31,14 @@ import {
 } from '../../test/distributed/harness/benchmark-workload-dispatch.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arraySome = Function.call.bind(Array.prototype.some);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const UTF8 = 'utf8';
 const JSON_ROOT = '$';
+const RESEARCH_IN_STORE_MESSAGE = 'published store carries a research-class record';
 const CAPACITY_RUN_FIELDS = Object.freeze(['committedPerSec', 'latencyMs']);
 const DATA_DIR = 'data/tidb-comparison';
 const DOCS_DIR = 'docs/benchmarks';
@@ -93,6 +95,18 @@ function checkRetainedRecords(rootDir) {
         inv.scope.campaignGitCommit === f.campaignGitCommit) &&
       (inv.scope.receiptIds === 'all' || arrayIncludes(inv.scope.receiptIds, f.recordId)));
     if (!covered) differ(`forensic record ${f.file}#${f.recordId} has no ledger entry`);
+  }
+}
+
+// Research records never enter the published store: any run of the research
+// class there is a defect of whoever wrote it.
+function checkNoResearchRecords(rootDir) {
+  const raw = readRawObservationSources(rootDir);
+  const research = arrayFilter(raw.runs, ({run}) =>
+    run?.plan?.profileClass === BENCHMARK_PROFILE_CLASS.RESEARCH ||
+    run?.subkind === BENCHMARK_PROFILE_CLASS.RESEARCH);
+  if (research.length > 0) {
+    differ(`${RESEARCH_IN_STORE_MESSAGE}: ${research[0].file} run ${research[0].run.runId}`);
   }
 }
 
@@ -159,6 +173,7 @@ async function recomputeComparativeBenchmarks(rootDir = REPO_ROOT) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'comparative-recompute-'));
   try {
     checkRetainedRecords(rootDir);
+    checkNoResearchRecords(rootDir);
     copyInputs(rootDir, scratch);
     await regenerateAllBenchmarkArtifactsFromAdmitted(scratch);
     compareTrees(rootDir, scratch);

@@ -5,6 +5,10 @@
  * What could not be closed is returned, per host, for the run record's
  * `closure`; teardown never throws on a host failure.
  */
+import {createHash} from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
 import {
   arrayFilter,
   arrayFind,
@@ -26,6 +30,14 @@ import {
 } from './real-product-remote-shell.js';
 
 const CLEANUP_SSH_TIMEOUT_MS = 15000;
+// The last lines of each product container's log kept when a run fails before its window: at
+// a few hundred bytes a line, a few hundred kilobytes per node, which fits the evidence
+// margin and the ssh answer buffer while covering formation, which logs at its start.
+// A research run keeps the whole log of every node up to this many bytes per node (the cap is
+// stated in the record when it is reached: the bytes kept and the bytes the log held).
+const NODE_LOG_BYTE_CAP = 48 * 1024 * 1024;
+const NODE_LOG_SSH_TIMEOUT_MS = 120000;
+const NODE_LOG_SUBDIR = 'node-logs';
 const STORAGE_SUBDIR_PATTERN = /^[A-Za-z0-9._-]+$/u;
 
 function cleanupCallOpts(opts) {
@@ -53,7 +65,7 @@ function requireSafeStorageSubdir(subDir) {
   return value;
 }
 
-async function closeHost({host, campaignId, sshRun, opts}) {
+async function closeHostContainers({host, campaignId, sshRun, opts}) {
   const listCommand = `docker ps -aq --filter label=${BENCH_LABEL.CAMPAIGN}=${campaignId}`;
   let containerIds;
   try {
@@ -123,19 +135,53 @@ async function closeHost({host, campaignId, sshRun, opts}) {
   return {host, confirmedClosed: true, removed: {host, containerIds}, unclosed: null};
 }
 
+// The campaign's own Docker networks (the research first look runs its nodes on
+// one): listed by the campaign label, removed once the containers are gone. A
+// network that is left behind is an unclosed resource like a left container.
+async function closeHostNetworks({host, campaignId, sshRun, opts}) {
+  const listCommand = `docker network ls -q --filter label=${BENCH_LABEL.CAMPAIGN}=${campaignId}`;
+  const unclosed = (networkIds, reason) => ({host, confirmedClosed: false, removed: null,
+    unclosed: {host, containerIds: null, networkIds, reason}});
+  let networkIds;
+  try {
+    networkIds = parseContainerIds(await sshRun(host, opts, listCommand, opts?.timeoutMs));
+    if (networkIds.length === 0) {
+      return {host, confirmedClosed: true, removed: null, unclosed: null};
+    }
+    await sshRun(host, opts, `docker network rm ${arrayJoin(arrayMap(networkIds, shellWord), ' ')}`,
+      opts?.timeoutMs);
+    const remaining = parseContainerIds(await sshRun(host, opts, listCommand, opts?.timeoutMs));
+    if (remaining.length > 0) return unclosed(remaining, 'networks still present after removal');
+  } catch (error) {
+    return unclosed(networkIds ?? null, `network closure failed: ${errorText(error)}`);
+  }
+  return {host, confirmedClosed: true, removed: {host, containerIds: [], networkIds},
+    unclosed: null};
+}
+
+async function closeHost({host, campaignId, sshRun, opts, campaignNetwork}) {
+  const containers = await closeHostContainers({host, campaignId, sshRun, opts});
+  if (!campaignNetwork || !containers.confirmedClosed) return containers;
+  const networks = await closeHostNetworks({host, campaignId, sshRun, opts});
+  return networks.unclosed ? networks : {...containers,
+    removed: containers.removed ?? networks.removed};
+}
+
 /**
  * @param {{hosts: Array<string>, campaignId: string, sshRun: Function,
- *   opts: Object}} input
+ *   opts: Object, campaignNetwork?: boolean}} input campaignNetwork: the campaign created a
+ *   Docker network on its hosts, which closes with its containers
  * @return {Promise<{complete: boolean, removed: Array<Object>,
  *   unclosed: Array<Object>, confirmedClosedHosts: Array<string>}>}
  */
-async function removeCampaignContainers({hosts, campaignId, sshRun, opts}) {
+async function removeCampaignContainers({hosts, campaignId, sshRun, opts,
+  campaignNetwork = false}) {
   requireCampaignId(campaignId);
   const cleanupOpts = cleanupCallOpts(opts);
   const uniqueHosts = [...new Set(hosts)];
   const outcomes = await settleConcurrentBatch(
     uniqueHosts,
-    (host) => closeHost({host, campaignId, sshRun, opts: cleanupOpts}),
+    (host) => closeHost({host, campaignId, sshRun, opts: cleanupOpts, campaignNetwork}),
   );
   const removed = arrayMap(arrayFilter(outcomes, (one) => one.removed), (one) => one.removed);
   const unclosed = arrayMap(arrayFilter(outcomes, (one) => one.unclosed),
@@ -248,12 +294,14 @@ function mergePostHelperContainerClosure(hosts, initialClosed, postHelperClosed)
 async function teardownCampaignDeployment({
   hosts,
   campaignId,
+  campaignNetwork = false,
   storageRoot = null,
   pendingStorageByHost = null,
   sshRun,
   opts,
 }) {
-  const closed = await removeCampaignContainers({hosts, campaignId, sshRun, opts});
+  const closed = await removeCampaignContainers({hosts, campaignId, sshRun, opts,
+    campaignNetwork});
   if (!storageRoot || !(pendingStorageByHost instanceof Map) || pendingStorageByHost.size === 0) {
     return {
       ...closed,
@@ -290,6 +338,7 @@ async function teardownCampaignDeployment({
     const postHelperClosed = await removeCampaignContainers({
       hosts: helperLaunchedHosts,
       campaignId,
+      campaignNetwork,
       sshRun,
       opts,
     });
@@ -309,7 +358,44 @@ async function teardownCampaignDeployment({
   };
 }
 
+/**
+ * The `docker logs` of every distinct product container, whole up to a byte cap per node,
+ * written into the campaign evidence beside the raw record before teardown. A log that could not be collected is a
+ * typed entry with its reason, never an absence.
+ * @param {{containers: Array<{host: string, containerId: string, role: string}>,
+ *   runId: string, evidenceDir: string, sshRun: Function, opts: Object}} input
+ * @return {Promise<Array<Object>>} {containerId, role, host, path, bytes, sha256} or
+ *   {containerId, role, host, unavailable}
+ */
+async function collectContainerLogs({containers, runId, evidenceDir, sshRun, opts}) {
+  const callOpts = cleanupCallOpts(opts);
+  const seen = new Set();
+  const entries = [];
+  for (const {host, containerId, role} of containers) {
+    if (seen.has(containerId)) continue;
+    seen.add(containerId);
+    try {
+      const logCommand = `docker logs ${shellWord(containerId)} 2>&1`;
+      const text = String(await sshRun(host, callOpts, `${logCommand} | head -c ${NODE_LOG_BYTE_CAP}`,
+        NODE_LOG_SSH_TIMEOUT_MS) ?? '');
+      const bytes = Buffer.byteLength(text);
+      const truncated = bytes >= NODE_LOG_BYTE_CAP ? {truncated: {capBytes: NODE_LOG_BYTE_CAP,
+        keptBytes: bytes, totalBytes: Number(String(await sshRun(host, callOpts,
+          `${logCommand} | wc -c`, NODE_LOG_SSH_TIMEOUT_MS)).trim())}} : {};
+      const relative = path.join(runId, NODE_LOG_SUBDIR, `${role}-${containerId.slice(0, 12)}.log`);
+      fs.mkdirSync(path.dirname(path.join(evidenceDir, relative)), {recursive: true});
+      fs.writeFileSync(path.join(evidenceDir, relative), text);
+      entries.push({containerId, role, host, path: relative, bytes,
+        sha256: createHash('sha256').update(text).digest('hex'), ...truncated});
+    } catch (error) {
+      entries.push({containerId, role, host, unavailable: errorText(error)});
+    }
+  }
+  return entries;
+}
+
 export {
+  collectContainerLogs,
   removeCampaignContainers,
   teardownCampaignDeployment,
 };

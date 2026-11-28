@@ -178,6 +178,7 @@ const ADMISSION_REASON = Object.freeze({
   EMULATED_PRODUCT: 'emulated-product',
   LOCAL_ORACLE_NOT_COMPARISON_TARGET: 'local-oracle-not-comparison-target',
   FABRICATED_HISTORY_METRICS: 'fabricated-history-metrics',
+  RESEARCH_PROFILE_NOT_ADMISSIBLE: 'research-profile-not-admissible',
 });
 
 // The gate stage's event for a system the chain has no gate client for
@@ -196,6 +197,7 @@ const NON_BLOCKING_REASONS = Object.freeze([
 const STOPPED_RUN_REASON = Object.freeze({
   [BENCHMARK_RUN_STATUS.SETUP_FAILED]: ADMISSION_REASON.DATASET_PREPARATION_FAILED,
   [BENCHMARK_RUN_STATUS.WARMUP_FAILED]: ADMISSION_REASON.WARMUP_FAILED,
+  [BENCHMARK_RUN_STATUS.SEED_UNVERIFIED]: ADMISSION_REASON.DATASET_UNVERIFIED,
   [BENCHMARK_RUN_STATUS.WATCHDOG_STOPPED]: ADMISSION_REASON.WATCHDOG_STOPPED,
 });
 
@@ -1093,9 +1095,15 @@ function isReadinessExhaustedRun(run) {
     run.observations.runStatus === BENCHMARK_RUN_STATUS.SETUP_FAILED;
 }
 
+// A research record is never admissible, whatever else holds or fails.
+function isResearchRun(run) {
+  return run?.plan?.profileClass === BENCHMARK_PROFILE_CLASS.RESEARCH ||
+    run?.subkind === BENCHMARK_PROFILE_CLASS.RESEARCH;
+}
+
 function checkRun(entry, claim, context) {
   const run = entry.run;
-  const reasons = [];
+  const reasons = isResearchRun(run) ? [ADMISSION_REASON.RESEARCH_PROFILE_NOT_ADMISSIBLE] : [];
   try {
     validateRunRecord(run);
   } catch (err) {

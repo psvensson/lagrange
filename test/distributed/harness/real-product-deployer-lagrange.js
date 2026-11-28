@@ -51,8 +51,13 @@ import {
 } from './real-product-captured-intrinsics.js';
 import {removeCampaignContainers} from './real-product-campaign-cleanup.js';
 import {
+  DECLARED_HOST_IDENTITY,
+  SUBSTRATE_KIND,
+} from './raw-observation-research-fields.js';
+import {
   DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS,
+  BENCH_LABEL,
   DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
   DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
@@ -138,6 +143,47 @@ function nodeIdOf(index) {
   return `${NODE_ID_PREFIX}${stringPadStart(stringOf(index + 1), NODE_ID_WIDTH, '0')}`;
 }
 
+const BRIDGE_NETWORK_KIND = 'bridge';
+const REFUSED_PLACEMENT = 'refused_node_placement';
+
+/**
+ * Where the three nodes run. Today's rule: one node per distinct host on the
+ * host's own network. The first look (substrate lab-single-host, research only)
+ * is the one exception: every node on the one host, on a campaign-scoped
+ * Docker bridge network, standard ports on each node's own bridge address, one
+ * declared host identity per node, synthetic (a truthfully declared one-host cluster
+ * never becomes ready). Anything else that is not one node per host is refused.
+ * @param {{hosts: Array<string>, substrate?: (string|null), campaignId: string}} input
+ * @return {Object} {declaredHostCount, network, nodes: [{index, host, name, nodeAddress,
+ *   ports, isSeed}]}
+ */
+function planLagrangeNodePlacement({hosts, substrate = null, campaignId}) {
+  requireCampaignId(campaignId);
+  const single = substrate === SUBSTRATE_KIND.SINGLE_HOST;
+  const distinct = new Set(hosts).size;
+  if (single ? distinct !== 1 : distinct !== hosts.length) {
+    throw deploymentFailure(REFUSED_PLACEMENT, single ?
+      'the single-host substrate places every node on one host' :
+      'every node needs its own host; one host for several nodes is the research ' +
+      'substrate lab-single-host only', {hosts, substrate});
+  }
+  const nodes = arrayMap(hosts, (host, index) => {
+    const name = `bench-${campaignId}-${NODE_ROLE}-${index + 1}`;
+    // The first look declares one synthetic host identity per node, derived from the
+    // campaign and the node index, never from an address; every other plan declares
+    // the machine name its host answers (declaredHostId null: observed at start).
+    return {index, host, name, nodeAddress: single ? name : host,
+      declaredHostId: single ? requireDeclaredNodeHostId(
+        `${campaignId}-synthetic-host-${index + 1}`) : null,
+      ports: {rest: PORT.REST, admin: PORT.ADMIN, transport: PORT.TRANSPORT},
+      isSeed: index === 0};
+  });
+  return {declaredHostCount: hosts.length, nodes,
+    declaredHostIdentity: single ? DECLARED_HOST_IDENTITY.SYNTHETIC :
+      DECLARED_HOST_IDENTITY.OBSERVED,
+    network: single ? {kind: BRIDGE_NETWORK_KIND, name: `bench-${campaignId}-net`} : null};
+}
+
 // The node's deployment facts only: identity, the host it runs on, storage
 // path, advertised address, listener ports and binds (as
 // docs/dockerhub-overview.md deploys a multi-host node), the PG-wire
@@ -145,17 +191,18 @@ function nodeIdOf(index) {
 // every timeout, budget and policy stays at the product's shipped default
 // (owner decision 2026-11-17), so the arm measures the product as shipped; a
 // formation that needs more is a product finding.
-function nodeEnv({nodeId, host, hostName, seedHost, connection, declaredHostCount}) {
+function nodeEnv({nodeId, nodeAddress, hostName, seedAddress, isSeed, connection,
+  declaredHostCount}) {
   const env = {
-    NODE_ID: nodeId, NODE_HOST_ID: hostName, DATA_DIR, NODE_ADDRESS: `${host}:${PORT.REST}`,
+    NODE_ID: nodeId, NODE_HOST_ID: hostName, DATA_DIR, NODE_ADDRESS: `${nodeAddress}:${PORT.REST}`,
     REST_API_PORT: PORT.REST, ADMIN_WS_PORT: PORT.ADMIN, TRANSPORT_WS_PORT: PORT.TRANSPORT,
     TRANSPORT_WS_HOST: '0.0.0.0', ADMIN_WS_HOST: '0.0.0.0',
     ADMIN_ALLOW_INSECURE_EXTERNAL_BIND: 'true',
     PGWIRE_AUTH_USER: connection.user, PGWIRE_AUTH_PASSWORD: connection.password,
     PGWIRE_AUTH_DATABASE: connection.database,
   };
-  if (seedHost !== host) {
-    env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
+  if (!isSeed) {
+    env.SEED_NODE_ADDRESS = `${seedAddress}:${PORT.REST}`;
   } else {
     env.FORMATION_DECLARED_HOST_COUNT = declaredHostCount;
   }
@@ -387,6 +434,7 @@ async function attachFormationCleanupAndRolesOnError({
   campaignId,
   sshRun,
   cleanOpts,
+  campaignNetwork,
 }) {
   await formationTracker.settleInFlight();
   if (error && typeof error === 'object' && !arrayIsArray(error.roles)) {
@@ -398,6 +446,7 @@ async function attachFormationCleanupAndRolesOnError({
       campaignId,
       sshRun,
       opts: cleanOpts,
+      campaignNetwork,
     });
   }
 }
@@ -411,8 +460,10 @@ async function attachFormationCleanupAndRolesOnError({
  *   `operations`, which the record never carries)
  */
 async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campaignId, sleep,
-  signal = null, deadlineAtMs = null, deadlineMs = null, now, nowFn}) {
+  onNodesStarted = async () => {}, signal = null, deadlineAtMs = null, deadlineMs = null, now,
+  nowFn}) {
   requireCampaignId(campaignId);
+  const plan = planLagrangeNodePlacement({hosts, substrate: opts.substrate ?? null, campaignId});
   const {image, expectedVersion} = resolveLagrangeImageAndVersion(opts);
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
     database: REQUEST_CELL_AUTH.DATABASE};
@@ -439,20 +490,20 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
   const postFailureTracker = createTrackedSshRun(sshRun, null);
   const roles = [];
   const nodeReadiness = [];
-  const formed = {listener: null};
+  const formed = {listener: null, times: {}};
   try {
     return await describingReadinessExhaustion(
       async () => {
         try {
-          return await formLagrangeCluster({ctx, rawSshRun: sshRun, hosts, image, connection,
-            roles, nodeReadiness, formed, campaignId});
+          return await formLagrangeCluster({ctx, rawSshRun: sshRun, plan, image, connection,
+            roles, nodeReadiness, formed, campaignId, onNodesStarted});
         } catch (error) {
           throw wrapFormationFailure(ctx, 'lagrange-formation', error);
         } finally {
           await formationTracker.settleInFlight();
         }
       },
-      (failure) => {
+      async (failure) => {
         const diagWindow = resolveOperationWindow({
           clock,
           defaultDeadlineMs: DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
@@ -468,9 +519,9 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
           deadlineAtMs: diagWindow.deadlineAtMs,
           deadlineMs: diagWindow.deadlineMs,
         };
-        return describeExhaustedDeployment({
+        const described = await describeExhaustedDeployment({
           targetId: 'lagrange',
-          topology: lagrangeTopology(hosts),
+          topology: lagrangeTopology(plan.nodes),
           sshRun: postFailureTracker.trackedSshRun,
           opts: postFailureOpts,
           deadlineAtMs: diagWindow.deadlineAtMs,
@@ -480,13 +531,14 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
           dataDir: DATA_DIR,
           readVersions: async (products) => {
             try {
-              return await reportedVersions(postFailureCtx, products);
+              return await reportedVersions(postFailureCtx, withNodeAddresses(products, roles));
             } finally {
               await postFailureTracker.settleInFlight();
             }
           },
           failure,
         });
+        return {...described, formationTimes: {...formed.times}};
       },
     );
   } catch (error) {
@@ -500,13 +552,23 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
       campaignId,
       sshRun,
       cleanOpts,
+      campaignNetwork: plan.network !== null,
     });
     throw error;
   }
 }
 
-function lagrangeTopology(hosts) {
-  return {description: `${hosts.length} Lagrange nodes; clients use the public ` +
+// The probes address a product by its node's address, which the container
+// inspection does not know; products come back in role order.
+function withNodeAddresses(products, roles) {
+  products.forEach((product, index) => {
+    product.address = roles[index].address;
+  });
+  return products;
+}
+
+function lagrangeTopology(nodes) {
+  return {description: `${nodes.length} Lagrange nodes; clients use the public ` +
     'PostgreSQL wire listener directly', clientPath: 'public-pg-wire'};
 }
 
@@ -536,34 +598,67 @@ async function observeHostName({sshRun, opts, host}) {
   }
 }
 
-async function startLagrangeNode({sshRun, opts, host, seedHost, image, connection, campaignId,
-  index, declaredHostCount}) {
-  const nodeId = nodeIdOf(index);
-  const hostName = await observeHostName({sshRun, opts, host});
-  const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
-    ordinal: index + 1, image: imageForHost(opts, host, image),
-    dockerArgs: [...storageArgs(opts, campaignId, index),
-      ...nodeEnv({nodeId, host, hostName, seedHost, connection, declaredHostCount})]});
-  return {role: NODE_ROLE, host, containerId: started.containerId, nodeId};
+// The address probes use: the host for a node on the host's network, the node's
+// address on the campaign bridge otherwise.
+const BRIDGE_ADDRESS_FORMAT = '{{(index .NetworkSettings.Networks "NET").IPAddress}}';
+
+async function bridgeAddressOf({sshRun, opts, host, containerId, network}) {
+  const format = stringReplace(BRIDGE_ADDRESS_FORMAT, 'NET', network.name);
+  const answer = stringTrim(stringOf(await sshRun(host, opts,
+    `docker inspect -f '${format}' ${containerId}`)));
+  if (answer === '') {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
+      `container ${containerId} has no address on ${network.name}`, {host, network});
+  }
+  return answer;
 }
 
-async function startJoinerNodes({sshRun, opts, hosts, seedHost, image, connection, campaignId,
-  roles}) {
-  const joinerIndices = [];
-  for (let index = 1; index < hosts.length; index += 1) joinerIndices.push(index);
+async function createCampaignNetwork({sshRun, opts, host, campaignId, network}) {
+  try {
+    await sshRun(host, opts, `docker network create --label ${BENCH_LABEL.CAMPAIGN}=${campaignId} ` +
+      `${network.name}`);
+  } catch (error) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
+      `docker network create ${network.name} on ${host} failed: ${classifyRemoteCommandError(
+        error).message}`, {host, network});
+  }
+}
+
+async function startLagrangeNode({sshRun, opts, node, plan, seedNode, image, connection,
+  campaignId}) {
+  const nodeId = nodeIdOf(node.index);
+  const machineHostName = await observeHostName({sshRun, opts, host: node.host});
+  // The identity the node declares: its synthetic id on the first look, otherwise the
+  // observed machine name. The machine's real name is recorded either way.
+  const hostName = node.declaredHostId ?? machineHostName;
+  const started = await dockerRunDetached({sshRun, opts, host: node.host, campaignId,
+    role: NODE_ROLE, ordinal: node.index + 1, image: imageForHost(opts, node.host, image),
+    ...(plan.network ? {network: plan.network.name} : {}),
+    dockerArgs: [...storageArgs(opts, campaignId, node.index),
+      ...nodeEnv({nodeId, nodeAddress: node.nodeAddress, hostName,
+        seedAddress: seedNode.nodeAddress, isSeed: node.isSeed, connection,
+        declaredHostCount: plan.declaredHostCount})]});
+  const address = plan.network ? await bridgeAddressOf({sshRun, opts, host: node.host,
+    containerId: started.containerId, network: plan.network}) : node.host;
+  return {role: NODE_ROLE, host: node.host, address, containerId: started.containerId, nodeId,
+    declaredHostId: hostName, machineHostName,
+    declaredHostIdentity: plan.declaredHostIdentity};
+}
+
+async function startJoinerNodes({sshRun, opts, plan, image, connection, campaignId, roles}) {
+  const joiners = arrayFilter(plan.nodes, (node) => !node.isSeed);
   let cancelled = false;
-  const settledJoiners = await Promise.allSettled(arrayMap(joinerIndices, async (index) => {
-    const host = hosts[index];
+  const settledJoiners = await Promise.allSettled(arrayMap(joiners, async (node) => {
     try {
-      await prepareNodeStorage({sshRun, opts, host, campaignId, index});
+      await prepareNodeStorage({sshRun, opts, host: node.host, campaignId, index: node.index});
     } catch (error) {
       cancelled = true;
       throw error;
     }
     if (cancelled) return null;
     try {
-      const role = await startLagrangeNode({sshRun, opts, host, seedHost, image, connection,
-        campaignId, index});
+      const role = await startLagrangeNode({sshRun, opts, node, plan, seedNode: plan.nodes[0],
+        image, connection, campaignId});
       roles.push(role);
       return role;
     } catch (error) {
@@ -591,6 +686,24 @@ function assertExpectedLagrangeRevision(products, expectedRevision) {
   if (wrong.length > 0) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
       `image revision label differs from ${expectedRevision}`,
+      {hosts: arrayMap(wrong, (one) => [one.host, revisionLabelOf(one)])});
+  }
+}
+
+const FULL_COMMIT_LABEL = /^[0-9a-f]{40}$/u;
+
+// A declared product commit is checked against the image's revision label when the label is a
+// full commit id; an `unknown`, absent or abbreviated label cannot contradict it (the booted
+// source fingerprint alone decides, and the record says the label was not available).
+function assertDeclaredProductRevision(products, declaredCommit) {
+  if (!declaredCommit) return;
+  const wrong = arrayFilter(products, (product) => {
+    const label = revisionLabelOf(product);
+    return FULL_COMMIT_LABEL.test(label ?? '') && label !== declaredCommit;
+  });
+  if (wrong.length > 0) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `image revision label differs from the declared product commit ${declaredCommit}`,
       {hosts: arrayMap(wrong, (one) => [one.host, revisionLabelOf(one)])});
   }
 }
@@ -629,22 +742,32 @@ function resolveExpectedLagrangeSrcFingerprint(opts) {
   return candidate;
 }
 
-async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, roles, nodeReadiness,
-  formed, campaignId}) {
+async function formLagrangeCluster({ctx, rawSshRun, plan, image, connection, roles, nodeReadiness,
+  formed, campaignId, onNodesStarted}) {
   const {sshRun, opts} = ctx;
-  const seedHost = hosts[0];
-  await prepareNodeStorage({sshRun, opts, host: seedHost, campaignId, index: 0});
-  roles.push(await startLagrangeNode({sshRun, opts, host: seedHost, seedHost, image, connection,
-    campaignId, index: 0, declaredHostCount: hosts.length}));
-  await startJoinerNodes({sshRun, opts, hosts, seedHost, image, connection, campaignId, roles});
-  ctx.watchedRoles = [...roles];
-  if (hosts.length > 0) {
-    nodeReadiness.push(await nodeReady(ctx, hosts[0]));
+  const [seedNode] = plan.nodes;
+  if (plan.network) {
+    await createCampaignNetwork({sshRun, opts, host: seedNode.host, campaignId,
+      network: plan.network});
   }
-  if (hosts.length > 1) {
+  await prepareNodeStorage({sshRun, opts, host: seedNode.host, campaignId, index: 0});
+  roles.push(await startLagrangeNode({sshRun, opts, node: seedNode, plan, seedNode, image,
+    connection, campaignId}));
+  await startJoinerNodes({sshRun, opts, plan, image, connection, campaignId, roles});
+  ctx.watchedRoles = [...roles];
+  // The containers are up and the readiness wait has not begun: a caller may look at its network.
+  const stampedAt = () => dateToISOString(new DateConstructor(ctx.now()));
+  formed.times.containersStartedAt = stampedAt();
+  formed.times.pollIntervalMs = ctx.budget.intervalMs;
+  await onNodesStarted({roles: [...roles]});
+  formed.times.firstPollAt = stampedAt();
+  const seedAddress = roles[0].address;
+  nodeReadiness.push(await nodeReady(ctx, seedAddress));
+  if (plan.nodes.length > 1) {
     const joinerReady = await settleConcurrentBatch(
-      hosts.slice(1),
-      (host) => nodeReady(ctx, host),
+      arrayMap(arrayFilter(roles, (role) => role.address !== seedAddress),
+        (role) => role.address),
+      (address) => nodeReady(ctx, address),
       ctx.settleInFlight ?? null,
     );
     nodeReadiness.push(...joinerReady);
@@ -658,16 +781,18 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     now: ctx.now,
   });
   const products = verifyProductIdentity(
-    await reportedVersions(ctx, inspectedProducts),
+    await reportedVersions(ctx, withNodeAddresses(inspectedProducts, roles)),
     {[NODE_ROLE]: {imageRef: image, contentIdentity: opts.lagrangeImageContent ?? null,
       versionPattern: versionPatternOf(image, ctx.expectedVersion),
       expectedSrcFingerprint: resolveExpectedLagrangeSrcFingerprint(opts),
       expectedGitCommit: opts.expectedGitCommit || null}});
   assertExpectedLagrangeRevision(products, opts.lagrangeRevision);
-  const membership = await membershipReady(ctx, seedHost, hosts.length);
-  const listener = await publicPgWireReady(ctx, seedHost, roles);
+  assertDeclaredProductRevision(products, opts.productCommit);
+  const membership = await membershipReady(ctx, seedAddress, plan.nodes.length,
+    plan.declaredHostCount);
+  const listener = await publicPgWireReady(ctx, seedAddress, roles);
   formed.listener = listener;
-  const leaders = await leadersReady(ctx, seedHost);
+  const leaders = await leadersReady(ctx, seedAddress);
   const target = {sshRun, opts, from: ctx.clientIp, campaignId,
     endpoint: {host: listener.host, port: listener.port}, connection};
   const query = createPsqlQueryReader(target);
@@ -690,25 +815,27 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     opts,
     campaignId,
     endpoint: {host: listener.host, port: listener.port},
-    candidates: arrayFilter(roles, (role) => role.host === listener.host),
+    candidates: arrayFilter(roles, (role) => role.address === listener.host),
     signal: ctx.signal,
     timeoutMs: bindRemainingMs ?? undefined,
   });
-  roles.push({role: LISTENER_ROLE, host: listener.host, containerId: binding.containerId,
-    nodeId: listener.nodeId});
+  const listenerNode = arrayFind(roles, (role) => role.address === listener.host);
+  roles.push({role: LISTENER_ROLE, host: listenerNode.host, address: listener.host,
+    containerId: binding.containerId, nodeId: listener.nodeId});
   const storage = arrayMap(products, (product) => classifyStorage(product, DATA_DIR));
   const endpoint = {protocol: 'postgresql', serviceId: PG_WIRE_SERVICE_ID,
     host: listener.host, port: listener.port, containerId: binding.containerId,
     binding};
   const observedAt = dateToISOString(new DateConstructor(ctx.now()));
-  const placement = placementOf(await readPartitions(ctx, seedHost), roles, observedAt);
+  const placement = placementOf(await readPartitions(ctx, seedAddress), roles, observedAt);
   const postTracker = createTrackedSshRun(rawSshRun, null);
   const postSqlTarget = {
     sshRun: postTracker.trackedSshRun,
     opts,
     from: ctx.clientIp,
     campaignId,
-    endpoint: {host: listener.host, port: listener.port},
+    // The live endpoint: a restart that moves its node's address moves it here.
+    endpoint,
     connection,
   };
   const postQuery = createPsqlQueryReader(postSqlTarget);
@@ -728,9 +855,25 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     expectedVersion: ctx.expectedVersion,
     watchedRoles: nodeRoles,
   };
+  // After a restart a node on the campaign bridge may have another address: every
+  // node's address is observed again before any probe, the endpoint follows its node,
+  // and what changed is returned for the record.
+  const observeNodeAddresses = async (sshRunOf) => {
+    const changes = [];
+    for (const role of arrayFilter(roles, (one) => one.role === NODE_ROLE)) {
+      const before = role.address;
+      const after = plan.network ? await bridgeAddressOf({sshRun: sshRunOf, opts, host: role.host,
+        containerId: role.containerId, network: plan.network}) : role.host;
+      for (const one of arrayFilter(roles, (candidate) => candidate.containerId ===
+        role.containerId)) one.address = after;
+      if (endpoint.containerId === role.containerId) endpoint.host = after;
+      if (after !== before) changes.push({containerId: role.containerId, before, after});
+    }
+    return {addressChanges: changes};
+  };
   return {
     targetId: 'lagrange',
-    topology: lagrangeTopology(hosts),
+    topology: lagrangeTopology(plan.nodes),
     roles, storage, runClass: runClassOf(storage),
     readiness: {state: READINESS_STATE.READY, observedAt,
       evidence: {nodes: nodeReadiness, membership, publicPgWire: listener, leaders, cluster,
@@ -739,6 +882,9 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     placement,
     endpoint,
     access: {connection},
+    // The clock facts of the formation: from the containers started (the caller's hook ran
+    // then and never delays the readiness polls) to the readiness owner's verdict.
+    formationTimes: {...formed.times, readyObservedAt: observedAt},
     operations: {
       // After the canonical load: every partition of every canonical table
       // routable and replicated, or a typed readiness exhaustion.
@@ -766,7 +912,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
             nodeRoles,
             arrayMap(CANONICAL_TABLES, (table) => table.name),
           );
-          const partitionsAnswer = await readPartitions(routableCtx, seedHost);
+          const partitionsAnswer = await readPartitions(routableCtx, roles[0].address);
           return {
             ...placementOf(partitionsAnswer, roles,
               dateToISOString(new DateConstructor(ctx.now()))),
@@ -793,6 +939,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
           deadlineMs: win.deadlineMs,
           watchedRoles: nodeRoles,
         };
+        const addresses = await observeNodeAddresses(basePostFormationCtx.sshRun);
         try {
           const systemReady = await clusterReady(
             readyCtx,
@@ -817,6 +964,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
           return {
             cluster,
             probe: await probeWriteReadback(readyCtx, postSql, campaignId, visibility),
+            ...addresses,
           };
         } finally {
           await postTracker.settleInFlight();
@@ -838,7 +986,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
           deadlineMs: win.deadlineMs,
         };
         try {
-          return {leaders: await observedLeaders(rolesCtx, seedHost)};
+          return {leaders: await observedLeaders(rolesCtx, roles[0].address)};
         } finally {
           await postTracker.settleInFlight();
         }
@@ -849,5 +997,6 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
 
 export {
   deployLagrangeCluster,
+  planLagrangeNodePlacement,
   resolveLagrangeContainerImage,
 };
