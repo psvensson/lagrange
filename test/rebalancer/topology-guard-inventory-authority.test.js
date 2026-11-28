@@ -147,7 +147,7 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
 
   await t.test('witness (red today): leader reachable, the guard refuses from the ' +
     'local follower\'s incomplete answer', async (t) => {
-    const host = openPlannerHost(t, world);
+    const host = await openPlannerHost(t, world);
     const route = host.route();
     const first = await host.createAdd();
     const second = await host.createAdd();
@@ -206,7 +206,7 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
 
   await t.test('anchor (green): the services-p1 leader is reachable from the planner node ' +
     'through the owner-RPC path', async (t) => {
-    const host = openPlannerHost(t, world);
+    const host = await openPlannerHost(t, world);
     const strict = await host.readServicesStrictly();
     const observation = strict.observation;
     const leader = world.replicaOn(NODE.PEER_A);
@@ -230,7 +230,7 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
 
   await t.test('anchor (b): the leader genuinely unreachable (its hop refuses)',
     async (t) => {
-      const host = openPlannerHost(t, world, {unreachableNodeIds: [NODE.PEER_A]});
+      const host = await openPlannerHost(t, world, {unreachableNodeIds: [NODE.PEER_A]});
       const first = await host.createAdd();
       const strict = await host.readServicesStrictly();
       const ledger = host.ledgerRows();
@@ -268,7 +268,7 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
     'follower and cache have not received', async (t) => {
     world.seedLeaderOnlyRow(buildRuntimeOccupantRow(NODE.PLANNER, Date.now()));
     const runtimeRowsSql = 'SELECT service_id, node_id FROM services WHERE service_type = ?';
-    const host = openPlannerHost(t, world);
+    const host = await openPlannerHost(t, world);
     t.equal(world.tableRowsOn(NODE.PEER_A, runtimeRowsSql, [RUNTIME_SERVICE]).length, 1,
       'setup: the leader\'s replica holds the occupant');
     t.equal(world.tableRowsOn(NODE.PLANNER, runtimeRowsSql, [RUNTIME_SERVICE]).length, 0,
@@ -302,7 +302,7 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
 test('anchor (a, green today): the planner node leading services-p1 admits the same request',
   {timeout: CASE_TIMEOUT_MS}, async (t) => {
     const world = await openWorld(t, NODE.PLANNER, PORTS);
-    const host = openPlannerHost(t, world);
+    const host = await openPlannerHost(t, world);
     const first = await withDiagnosticStacks(() => host.createAdd());
     const ledger = host.ledgerRows();
     const firstRead = guardReadOf(first);

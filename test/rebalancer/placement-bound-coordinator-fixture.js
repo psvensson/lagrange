@@ -14,14 +14,21 @@
 //   ledger admits and the transitions the workflow writes afterwards are one
 //   replica_operations table (the store mirrors each committed row into the
 //   fixture cache, as CDC would);
-// - the node authority answers a committed, latched formation (FORMED).
+// - the node authority answers a committed, latched formation (FORMED);
+// - the ledger replica's leadership-sink slot holds its placement owner, which
+//   the ledger drives, so the coordinator's copy limits come from the active
+//   local owner (resolveActiveReplicaPlacementOwner ->
+//   resolveOwnerMoveCopyLimits), as on the node that leads the ledger.
 // Substituted (evidence ceiling): consensus is the controllable port (one
 // voter; every proposal commits on the next microtask); the coordinator's own
 // later ledger writes are executed on the shared table by its store, as in
-// every coordinator fixture, not proposed. The placement owner is not
-// attached: the ledger replica is not handed this coordinator, so its attach
-// precondition holds (no autonomous pass runs); the subject of these fixtures
-// is the coordinator's creation and the workflow after it.
+// every coordinator fixture, not proposed. The placement owner is the
+// production ReplicaPlacementOwner, leading, with its passes running; it is
+// attached by ledger-placement-owner.js (which names the collaborators it
+// substitutes and its own evidence ceiling) rather than by the factory bound
+// here: the ledger replica is not handed this coordinator, so that factory is
+// never asked to attach. The subject of these fixtures is the coordinator's
+// creation and the workflow after it.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
@@ -42,6 +49,7 @@ import {applyCommitted, shutdownAll, startLeader, temporaryDbPath} from
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {REPLICA_OPERATION_WRITE_CAPTURE, SQL_STORE_SCHEMAS,
   createTestCoordinator} from './test-helpers.js';
+import {attachLedgerPlacementOwner} from './ledger-placement-owner.js';
 import {createTimeoutTestCoordinator} from './timeout-test-coordinator.js';
 
 const DEFAULT_NODE_ID = 'test-node-1';
@@ -103,7 +111,8 @@ async function startPlacementLedger({nodeId = DEFAULT_NODE_ID, timeSource} = {})
 
 /**
  * Bind a constructed coordinator as ControlPlaneSetup.create does, with the
- * ledger as its local ledger replica; its shutdown stops the ledger it owns.
+ * ledger as its local ledger replica and the ledger's placement owner in its
+ * slot; its shutdown stops the ledger it owns.
  * @param {Object} coordinator - The RebalanceCoordinator.
  * @param {Object} ledger - From startPlacementLedger.
  * @param {boolean} [ownsLedger] - Whether the coordinator's shutdown stops it.
@@ -118,6 +127,7 @@ function bindPlacementAdmission(coordinator, ledger, ownsLedger = true) {
       storageAccountingService: coordinator.storageAccountingService,
     }));
   coordinator.registerLedgerPartitionService(ledger.leader);
+  attachLedgerPlacementOwner(ledger.leader, coordinator);
   if (!ownsLedger) return;
   const shutdown = coordinator.shutdown.bind(coordinator);
   coordinator.shutdown = async (...args) => {

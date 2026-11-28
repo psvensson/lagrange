@@ -49,6 +49,7 @@ import {
   openServicesWorld,
   resetGuardEnvironment,
 } from './topology-guard-inventory-authority-fixture.js';
+import {COMMITTED_FORMATION} from './placement-bound-coordinator-fixture.js';
 import {
   createMockControlPlaneReadinessService,
   createTestRebalancer,
@@ -217,10 +218,10 @@ async function openCureScene(t, {cureNodeIds, partitionId = CURE_PARTITION_ID,
   cureRows.forEach((row) => world.seedRowOnAll(row));
   const storage = createAllowAllStorageAdmissionService();
   let readiness = null;
-  const host = openPlannerHost(t, world, {readyNodes: true, publishedRows: cureRows,
+  const host = await openPlannerHost(t, world, {readyNodes: true, publishedRows: cureRows,
     coordinatorOptionsOf: (cache) => {
       readiness = createMockControlPlaneReadinessService({systemTableCache: cache,
-        defaultRepairEligible: true});
+        defaultRepairEligible: true, formation: COMMITTED_FORMATION});
       return {controlPlaneReadinessService: readiness, storageAdmissionService: storage};
     }});
   seedFreeNodesAndPartition(host.cache, partitionId, tableId);

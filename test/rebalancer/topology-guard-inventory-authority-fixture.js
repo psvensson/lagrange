@@ -17,9 +17,13 @@
 //   (deliverLocal to the replica's own registered transport handler); a hop
 //   to a node a case declares unreachable is answered "no handler";
 // - the replica-operation ledger (replica_operations, storage_reservations),
-//   which is not the subject: the coordinator SQL store fixture, answered at
-//   the engine, at executeOnPartition and by the planner node's local ledger
-//   leader replica, with the fixture leader witness;
+//   which is not the subject: each host's coordinator is placement-bound
+//   (placement-bound-coordinator-fixture.js) to its own real
+//   replica_operations-p1 leader, whose committed apply admits every creation
+//   (a node authority answering a committed, latched formation); the
+//   coordinator SQL store fixture opens that ledger's database file and
+//   answers the rest at the engine, at executeOnPartition and as the planner
+//   node's local ledger replica for reads, with the fixture leader witness.
 //   A ledger write answers as the ledger leader's apply answers it: with the
 //   producer's durable commit receipt (buildDurableCommitWitness over the
 //   entry id derived from the named write's key, at a fixture log position),
@@ -97,6 +101,8 @@ import {
   writeThroughLeader,
 } from '../partition/partition-group-raft-controls.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {COMMITTED_FORMATION, bindPlacementAdmission, startPlacementLedger} from
+  './placement-bound-coordinator-fixture.js';
 import {
   buildMockPolicyAuthorityWitness,
   createCoordinatorSqlStore,
@@ -600,17 +606,28 @@ function openPlannerTurn(t, host, {clock, scheduledRetry = true}, rebalancers) {
  *   its cache publishes (default the world's); further SERVICES rows its cache
  *   holds; replica_operations rows its ledger and cache start with; the
  *   coordinator's non-subject collaborators a case supplies itself (readiness,
- *   storage admission), built over the host's cache.
- * @return {Object} The host.
+ *   storage admission), built over the host's cache; a readiness a case
+ *   supplies answers the committed formation itself.
+ * @return {Promise<Object>} The host.
  */
-function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
+async function openPlannerHost(t, world, options = {}) {
+  const ledger = await startPlacementLedger({nodeId: NODE.PLANNER});
+  try {
+    return composePlannerHost(t, world, ledger, options);
+  } catch (error) {
+    await ledger.stop();
+    throw error;
+  }
+}
+
+function composePlannerHost(t, world, ledger, {unreachableNodeIds = [], readyNodes = false,
   publishedLeaderNodeId = world.leaderNodeId, publishedRows = [], ledgerRows = [],
-  coordinatorOptionsOf = () => ({})} = {}) {
+  coordinatorOptionsOf = () => ({})}) {
   const observed = {servicesReads: [], ownerRpc: [], hops: [], engineRefusals: []};
   const cache = new SystemTableCache();
   seedPlannerCache(cache, world, {publishedLeaderNodeId, publishedRows, ledgerRows});
   if (readyNodes) seedReadyNodes(cache);
-  const store = createCoordinatorSqlStore(cache);
+  const store = createCoordinatorSqlStore(cache, {openDatabase: ledger.openDatabase});
   let ledgerLogIndex = 0;
   const nextLedgerLogIndex = () => {
     ledgerLogIndex += 1;
@@ -669,10 +686,13 @@ function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
   const gateway = new ControlPlaneSystemTableGateway({nodeId: NODE.PLANNER,
     cdcIntegrationService: cdc, systemTableCache: cache, sqlQueryEngine});
   tapServicesReads(gateway, observed);
-  const coordinator = createTestCoordinator({...coordinatorOptionsOf(cache),
+  const coordinator = createTestCoordinator({
+    readinessFixture: {formation: COMMITTED_FORMATION}, ...coordinatorOptionsOf(cache),
     nodeId: NODE.PLANNER, systemTableCache: cache,
     controlPlaneSystemTableGateway: gateway, sqlQueryEngine, cdcIntegrationService: cdc,
     enableTimeouts: false});
+  // Its shutdown stops the host's ledger.
+  bindPlacementAdmission(coordinator, ledger);
   const rebalancers = [];
   t.teardown(async () => {
     for (const rebalancer of rebalancers) rebalancer.shutdown();

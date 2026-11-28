@@ -23,12 +23,15 @@ import {
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 import {
   buildMockPolicyAuthorityWitness,
+  createCoordinatorSqlStore,
   createMockCache,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
   withServicesLeaderWitness,
   withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
+import {COMMITTED_FORMATION, bindPlacementAdmission, startPlacementLedger} from
+  './placement-bound-coordinator-fixture.js';
 
 // A successful authoritative read as its owner answers it: a SERVICES read
 // from the services-p1 leader, a replica_operations read complete from the
@@ -87,11 +90,16 @@ function createServiceRow(replicaId, nodeId, options = {}) {
   };
 }
 
-function createSqlEngine(options = {}) {
+const REPLICA_OPERATIONS_STATEMENT = /\breplica_operations\b/u;
+const ALL_OPERATIONS_SQL = 'SELECT * FROM replica_operations ORDER BY operation_id';
+
+// The one replica_operations table is the ledger's: placement admission
+// inserts into it at the ledger's apply, the coordinator reads it and the
+// record path of the other entity types inserts through the gateway.
+function createSqlEngine(store, options = {}) {
   const {
     authoritativeServices = [],
   } = options;
-  const operations = new Map();
 
   const executeQuery = async (sql, params = []) => {
     if (sql.includes('SELECT * FROM services') &&
@@ -105,71 +113,44 @@ function createSqlEngine(options = {}) {
         ),
       };
     }
-    if (sql.includes('SELECT * FROM replica_operations') &&
-          sql.includes('target_node_id = ?')) {
-      const [partitionId, targetNodeId] = params;
-      const existing = [...operations.values()].filter((operation) =>
-        operation.partition_id === partitionId &&
-          operation.target_node_id === targetNodeId,
-      );
-      return {
-        success: true,
-        rows: existing,
-      };
-    }
-    if (sql.includes('SELECT * FROM replica_operations') &&
-          sql.includes('entity_type = ?')) {
-      const [entityType, entityId] = params;
-      const existing = [...operations.values()].filter((operation) =>
-        operation.entity_type === entityType &&
-          operation.entity_id === entityId);
-      return {
-        success: true,
-        rows: existing,
-      };
-    }
-    if (sql.includes('SELECT * FROM replica_operations') &&
-          sql.includes('operation_id = ?')) {
-      const [operationId] = params;
-      return {
-        success: true,
-        rowSetComplete: true,
-        rows: operations.has(operationId) ? [operations.get(operationId)] : [],
-      };
+    if (REPLICA_OPERATIONS_STATEMENT.test(sql)) {
+      return store.execute(sql, params);
     }
     return {success: true, rowSetComplete: true, rows: []};
   };
 
   return {
     executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
-    async submitMutation({operation, tableName, row}) {
-      if (operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
-          tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+    async submitMutation(mutation) {
+      if (mutation.operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
+          mutation.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
         throw new Error('Unexpected topology guard mutation');
       }
-      if (operations.has(row.operation_id)) {
-        return {success: true, affectedRows: 0};
-      }
-      operations.set(row.operation_id, {...row});
-      return {success: true, affectedRows: 1};
+      return store.submitMutation(mutation);
     },
     getOperations() {
-      return [...operations.values()];
+      return store.execute(ALL_OPERATIONS_SQL, []).rows;
     },
   };
 }
 
-function createCoordinator(options = {}) {
+// The coordinator as ControlPlaneSetup.create binds it, on the node that leads
+// its own real replica_operations-p1 ledger (placement-bound-coordinator-
+// fixture.js), with a node authority that answers a committed, latched
+// formation; its shutdown stops the ledger.
+async function createCoordinator(options = {}) {
   const cache = createMockCache({
     nodes: options.cacheNodes || [],
     services: options.cacheServices || [],
     partitions: options.cachePartitions || [],
   });
-  const sqlEngine = createSqlEngine({
+  const ledger = await startPlacementLedger({nodeId: TEST_NODE_ID});
+  const store = createCoordinatorSqlStore(cache, {openDatabase: ledger.openDatabase});
+  const sqlEngine = createSqlEngine(store, {
     authoritativeServices: options.authoritativeServices || [],
   });
   const baseReadinessService = createMockControlPlaneReadinessService({
-    systemTableCache: cache,
+    systemTableCache: cache, formation: COMMITTED_FORMATION,
   });
   const controlPlaneReadinessService =
     options.controlPlaneReadinessService ||
@@ -222,6 +203,15 @@ function createCoordinator(options = {}) {
     enableTimeouts: false,
   });
   coordinator.initialize();
+  bindPlacementAdmission(coordinator, ledger);
+  const shutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async (...args) => {
+    try {
+      return await shutdown(...args);
+    } finally {
+      store.suspend();
+    }
+  };
   return {
     coordinator,
     sqlEngine,
@@ -244,7 +234,7 @@ test('RebalanceCoordinator blocks same-node duplicate topology creation', async 
     TEST_PARTITION_ID + '-r2',
     TEST_EXISTING_NODE_ID,
   );
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheServices: [existingReplica],
   });
 
@@ -283,7 +273,7 @@ test('RebalanceCoordinator topology guard invokes the injected inventory owner',
       inventoryBuildCount += 1;
       return buildReplicaInventorySnapshot(options);
     };
-    const {coordinator} = createCoordinator({
+    const {coordinator} = await createCoordinator({
       cacheServices: [
         createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_TARGET_NODE_ID),
       ],
@@ -309,7 +299,7 @@ test('RebalanceCoordinator fails topology increase closed when service owner row
     const readRows = async (table) => table === SYSTEM_TABLE_NAME.SERVICES ? {
       success: false, rows: [], error: 'service owner unavailable',
     } : {success: true, rows: []};
-    const {coordinator} = createCoordinator({
+    const {coordinator} = await createCoordinator({
       cacheServices: [
         createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
       ],
@@ -372,7 +362,7 @@ test(
       }),
       executeQuery: async () => ({success: true, rowSetComplete: true, rows: []}),
     };
-    const {coordinator} = createCoordinator({
+    const {coordinator} = await createCoordinator({
       cacheServices: authoritativeServices,
       controlPlaneSystemTableGateway: slowSuccessfulGateway,
       nowFn: () => nowMs,
@@ -425,7 +415,7 @@ test(
       tableName === 'services' ?
         unavailable() :
         {success: true, rows: []};
-    const {coordinator} = createCoordinator({
+    const {coordinator} = await createCoordinator({
       cacheNodes: [
         seed,
         spreadNode,
@@ -547,7 +537,7 @@ test('RebalanceCoordinator blocks stale ADD when authoritative topology already 
     ...cacheServices,
     createServiceRow(TEST_PARTITION_ID + '-r3', 'node-3'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheServices,
     authoritativeServices,
   });
@@ -594,7 +584,7 @@ test('RebalanceCoordinator blocks REPLACE when target node already has partition
       status: TEST_FAILED_STATUS,
     }),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheServices,
   });
 
@@ -639,7 +629,7 @@ test('RebalanceCoordinator applies topology occupancy guard to message-group cre
       serviceType: SERVICE_TYPE.MESSAGE_GROUP,
     },
   );
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheServices: [existingReplica],
   });
 
@@ -698,7 +688,7 @@ test('count-keyed lane HOLDS a REPLACE churn create while the critical partition
     critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -729,7 +719,7 @@ test('count-keyed lane consumes canonical identity deduplication', async (t) => 
     critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
     critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -762,7 +752,7 @@ async (t) => {
     critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4', TEST_FAILED_STATUS),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -795,7 +785,7 @@ test('count-keyed lane HOLDS a REPLACE churn create when the surplus is a draini
     critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4', ReplicaStatusForTest.REMOVING),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -832,7 +822,7 @@ test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on aliv
     critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -861,7 +851,7 @@ test('count-keyed lane STILL HOLDS an over-target ADD without the spread-cure ' 
     critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -888,7 +878,7 @@ async (t) => {
     critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -914,7 +904,7 @@ test('count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target n
     critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -951,7 +941,7 @@ test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op
     critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
     orphanRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -980,7 +970,7 @@ test('s14 orphan census: a CATCHING-UP learner (status=creating) still counts, '
     // pre-active transitional (not an orphan): a legitimate voter-to-be.
     {...critRow(CRIT_PARTITION_ID + '-r3', 'node-3'), raft_role: 'learner', status: 'creating'},
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -1005,7 +995,7 @@ test('s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED â
     critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
     orphanRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
-  const {coordinator, sqlEngine} = createCoordinator({
+  const {coordinator, sqlEngine} = await createCoordinator({
     cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
@@ -1028,7 +1018,7 @@ test('ADD and REPLACE refuse unavailable policy before persistence ' +
   initializeTestEnvironment();
   for (const type of [TEST_ADD_OPERATION_TYPE, TEST_REPLACE_OPERATION_TYPE]) {
     const rows = [createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID)];
-    const {coordinator, sqlEngine} = createCoordinator({
+    const {coordinator, sqlEngine} = await createCoordinator({
       cacheServices: rows, authoritativeServices: rows,
     });
     try {

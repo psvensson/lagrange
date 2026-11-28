@@ -95,7 +95,7 @@ test('a fresh services-p1 leader that has not applied its election log: no decis
   // not its commit, then leads without being able to commit its own entry.
   await world.freshLeaderBehindCommit(NODE.PEER_A, NODE.PEER_B,
     buildRuntimeOccupantRow(NODE.PEER_B, Date.now()), ELECTION_LOG_ENTRY_ID);
-  const host = openPlannerHost(t, world, {publishedLeaderNodeId: NODE.PEER_B});
+  const host = await openPlannerHost(t, world, {publishedLeaderNodeId: NODE.PEER_B});
   const clock = new VirtualTimeSource({startMs: Date.now()});
   const turn = host.openPlannerTurn({clock});
   await turn.start();
@@ -123,7 +123,7 @@ test('the leader\'s applied index moves while it reads: the rows of that read de
   'nothing; the decision is on the moved state', {timeout: CASE_TIMEOUT_MS}, async (t) => {
   const world = await openWorld(t);
   await world.settleLeader(NODE.PEER_A);
-  const host = openPlannerHost(t, world);
+  const host = await openPlannerHost(t, world);
   const receiverBefore = world.readCountsOf(NODE.PEER_A).receiver;
   const held = world.holdNextStatementAfterRead(NODE.PEER_A);
   const pending = host.createAdd();

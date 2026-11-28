@@ -55,7 +55,7 @@ test('residual: the guard asks a deposed services-p1 leader that does not know i
   // in the new quorum's tables only.
   world.seedRowOnNodes([NODE.PLANNER, NODE.PEER_B],
     buildRuntimeOccupantRow(NODE.PLANNER, Date.now()));
-  const host = openPlannerHost(t, world, {publishedLeaderNodeId: NODE.PEER_A});
+  const host = await openPlannerHost(t, world, {publishedLeaderNodeId: NODE.PEER_A});
   const deposedRoleAtRead = world.replicaOn(NODE.PEER_A).raft.readStatus().role;
   const readAtMs = Date.now();
   const first = await host.createAdd();

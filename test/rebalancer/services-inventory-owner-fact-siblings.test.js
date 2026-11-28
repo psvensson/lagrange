@@ -103,9 +103,9 @@ async function openWorld(t, leaderNodeId, ports) {
 // The three decisions over one world: READY (leader reachable) and
 // UNAVAILABLE (leader's node unreachable), on hosts with ready nodes.
 async function decideIn(t, world, decide, hostOptions = {}) {
-  const reachable = openPlannerHost(t, world, {readyNodes: true, ...hostOptions});
+  const reachable = await openPlannerHost(t, world, {readyNodes: true, ...hostOptions});
   const ready = await settle(() => decide(reachable));
-  const unreachable = openPlannerHost(t, world, {readyNodes: true, ...hostOptions,
+  const unreachable = await openPlannerHost(t, world, {readyNodes: true, ...hostOptions,
     unreachableNodeIds: [world.leaderNodeId]});
   const unavailable = await settle(() => decide(unreachable));
   return {ready, unavailable};
@@ -116,7 +116,7 @@ async function decideInBothWorlds(t, decide, seed, hostOptionsOf = () => ({})) {
   seed(reference);
   t.equal(reference.replicaOn(NODE.PLANNER).getRole(), RAFT_ROLE.LEADER,
     'setup: in the reference world the planner node leads services-p1');
-  const referenceHost = openPlannerHost(t, reference,
+  const referenceHost = await openPlannerHost(t, reference,
     {readyNodes: true, ...hostOptionsOf(reference)});
   const referenceDecision = await settle(() => decide(referenceHost));
   const world = await openWorld(t, NODE.PEER_A, PORTS);
@@ -195,12 +195,12 @@ async (t) => {
   const projected = (world) => world.publishedRows.map((row) => row.service_id).sort();
   const reference = await openWorld(t, NODE.PLANNER, PORTS);
   reference.seedLeaderOnlyRow(leaderOnlyPartitionRow(reference));
-  const referenceBook = await addressBookOf(openPlannerHost(t, reference));
+  const referenceBook = await addressBookOf(await openPlannerHost(t, reference));
   const world = await openWorld(t, NODE.PEER_A, PORTS);
   world.seedLeaderOnlyRow(leaderOnlyPartitionRow(world));
-  const host = openPlannerHost(t, world);
+  const host = await openPlannerHost(t, world);
   const before = await addressBookOf(host);
-  const unreachableBook = await addressBookOf(openPlannerHost(t, world,
+  const unreachableBook = await addressBookOf(await openPlannerHost(t, world,
     {unreachableNodeIds: [world.leaderNodeId]}));
   // The projection receives the row (its cache change); the next read has it.
   host.cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT,
@@ -278,17 +278,17 @@ test('holdCriticalPartitionCreateLaneIfOverTarget: a READY owner fact over targe
       moveReason: MOVE_REASON.INCREASE_REPLICA_COUNT}});
   const reference = await openWorld(t, NODE.PLANNER, PORTS);
   reference.seedLeaderOnlyRow(leaderOnlyPartitionRow(reference));
-  const referenceDecision = await settle(() =>
-    decide(openPlannerHost(t, reference, {readyNodes: true})));
+  const referenceDecision = await settle(async () =>
+    decide(await openPlannerHost(t, reference, {readyNodes: true})));
   const world = await openWorld(t, NODE.PEER_A, PORTS);
   world.seedLeaderOnlyRow(leaderOnlyPartitionRow(world));
   t.equal(world.replicaOn(NODE.PLANNER).getRole(), RAFT_ROLE.FOLLOWER,
     'setup: in the subject world the planner node hosts a follower');
   const hostOptions = {readyNodes: true, publishedRows: [leaderOnlyPartitionRow(world)]};
   const plannerBefore = world.readCountsOf(NODE.PLANNER);
-  const ready = await settle(() => decide(openPlannerHost(t, world, hostOptions)));
+  const ready = await settle(async () => decide(await openPlannerHost(t, world, hostOptions)));
   const plannerAfterReady = world.readCountsOf(NODE.PLANNER);
-  const unavailable = await settle(() => decide(openPlannerHost(t, world,
+  const unavailable = await settle(async () => decide(await openPlannerHost(t, world,
     {...hostOptions, unreachableNodeIds: [world.leaderNodeId]})));
   const plannerAfterUnavailable = world.readCountsOf(NODE.PLANNER);
   printObservation(t, 'over-target-hold', {referenceError: errorShape(referenceDecision.error),

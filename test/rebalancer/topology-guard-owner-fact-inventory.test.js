@@ -97,7 +97,7 @@ async function openWorld(t, leaderNodeId, ports) {
 test('the guard reads the SERVICES owner fact from the leader, never the planner\'s ' +
   'follower, and admits the ADD once', {timeout: CASE_TIMEOUT_MS}, async (t) => {
   const world = await openWorld(t, NODE.PEER_A, PORTS);
-  const host = openPlannerHost(t, world);
+  const host = await openPlannerHost(t, world);
   const plannerBefore = world.readCountsOf(NODE.PLANNER);
   const first = await host.createAdd();
   const plannerAfter = world.readCountsOf(NODE.PLANNER);
@@ -165,7 +165,7 @@ test('the leader unreachable: no decision, typed deferral, zero proposals; the p
   const world = await openWorld(t, NODE.PEER_A, PORTS);
 
   await t.test('with the planner\'s scheduled retry', async (t) => {
-    const host = openPlannerHost(t, world);
+    const host = await openPlannerHost(t, world);
     const {duringFault, afterRecovery} = await runPlannerTurnAcrossOutage(t, {world, host,
       outage: () => host.setReachable(NODE.PEER_A, false),
       restore: () => host.setReachable(NODE.PEER_A, true),
@@ -186,7 +186,7 @@ test('the leader unreachable: no decision, typed deferral, zero proposals; the p
 
   await t.test('anti-vacuity: without the scheduled retry nothing proposes after the ' +
     'owner answers', async (t) => {
-    const host = openPlannerHost(t, world);
+    const host = await openPlannerHost(t, world);
     const {afterRecovery} = await runPlannerTurnAcrossOutage(t, {world, host,
       outage: () => host.setReachable(NODE.PEER_A, false),
       restore: () => host.setReachable(NODE.PEER_A, true),
@@ -202,7 +202,7 @@ test('a stale published leader whose successor is unreachable: no decision; the 
   // services-p1 leadership moves to PEER_B; the planner's projection still
   // publishes PEER_A (partitions.leader_node_id), whose replica now follows.
   await world.transferLeadership(NODE.PEER_A, NODE.PEER_B);
-  const host = openPlannerHost(t, world);
+  const host = await openPlannerHost(t, world);
   t.equal(host.route().publishedLeaderNodeId, NODE.PEER_A,
     'setup: the planner still publishes the deposed leader');
   const {duringFault, afterRecovery} = await runPlannerTurnAcrossOutage(t, {world, host,

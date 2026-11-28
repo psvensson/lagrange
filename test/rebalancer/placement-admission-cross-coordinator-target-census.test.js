@@ -66,7 +66,9 @@ import {
 } from '../../src/partition/partition-service-row-owner.js';
 import {
   PLACEMENT_ADMIT_TYPE,
+  PLACEMENT_REPAIR_PREPARE_TYPE,
   PLACEMENT_RESULT_FIELD,
+  REPAIR_PREPARATION_STATE,
 } from '../../src/partition/partition-placement-admission-constants.js';
 import {
   decidePlacementAdmission,
@@ -77,7 +79,9 @@ import {
 import {
   leaderReadRequestOf,
 } from '../../src/control-plane/control-plane-owner-fact-read-contract.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {createReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
 import {
   ReplicaOperationField,
@@ -114,6 +118,7 @@ const SETTLE_TURNS = 24;
 const REPLICA_SUFFIX = '-r';
 const STATEMENT_ON_LEDGER = /\b(?:from|into|update)\s+(?:replica_operations|storage_reservations)\b/iu;
 const LEDGER_PARTITION_ID = INITIAL_PARTITION_IDS.replica_operations;
+const LEDGER_LEADER_REPLICA_ID = `${LEDGER_PARTITION_ID}-r1`;
 const STATEMENT_SHAPE_CHARS = 72;
 const ATTEMPT_READS_SHOWN = 6;
 const WHITESPACE_RUN = /\s+/gu;
@@ -133,6 +138,8 @@ const PARTITION_LAYOUT = Object.freeze({
   'replica_operations-p1': [NODE_B, NODE_A, NODE_C],
 });
 const DEFAULT_LAYOUT = Object.freeze([NODE_A, NODE_A, NODE_B]);
+// The ledger's leader, as its partition row names it.
+const LEDGER_LEADER_NODE_ID = PARTITION_LAYOUT[LEDGER_PARTITION_ID][0];
 
 function readyNodeRow(nodeId, nowMs) {
   return createNodeEntry(nodeId, {
@@ -249,6 +256,26 @@ function createLedgerStore(hostsById) {
       published.set(tableName, current);
     }
   };
+  // The leader node's production placement owner over this ledger. The store
+  // is the ledger (every replica of it), so the owner's ledger replica is its
+  // committed table under the leader's tenure; the owner only answers copy
+  // limits here (it does not lead: no pass, no partition events, which this
+  // ledger does not deliver).
+  let placementOwner = null;
+  const noPartitionEvents = () => {
+    throw new Error('the census ledger delivers no partition events');
+  };
+  const leaderPlacementOwner = () => {
+    const hosts = hostsById.get(LEDGER_LEADER_NODE_ID);
+    placementOwner ??= createReplicaPlacementOwner({nodeId: LEDGER_LEADER_NODE_ID,
+      ledgerPartitionService: Object.freeze({partitionId: LEDGER_PARTITION_ID, db: database,
+        leadershipTenure: Object.freeze({term: 1}), on: noPartitionEvents,
+        off: noPartitionEvents}),
+      nodeAuthority: hosts.controlPlaneReadinessService.getServeEligibilityOwner(),
+      systemTableCache: hosts.cache, now: () => hosts.controlPlaneReadinessService.now(),
+      logger: LoggingService.getInstance()});
+    return placementOwner;
+  };
   // SQLite binds no boolean and no undefined: they bind as 0/1 and NULL.
   const bind = (value) => (typeof value === 'boolean' ? Number(value) :
     value === undefined ? null : value);
@@ -264,13 +291,23 @@ function createLedgerStore(hostsById) {
       for (const change of queued) apply(nodeId, change);
       return queued.length;
     },
+    // The ledger leader's answer to a copy-limit preparation
+    // (partition-placement-repair-preparation.js
+    // requestPlacementMoveCopyLimitsPreparation): its placement owner's copy
+    // limits for the move, and the leader replica that prepared them.
+    prepare(payload, nowMs) {
+      return Object.freeze({state: REPAIR_PREPARATION_STATE.PREPARED,
+        copyLimits: leaderPlacementOwner().resolveAdaptiveCopyLimitsForMove(payload.move, nowMs),
+        owner: Object.freeze({nodeId: LEDGER_LEADER_NODE_ID,
+          replicaId: LEDGER_LEADER_REPLICA_ID})});
+    },
     admit(payload, nowMs) {
       nextLogIndex += 1;
       const command = {
         type: PLACEMENT_ADMIT_TYPE,
         partitionId: LEDGER_PARTITION_ID,
         entryId: payload.entryId,
-        proposedBy: `${LEDGER_PARTITION_ID}-r1`,
+        proposedBy: LEDGER_LEADER_REPLICA_ID,
         proposedAt: nowMs,
         body: payload.body,
       };
@@ -395,6 +432,10 @@ function installTransport(hosts, ledger, nowMs) {
     if (payload?.type === PLACEMENT_ADMIT_TYPE) {
       return buildDeliveryEnvelope({acknowledged: true},
         ledger.admit(payload, nowMs));
+    }
+    if (payload?.type === PLACEMENT_REPAIR_PREPARE_TYPE) {
+      return buildDeliveryEnvelope({acknowledged: true},
+        ledger.prepare(payload, nowMs));
     }
     return buildDeliveryEnvelope({acknowledged: true}, {
       status: payload?.[ReplicaOperationField.TYPE] ===
