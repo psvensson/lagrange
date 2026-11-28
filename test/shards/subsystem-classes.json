@@ -28,7 +28,7 @@
   "censusSize": 2849,
   "digest": "fnv1a32-0f421d86",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9dee38fc",
+  "observationDigest": "fnv1a32-cfcf81d8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -26885,7 +26885,6 @@
       "files": [
         ".githooks/pre-push",
         "Dockerfile",
-        "data/formation-health/trend.ndjson",
         "package-lock.json",
         "package.json",
         "scripts/action-authority.js",
@@ -26943,7 +26942,6 @@
         "AGENTS.md",
         "Dockerfile",
         "README.md",
-        "data/formation-health/trend.ndjson",
         "dependency-cruiser.config.cjs",
         "docs/development/agent-tooling.md",
         "docs/development/quest-artifacts.md",
@@ -27083,7 +27081,6 @@
         "CHANGELOG.md",
         "CLAUDE.md",
         "README.md",
-        "data/formation-health/trend.ndjson",
         "data/releases/v0.2.5.json",
         "docs/dockerhub-overview.md",
         "examples/service-data-affinity/run-affinity-demo.js",
@@ -28354,25 +28351,19 @@
     },
     "test/scripts/formation-health.test.js": {
       "files": [
-        ".githooks/pre-push",
         ".github/workflows/formation-health.yml",
-        "data/formation-health/trend.ndjson",
-        "examples/service-data-affinity/formation-verdict.js",
         "examples/service-data-affinity/run-affinity-demo.js",
         "package.json",
-        "scripts/checks/formation-health.js",
-        "scripts/checks/git-invocation.js",
         "scripts/checks/wait-for-thermal-headroom.js",
-        "scripts/test-machine-factor.js",
-        "src/diagnostics/formation-diagnostics-contract.js",
-        "src/test-helpers/probe-guard.js",
         "test/distributed/config/convergence-sealed-bars.json",
-        "test/distributed/harness/certification-evidence-statement.js",
-        "test/distributed/harness/gcp-provisioner.js",
-        "test/shards/impact-graph-seal.json"
+        "test/distributed/harness/gcp-provisioner.js"
       ],
       "directories": [
-        "src"
+        "data"
+      ],
+      "env": [
+        "LAGRANGE_PROBE",
+        "PATH"
       ]
     },
     "test/scripts/gen-solve-commands-index.test.js": {
@@ -28842,7 +28833,6 @@
         ".githooks/pre-push",
         ".github/workflows/full-corpus-canary.yml",
         ".gitignore",
-        "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
         "package.json",
@@ -29208,7 +29198,6 @@
         "package.json",
         "scripts/check-circular-dependencies.js",
         "scripts/check-unused-exports.js",
-        "scripts/checks/formation-health.js",
         "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/checks/wait-for-thermal-headroom.js"
@@ -29218,9 +29207,7 @@
         "LAGRANGE_GATE_PUSHED_REF",
         "LAGRANGE_WORKSPACE_INJECTIONS",
         "PRE_PUSH_FLOW_CALLS",
-        "PRE_PUSH_FLOW_GH_SAYS",
-        "PRE_PUSH_FLOW_STATUS_TREND",
-        "PRE_PUSH_FLOW_TREND_SAYS"
+        "PRE_PUSH_FLOW_GH_SAYS"
       ]
     },
     "test/scripts/pre-push-stage-manifest.test.js": {
@@ -29336,7 +29323,6 @@
     "test/scripts/publish-head-workspace-links.test.js": {
       "files": [
         ".githooks/pre-push",
-        "data/formation-health/trend.ndjson",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/proof-authority.js",
@@ -29355,7 +29341,6 @@
         ".githooks/pre-push",
         ".gitignore",
         "CHANGELOG.md",
-        "data/formation-health/trend.ndjson",
         "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
@@ -29369,7 +29354,6 @@
       "directories": [
         ".githooks",
         "data",
-        "data/formation-health",
         "data/releases",
         "solve",
         "test"
@@ -29704,7 +29688,6 @@
     "test/scripts/scenario-certification-consumers.test.js": {
       "files": [
         "Dockerfile",
-        "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/run-affinity-demo.js",
         "package-lock.json",
         "package.json",

@@ -20,9 +20,6 @@ data
 !/data/releases/
 /data/releases/*
 !/data/releases/*.json
-!/data/formation-health/
-/data/formation-health/*
-!/data/formation-health/trend.ndjson
 !/data/storage-load/
 /data/storage-load/*
 !/data/storage-load/*.json
@@ -89,3 +86,6 @@ city.toml
 
 # solve-v2: the v1 archive bundle lives in the evidence store, never in git
 solve/epics/solve-v2/solve-v1-archive.tar.gz
+
+# The nightly workflow's nested checkout of its data branch.
+/trend-data/

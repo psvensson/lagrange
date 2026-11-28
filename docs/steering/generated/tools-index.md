@@ -163,7 +163,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## health
 
-- `health:formation` — Run the MovieLens formation-only phase (local, or one node per GCP VM with --gcp) or read a report, append one formation-verdict record to data/formation-health/trend.ndjson, and print the trend (--summary renders it without running).
+- `health:formation` — Run the MovieLens formation-only phase (local, or one node per GCP VM with --gcp) or read a report, append one formation-verdict record to the file named by --trend, and print the trend from the data branch data/formation-health (--summary renders it without running; --fetch fetches the branch first).
 
 ## hooks
 

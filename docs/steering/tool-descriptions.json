@@ -24,7 +24,7 @@
   "distributed:stop-containers": "Stop local Docker containers and Node processes created by the distributed harness.",
   "gate": "Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).",
   "generate:source-owner-index": "Regenerate the INDEX.md in every src directory (file summaries and importer counts from the sealed import graph).",
-  "health:formation": "Run the MovieLens formation-only phase (local, or one node per GCP VM with --gcp) or read a report, append one formation-verdict record to data/formation-health/trend.ndjson, and print the trend (--summary renders it without running).",
+  "health:formation": "Run the MovieLens formation-only phase (local, or one node per GCP VM with --gcp) or read a report, append one formation-verdict record to the file named by --trend, and print the trend from the data branch data/formation-health (--summary renders it without running; --fetch fetches the branch first).",
   "hooks:install": "Install the repository git hooks.",
   "release:notes": "Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.",
   "release:preflight": "Evaluate the five release-exit checks for the current checkout (clean release content, HEAD is origin/main, ci gate green on the exact sha, versions and changelog agree, tag absent) and print the exact tag commands; never tags.",

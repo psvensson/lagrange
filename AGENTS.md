@@ -41,7 +41,7 @@ Use `npm run publish` for normal publication or the runbook's
 when that proof scope applies. The
 [workflow](docs/steering/workflow-guidelines/solver-quests.md#publication-authority)
 owns that boundary; the [runbook](docs/development/solver-runbook.md) describes
-clean-candidate checks, inert-data rebasing and GitHub post-merge proof.
+clean-candidate checks, fast-forward-only publication and GitHub post-merge proof.
 
 ## Find The Right Surface
 

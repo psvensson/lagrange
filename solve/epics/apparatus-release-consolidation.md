@@ -170,6 +170,9 @@ verdicts: `UNKNOWN` fails the job loudly instead of appending a non-verdict,
 and `data/formation-health/trend.ndjson` is committed (compact text, one
 record per run) so the release notes and this epic read the same file.
 Probe: script, unmet until three consecutive scheduled records measure.
+*Current location (2026-11-28):* the record is no longer committed to main; it lives on the branch
+`data/formation-health` (`trend.ndjson`), read through `origin/data/formation-health` (`formation-health.js`, `--fetch`);
+see [the runbook section](../../docs/development/solver-runbook.md#formation-trend-record-data-branch).
 
 **public-claims-match-shipped-bytes** — the README's install line stays
 unpinned (`npm install --global lagrange-server` installs what npm serves as

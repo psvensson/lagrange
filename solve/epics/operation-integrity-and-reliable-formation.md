@@ -134,7 +134,7 @@ do not establish who is working now.
 **Latest observed formation result:** The
 [26 November formation-health run](https://github.com/psvensson/lagrange/actions/runs/45748726137)
 completed with failure on `e26459fe318855aa7bf4fadd0ddf6b9f96dd3312`. The
-[checked-in trend](../../data/formation-health/trend.ndjson) records
+trend on the branch `data/formation-health` (`trend.ndjson`) records
 `movielens-lagrange-formation-only-live` as `FAIL`,
 `reason=schema_admission_blocked`, `admissionState=denied`, with a 242,688 ms
 observation window. This is the latest reported blocker, not an established

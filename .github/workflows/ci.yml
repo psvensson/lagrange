@@ -247,8 +247,7 @@ jobs:
       # continue-on-error: red here is debt to pay down, red above is a change
       # that must not land, and the red-main guard reads only this workflow's
       # conclusion, which these steps never decide. Main pushes only. The
-      # inventory runs first: the analyses read its generated inputs; the last
-      # line holds the nightly workflow's token to one inert data file.
+      # inventory runs first: the analyses read its generated inputs.
       - name: Whole-repository structural analysis
         if: github.event_name != 'pull_request'
         # Its own bound, because continue-on-error absorbs a failing step but
@@ -260,7 +259,6 @@ jobs:
           npm run test:owner-debt:prepare
           npm run test:static
           npm run model:contracts
-          node scripts/checks/formation-health.js --bot-commits
 
       - name: Upload health evidence
         if: always() && github.event_name != 'pull_request'
