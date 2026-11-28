@@ -137527,6 +137527,110 @@
       }
     },
     {
+      "file": "src/partition/managed-workflow-record-bytes.js",
+      "row": "catch_returns_default",
+      "range": [
+        2519,
+        2556
+      ],
+      "hash": "106355409e5ac24e12b9295b32a20bb98e90a0b6af58ed4a19f778bb95ac4a29",
+      "occurrence": 0,
+      "class": "primary-only",
+      "sidesExecuted": {
+        "primary": true,
+        "fallback": false
+      },
+      "runs": [
+        "packaging-peter-System-Product-Name-20261109T232228Z",
+        "formation-peter-System-Product-Name-20261109T232249Z",
+        "bootstrap-peter-System-Product-Name-20261109T232559Z",
+        "integration-adam-Aspire-A515-52G-20261109T232251Z",
+        "integration-peter-All-Series-20261109T232255Z",
+        "integration-Carinasdator-20261109T232253Z",
+        "integration-peter-System-Product-Name-20261110T000250Z",
+        "bootstrap-peter-System-Product-Name-20261110T024846Z",
+        "integration-peter-System-Product-Name-20261110T025008Z",
+        "unit-peter-System-Product-Name-20261110T025805Z",
+        "bootstrap-peter-RB102-20261110T024915Z",
+        "integration-peter-RB102-20261110T025117Z",
+        "unit-peter-RB102-20261110T025351Z",
+        "unit-Carinasdator-20261110T024910Z",
+        "unit-adam-Aspire-A515-52G-20261110T024910Z",
+        "unit-peter-All-Series-20261110T024917Z",
+        "unit-peter-System-Product-Name-20261110T030646Z"
+      ],
+      "sidesByRun": {
+        "packaging-peter-System-Product-Name-20261109T232228Z": {
+          "primary": false,
+          "fallback": false
+        },
+        "formation-peter-System-Product-Name-20261109T232249Z": {
+          "primary": false,
+          "fallback": false
+        },
+        "bootstrap-peter-System-Product-Name-20261109T232559Z": {
+          "primary": false,
+          "fallback": false
+        },
+        "integration-adam-Aspire-A515-52G-20261109T232251Z": {
+          "primary": true,
+          "fallback": false
+        },
+        "integration-peter-All-Series-20261109T232255Z": {
+          "primary": false,
+          "fallback": false
+        },
+        "integration-Carinasdator-20261109T232253Z": {
+          "primary": false,
+          "fallback": false
+        },
+        "integration-peter-System-Product-Name-20261110T000250Z": {
+          "primary": true,
+          "fallback": false
+        },
+        "bootstrap-peter-System-Product-Name-20261110T024846Z": {
+          "primary": false,
+          "fallback": false
+        },
+        "integration-peter-System-Product-Name-20261110T025008Z": {
+          "primary": true,
+          "fallback": false
+        },
+        "unit-peter-System-Product-Name-20261110T025805Z": {
+          "primary": true,
+          "fallback": false
+        },
+        "bootstrap-peter-RB102-20261110T024915Z": {
+          "primary": false,
+          "fallback": false
+        },
+        "integration-peter-RB102-20261110T025117Z": {
+          "primary": false,
+          "fallback": false
+        },
+        "unit-peter-RB102-20261110T025351Z": {
+          "primary": true,
+          "fallback": false
+        },
+        "unit-Carinasdator-20261110T024910Z": {
+          "primary": true,
+          "fallback": false
+        },
+        "unit-adam-Aspire-A515-52G-20261110T024910Z": {
+          "primary": true,
+          "fallback": false
+        },
+        "unit-peter-All-Series-20261110T024917Z": {
+          "primary": true,
+          "fallback": false
+        },
+        "unit-peter-System-Product-Name-20261110T030646Z": {
+          "primary": true,
+          "fallback": false
+        }
+      }
+    },
+    {
       "file": "src/partition/managed-workflow-record-changes.js",
       "row": "typeof_dual_paths",
       "range": [
@@ -137938,110 +138042,6 @@
         },
         "unit-peter-System-Product-Name-20261110T030646Z": {
           "primary": false,
-          "fallback": false
-        }
-      }
-    },
-    {
-      "file": "src/partition/managed-workflow-record-store.js",
-      "row": "catch_returns_default",
-      "range": [
-        9216,
-        9253
-      ],
-      "hash": "d7293cec548603cfb53cf00edd6e11f3e86ce6696ea0c81b63e8014f3eca3bb4",
-      "occurrence": 0,
-      "class": "primary-only",
-      "sidesExecuted": {
-        "primary": true,
-        "fallback": false
-      },
-      "runs": [
-        "packaging-peter-System-Product-Name-20261109T232228Z",
-        "formation-peter-System-Product-Name-20261109T232249Z",
-        "bootstrap-peter-System-Product-Name-20261109T232559Z",
-        "integration-adam-Aspire-A515-52G-20261109T232251Z",
-        "integration-peter-All-Series-20261109T232255Z",
-        "integration-Carinasdator-20261109T232253Z",
-        "integration-peter-System-Product-Name-20261110T000250Z",
-        "bootstrap-peter-System-Product-Name-20261110T024846Z",
-        "integration-peter-System-Product-Name-20261110T025008Z",
-        "unit-peter-System-Product-Name-20261110T025805Z",
-        "bootstrap-peter-RB102-20261110T024915Z",
-        "integration-peter-RB102-20261110T025117Z",
-        "unit-peter-RB102-20261110T025351Z",
-        "unit-Carinasdator-20261110T024910Z",
-        "unit-adam-Aspire-A515-52G-20261110T024910Z",
-        "unit-peter-All-Series-20261110T024917Z",
-        "unit-peter-System-Product-Name-20261110T030646Z"
-      ],
-      "sidesByRun": {
-        "packaging-peter-System-Product-Name-20261109T232228Z": {
-          "primary": false,
-          "fallback": false
-        },
-        "formation-peter-System-Product-Name-20261109T232249Z": {
-          "primary": false,
-          "fallback": false
-        },
-        "bootstrap-peter-System-Product-Name-20261109T232559Z": {
-          "primary": false,
-          "fallback": false
-        },
-        "integration-adam-Aspire-A515-52G-20261109T232251Z": {
-          "primary": true,
-          "fallback": false
-        },
-        "integration-peter-All-Series-20261109T232255Z": {
-          "primary": false,
-          "fallback": false
-        },
-        "integration-Carinasdator-20261109T232253Z": {
-          "primary": false,
-          "fallback": false
-        },
-        "integration-peter-System-Product-Name-20261110T000250Z": {
-          "primary": true,
-          "fallback": false
-        },
-        "bootstrap-peter-System-Product-Name-20261110T024846Z": {
-          "primary": false,
-          "fallback": false
-        },
-        "integration-peter-System-Product-Name-20261110T025008Z": {
-          "primary": true,
-          "fallback": false
-        },
-        "unit-peter-System-Product-Name-20261110T025805Z": {
-          "primary": true,
-          "fallback": false
-        },
-        "bootstrap-peter-RB102-20261110T024915Z": {
-          "primary": false,
-          "fallback": false
-        },
-        "integration-peter-RB102-20261110T025117Z": {
-          "primary": false,
-          "fallback": false
-        },
-        "unit-peter-RB102-20261110T025351Z": {
-          "primary": true,
-          "fallback": false
-        },
-        "unit-Carinasdator-20261110T024910Z": {
-          "primary": true,
-          "fallback": false
-        },
-        "unit-adam-Aspire-A515-52G-20261110T024910Z": {
-          "primary": true,
-          "fallback": false
-        },
-        "unit-peter-All-Series-20261110T024917Z": {
-          "primary": true,
-          "fallback": false
-        },
-        "unit-peter-System-Product-Name-20261110T030646Z": {
-          "primary": true,
           "fallback": false
         }
       }

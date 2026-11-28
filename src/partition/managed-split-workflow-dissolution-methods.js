@@ -38,6 +38,13 @@ const LOCAL_STR_SPLIT_SOURCE_DISSOLUTION = 'split_source_dissolution';
 const LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS = 1;
 const LOCAL_STR_SPLIT_ABORTED_CHILD_TEARDOWN = 'split_aborted_child_teardown';
 const LOCAL_STR_NORMAL_PARTITION_STATE = 'NORMAL';
+// The aborted split's descriptor cleanup: its unconfirmed receipt and refusals.
+const SPLIT_CLEANUP_ACK = Object.freeze({
+  RECEIPT_REQUIRED: 'Committed split descriptor cleanup receipt required',
+  UNCONFIRMED_CODE: 'split-descriptor-cleanup-unconfirmed',
+  DECISION_MOVED: 'split-descriptor-cleanup-decision-moved',
+  RECEIPT_CONFLICT: 'split-descriptor-cleanup-receipt-conflict',
+});
 
 /**
  * Durable statuses from which the terminal dissolving advance is
@@ -485,29 +492,31 @@ class ManagedSplitWorkflowDissolutionMethods {
         !Number.isSafeInteger(result.logIndex) || result.logIndex < 1 ||
         !Number.isSafeInteger(result.term) || result.term < 1 ||
         !matchesTerminalReceipt(result.splitDescriptorReceipt, intent)) {
-      throw Object.assign(new Error('Committed split descriptor cleanup receipt required'), {
-        code: 'split-descriptor-cleanup-unconfirmed', intent});
+      throw Object.assign(new Error(SPLIT_CLEANUP_ACK.RECEIPT_REQUIRED), {
+        code: SPLIT_CLEANUP_ACK.UNCONFIRMED_CODE, intent});
     }
     return this.workflowCoordinator.updateWorkflow(workflow.workflowId, (record) => {
       if (record.status !== PARTITION_TRANSITION_STATE.FAILED ||
           record.tableId !== intent.tableId ||
           record.metadata.workflowAttempt !== intent.workflowAttempt) {
-        return refuseRecordChange('split-descriptor-cleanup-decision-moved', {superseded: true});
+        return refuseRecordChange(SPLIT_CLEANUP_ACK.DECISION_MOVED, {superseded: true});
       }
       const manifest = cleanupRecord(record.metadata, record.tableId);
       const current = terminalSubjects(record.metadata, record.tableId).get(partitionId);
       if (manifest.decisionFence !== decision.decisionFence ||
           !matchesTerminalReceipt(result.splitDescriptorReceipt, current)) {
-        return refuseRecordChange('split-descriptor-cleanup-decision-moved', {superseded: true});
+        return refuseRecordChange(SPLIT_CLEANUP_ACK.DECISION_MOVED, {superseded: true});
       }
-      const pending = intent.action === SIBLING_DESCRIPTOR_ACTION.FINALIZE ? 'pendingSiblings' : 'pendingChildren';
-      if (!manifest[pending].includes(partitionId)) {
+      const siblings = intent.action === SIBLING_DESCRIPTOR_ACTION.FINALIZE;
+      const pending = siblings ? manifest.pendingSiblings : manifest.pendingChildren;
+      if (!pending.includes(partitionId)) {
         const prior = manifest.receipts.find((receipt) => receipt.partitionId === partitionId);
         return prior.disposition === result.splitDescriptorReceipt.disposition ? RECORD_UNCHANGED :
-          refuseRecordChange('split-descriptor-cleanup-receipt-conflict');
+          refuseRecordChange(SPLIT_CLEANUP_ACK.RECEIPT_CONFLICT);
       }
+      const remaining = pending.filter((id) => id !== partitionId);
       return {...record, metadata: {...record.metadata, splitDescriptorCleanup: {...manifest,
-        [pending]: manifest[pending].filter((id) => id !== partitionId),
+        ...(siblings ? {pendingSiblings: remaining} : {pendingChildren: remaining}),
         receipts: [...manifest.receipts, result.splitDescriptorReceipt]}}};
     });
   }

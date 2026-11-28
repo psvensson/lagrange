@@ -94,6 +94,17 @@ function isPhaseRegression(from, to) {
     PHASE_RANK.get(to) < PHASE_RANK.get(from);
 }
 
+// While an accepted split source failure is pending, a change may only abort
+// on that same failure; it moves neither the phase nor the issued children.
+function blocksPendingSplitFailure(workflow, next) {
+  const failure = workflow?.metadata?.splitSourceFailure;
+  return failure && workflow.status !== STATE.FAILED &&
+    (next.status !== workflow.status ||
+      next.metadata.splitIssuedChildren !== workflow.metadata.splitIssuedChildren) &&
+    !(next.status === STATE.FAILED &&
+      sameSourceFailure(failure, next.metadata.failure?.sourceFailure));
+}
+
 /**
  * The one phase guard every change passes (the coordinator wraps each
  * change it hands the store with it, whichever entry it came from): a change
@@ -106,12 +117,7 @@ function phaseMonotonicChange(change) {
   return (workflow, stored) => {
     const next = change(workflow, stored);
     if (isSentinelAnswer(next)) return next;
-    const failure = workflow?.metadata?.splitSourceFailure;
-    if (failure && workflow.status !== STATE.FAILED &&
-        (next.status !== workflow.status ||
-          next.metadata.splitIssuedChildren !== workflow.metadata.splitIssuedChildren) &&
-        !(next.status === STATE.FAILED &&
-          sameSourceFailure(failure, next.metadata.failure?.sourceFailure))) {
+    if (blocksPendingSplitFailure(workflow, next)) {
       return refuseRecordChange(SPLIT_FAILURE_PENDING);
     }
     if (!isCutoverRegression(stored?.state ?? null, next.status)) {
@@ -205,6 +211,22 @@ function isRecordAsRead(stored, read) {
     stored.bytes.generation === read.generation;
 }
 
+// The registration as the record writes it: the attempt (the generation it
+// writes), a fence above every earlier one, and this owner's lease.
+function registeredRecordOf(owner, registration, stored) {
+  const attempt = stored.generation + 1;
+  return {...registration,
+    metadata: {...(registration.metadata || {}),
+      ...(registration.metadata?.sourcePartitionId ?
+        {splitIssuedChildren: [], splitIssuedSiblings: [],
+          splitDescriptorBaseVersion: stored.row?.active_partition_version} : {}),
+      [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: attempt},
+    fenceToken: Math.max((stored.claim.fenceToken ?? 0) + 1, attempt),
+    workflowOwnerId: owner.workflowOwnerId,
+    leaseExpiresAt: owner.now() + owner.workflowLeaseMs,
+    attemptCount: 1};
+}
+
 /**
  * Claim before register (owner ruling 2026-10-05): the registration IS the
  * claim. Its content was derived from the record the caller read, so its
@@ -244,17 +266,7 @@ function registrationChange(owner, registration, read, revalidate) {
       return refuseRecordChange(RECORD_CHANGE_REFUSAL.REGISTRATION_INPUT_MOVED,
         {input: movedInput});
     }
-    const attempt = stored.generation + 1;
-    return {...registration,
-      metadata: {...(registration.metadata || {}),
-        ...(registration.metadata?.sourcePartitionId ?
-          {splitIssuedChildren: [], splitIssuedSiblings: [],
-            splitDescriptorBaseVersion: stored.row?.active_partition_version} : {}),
-        [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: attempt},
-      fenceToken: Math.max((stored.claim.fenceToken ?? 0) + 1, attempt),
-      workflowOwnerId: owner.workflowOwnerId,
-      leaseExpiresAt: owner.now() + owner.workflowLeaseMs,
-      attemptCount: 1};
+    return registeredRecordOf(owner, registration, stored);
   };
 }
 
@@ -373,6 +385,24 @@ function transitionRefusalOf(owner, workflow, transition, isTerminal) {
   return null;
 }
 
+// The record's metadata once a source finished mirroring at cutover (the split
+// source's CLEANUP_COMPLETED, a merge source's SOURCE_MIRROR_REMOVED): that
+// source's grant is marked released.
+function releasedGrantsMetadata(workflow, key, status) {
+  const metadata = workflow.metadata;
+  const splitDone = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED &&
+    workflow.status === STATE.SPLIT_CUTOVER_ACTIVE &&
+    key === SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION;
+  const mergeDone = status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED &&
+    workflow.status === STATE.MERGE_CUTOVER_ACTIVE;
+  const grants = metadata.mirrorCustodyGrants;
+  return grants && (splitDone || mergeDone) ? {...metadata,
+    mirrorCustodyGrants: grants.map((item) => (splitDone ?
+      metadata.sourcePartitionId === item.partitionId :
+      buildMergeSourceParticipantKey(item.partitionId) === key) ?
+      {...item, release: true} : item)} : metadata;
+}
+
 /**
  * A participant acknowledgement (the owner's own, or a non-owner's): the
  * participant must exist on the RECORD, and the fence, duplicate and graph
@@ -412,17 +442,7 @@ function acknowledgementChange(owner, ack, isAllowed) {
     const participants = new Map(workflow.participants);
     participants.set(key, acknowledged);
     const metadata = workflow.metadata;
-    const splitDone = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED &&
-      workflow.status === STATE.SPLIT_CUTOVER_ACTIVE &&
-      key === SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION;
-    const mergeDone = status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED &&
-      workflow.status === STATE.MERGE_CUTOVER_ACTIVE;
-    const grants = metadata.mirrorCustodyGrants;
-    const nextMetadata = grants && (splitDone || mergeDone) ? {...metadata,
-      mirrorCustodyGrants: grants.map((item) => (splitDone ?
-        metadata.sourcePartitionId === item.partitionId :
-        buildMergeSourceParticipantKey(item.partitionId) === key) ?
-        {...item, release: true} : item)} : metadata;
+    const nextMetadata = releasedGrantsMetadata(workflow, key, status);
     const failure = sourceFailureAuthorization(workflow, key, status, fence);
     return renewLeaseRidingWrite(owner, {...workflow, participants,
       metadata: failure ?
@@ -518,6 +538,33 @@ function applySourceStartAuthorization(owner, ack, authorization, ordinary,
   return ordinary(workflow);
 }
 
+// The source's execution on this record is over: an accepted source failure is
+// pending, or the attempt's mirror execution ended.
+function sourceExecutionEnded(metadata) {
+  return metadata.splitSourceFailure || metadata.mirrorExecutionEnded;
+}
+
+// Whether a reservation-only START may not reserve the source's custody grant.
+function reservationRefused(workflow, authorization, participant, partitionId, grant) {
+  return !partitionId || sourceExecutionEnded(workflow.metadata) ||
+      [SPLIT_ACK_STATUS.CLEANUP_COMPLETED, MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+        SPLIT_ACK_STATUS.SOURCE_DISSOLVED].includes(participant.status) ||
+      !authorization.executableStates.has(workflow.status) ||
+      !(authorization.initialStates.has(workflow.status) ||
+        authorization.startedStatuses.has(participant.status)) || grant?.release;
+}
+
+// Whether START (or its confirmation) may not run on the source's reserved grant.
+function startGrantRefused(workflow, authorization, grant) {
+  const historicalConfirmation = authorization.confirmationOnly &&
+      !authorization.requireExecutable;
+  return !grant || (authorization.confirmationOnly && !grant.acquired) ||
+      (!historicalConfirmation &&
+        (sourceExecutionEnded(workflow.metadata) || grant.release ||
+          (authorization.requireExecutable &&
+            !authorization.executableStates.has(workflow.status))));
+}
+
 function sourceStartAuthorizationChange(owner, ack, isAllowed, authorization) {
   const ordinary = acknowledgementChange(owner, ack, isAllowed);
   const key = String(ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]);
@@ -531,26 +578,13 @@ function sourceStartAuthorizationChange(owner, ack, isAllowed, authorization) {
       const validation = validateSourceStartAuthorization(workflow, ack, authorization, key, status,
         fence);
       if (validation.refusal) return validation.refusal;
-      if (!partitionId || workflow.metadata.splitSourceFailure ||
-          workflow.metadata.mirrorExecutionEnded ||
-          [SPLIT_ACK_STATUS.CLEANUP_COMPLETED, MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
-            SPLIT_ACK_STATUS.SOURCE_DISSOLVED].includes(validation.participant.status) ||
-          !authorization.executableStates.has(workflow.status) ||
-          !(authorization.initialStates.has(workflow.status) ||
-            authorization.startedStatuses.has(validation.participant.status)) || grant?.release) {
+      if (reservationRefused(workflow, authorization, validation.participant, partitionId, grant)) {
         return refuseSourceStart(validation.participant, key, status, fence);
       }
       return {...workflow, metadata: {...workflow.metadata, mirrorCustodyGrants: grant ? grants :
         [...grants, {partitionId, fence, acquired: false}]}};
     }
-    const historicalConfirmation = authorization.confirmationOnly &&
-        !authorization.requireExecutable;
-    if (!grant || (authorization.confirmationOnly && !grant.acquired) ||
-        (!historicalConfirmation &&
-          (workflow.metadata.splitSourceFailure || workflow.metadata.mirrorExecutionEnded ||
-            grant.release ||
-            (authorization.requireExecutable &&
-              !authorization.executableStates.has(workflow.status))))) {
+    if (startGrantRefused(workflow, authorization, grant)) {
       return refuseRecordChange(PARTICIPANT_ACK_RESULT.INVALID_TRANSITION, {key, status, fence});
     }
     const next = applySourceStartAuthorization(
@@ -588,16 +622,21 @@ function isStaleParticipantFence(participant, fence) {
     fence < participant.fenceToken;
 }
 
+// A status that may end the source counts only at the record's exact fence.
+function isStaleSourceEndingFence(participant, status, fence, workflowFence) {
+  const mayEndSource = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED ||
+    status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED ||
+    SPLIT_ACK_FAILURE_STATUSES.has(status) || MERGE_ACK_FAILURE_STATUSES.has(status);
+  return mayEndSource && (!Number.isSafeInteger(fence) || fence <= 0 ||
+      fence !== workflowFence || fence !== participant.fenceToken);
+}
+
 function acknowledgementRejectionOf(participant, key, status, fence,
   isAllowed, checkpoint, workflowFence) {
   if (!participant) {
     return PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND;
   }
-  const mayEndSource = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED ||
-    status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED ||
-    SPLIT_ACK_FAILURE_STATUSES.has(status) || MERGE_ACK_FAILURE_STATUSES.has(status);
-  if (mayEndSource && (!Number.isSafeInteger(fence) || fence <= 0 ||
-      fence !== workflowFence || fence !== participant.fenceToken)) {
+  if (isStaleSourceEndingFence(participant, status, fence, workflowFence)) {
     return PARTICIPANT_ACK_RESULT.STALE_FENCE;
   }
   if (isStaleParticipantFence(participant, fence)) {

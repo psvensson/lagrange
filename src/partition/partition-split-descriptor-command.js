@@ -132,6 +132,13 @@ function carriesSplitDescriptorReceipt(value) {
   return Object.hasOwn(value, SPLIT_DESCRIPTOR_RECEIPT_FIELD);
 }
 
+// The field that carries a request's split descriptor intent onward to the next
+// hop: the intent when the request carries one, otherwise nothing.
+function onwardSplitDescriptorIntent(options) {
+  return carriesSplitDescriptorIntent(options) ?
+    {[SPLIT_DESCRIPTOR_INTENT_FIELD]: options[SPLIT_DESCRIPTOR_INTENT_FIELD]} : {};
+}
+
 // The strict binding is checked at submission and independently at committed
 // apply. Different proposers/timestamps can represent the same command.
 function usesSplitDescriptorIdentity(command) {
@@ -217,6 +224,6 @@ export {DISPOSITION as SPLIT_DESCRIPTOR_DISPOSITION, SPLIT_DESCRIPTOR_ERROR,
   decodeSplitDescriptorCommand, deriveParticipantEntryId,
   descriptorRefusal,
   finalizeChildReceipt, isSplitDescriptorDigest, isSplitDescriptorReceiptFor,
-  retainedSplitDescriptorAnswer,
+  onwardSplitDescriptorIntent, retainedSplitDescriptorAnswer,
   canonicalIntent as canonicalSplitDescriptorIntent, isSiblingDescriptorAction, splitDescriptorCommandDigest, splitDescriptorStatement, splitDescriptorWriteKey,
   usesSplitDescriptorIdentity};

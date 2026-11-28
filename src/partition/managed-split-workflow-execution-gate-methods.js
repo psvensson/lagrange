@@ -65,6 +65,14 @@ function dispatchAcceptedSplitFailure(owner, workflowId, failure) {
   });
 }
 
+// A duplicate of the source failure the record already accepted: its abort is
+// dispatched again (the first reply may have been lost).
+function isRedeliveredAcceptedFailure(ackResult, failure, ackStatus, ack) {
+  return ackResult.result === PARTICIPANT_ACK_RESULT.DUPLICATE &&
+    failure?.status === ackStatus &&
+    failure.participantKey === ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY];
+}
+
 async function buildAcceptedSplitAckOutcome(owner, workflow, workflowId,
   ackResult, ackStatus) {
   let splitCutoverApplied =
@@ -382,9 +390,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
     if (duplicateOutcome.handled) return duplicateOutcome.outcome;
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
       const failure = this.resolveWorkflowState(workflowId)?.metadata?.splitSourceFailure;
-      if (ackResult.result === PARTICIPANT_ACK_RESULT.DUPLICATE &&
-          failure?.status === ackStatus &&
-          failure.participantKey === ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]) {
+      if (isRedeliveredAcceptedFailure(ackResult, failure, ackStatus, ack)) {
         dispatchAcceptedSplitFailure(this, workflowId, failure);
       } else {
         await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult, ack);

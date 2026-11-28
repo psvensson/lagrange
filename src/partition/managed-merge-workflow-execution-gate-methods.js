@@ -29,8 +29,6 @@ import {acknowledgeSourceStartAtRecordTurn, mergeStartAuthorization} from
 const LOCAL_STR_PARTITION_MERGE_WORKFLOW = 'partition:merge:workflow';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
 const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
-const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_FUNCTION = 'function';
 
 async function resolveDuplicateMergeCutoverOutcome(owner, workflowId,
   ackResult, ackStatus) {
@@ -56,9 +54,7 @@ async function buildAcceptedMergeAckOutcome(owner, workflow, workflowId,
     mergeCutoverApplied = await owner.applyMergeCutoverIfReady(workflowId);
   }
   if (ackStatus === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED) {
-    const terminalCustody = await owner.finalizeMergeDissolutionEvidence(workflowId);
-    return {...ackResult, mergeCutoverApplied, mergeSourcesRetired: Boolean(terminalCustody),
-      ...(terminalCustody ? {terminalCustody} : {})};
+    await owner.finalizeMergeDissolutionEvidence(workflowId);
   }
   return {...ackResult, mergeCutoverApplied};
 }
@@ -247,7 +243,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
   buildManagedMergeMutationOptions(options = {}) {
     return {
       ...MANAGED_MERGE_MUTATION_OPTIONS,
-      ...(options && typeof options === LOCAL_STR_OBJECT ? options : {}),
+      ...(options && typeof options === 'object' ? options : {}),
     };
   }
 
@@ -408,7 +404,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
     const tableId = String(tableInfo?.table_id ?? '');
     const current = (this.listTableInfos?.() || []).find((row) =>
       String(row?.table_id ?? '') === tableId) || tableInfo;
-    if (current && typeof this.resumeGroupRetirement === LOCAL_STR_FUNCTION) {
+    if (current && typeof this.resumeGroupRetirement === 'function') {
       this.resumeGroupRetirement(current, RESUME_TRIGGER.START_REFUSED).catch(() => {});
     }
     return {

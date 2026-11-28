@@ -1,6 +1,13 @@
-import {MIRROR_RETENTION_CUSTODY_ACTION} from './partition-committed-statement-outcome-constants.js';
 import {endsSourceExecutionAttempt} from './partition-constants.js';
-import {validMirrorCustody} from './partition-mirror-custody-codec.js';
+import {
+  GENERATION_COLUMN, generationOf, recordBytesOf, rereadLagsBase, sameBytes, storedRecordOf,
+  withNextGeneration, writtenRowOf,
+} from './managed-workflow-record-bytes.js';
+import {
+  MIRROR_RELEASE_ACK_ERROR, MIRROR_RELEASE_UNRESOLVED, dropsOwedGrant, endsAttemptOwingGrants,
+  mirrorReleaseUnresolvedError, releaseAttemptOf, releaseReceiptMismatches, reopensEndedAttempt,
+  withEndedMirrorExecution,
+} from './managed-workflow-mirror-custody-grants.js';
 /**
  * Owner contract:
  * Owner: every write of a split or merge workflow's durable record - the
@@ -70,8 +77,7 @@ import {
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
-import {PARTITION_TRANSITION_METADATA_FIELD, RESUME_TRIGGER, WORKFLOW_FAMILY} from './partition-constants.js';
-import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
+import {RESUME_TRIGGER} from './partition-constants.js';
 import {WORKFLOW_CLAIM_RESULT} from '../workflow/workflow-constants.js';
 import {
   readWaitClock,
@@ -79,8 +85,6 @@ import {
 } from '../logging/wait-bound-spent.js';
 
 const RECORD_SQL = 'SELECT * FROM tables WHERE table_id = ?';
-const STRING_TYPE = 'string';
-const OBJECT_TYPE = 'object';
 const FUNCTION_TYPE = 'function';
 const MAX_COMPARE_AND_SWAP_ATTEMPTS = 3;
 // The change's bounded attempts spent undecided (UNCONFIRMED).
@@ -89,11 +93,6 @@ const RECORD_CHANGE_ATTEMPTS_WAIT = Object.freeze({
   awaited: 'the workflow record change decided on the authoritative record',
 });
 const STATE_COLUMN = 'partition_transition_state';
-// The record generation (round 7): strictly increased by every accepted
-// change, the terminal clear included, and compared by every
-// compare-and-swap; it survives the clear, so a record never repeats. A row
-// that predates the column reads 0.
-const GENERATION_COLUMN = 'partition_transition_generation';
 const READ_BASE_OPTION = 'readBase';
 
 // What one record change came to.
@@ -168,99 +167,6 @@ function refuseRecordChange(reason, details = {}) {
 
 function isRefusal(value) {
   return Boolean(value && value[REFUSAL] === true);
-}
-
-/**
- * The exact stored transition metadata of one `tables` row: the string as
- * stored (a view that decoded it to an object re-encodes it), or null.
- * @param {*} raw
- * @return {string|null}
- */
-function storedMetadataOf(raw) {
-  if (raw === null || raw === undefined) {
-    return null;
-  }
-  return typeof raw === OBJECT_TYPE ? JSON.stringify(raw) : String(raw);
-}
-
-/**
- * The record generation of one `tables` row: a non-negative integer, 0 for a
- * row (or a view of it) that predates the column.
- * @param {Object|null} row
- * @return {number}
- */
-function generationOf(row) {
-  const generation = Number(row?.[GENERATION_COLUMN] ?? 0);
-  return Number.isSafeInteger(generation) && generation > 0 ? generation : 0;
-}
-
-/**
- * The compared record of one `tables` row as READ (absent: null/null/0):
- * what a change's precondition may compare a record against. Never written.
- * @param {Object|null} row
- * @return {{metadata: (string|null), state: (string|null),
- *   generation: number}}
- */
-function bytesOf(row) {
-  return {
-    metadata: storedMetadataOf(row?.partition_transition_metadata),
-    state: row?.partition_transition_state ?? null,
-    generation: generationOf(row),
-  };
-}
-
-function sameBytes(left, right) {
-  const a = bytesOf(left);
-  const b = bytesOf(right);
-  return a.metadata === b.metadata && a.state === b.state &&
-    a.generation === b.generation;
-}
-
-function parseMetadata(raw) {
-  if (typeof raw !== STRING_TYPE || raw.length === 0) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === OBJECT_TYPE ? parsed : null;
-  } catch (_error) {
-    return null;
-  }
-}
-
-/**
- * The decoded record: which workflow it holds, its state, metadata and
- * ownership claim.
- * @param {Object|null} row
- * @return {Object}
- */
-function storedRecordOf(row) {
-  const bytes = bytesOf(row);
-  const metadata = parseMetadata(bytes.metadata);
-  return Object.freeze({
-    bytes,
-    generation: bytes.generation,
-    row: row ?? null,
-    exists: Boolean(row),
-    workflowId: metadata ? String(metadata[
-      PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || '') || null : null,
-    state: bytes.state,
-    metadata,
-    claim: durableOwnershipClaimOf(metadata),
-  });
-}
-
-/**
- * The transition a `tables` row stores, decoded from its exact bytes (the
- * owners' record decoders start here): {state, metadata} or null when the row
- * holds no transition.
- * @param {Object|null} row
- * @return {{state: string, metadata: Object}|null}
- */
-function storedTransitionOf(row) {
-  const bytes = bytesOf(row);
-  const metadata = parseMetadata(bytes.metadata);
-  return bytes.state && metadata ? {state: bytes.state, metadata} : null;
 }
 
 function affectedRowsOf(result) {
@@ -446,27 +352,6 @@ function relinquishFieldsOf(owner, workflowId, live, row) {
   };
 }
 
-/**
- * Whether the authoritative re-read lags the base: it holds the base's own
- * record, or a record of a LOWER generation (generations only grow, so it
- * is an older copy - a leader that has not applied the base yet). Anything
- * else - an absent row included (the table is gone) - moved past the base.
- * @param {Object|null} reread
- * @param {Object|null} base
- * @return {boolean}
- */
-function rereadLagsBase(reread, base) {
-  return sameBytes(reread, base) ||
-    (reread !== null && generationOf(reread) < generationOf(base));
-}
-
-// Every accepted change advances the generation by one, in the same write
-// (the clear included): stamped here, so no encoder can omit it.
-function withNextGeneration(encoded, base) {
-  return {...encoded, data: {...encoded.data,
-    [GENERATION_COLUMN]: generationOf(base) + 1}};
-}
-
 // Encode one change's next record into the UPDATE's data and options.
 function encodeChange(owner, next, kind, base) {
   if (next === RECORD_CLEARED) {
@@ -476,24 +361,14 @@ function encodeChange(owner, next, kind, base) {
     base);
   if (!Object.hasOwn(encoded.data, STATE_COLUMN)) {
     // A claim leaves the state column alone: the written state is the base's.
-    return {...encoded, writtenState: bytesOf(base).state};
+    return {...encoded, writtenState: recordBytesOf(base).state};
   }
   return {...encoded, writtenState: encoded.data.partition_transition_state};
 }
 
-function writtenRowOf(base, encoded, tableId) {
-  return {
-    ...(base || {table_id: tableId}),
-    ...encoded.data,
-    partition_transition_metadata:
-      encoded.data.partition_transition_metadata ?? null,
-    partition_transition_state: encoded.writtenState ?? null,
-  };
-}
-
 // The compare-and-swap of one encoded change against exactly `base`.
 async function compareAndSwap(owner, tableId, base, encoded) {
-  const compared = bytesOf(base);
+  const compared = recordBytesOf(base);
   try {
     const result = await owner.getControlPlaneSystemTableGateway()
       .updateSystemTableRow(TABLES.TABLES, {
@@ -512,19 +387,10 @@ async function compareAndSwap(owner, tableId, base, encoded) {
 // Remove this source's grants only after its group has committed the release.
 // The exact authoritative bytes and generation also fence concurrent source ACKs.
 async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
-  const {partitionId, custody, action, logIndex} = receipt;
+  const {custody} = receipt;
   const {metadata, state} = storedRecordOf(row);
-  if (action !== MIRROR_RETENTION_CUSTODY_ACTION.RELEASE || !validMirrorCustody(custody) ||
-      !(BigInt(logIndex) > 0n) ||
-      custody.workflowId !== metadata.workflowId ||
-      custody.workflowAttempt !== metadata.workflowAttempt ||
-      custody.targetPartitionVersion !== metadata.targetPartitionVersion ||
-      !(custody.family === WORKFLOW_FAMILY.SPLIT ? metadata.sourcePartitionId === partitionId :
-        metadata.sourcePartitionIds?.includes(partitionId)) ||
-      !metadata.mirrorCustodyGrants?.some((grant) =>
-        grant.partitionId === partitionId && grant.fence === custody.workflowFenceToken &&
-        (grant.release || (metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(state))))) {
-    throw new TypeError('Mirror release acknowledgement does not match terminal workflow');
+  if (releaseReceiptMismatches(receipt, metadata, state)) {
+    throw new TypeError(MIRROR_RELEASE_ACK_ERROR.MISMATCH_MESSAGE);
   }
   const observed = await enqueueChange(owner, custody.workflowId, async () => {
     const confirmed = await commitReleaseReceipt(owner, row, receipt);
@@ -542,61 +408,53 @@ async function acknowledgeMirrorCustodyRelease(owner, row, receipt) {
   return true;
 }
 
-async function commitReleaseReceipt(owner, row, {partitionId, custody}) {
-  const matchesReceipt = (grant) => grant.partitionId === partitionId &&
-      grant.fence === custody.workflowFenceToken;
+// The cause of a write that did not land: compareAndSwap answers
+// `submitError: null` exactly when the submission returned an answer.
+function swapFailureCauseOf(swap) {
+  return swap.submitError === null ? swap.submission?.error : swap.submitError;
+}
+
+function releaseObservationOf(attempt, base, observed, result) {
+  return {
+    attempt: attempt + 1, comparedGeneration: generationOf(base),
+    observedGeneration: observed ? generationOf(observed) : null,
+    affectedRows: result.submission ? affectedRowsOf(result.submission) : null,
+    outcome: result.submission?.outcome,
+    cause: swapFailureCauseOf(result),
+  };
+}
+
+async function commitReleaseReceipt(owner, row, receipt) {
   let base = await authoritativeRecordOf(owner, row.table_id);
   let lastObservation;
-  function unresolved(reason) {
-    throw Object.assign(new Error('Committed mirror release awaiting workflow acknowledgement', {
-      cause: lastObservation?.cause,
-    }), {
-      code: 'MIRROR_RELEASE_ACK_UNCONFIRMED', partitionId, workflowId: custody.workflowId,
-      workflowAttempt: custody.workflowAttempt, fence: custody.workflowFenceToken,
-      reason, observation: lastObservation,
-    });
-  }
   for (let attempt = 0; ; attempt++) {
-    if (!base) unresolved('authoritative-row-unavailable');
-    if (generationOf(base) < generationOf(row)) unresolved('authoritative-generation-behind');
-    const current = storedRecordOf(base);
-    if (current.workflowId !== custody.workflowId ||
-        current.metadata.workflowAttempt !== custody.workflowAttempt ||
-        current.metadata.targetPartitionVersion !== custody.targetPartitionVersion) {
-      unresolved('workflow-identity-changed');
+    const step = releaseAttemptOf(base, row, receipt, attempt, MAX_COMPARE_AND_SWAP_ATTEMPTS);
+    if (step.unresolved) {
+      throw mirrorReleaseUnresolvedError(receipt, step.unresolved, lastObservation);
     }
-    const grant = current.metadata.mirrorCustodyGrants.find(matchesReceipt);
-    if (!grant) return base;
-    if (!grant.release &&
-        !(current.metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(current.state))) {
-      unresolved('release-authorization-changed');
-    }
-    if (attempt === MAX_COMPARE_AND_SWAP_ATTEMPTS) unresolved('conditional-write-unconfirmed');
-    const remaining = current.metadata.mirrorCustodyGrants.filter((grant) =>
-      !matchesReceipt(grant));
+    if (step.done) return base;
+    const {current, remaining} = step;
     const encoded = withNextGeneration({data: {partition_transition_metadata:
       JSON.stringify({...current.metadata, mirrorCustodyGrants: remaining})},
     options: {workClass: PRESSURE_WORK_CLASS.CRITICAL}}, base);
     const result = await compareAndSwap(owner, base.table_id, base, encoded);
     const written = writtenRowOf(base, {...encoded, writtenState: current.state}, base.table_id);
     const observed = result.landed ? written : await authoritativeRecordOf(owner, base.table_id);
-    lastObservation = {
-      attempt: attempt + 1, comparedGeneration: generationOf(base),
-      observedGeneration: observed ? generationOf(observed) : null,
-      affectedRows: result.submission ? affectedRowsOf(result.submission) : null,
-      outcome: result.submission?.outcome,
-      cause: result.submitError ?? result.submission?.error,
-    };
+    lastObservation = releaseObservationOf(attempt, base, observed, result);
     if (observed && sameBytes(observed, written)) {
       return observed;
     }
     if (!observed) {
-      unresolved('authoritative-row-unavailable');
+      throw mirrorReleaseUnresolvedError(receipt, MIRROR_RELEASE_UNRESOLVED.ROW_UNAVAILABLE,
+        lastObservation);
     }
     if (sameBytes(base, observed)) {
       continue;
     }
-    if (rereadLagsBase(observed, base)) unresolved('authoritative-generation-behind');
+    if (rereadLagsBase(observed, base)) {
+      throw mirrorReleaseUnresolvedError(receipt, MIRROR_RELEASE_UNRESOLVED.GENERATION_BEHIND,
+        lastObservation);
+    }
     base = observed;
   }
 }
@@ -620,29 +478,22 @@ function applyChangeTo(owner, workflowId, change, base) {
     return {unchanged: true};
   }
   if (answer !== RECORD_CLEARED &&
-      (!answer || typeof answer !== OBJECT_TYPE)) {
+      (!answer || typeof answer !== 'object')) {
     throw new TypeError(RECORD_CHANGE_ERROR_MSG.NOT_A_CHANGE + workflowId);
   }
   // A retried plan or owner reaction cannot turn a terminal release back
   // into executable work, or overwrite a source grant while the ACK races.
   const prior = storedRecordOf(base);
-  const grants = prior.metadata?.mirrorCustodyGrants;
-  if (grants?.length && answer !== RECORD_CLEARED) {
-    if (grants.some((owed) => !answer.metadata?.mirrorCustodyGrants?.some(
-      (grant) => grant.partitionId === owed.partitionId && grant.fence === owed.fence &&
-            (!owed.acquired || grant.acquired) && (!owed.release || grant.release)))) {
+  if (answer !== RECORD_CLEARED) {
+    if (dropsOwedGrant(prior.metadata, answer)) {
       return {refusal: refuseRecordChange(RECORD_CHANGE_REFUSAL.SOURCE_MIRROR_RELEASE_PENDING)};
     }
-  }
-  if (answer !== RECORD_CLEARED && prior.metadata?.mirrorExecutionEnded &&
-      answer.metadata?.workflowAttempt === prior.metadata.workflowAttempt &&
-      !endsSourceExecutionAttempt(answer.status)) {
-    return {refusal: refuseRecordChange(RECORD_CHANGE_REFUSAL.SOURCE_MIRROR_ATTEMPT_ENDED)};
-  }
-  if (answer !== RECORD_CLEARED && grants?.length && endsSourceExecutionAttempt(answer.status)) {
-    // A scheduled retry registers a fresh attempt. The old source's grant
-    // stays addressable even if the retry is due before RELEASE commits.
-    return {next: {...answer, metadata: {...answer.metadata, mirrorExecutionEnded: true}}};
+    if (reopensEndedAttempt(prior.metadata, answer)) {
+      return {refusal: refuseRecordChange(RECORD_CHANGE_REFUSAL.SOURCE_MIRROR_ATTEMPT_ENDED)};
+    }
+    if (endsAttemptOwingGrants(prior.metadata, answer)) {
+      return {next: withEndedMirrorExecution(answer)};
+    }
   }
   return {next: answer};
 }
@@ -921,10 +772,8 @@ export {
   RECORD_CLEARED,
   RECORD_UNCHANGED,
   applyRecordChange,
-  bytesOf as recordBytesOf,
   forgetWorkflowRecord,
   isRefusal as isRecordRefusal,
   recordChangeRefusedError,
-  storedTransitionOf,
   refuseRecordChange,
 };

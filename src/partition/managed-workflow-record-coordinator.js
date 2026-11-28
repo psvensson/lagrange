@@ -29,10 +29,10 @@ import {
   RECORD_CHANGE_REFUSAL,
   applyRecordChange,
   forgetWorkflowRecord,
-  recordBytesOf,
   recordChangeRefusedError,
   refuseRecordChange,
 } from './managed-workflow-record-store.js';
+import {recordBytesOf} from './managed-workflow-record-bytes.js';
 import {
   acknowledgementChange,
   clearChange,
@@ -169,6 +169,18 @@ function transitionRefusedError(write) {
     WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN), {
     recordChangeOutcome: write.outcome, refusal: write.refusal ?? null,
     superseded: write.outcome === RECORD_CHANGE_OUTCOME.SUPERSEDED});
+}
+
+// The ACCEPTED answer: the record's acknowledgement time, and the accepted
+// source failure when this acknowledgement is the one that recorded it.
+function acceptedAcknowledgementOf(coordinator, write, key, ack) {
+  const failure = write.workflow?.metadata?.splitSourceFailure;
+  return {result: PARTICIPANT_ACK_RESULT.ACCEPTED, participantKey: key,
+    ...(failure?.participantKey === key &&
+    failure.status === ack[PARTICIPANT_ACK_FIELD.STATUS] ?
+      {splitSourceFailure: failure} : {}),
+    acknowledgedAt: write.workflow?.participants?.get(key)
+      ?.acknowledgedAt ?? coordinator.now()};
 }
 
 /**
@@ -381,13 +393,7 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
         this.requireWorkflow(workflowId).fenceToken, change) : change);
     const key = String(ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]);
     if (write.outcome === RECORD_CHANGE_OUTCOME.ACCEPTED) {
-      const failure = write.workflow?.metadata?.splitSourceFailure;
-      return {result: PARTICIPANT_ACK_RESULT.ACCEPTED, participantKey: key,
-        ...(failure?.participantKey === key &&
-        failure.status === ack[PARTICIPANT_ACK_FIELD.STATUS] ?
-          {splitSourceFailure: failure} : {}),
-        acknowledgedAt: write.workflow?.participants?.get(key)
-          ?.acknowledgedAt ?? this.now()};
+      return acceptedAcknowledgementOf(this, write, key, ack);
     }
     if (write.outcome === RECORD_CHANGE_OUTCOME.REFUSED) {
       return this.respondToAckRejection(workflowId, write.refusal);

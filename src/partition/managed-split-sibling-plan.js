@@ -6,9 +6,21 @@ import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
 import {RECORD_CHANGE_REFUSAL, RECORD_UNCHANGED, refuseRecordChange} from './managed-workflow-record-store.js';
 import {SIBLING_DESCRIPTOR_ACTION, canonicalSiblingDescriptorIntent} from './partition-sibling-descriptor-effect.js';
 
+// The fields of one issued sibling subject (metadata.splitIssuedSiblings).
+const ISSUED_SIBLING_FIELDS = Object.freeze(['partitionId', 'priorAttempt', 'priorVersion',
+  'targetVersion']);
+const SIBLING_PLAN_ERROR = Object.freeze({
+  PREIMAGE_UNAVAILABLE: 'Split sibling descriptor preimage is unavailable',
+  PREIMAGE_UNBOUND: 'Cannot bind split sibling descriptor preimage',
+  PREIMAGE_INVALID_CODE: 'split-sibling-preimage-invalid',
+  PLAN_MISSING: 'Missing split sibling plan',
+  PLAN_INVALID_CODE: 'split-sibling-plan-invalid',
+  DUPLICATE_SUBJECT: 'Duplicate split sibling descriptor subject',
+});
+
 function siblingIntent(tableId, metadata, subject, action) {
   const fields = copyStrictOwnDataRecord(subject);
-  if (!fields || Object.keys(fields).length !== 4) return null;
+  if (!fields || Object.keys(fields).length !== ISSUED_SIBLING_FIELDS.length) return null;
   const {partitionId, priorAttempt, priorVersion, targetVersion} = fields;
   if (!Array.isArray(metadata.targetPartitionIds) ||
       metadata.targetPartitionIds.includes(partitionId) ||
@@ -23,8 +35,8 @@ function siblingIntent(tableId, metadata, subject, action) {
 function validateSubject(workflow, subject) {
   if (!siblingIntent(workflow.tableId, workflow.metadata, subject,
     SIBLING_DESCRIPTOR_ACTION.PROMOTE)) {
-    throw Object.assign(new Error('Split sibling descriptor preimage is unavailable'), {
-      code: 'split-sibling-preimage-invalid', partitionId: subject?.partitionId});
+    throw Object.assign(new Error(SIBLING_PLAN_ERROR.PREIMAGE_UNAVAILABLE), {
+      code: SIBLING_PLAN_ERROR.PREIMAGE_INVALID_CODE, partitionId: subject?.partitionId});
   }
 }
 
@@ -42,13 +54,13 @@ function sameIssuedSiblingPlan(workflow, expected) {
 async function issueSplitSiblingPlan(owner, workflow) {
   const prior = workflow.metadata.splitIssuedSiblings;
   if (!Array.isArray(prior)) {
-    throw Object.assign(new Error('Missing split sibling plan'), {
-      code: 'split-sibling-plan-invalid'});
+    throw Object.assign(new Error(SIBLING_PLAN_ERROR.PLAN_MISSING), {
+      code: SIBLING_PLAN_ERROR.PLAN_INVALID_CODE});
   }
   const subjects = new Map();
   for (const subject of prior) {
     validateSubject(workflow, subject);
-    if (subjects.has(subject.partitionId)) throw new Error('Duplicate split sibling descriptor subject');
+    if (subjects.has(subject.partitionId)) throw new Error(SIBLING_PLAN_ERROR.DUPLICATE_SUBJECT);
     subjects.set(subject.partitionId, subject);
   }
   const activeVersion = workflow.metadata.splitDescriptorBaseVersion;
@@ -58,8 +70,8 @@ async function issueSplitSiblingPlan(owner, workflow) {
     const row = owner.getPartitionInfo(partitionId);
     if (row?.table_id !== workflow.tableId || row.partition_id !== partitionId ||
         row.partition_version !== activeVersion) {
-      throw Object.assign(new Error('Cannot bind split sibling descriptor preimage'), {
-        code: 'split-sibling-preimage-invalid', partitionId});
+      throw Object.assign(new Error(SIBLING_PLAN_ERROR.PREIMAGE_UNBOUND), {
+        code: SIBLING_PLAN_ERROR.PREIMAGE_INVALID_CODE, partitionId});
     }
     const subject = {partitionId, priorAttempt: row.split_descriptor_attempt,
       priorVersion: row.partition_version, targetVersion};

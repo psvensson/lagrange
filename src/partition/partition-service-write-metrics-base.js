@@ -1,4 +1,4 @@
-import {carriesSplitDescriptorIntent, decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from
+import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, onwardSplitDescriptorIntent, SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from
   './partition-split-descriptor-command.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
@@ -77,8 +77,7 @@ function buildQueryOperation(sql, params, options) {
     operationId: options.operationId || null,
     idempotencyKey: options.idempotencyKey || null,
     splitMirrorOrigin: options.splitMirrorOrigin || null,
-    ...(carriesSplitDescriptorIntent(options) ?
-      {splitDescriptorIntent: options.splitDescriptorIntent} : {}),
+    ...onwardSplitDescriptorIntent(options),
   };
 }
 

@@ -1480,8 +1480,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/managed-workflow-record-store.js",
-      "line": 208,
+      "filePath": "src/partition/managed-workflow-record-bytes.js",
+      "line": 73,
       "column": 4,
       "functionName": "parseMetadata",
       "kind": "catch_returns_default",

@@ -1,4 +1,5 @@
-import {RECORD_CHANGE_REFUSAL, storedTransitionOf} from './managed-workflow-record-store.js';
+import {RECORD_CHANGE_REFUSAL} from './managed-workflow-record-store.js';
+import {storedTransitionOf} from './managed-workflow-record-bytes.js';
 import {PARTITION_TRANSITION_STATE, RESUME_TRIGGER, WORKFLOW_FAMILY} from './partition-constants.js';
 import {PRE_CUTOVER_SPLIT_STATES, cleanupRecord} from './managed-split-descriptor-cleanup.js';
 /**

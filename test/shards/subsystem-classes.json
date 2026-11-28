@@ -18,17 +18,17 @@
     "runtime-primitives": 24,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 267,
+    "storage-partition": 271,
     "storage-raft": 166,
     "test-infrastructure": 175,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2851,
-  "digest": "fnv1a32-8b03b849",
+  "censusSize": 2855,
+  "digest": "fnv1a32-c00d30be",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9fba03c6",
+  "observationDigest": "fnv1a32-4a8392de",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1463,6 +1463,7 @@
     "test/partition/merge-auto-execution.test.js": "storage-partition",
     "test/partition/merge-backfill-batching.test.js": "storage-partition",
     "test/partition/merge-cutover-coordination.test.js": "storage-partition",
+    "test/partition/merge-source-mirror-removed-answer.test.js": "storage-partition",
     "test/partition/merge-source-replication.test.js": "storage-partition",
     "test/partition/message-handler-registry-routing.property.test.js": "storage-partition",
     "test/partition/message-handler-registry.test.js": "storage-partition",
@@ -1612,6 +1613,7 @@
     "test/partition/split-abort-fence-parity.test.js": "storage-partition",
     "test/partition/split-ack-constants.test.js": "storage-partition",
     "test/partition/split-backfill-internal-pacing.test.js": "storage-partition",
+    "test/partition/split-child-descriptor-write-answer.test.js": "storage-partition",
     "test/partition/split-cutover-owner-delegation.test.js": "storage-partition",
     "test/partition/split-descriptor-checkpoint.test.js": "storage-partition",
     "test/partition/split-descriptor-finalization.test.js": "storage-partition",
@@ -1627,6 +1629,7 @@
     "test/partition/split-progress-depends-on-process-local-state.test.js": "storage-partition",
     "test/partition/split-rebalance-trigger.test.js": "storage-partition",
     "test/partition/split-recovery-after-restart.test.js": "storage-partition",
+    "test/partition/split-redelivered-source-failure.test.js": "storage-partition",
     "test/partition/split-sibling-descriptor-finalization.test.js": "storage-partition",
     "test/partition/split-sibling-workflow-recovery.test.js": "storage-partition",
     "test/partition/split-source-participant-ack.test.js": "storage-partition",
@@ -1638,6 +1641,7 @@
     "test/partition/workflow-record-incarnation.test.js": "storage-partition",
     "test/partition/workflow-record-interleaving.property.test.js": "storage-partition",
     "test/partition/workflow-record-lagging-view.test.js": "storage-partition",
+    "test/partition/workflow-record-mirror-release-receipt.test.js": "storage-partition",
     "test/partition/workflow-record-projection-drop.test.js": "storage-partition",
     "test/partition/workflow-record-reconcile.test.js": "storage-partition",
     "test/partition/workflow-record-same-owner-race.test.js": "storage-partition",
@@ -14838,6 +14842,11 @@
         "src/partition/partition-constants.js"
       ]
     },
+    "test/partition/merge-source-mirror-removed-answer.test.js": {
+      "files": [
+        "src/partition/managed-merge-workflow-execution-gate-methods.js"
+      ]
+    },
     "test/partition/merge-source-replication.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -17653,6 +17662,12 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/split-child-descriptor-write-answer.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/managed-split-workflow-persistence-methods.js"
+      ]
+    },
     "test/partition/split-cutover-owner-delegation.test.js": {
       "files": [
         "src/partition/partition-service.js"
@@ -17759,6 +17774,11 @@
       "files": [
         "src/partition/partition-service.js",
         "src/workflow/durable-workflow-coordinator.js"
+      ]
+    },
+    "test/partition/split-redelivered-source-failure.test.js": {
+      "files": [
+        "src/partition/managed-split-workflow-execution-gate-methods.js"
       ]
     },
     "test/partition/split-sibling-descriptor-finalization.test.js": {

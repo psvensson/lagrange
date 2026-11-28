@@ -21,7 +21,7 @@ import {
   isRetryableManagedSplitTransition,
 } from './managed-split-retry-policy.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
-import {storedTransitionOf} from './managed-workflow-record-store.js';
+import {storedTransitionOf} from './managed-workflow-record-bytes.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_CHILD_PROVISIONING = 'partition_child_provisioning';

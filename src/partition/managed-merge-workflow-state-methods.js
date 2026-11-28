@@ -17,7 +17,7 @@ import {
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
-import {storedTransitionOf} from './managed-workflow-record-store.js';
+import {storedTransitionOf} from './managed-workflow-record-bytes.js';
 import {registrationInputsRefusalOf} from
   './managed-workflow-registration-inputs.js';
 

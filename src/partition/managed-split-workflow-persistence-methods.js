@@ -25,6 +25,8 @@ import {
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 import {splitDescriptorWriteKey} from './partition-split-descriptor-command.js';
 import {childIntent} from './managed-split-descriptor-cleanup.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -41,12 +43,30 @@ const LOCAL_STR_PARTITION_VERSION = 'partition_version';
 const LOCAL_STR_EPOCH_EFFECT_DETAIL =
   ': expected exactly 1 tables row update for workflow ';
 const LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_M = 'Managed split child partition metadata mismatch for ';
+const CHILD_DESCRIPTOR_ERROR = Object.freeze({
+  WRITE_REFUSED_CODE: 'split_child_descriptor_write_refused',
+  OWNER_INVALID_MESSAGE: 'Invalid split child descriptor ownership',
+  OWNER_INVALID_CODE: 'split_child_descriptor_owner_invalid',
+});
+// A failed descriptor submission carries the answer's own error, else this.
+const DESCRIPTOR_SUBMISSION_FAILED_MESSAGE = 'Split descriptor submission failed';
 
+// The write landed on exactly one row, as the mutation outcome owner counts it.
 function assertChildDescriptorWritten(result, partitionId) {
-  const changes = result?.partitionResult?.affectedRows ?? result?.affectedRows;
+  const changes = classifyControlPlaneMutationResult(result).affectedRows;
   if (result?.success !== true || changes !== 1) {
     throw Object.assign(new Error(result?.error || `Split descriptor write refused for ${partitionId}`), {
-      code: 'split_child_descriptor_write_refused', cause: result,
+      code: CHILD_DESCRIPTOR_ERROR.WRITE_REFUSED_CODE, cause: result,
+    });
+  }
+}
+
+// An existing child row is re-owned only by the same or a later attempt.
+function assertChildDescriptorAttempts(previous, next, partitionId) {
+  if (!Number.isSafeInteger(previous) || previous < 1 ||
+      !Number.isSafeInteger(next) || next < previous) {
+    throw Object.assign(new Error(CHILD_DESCRIPTOR_ERROR.OWNER_INVALID_MESSAGE), {
+      code: CHILD_DESCRIPTOR_ERROR.OWNER_INVALID_CODE, partitionId,
     });
   }
 }
@@ -405,12 +425,7 @@ class ManagedSplitWorkflowPersistenceMethods {
       this.assertExistingChildPartitionMetadataMatches(expected, existing);
       const previous = existing.split_descriptor_attempt;
       const next = expected.split_descriptor_attempt;
-      if (!Number.isSafeInteger(previous) || previous < 1 ||
-          !Number.isSafeInteger(next) || next < previous) {
-        throw Object.assign(new Error('Invalid split child descriptor ownership'), {
-          code: 'split_child_descriptor_owner_invalid', partitionId: expected.partition_id,
-        });
-      }
+      assertChildDescriptorAttempts(previous, next, expected.partition_id);
       const acquired = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: TABLES.PARTITIONS,
@@ -554,7 +569,7 @@ class ManagedSplitWorkflowPersistenceMethods {
     }, {...this.buildManagedSplitMutationOptions(), splitDescriptorIntent,
       idempotencyKey: splitDescriptorWriteKey(splitDescriptorIntent)});
     if (result?.success !== true) {
-      throw Object.assign(new Error(result?.error || 'Split descriptor submission failed'),
+      throw Object.assign(new Error(result?.error || DESCRIPTOR_SUBMISSION_FAILED_MESSAGE),
         {cause: result});
     }
     return result.partitionResult;
