@@ -232,11 +232,15 @@ async (t) => {
     emit(eventName, payload) {
       this.events.push([eventName, payload]);
     }
-    async queryOperationById() {
-      return null;
-    }
-    isOperationTerminal() {
-      return false;
+    // The reservation sweep consults the operation's visibility contract
+    // (rebalance-coordinator-reservation-lifecycle-methods.js:549). The
+    // operation is authoritatively absent: the confirmed-absence outcome the
+    // repository returns (replica-operation-repository-read-methods.js:399).
+    get repository() {
+      return {
+        getOperationByIdVisibilityObservation: async () =>
+          Object.freeze({operation: null, deferredOutcome: null}),
+      };
     }
   }
   applyRebalanceCoordinatorReservationLifecycleMethods(TestCoordinator);

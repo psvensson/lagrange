@@ -7,6 +7,9 @@ import {ConfigurationManager} from '../../../src/config/configuration-manager.js
 import {LoggingService} from '../../../src/logging/logging-service.js';
 import {PartitionService} from '../../../src/partition/partition-service.js';
 import {QueryExecutor} from '../../../src/query/query-executor.js';
+import {decodeTypedRowSet} from '../../../src/query/sql-value-codec.js';
+import {materializeAndPresentRowObjects} from
+  '../../../src/query/sql-value-presentation.js';
 import {SQLParser} from '../../../src/query/sql-parser.js';
 import {DistributedWriteCoordinator} from
   '../../../src/query/distributed/distributed-write-coordinator.js';
@@ -156,8 +159,9 @@ function createLocalPartitionReadNode(partition) {
       if (result.success !== true) {
         throw new Error(result.error || 'local partition read failed');
       }
+      const decoded = decodeTypedRowSet(result.rowSet);
       return {
-        rows: result.rows,
+        rows: materializeAndPresentRowObjects(decoded.columns, decoded.rows),
         readAuthorityWitnesses: [result.readAuthorityWitness],
       };
     },

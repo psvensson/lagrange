@@ -31,6 +31,8 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
 import {REBALANCE_COORDINATOR_LOG_MSG} from
   '../../src/rebalancer/rebalancer-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {clearOperationLedgerSelfMoveParkEvidence} from
+  '../../src/rebalancer/operation-workflow-ledger-self-move-park-evidence.js';
 import {buildOperationUpdateOutcome} from '../../src/rebalancer/replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 import {REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE} from
@@ -193,6 +195,12 @@ function buildTerminalPersistenceHost({transitionOutcome}) {
   host.clearTransitionRetry = (id) =>
     recorded.transitionRetryClears.push(id);
   host.clearDeferredSafetyBlockState = () => {};
+  // The owner state clearTerminalOperationRetryState reads (production:
+  // operation-workflow-owner.js:74 and operation-workflow-owner-retry-registry.js:141).
+  host.withheldDispatchByOperationId = new Map();
+  host.operationLedgerSelfMoveParkEvidenceByOperationId = new Map();
+  host.clearOperationLedgerSelfMoveParkEvidence = (id) =>
+    clearOperationLedgerSelfMoveParkEvidence(host, id);
   host.releaseReservationForOperation = async (operation) =>
     recorded.reservationReleases.push(operation.operationId);
   host.buildOperationTransitionStepEntry = (

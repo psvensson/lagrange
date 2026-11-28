@@ -106,7 +106,11 @@ test('OperationsView', async (t) => {
 
   t.test('getRowStatus returns NORMAL for removed operation', async (t) => {
     const view = new OperationsView();
-    const operation = createOperation({status: OPERATION_STATUS.REMOVED});
+    const operation = createOperation({
+      type: 'REMOVE',
+      status: OPERATION_STATUS.REMOVED,
+      workflow_step: 'REMOVED',
+    });
 
     t.equal(view.getRowStatus(operation), ROW_STATUS.NORMAL);
   });

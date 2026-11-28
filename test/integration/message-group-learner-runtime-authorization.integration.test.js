@@ -559,7 +559,12 @@ test('durable learner intent is consumed only through the bound repository and r
         const trapped = trapSharedCore(f.cluster, f.leader);
         assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL,
           'the real runtime reconstruction control must engage');
-        for (const id of FOUNDERS) f.cluster.node(id).readStatus();
+        // readStatus() is a pure read: the next operation replaces the runtime.
+        for (const id of FOUNDERS) {
+          const ticked = await turnChainValue(f.cluster.node(id).tick());
+          assert.equal(ticked?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+            `the replacement answers ${id}'s operation (${JSON.stringify(ticked)})`);
+        }
         assert.notEqual(f.cluster.node(f.leader).readStatus().runtimeGeneration, previousRuntime,
           'the actual fatal boundary must reconstruct the shared native runtime');
         assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);

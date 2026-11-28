@@ -748,8 +748,7 @@ test('C1 proposeCDCCommand refuses unpaired or absent durable route custody', as
 test('C1 a committed receipt settled before its parent retired never answers success',
   async (t) => {
     const event = sourceEvent(1);
-    const {f, follower, queue, hold, key} = await heldForwardFixture(t, event,
-      {holdFollowerReplication: false});
+    const {f, follower, queue, hold, key} = await heldForwardFixture(t, event);
     // Controlled parent grant: it retires synchronously right after the real
     // queue settles the follower's own committed afterCommit answer, before the
     // owner can rebind that receipt to this invocation.
@@ -776,8 +775,15 @@ test('C1 a committed receipt settled before its parent retired never answers suc
     try {
       const pending = observe(follower.applyCDCBatch([event], parent));
       await pump(f);
-      assert.equal(committedSettlements, 1, 'setup: local afterCommit settled the waiter committed');
+      // The leader's terminal answer reaches the hold while the follower's
+      // replication is still held: the consensus delivery class applies a
+      // released follower envelope before the leader's answer returns, so the
+      // answer is captured first and the follower's own commit follows.
       assert.ok(hold.response, 'setup: the remote terminal answer is held');
+      assert.equal(committedSettlements, 0, 'setup: the follower has not applied yet');
+      hold.releaseNativePackets();
+      await pump(f);
+      assert.equal(committedSettlements, 1, 'setup: local afterCommit settled the waiter committed');
       assert.equal(pending.settled, true, 'the caller settles at its own settlement');
       assert.equal(pending.error, undefined, pending.error?.stack);
       assert.equal(pending.answer.success, false, 'C1_RC1_RETIRED_PARENT_NEVER_SUCCESS');
