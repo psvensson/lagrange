@@ -25,10 +25,41 @@ function samePersistedWakeRow(left, right) {
   const keys = Object.keys(left);
   return keys.length === Object.keys(right).length && keys.every((key) => {
     const value = left[key];
-    const type = typeof value;
-    return (value === null || type === 'string' || type === 'number' || type === 'boolean') &&
+    return (value === null || typeof value === 'string' || typeof value === 'number' ||
+      typeof value === 'boolean') &&
       Object.hasOwn(right, key) && Object.is(value, right[key]);
   });
+}
+
+// Settle the router's answer to one direct wake-up: clear its in-flight slot,
+// then schedule its verification or defer its dispatch retry.
+function settleDirectDispatchWakeupDelivery(service, operation, operationRow, deliveryEnvelope) {
+  const transport = deliveryTransportOf(deliveryEnvelope);
+  const answer = deliveryAnswerOf(deliveryEnvelope);
+  const latestOperationRow = service.clearDirectDispatchWakeupInFlight(
+    operation.operationId,
+    operationRow,
+  );
+  // Woken only when delivered and the dispatch owner did not refuse; its
+  // own refusal defers through the dispatch owner, not the transport.
+  const delivered = isDeliveredTransportDeliveryOutcome(transport);
+  if (delivered && answer?.success !== false) {
+    service.scheduleRemoteDispatchWakeupVerification(
+      operation.operationId,
+      latestOperationRow,
+    );
+    return true;
+  }
+  service.deferOperationDispatchRetry(
+    operation.operationId,
+    delivered ? answer : transport,
+    latestOperationRow,
+    {
+      [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
+        true,
+    },
+  );
+  return false;
 }
 
 /**
@@ -152,32 +183,12 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
           ownerNodeId,
         ),
       );
-      const transport = deliveryTransportOf(deliveryEnvelope);
-      const answer = deliveryAnswerOf(deliveryEnvelope);
-      const latestOperationRow = this.clearDirectDispatchWakeupInFlight(
-        operation.operationId,
+      return settleDirectDispatchWakeupDelivery(
+        this,
+        operation,
         operationRow,
+        deliveryEnvelope,
       );
-      // Woken only when delivered and the dispatch owner did not refuse; its
-      // own refusal defers through the dispatch owner, not the transport.
-      const delivered = isDeliveredTransportDeliveryOutcome(transport);
-      if (delivered && answer?.success !== false) {
-        this.scheduleRemoteDispatchWakeupVerification(
-          operation.operationId,
-          latestOperationRow,
-        );
-        return true;
-      }
-      this.deferOperationDispatchRetry(
-        operation.operationId,
-        delivered ? answer : transport,
-        latestOperationRow,
-        {
-          [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
-            true,
-        },
-      );
-      return false;
     } catch (error) {
       const latestOperationRow = this.clearDirectDispatchWakeupInFlight(
         operation.operationId,

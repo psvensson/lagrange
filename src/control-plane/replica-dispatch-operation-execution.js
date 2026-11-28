@@ -43,6 +43,16 @@ const {
 
 const GROWTH_WAKE_KEY_MISMATCH = 'growth wake operation key differs';
 
+// What a row dispatch hands the coordinator: the wake that caused it and
+// whether it re-arms a routine create, then the dispatch cause.
+function coordinatorDispatchOptions(options) {
+  return {
+    ...(options.dispatchWake ? {dispatchWake: options.dispatchWake} : {}),
+    ...(options.routineCreateRearmWake === true ? {routineCreateRearmWake: true} : {}),
+    cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
+  };
+}
+
 class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
   /**
    * Resolve the canonical system-table gateway for dispatch writes.
@@ -295,11 +305,8 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
         typeof this.rebalanceCoordinator.dispatchOperation === 'function'
       ) {
         dispatchResult =
-          await this.rebalanceCoordinator.dispatchOperation(rowOperation, {
-            ...(options.dispatchWake ? {dispatchWake: options.dispatchWake} : {}),
-            ...(options.routineCreateRearmWake === true ? {routineCreateRearmWake: true} : {}),
-            cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
-          });
+          await this.rebalanceCoordinator.dispatchOperation(rowOperation,
+            coordinatorDispatchOptions(options));
       } else {
         const claimedOperation =
           await this.rebalanceCoordinator.claimDispatchTransition(operationId);

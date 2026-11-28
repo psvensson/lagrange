@@ -178,3 +178,29 @@ test('overlapping sibling finalizations with identical SQL and different plans r
       'SELECT partition_version, split_descriptor_attempt FROM partitions WHERE partition_id = ?', [CHILD]),
     [{partition_version: 1, split_descriptor_attempt: 0}]);
   }, {cdc: true}));
+
+test('gateway refuses a split descriptor mutation that deviates from its descriptor statement or key',
+  {timeout: 120000}, async () => {
+    await withSurface([TABLE], async ({gateway, deliveries}) => {
+      assert.equal((await insertChild(gateway, FIRST.workflowAttempt)).success, true);
+      const deviations = [
+        ['an ignore-existing write', {splitDescriptorIntent: FIRST, ignoreExisting: true}],
+        ['a caller key other than the descriptor key',
+          {splitDescriptorIntent: FIRST, idempotencyKey: 'caller-chosen-key'}],
+        ['an intent the descriptor owner cannot canonicalize',
+          {splitDescriptorIntent: {...FIRST, workflowAttempt: 0}}],
+      ];
+      for (const [label, options] of deviations) {
+        const refused = await gateway.deleteSystemTableRow(TABLE, where(FIRST), options);
+        assert.equal(refused.success, false, label);
+        assert.equal(refused.errorCode, SPLIT_DESCRIPTOR_ERROR.BYTES, label);
+      }
+      assert.equal(deliveries.filter((entry) => entry.sql === SPLIT_DESCRIPTOR_FINALIZE_SQL).length,
+        0, 'no refused descriptor reaches the partition');
+      const accepted = await gateway.deleteSystemTableRow(TABLE, where(FIRST),
+        {splitDescriptorIntent: FIRST, idempotencyKey: splitDescriptorWriteKey(FIRST)});
+      assert.equal(accepted.success, true, accepted.error);
+      assert.equal(accepted.partitionResult.splitDescriptorReceipt.disposition,
+        SPLIT_DESCRIPTOR_DISPOSITION.DELETED);
+    }, {cdc: true});
+  });

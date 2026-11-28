@@ -56,6 +56,9 @@ const COLUMN = Object.freeze({
   LAST_LATENCY_CHECK_AT: 'last_latency_check_at',
   LATENCY_ASSIGNMENT_STATE: 'latency_assignment_state',
   HOST_ID: 'host_id',
+  // The resource sample a node heartbeat published: its time and identity.
+  TELEMETRY_SAMPLED_AT: 'telemetry_sampled_at',
+  TELEMETRY_SAMPLE_ID: 'telemetry_sample_id',
   // A placement-admitted copy's copy source (quest
   // replica-placement-admission-owner): the node source occupancy counts.
   COPY_SOURCE_NODE_ID: 'copy_source_node_id',

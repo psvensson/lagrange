@@ -26,6 +26,26 @@ function canDeferOperationDispatchRetry(operationId, errorLike) {
   return Boolean(operationId) && isRetryableControlPlaneError(errorLike);
 }
 
+// Whether a dispatch failure is only the replica operation's visibility lag.
+function isVisibilityLagDispatchFailure(errorLike) {
+  return errorLike?.code ===
+    REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_VISIBILITY_LAG;
+}
+
+// Whether dispatch options or a deferred retry ask the next dispatch to read
+// its row again first.
+function requestsRowRefreshBeforeDispatch(source) {
+  return source?.[
+    REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+  ] === true;
+}
+
+// The reconcile reason a deferred retry re-enters the dispatch queue with.
+function deferredRetryReconcileReason(deferredRetry) {
+  return deferredRetry.visibilityOnly ? RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY :
+    RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH;
+}
+
 class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadiness {
   /**
    * Normalize operation-dispatch queue shard count to a safe positive integer.
@@ -187,17 +207,13 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     const retryAfterMs = this.resolveOperationDispatchRetryAfterMs(errorLike);
     const desiredAttemptAt = Date.now() + retryAfterMs;
     const errorMessage = errorLike?.message || errorLike?.error || null;
-    const refreshRowBeforeDispatch =
-      options?.[
-        REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
-      ] === true;
+    const refreshRowBeforeDispatch = requestsRowRefreshBeforeDispatch(options);
     const existing = this.operationDispatchDeferredRetries.get(operationId);
     const deferredContext = mergeOperationDispatchReconcileContext(
       existing?.context,
       extractOperationDispatchProgressContext(options),
     );
-    const visibilityOnly = errorLike?.code ===
-      REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_VISIBILITY_LAG;
+    const visibilityOnly = isVisibilityLagDispatchFailure(errorLike);
     if (existing) {
       existing.visibilityOnly &&= visibilityOnly;
       return updateExistingOperationDispatchDeferredRetry({
@@ -289,12 +305,8 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
         REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PROVENANCE
       ] = true;
       if (
-        options?.[
-          REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
-        ] === true ||
-        deferredRetry?.[
-          REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
-        ] === true
+        requestsRowRefreshBeforeDispatch(options) ||
+        requestsRowRefreshBeforeDispatch(deferredRetry)
       ) {
         context[
           REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
@@ -302,8 +314,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       }
       this.operationDispatchQueue.enqueue(
         operationId,
-        deferredRetry.visibilityOnly ? RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY :
-          RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
+        deferredRetryReconcileReason(deferredRetry),
         Object.keys(context).length > 0 ? context : undefined,
       );
       this.logger.debug(DISPATCH_LOG_MSG.OPERATION_DISPATCH_DEFERRED_RETRY, {

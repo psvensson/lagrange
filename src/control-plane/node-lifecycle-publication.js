@@ -117,6 +117,11 @@ const NODE_TELEMETRY_COLUMNS = Object.freeze([
   COLUMN.MEMORY_USAGE_PERCENT,
   COLUMN.DISK_USAGE_PERCENT,
 ]);
+// The resource sample's time and identity, carried beside its columns.
+const NODE_TELEMETRY_SAMPLE_COLUMNS = Object.freeze([
+  COLUMN.TELEMETRY_SAMPLED_AT,
+  COLUMN.TELEMETRY_SAMPLE_ID,
+]);
 
 const NODE_LIFECYCLE_CRITICAL_WORK = 'critical';
 
@@ -245,7 +250,7 @@ function extractTelemetrySampleMeta(telemetry) {
       meta[column] = numberIsFinite(telemetry[column]) ? telemetry[column] : null;
     }
   }
-  for (const key of ['telemetry_sampled_at', 'telemetry_sample_id']) {
+  for (const key of NODE_TELEMETRY_SAMPLE_COLUMNS) {
     if (Object.hasOwn(telemetry, key)) {
       meta[key] = Number.isSafeInteger(telemetry[key]) ? telemetry[key] : null;
     }

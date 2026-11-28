@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 123,
+    "admin-diagnostics": 124,
     "architecture-governance": 21,
     "bootstrap-membership": 358,
     "cdc-metadata": 81,
     "cli-tooling": 99,
-    "control-plane": 246,
+    "control-plane": 247,
     "convergence-topology": 88,
     "distributed-harness": 226,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2849,
-  "digest": "fnv1a32-0f421d86",
+  "censusSize": 2851,
+  "digest": "fnv1a32-8b03b849",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cfcf81d8",
+  "observationDigest": "fnv1a32-9fba03c6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -73,6 +73,7 @@
     "test/admin/admin-query-result-envelope-participant-failures.test.js": "admin-diagnostics",
     "test/admin/admin-query-result-message-envelope.test.js": "admin-diagnostics",
     "test/admin/admin-quota-enforcer.test.js": "admin-diagnostics",
+    "test/admin/admin-replica-operation-summary-compaction.test.js": "admin-diagnostics",
     "test/admin/admin-runtime-service-views.test.js": "admin-diagnostics",
     "test/admin/admin-service-diagnostics.test.js": "admin-diagnostics",
     "test/admin/admin-service-discovery.test.js": "admin-diagnostics",
@@ -621,6 +622,7 @@
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "control-plane",
     "test/control-plane/heartbeat-memory-trend.test.js": "control-plane",
     "test/control-plane/heartbeat-periodic-writes.property.test.js": "control-plane",
+    "test/control-plane/heartbeat-service-write-coalescing.test.js": "control-plane",
     "test/control-plane/heartbeat-storage-budget-preservation.test.js": "control-plane",
     "test/control-plane/heartbeat-terminal-node-row-endpoint.test.js": "control-plane",
     "test/control-plane/heartbeat-wait-bound-spent.test.js": "control-plane",
@@ -3028,6 +3030,11 @@
     "test/admin/admin-query-result-message-envelope.test.js": {
       "files": [
         "src/admin/admin-websocket-api-shared.js"
+      ]
+    },
+    "test/admin/admin-replica-operation-summary-compaction.test.js": {
+      "files": [
+        "src/admin/admin-replica-operation-summary-compaction.js"
       ]
     },
     "test/admin/admin-runtime-service-views.test.js": {
@@ -5860,6 +5867,22 @@
         "src/config/configuration-manager.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/heartbeat-service-constants.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-write-coordinator.js",
+        "src/query/query-execution-budget.js",
+        "src/query/query-executor-partition-failure.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/control-plane/heartbeat-service-write-coalescing.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/partition/partition-committed-statement-outcome.js",

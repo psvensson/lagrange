@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2471,
+    "unit": 2473,
     "integration": 137,
     "bootstrap": 234,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2849,
-  "digest": "fnv1a32-478b2559",
+  "censusSize": 2851,
+  "digest": "fnv1a32-a3055d12",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -54,6 +54,7 @@
     "test/admin/admin-query-result-envelope-participant-failures.test.js": "unit",
     "test/admin/admin-query-result-message-envelope.test.js": "unit",
     "test/admin/admin-quota-enforcer.test.js": "unit",
+    "test/admin/admin-replica-operation-summary-compaction.test.js": "unit",
     "test/admin/admin-runtime-service-views.test.js": "unit",
     "test/admin/admin-service-diagnostics.test.js": "unit",
     "test/admin/admin-service-discovery.test.js": "unit",
@@ -602,6 +603,7 @@
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "unit",
     "test/control-plane/heartbeat-memory-trend.test.js": "unit",
     "test/control-plane/heartbeat-periodic-writes.property.test.js": "unit",
+    "test/control-plane/heartbeat-service-write-coalescing.test.js": "unit",
     "test/control-plane/heartbeat-storage-budget-preservation.test.js": "unit",
     "test/control-plane/heartbeat-terminal-node-row-endpoint.test.js": "unit",
     "test/control-plane/heartbeat-wait-bound-spent.test.js": "unit",

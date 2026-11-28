@@ -43,6 +43,12 @@ function isRoutineCreateRearmWake(context, reasons) {
   return reasons.every((reason) => ROUTINE_CREATE_REARM_WAKE_REASONS.has(reason));
 }
 
+// The wake a reconcile pass hands its dispatch: its reasons and the handoff
+// mode the enqueue named (null when none).
+function dispatchWakeOf(context, reasons) {
+  return {reasons, handoffMode: context?.[ControlPlaneField.HANDOFF_MODE] ?? null};
+}
+
 const READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD = Object.freeze({
   FORCE_READY_WATERMARK: 'forceReadyWatermark',
   READINESS_PLANNING_SNAPSHOT_TOKEN_KEY:
@@ -271,7 +277,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       return;
     }
 
-    const dispatchWake = {reasons, handoffMode: context?.[ControlPlaneField.HANDOFF_MODE] ?? null};
+    const dispatchWake = dispatchWakeOf(context, reasons);
     try {
       if (this.shouldExecuteOperationFromDispatchReplay(row, context)) {
         this.clearDeferredOperationDispatchRetry(operationId);
