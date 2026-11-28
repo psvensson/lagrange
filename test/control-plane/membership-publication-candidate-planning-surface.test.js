@@ -150,5 +150,17 @@ test('synchronous planning selects both publication answers from one inventory',
     t.equal(reads, preloaded ? 0 : scans, 'publication inventory reads');
     t.equal(normalizations, scans * rows.length, 'actual normalized row count');
   }
+  // The tie rule, by its literal answer: among equal epochs the inventory's
+  // first row is the latest, of any status (9) and PUBLISHED (8).
+  coordinator.systemTableCache.getAll = () => mixed;
+  const tied = coordinator.readPublicationPlanningSnapshotSync({nodeRows: [], serviceRows: [],
+    nodeEndpointRows: [], replicaOperationRows: [], partitionRows: [], readinessEntries: []});
+  t.equal(tied.latestPublicationRow.publicationId, 'pending-first', 'planning: latest');
+  t.equal(tied.latestPublishedPublicationRow.publicationId, 'previous-first',
+    'planning: latest PUBLISHED');
+  t.equal(coordinator.getLatestPublicationRowSync({publicationRows: mixed}).publicationId,
+    'pending-first', 'selector: latest');
+  t.equal(coordinator.getLatestPublishedPublicationRowSync({publicationRows: mixed}).publicationId,
+    'previous-first', 'selector: latest PUBLISHED');
   t.end();
 });

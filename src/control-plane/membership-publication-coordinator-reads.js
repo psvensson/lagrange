@@ -108,6 +108,40 @@ async function fetchDirectOwnerRows(
   return {handled: false, rows: []};
 }
 
+// Before the inventory names a membership publication: no row for either
+// selection (the row-or-null contract of the latest-publication readers).
+const NO_MEMBERSHIP_PUBLICATION_SELECTED = Object.freeze({
+  latestPublicationRow: null,
+  latestPublishedPublicationRow: null,
+});
+
+// The one rule of which membership publication row is later, for every scan of
+// this module: with no row selected yet the first; after it, only a strictly
+// higher (publicationEpoch || 0), so the inventory's first row wins a tie.
+function isNewerPublicationEpoch(selectedRow, epoch) {
+  return !selectedRow || epoch > (selectedRow.publicationEpoch || 0);
+}
+
+// The one selection of the latest membership publication rows from one
+// inventory, of any status and PUBLISHED: the highest (publicationEpoch || 0),
+// the inventory's first row among equal epochs. Each row is normalized once.
+function selectLatestMembershipPublicationRows(rows) {
+  const selected = {...NO_MEMBERSHIP_PUBLICATION_SELECTED};
+  for (const raw of rows) {
+    const row = normalizeControlPlanePublicationRow(raw);
+    if (row.publicationKind !== MEMBERSHIP_PUBLICATION_KIND) continue;
+    const epoch = row.publicationEpoch || 0;
+    if (isNewerPublicationEpoch(selected.latestPublicationRow, epoch)) {
+      selected.latestPublicationRow = row;
+    }
+    if (row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+        isNewerPublicationEpoch(selected.latestPublishedPublicationRow, epoch)) {
+      selected.latestPublishedPublicationRow = row;
+    }
+  }
+  return selected;
+}
+
 class MembershipPublicationCoordinatorReads {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
@@ -260,34 +294,14 @@ class MembershipPublicationCoordinatorReads {
       ...options,
       preloadedRows: options.publicationRows,
     });
-    const normalizedRows = publicationRows
-      .map((row) => normalizeControlPlanePublicationRow(row))
-      .filter((row) => row.publicationKind === MEMBERSHIP_PUBLICATION_KIND)
-      .sort((left, right) => (right.publicationEpoch || 0) - (left.publicationEpoch || 0));
-    return normalizedRows[0] || null;
+    return selectLatestMembershipPublicationRows(publicationRows).latestPublicationRow;
   }
 
   readPlanningPublicationPairSync(options) {
     const rows = Array.isArray(options.publicationRows) ? options.publicationRows :
       typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] : [];
-    let latestPublicationRow = null;
-    let latestPublishedPublicationRow = null;
-    for (const raw of rows) {
-      const row = normalizeControlPlanePublicationRow(raw);
-      if (row.publicationKind !== MEMBERSHIP_PUBLICATION_KIND) continue;
-      const epoch = row.publicationEpoch || 0;
-      // Strict comparison preserves the inventory's first row among equal epochs.
-      if (!latestPublicationRow || epoch > (latestPublicationRow.publicationEpoch || 0)) {
-        latestPublicationRow = row;
-      }
-      if (row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
-          (!latestPublishedPublicationRow ||
-          epoch > (latestPublishedPublicationRow.publicationEpoch || 0))) {
-        latestPublishedPublicationRow = row;
-      }
-    }
-    return {latestPublicationRow, latestPublishedPublicationRow};
+    return selectLatestMembershipPublicationRows(rows);
   }
 
   getLatestPublicationRowSync(options = {}) {
@@ -297,11 +311,7 @@ class MembershipPublicationCoordinatorReads {
       (typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] :
         []);
-    const normalizedRows = publicationRows
-      .map((row) => normalizeControlPlanePublicationRow(row))
-      .filter((row) => row.publicationKind === MEMBERSHIP_PUBLICATION_KIND)
-      .sort((left, right) => (right.publicationEpoch || 0) - (left.publicationEpoch || 0));
-    return normalizedRows[0] || null;
+    return selectLatestMembershipPublicationRows(publicationRows).latestPublicationRow;
   }
 
   async getLatestClusterPublication(options = {}) {
@@ -317,15 +327,7 @@ class MembershipPublicationCoordinatorReads {
       ...options,
       preloadedRows: options.publicationRows,
     });
-    const normalizedRows = publicationRows
-      .map((row) => normalizeControlPlanePublicationRow(row))
-      .filter(
-        (row) =>
-          row.publicationKind === MEMBERSHIP_PUBLICATION_KIND &&
-          row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
-      )
-      .sort((left, right) => (right.publicationEpoch || 0) - (left.publicationEpoch || 0));
-    return normalizedRows[0] || null;
+    return selectLatestMembershipPublicationRows(publicationRows).latestPublishedPublicationRow;
   }
 
   getLatestPublishedPublicationRowSync(options = {}) {
@@ -335,15 +337,7 @@ class MembershipPublicationCoordinatorReads {
       (typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] :
         []);
-    const normalizedRows = publicationRows
-      .map((row) => normalizeControlPlanePublicationRow(row))
-      .filter(
-        (row) =>
-          row.publicationKind === MEMBERSHIP_PUBLICATION_KIND &&
-          row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
-      )
-      .sort((left, right) => (right.publicationEpoch || 0) - (left.publicationEpoch || 0));
-    return normalizedRows[0] || null;
+    return selectLatestMembershipPublicationRows(publicationRows).latestPublishedPublicationRow;
   }
 
   async getLatestPublishedClusterPublication(options = {}) {
@@ -384,28 +378,26 @@ class MembershipPublicationCoordinatorReads {
       (typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] :
         []);
-    let winningRow = null;
-    let winningEpochSortValue = -Infinity;
+    let winner = null;
     for (const row of publicationRows) {
       // Mirror the normalized filter (publicationKind === MEMBERSHIP_PUBLICATION_KIND)
-      // and sort key ((publicationEpoch || 0) desc, stable → first row wins ties)
-      // using only scalar coercion — no JSON.parse of the array/object columns.
+      // and the module's one later-row rule (isNewerPublicationEpoch) using only
+      // scalar coercion — no JSON.parse of the array/object columns.
       const publicationKind = readLowerText(row?.publication_kind, row?.publicationKind);
       if (publicationKind !== MEMBERSHIP_PUBLICATION_KIND) {
         continue;
       }
       const epochSortValue =
         readInteger(row?.publication_epoch, row?.publicationEpoch) || 0;
-      if (epochSortValue > winningEpochSortValue) {
-        winningEpochSortValue = epochSortValue;
-        winningRow = row;
+      if (isNewerPublicationEpoch(winner, epochSortValue)) {
+        winner = {row, publicationEpoch: epochSortValue};
       }
     }
-    if (!winningRow) {
+    if (!winner) {
       return null;
     }
     // Full-normalize ONLY the winner to reuse exact inclusion + status semantics.
-    const normalizedWinner = normalizeControlPlanePublicationRow(winningRow);
+    const normalizedWinner = normalizeControlPlanePublicationRow(winner.row);
     // requireNodeInclusion=false serves the readiness-memo staleness probe: it
     // compares the WINNER row's epoch/status against a cached projection that
     // stored the cluster winner's epoch regardless of inclusion, so filtering

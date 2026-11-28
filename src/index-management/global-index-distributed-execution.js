@@ -689,5 +689,6 @@ export {
   hasDistributedPartitionRoute,
   provisionIndexPartitionsWithRuntime,
   reconcileDistributedIndexDatasetSchema,
+  resolveSchemaProvisioningJobOwner,
   syncGlobalIndexesFromSystemCache,
 };

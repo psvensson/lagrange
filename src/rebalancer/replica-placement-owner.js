@@ -32,7 +32,7 @@ import {createBlockedPlacementAttempts, deleteUnresolvedPlacementAttempt,
   reconcileReleaseAttempts, redrivenReleaseAttempt} from './replica-placement-owner-attempts.js';
 import {COLLABORATOR, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID, invalidCollaborator, isFunction,
   validateReplicaPlacementOwnerOptions} from './replica-placement-owner-collaborators.js';
-import {PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY,
+import {PLACEMENT_ADMISSION_STOP_REASON as ADMISSION_STOP, PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY,
   PLACEMENT_DEFICIT_KIND, PLACEMENT_DISPATCH_HOLD, PLACEMENT_OUTCOME, PLACEMENT_TRIGGER} from
   './replica-placement-owner-constants.js';
 import {PLACEMENT_DEFICIT_STATE, buildDeficitContext, buildPartitionReplicaRows, evaluateDeficitContext,
@@ -43,7 +43,7 @@ import {PLACEMENT_PASS_CHECKPOINT as CHECKPOINT, beginPlacementPass, completePas
   placementPassSnapshot, recordCapacityCheck, recordFenced, recordAdmittedOperation,
   recordNodeAuthorityWait, recordPassEvaluations, recordPassFailure, recordProposal,
   recordSubmissionAnswer, resyncAdmissionsOf} from './replica-placement-owner-pass-observation.js';
-import {CANDIDATE_FAILED, classifyCandidateFailure, createProposalProgress, recordProposalAnswer,
+import {CANDIDATE_FAILED, classifyCandidateFailure, createProposalProgress, isCommittedRefusal, recordProposalAnswer,
   recordProposalHandover} from './replica-placement-owner-proposal-knowledge.js';
 import {PLACEMENT_TERM_START, createTenureCustody, isTermStartApplied, requestLeadershipStartCdcDrive,
   tenureFenceRefusal} from './replica-placement-owner-tenure.js';
@@ -107,19 +107,13 @@ function shouldWakeOnOperationRowChange(seenSigs, ownIds, row, op) {
 }
 
 function shouldStopPlacementPass(candidate, state) {
-  if (state.ledgerIncomplete) return true;
-  return candidate.placementClass === PLACEMENT_CLASS.LEDGER &&
-    state.incompleteCount > 0;
+  return state.ledgerIncomplete ||
+    (candidate.placementClass === PLACEMENT_CLASS.LEDGER && state.incompleteCount > 0);
 }
 
 function moveIntentKeyOf(partitionId, move) {
   return `${partitionId}:${move.type}:${move.targetNodeId}:` +
     `${move.sourceReplicaId ?? ''}:${move.replicaId ?? ''}:${move.copySourceNodeId ?? ''}`;
-}
-
-function isCommittedRefusal(answer) {
-  return answer?.committed === true &&
-    answer?.[PLACEMENT_RESULT_FIELD]?.outcome === PLACEMENT_OUTCOME.REFUSED;
 }
 
 class ReplicaPlacementOwner {
@@ -227,7 +221,8 @@ class ReplicaPlacementOwner {
     this.custody = createTenureCustody(tenure);
     this.custody.serviceWakes = {previousUpdate: null, pendingUpdates: 0, pendingRepeats: 0,
       totals: {adjacentRepeatedUpdates: 0, serviceOnlyPasses: 0, serviceOnlyEvaluations: 0,
-        repeatOnlyPasses: 0, repeatOnlyEvaluations: 0, repeatOnlyProposals: 0, repeatOnlyAdmissions: 0}};
+        repeatOnlyPasses: 0, repeatOnlyEvaluations: 0, repeatOnlyProposals: 0,
+        repeatOnlyAdmissions: 0}};
     this.adaptiveBudgetController?.resetForNewLeadership?.();
     this.attachListeners();
     if (this.workflowOwner) this.workflowOwner.repository.observeRetainedLedgerLeadershipStart();
@@ -585,13 +580,15 @@ class ReplicaPlacementOwner {
   }
 
   evaluatePassPartitions(inputsByPartition, nodeInput, saturatedTargetNodeIds,
-    storageExcludedTargets, targetCapacityRanker = null, preliminary = null, retainContext = false) {
+    storageExcludedTargets, targetCapacityRanker = null, preliminary = null,
+    retainContext = false) {
     const targetInputs = {eligibility: nodeInput.eligibility, saturatedTargetNodeIds,
       storageExcludedTargets, targetCapacityRanker};
     if (preliminary) {
       // Only this synchronous budget turn shares replica and membership inputs.
       return preliminary.map((entry) => entry.evaluation.state === PLACEMENT_DEFICIT_STATE.NONE ?
-        entry : this.evaluatePassPartition(entry.partitionId, inputsByPartition.get(entry.partitionId),
+        entry :
+        this.evaluatePassPartition(entry.partitionId, inputsByPartition.get(entry.partitionId),
           targetInputs, entry.deficitContext));
     }
     return Array.from(inputsByPartition, ([partitionId, input]) =>
@@ -628,7 +625,8 @@ class ReplicaPlacementOwner {
       return this.canAdmitRemove(candidate, pass);
     }
     if (!COPY_MOVE_TYPES.has(candidate.move.type)) return true;
-    const check = decideCopyCapacity(candidate, repairWaitingSourceNodeIds, occupancy, budgetSnapshot);
+    const check = decideCopyCapacity(candidate, repairWaitingSourceNodeIds, occupancy,
+      budgetSnapshot);
     pass.decisionDiagnostics?.recordCopyCheck(check);
     return check.allowed;
   }
@@ -638,7 +636,8 @@ class ReplicaPlacementOwner {
     const evaluations = this.evaluatePassPartitions(inputsByPartition, nodeInput,
       saturatedTargets, storageExcludedTargets,
       targetCapacityRanker, preliminary);
-    return buildPassOrderedCandidates(evaluations, inputsByPartition, nodeInput.formation, diagnostics);
+    return buildPassOrderedCandidates(evaluations, inputsByPartition, nodeInput.formation,
+      diagnostics);
   }
 
   resolveAdaptiveCopyLimitsForMove(move, nowMs = this.now()) {
@@ -720,17 +719,14 @@ class ReplicaPlacementOwner {
     return this.checkpoint(pass, CHECKPOINT.AFTER_LEDGER_HOLD_RELEASE);
   }
 
-  async admitOrderedCandidates(context) {
+  async admitUntilStopped(context, diagnostics) {
     const {ordered, busyPartitions, occupancy, saturatedTargets, pass} = context;
     const state = {incompleteCount: context.incompleteCount, copyCount: context.copyCount,
       ledgerIncomplete: context.ledgerIncomplete};
-    const diagnostics = pass.decisionDiagnostics?.snapshot;
-    if (diagnostics) diagnostics.orderedCount = ordered.length;
     for (const rawCandidate of ordered) {
       if (!this.checkpoint(pass, CHECKPOINT.CANDIDATE) ||
           shouldStopPlacementPass(rawCandidate, state)) {
-        if (diagnostics) diagnostics.stopReason = pass.stale ? 'tenure_ended' : 'ledger_exclusion';
-        break;
+        return pass.stale ? ADMISSION_STOP.TENURE_ENDED : ADMISSION_STOP.LEDGER_EXCLUSION;
       }
       if (diagnostics) diagnostics.admissionExamined++;
       const proposal = await this.proposeCandidateIsolated(rawCandidate, context);
@@ -743,14 +739,17 @@ class ReplicaPlacementOwner {
         candidate, occupancy, saturatedTargets, context.budgetSnapshot);
       if (candidate.placementClass === PLACEMENT_CLASS.LEDGER &&
           !(await this.releaseAdmittedLedgerHold(operationId, state, pass))) {
-        if (diagnostics) diagnostics.stopReason = 'ledger_hold_checkpoint';
-        break;
+        return ADMISSION_STOP.LEDGER_HOLD_CHECKPOINT;
       }
-      if (this.pendingTriggers.size > 0) {
-        if (diagnostics) diagnostics.stopReason = 'pending_trigger';
-        break;
-      }
+      if (this.pendingTriggers.size > 0) return ADMISSION_STOP.PENDING_TRIGGER;
     }
+    return ADMISSION_STOP.ORDERED_EXHAUSTED;
+  }
+  async admitOrderedCandidates(context) {
+    const diagnostics = context.pass.decisionDiagnostics?.snapshot;
+    if (diagnostics) diagnostics.orderedCount = context.ordered.length;
+    const reason = await this.admitUntilStopped(context, diagnostics);
+    if (diagnostics && reason !== ADMISSION_STOP.ORDERED_EXHAUSTED) diagnostics.stopReason = reason;
   }
 
   // The census after the custody's one leadership-start reconciliation and an
@@ -806,7 +805,8 @@ class ReplicaPlacementOwner {
     const targetCapacityRanker = buildTargetCapacityRanker(budgetSnapshot,
       nodeInput.eligibility.eligibleNodeIds);
     const prepared = this.preparePassOrderedCandidates(nodeInput, inputsByPartition,
-      saturatedTargets, effectiveExcludedTargets, targetCapacityRanker, pass.decisionDiagnostics, preliminary);
+      saturatedTargets, effectiveExcludedTargets, targetCapacityRanker, pass.decisionDiagnostics,
+      preliminary);
     recordPassEvaluations(pass, prepared);
     return this.admitOrderedCandidates({
       ordered: prepared.ordered, inputsByPartition: prepared.inputsByPartition,

@@ -266,7 +266,20 @@ const PLACEMENT_CLEARING_TRIGGER = Object.freeze({
 const PLACEMENT_OPERATION_ID_PREFIX = 'pl-';
 const PLACEMENT_OPERATION_ID_SEPARATOR = '-';
 
+// Why one pass's admission loop stopped: the stopReason of the pass's decision
+// diagnostics. ORDERED_EXHAUSTED (every ordered candidate examined) is never
+// written there; that snapshot keeps the stopReason it was created with (null).
+const PLACEMENT_ADMISSION_STOP_REASON = Object.freeze({
+  TENURE_ENDED: 'tenure_ended',
+  LEDGER_EXCLUSION: 'ledger_exclusion',
+  LEDGER_HOLD_CHECKPOINT: 'ledger_hold_checkpoint',
+  PENDING_TRIGGER: 'pending_trigger',
+  CANDIDATE_FAILURE: 'candidate_failure',
+  ORDERED_EXHAUSTED: 'ordered_exhausted',
+});
+
 export {
+  PLACEMENT_ADMISSION_STOP_REASON,
   PLACEMENT_CLASS,
   PLACEMENT_CLASS_ORDER,
   PLACEMENT_CLEARING_TRIGGER,

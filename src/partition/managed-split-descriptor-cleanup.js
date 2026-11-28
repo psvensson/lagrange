@@ -26,11 +26,15 @@ function distinctIds(ids) {
     new Set(ids).size === ids.length;
 }
 
+// Only the source partition's failure of a split before cutover authorizes
+// failing that split.
+function isPreCutoverSourceFailure(workflow, key, status) {
+  return key === SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION &&
+    SPLIT_ACK_FAILURE_STATUSES.has(status) && PRE_CUTOVER_SPLIT_STATES.has(workflow.status);
+}
+
+// The authorization such an acknowledgement carries.
 function sourceFailureAuthorization(workflow, key, status, fence) {
-  if (key !== SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION ||
-      !SPLIT_ACK_FAILURE_STATUSES.has(status) || !PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
-    return null;
-  }
   return {workflowId: workflow.workflowId, workflowAttempt: workflow.metadata.workflowAttempt,
     participantKey: key, status, fenceToken: fence};
 }
@@ -68,15 +72,23 @@ function matchesTerminalReceipt(receipt, intent) {
     isSiblingDescriptorReceiptFor(receipt, intent) : isSplitDescriptorReceiptFor(receipt, intent);
 }
 
+// Whether the descriptor-cleanup manifest a FAILED split recorded does not fit
+// this table and attempt.
+function isMalformedCleanupManifest(manifest, metadata, tableId) {
+  return !manifest || !Number.isSafeInteger(metadata.workflowAttempt) ||
+    metadata.workflowAttempt < 1 ||
+    manifest.tableId !== tableId || manifest.workflowAttempt !== metadata.workflowAttempt ||
+    !Number.isSafeInteger(manifest.decisionFence) ||
+    manifest.decisionFence < manifest.workflowAttempt ||
+    !distinctIds(manifest.pendingChildren) || !distinctIds(manifest.pendingSiblings) ||
+    !Array.isArray(manifest.receipts);
+}
+
 function cleanupRecord(metadata, tableId) {
   const manifest = metadata.splitDescriptorCleanup;
-  if (!manifest || !Number.isSafeInteger(metadata.workflowAttempt) ||
-      metadata.workflowAttempt < 1 ||
-      manifest.tableId !== tableId || manifest.workflowAttempt !== metadata.workflowAttempt ||
-      !Number.isSafeInteger(manifest.decisionFence) ||
-      manifest.decisionFence < manifest.workflowAttempt ||
-      !distinctIds(manifest.pendingChildren) || !distinctIds(manifest.pendingSiblings) ||
-      !Array.isArray(manifest.receipts)) throw invalidCleanupRecord(metadata.workflowId);
+  if (isMalformedCleanupManifest(manifest, metadata, tableId)) {
+    throw invalidCleanupRecord(metadata.workflowId);
+  }
   const remaining = terminalSubjects(metadata, tableId);
   for (const id of manifest.pendingChildren) {
     if (!metadata.splitIssuedChildren.includes(id) || !remaining.delete(id)) {
@@ -124,6 +136,7 @@ function withSplitCleanupDecision(current, next) {
 
 export {
   PRE_CUTOVER_SPLIT_STATES, SPLIT_FAILURE_PENDING, childIntent, cleanupRecord,
+  isPreCutoverSourceFailure,
   matchesTerminalReceipt, sameSourceFailure, sourceFailureAuthorization, splitCleanupRefusal,
   terminalSubjects, withSplitCleanupDecision,
 };

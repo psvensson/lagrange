@@ -1,4 +1,4 @@
-import {sameSourceFailure, sourceFailureAuthorization, splitCleanupRefusal,
+import {isPreCutoverSourceFailure, sameSourceFailure, sourceFailureAuthorization, splitCleanupRefusal,
   SPLIT_FAILURE_PENDING, withSplitCleanupDecision} from './managed-split-descriptor-cleanup.js';
 import {buildMergeSourceParticipantKey, MERGE_ACK_FAILURE_STATUSES, MERGE_ACK_STATUS} from './merge-ack-constants.js';
 import {SPLIT_PARTICIPANT_PREFIX, SPLIT_ACK_FAILURE_STATUSES, SPLIT_ACK_STATUS} from './split-ack-constants.js';
@@ -94,6 +94,17 @@ function isPhaseRegression(from, to) {
     PHASE_RANK.get(to) < PHASE_RANK.get(from);
 }
 
+// A recorded split source failure holds the record: only the transition to
+// FAILED that carries that same failure changes its status or issued children.
+function isHeldBySplitSourceFailure(workflow, next) {
+  const failure = workflow?.metadata?.splitSourceFailure;
+  return Boolean(failure && workflow.status !== STATE.FAILED &&
+    (next.status !== workflow.status ||
+      next.metadata.splitIssuedChildren !== workflow.metadata.splitIssuedChildren) &&
+    !(next.status === STATE.FAILED &&
+      sameSourceFailure(failure, next.metadata.failure?.sourceFailure)));
+}
+
 /**
  * The one phase guard every change passes (the coordinator wraps each
  * change it hands the store with it, whichever entry it came from): a change
@@ -106,12 +117,7 @@ function phaseMonotonicChange(change) {
   return (workflow, stored) => {
     const next = change(workflow, stored);
     if (isSentinelAnswer(next)) return next;
-    const failure = workflow?.metadata?.splitSourceFailure;
-    if (failure && workflow.status !== STATE.FAILED &&
-        (next.status !== workflow.status ||
-          next.metadata.splitIssuedChildren !== workflow.metadata.splitIssuedChildren) &&
-        !(next.status === STATE.FAILED &&
-          sameSourceFailure(failure, next.metadata.failure?.sourceFailure))) {
+    if (isHeldBySplitSourceFailure(workflow, next)) {
       return refuseRecordChange(SPLIT_FAILURE_PENDING);
     }
     if (!isCutoverRegression(stored?.state ?? null, next.status)) {
@@ -205,6 +211,22 @@ function isRecordAsRead(stored, read) {
     stored.bytes.generation === read.generation;
 }
 
+// The registration as the claim it is: the attempt it mints, a fence above
+// every earlier fence and attempt, and this owner's lease.
+function claimedRegistration(owner, registration, stored) {
+  const attempt = stored.generation + 1;
+  return {...registration,
+    metadata: {...(registration.metadata || {}),
+      ...(registration.metadata?.sourcePartitionId ?
+        {splitIssuedChildren: [], splitIssuedSiblings: [],
+          splitDescriptorBaseVersion: stored.row?.active_partition_version} : {}),
+      [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: attempt},
+    fenceToken: Math.max((stored.claim.fenceToken ?? 0) + 1, attempt),
+    workflowOwnerId: owner.workflowOwnerId,
+    leaseExpiresAt: owner.now() + owner.workflowLeaseMs,
+    attemptCount: 1};
+}
+
 /**
  * Claim before register (owner ruling 2026-10-05): the registration IS the
  * claim. Its content was derived from the record the caller read, so its
@@ -244,17 +266,7 @@ function registrationChange(owner, registration, read, revalidate) {
       return refuseRecordChange(RECORD_CHANGE_REFUSAL.REGISTRATION_INPUT_MOVED,
         {input: movedInput});
     }
-    const attempt = stored.generation + 1;
-    return {...registration,
-      metadata: {...(registration.metadata || {}),
-        ...(registration.metadata?.sourcePartitionId ?
-          {splitIssuedChildren: [], splitIssuedSiblings: [],
-            splitDescriptorBaseVersion: stored.row?.active_partition_version} : {}),
-        [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: attempt},
-      fenceToken: Math.max((stored.claim.fenceToken ?? 0) + 1, attempt),
-      workflowOwnerId: owner.workflowOwnerId,
-      leaseExpiresAt: owner.now() + owner.workflowLeaseMs,
-      attemptCount: 1};
+    return claimedRegistration(owner, registration, stored);
   };
 }
 
@@ -373,6 +385,36 @@ function transitionRefusalOf(owner, workflow, transition, isTerminal) {
   return null;
 }
 
+// The record's participant as an accepted acknowledgement leaves it.
+function acknowledgedParticipant(participant, status, now, fence, checkpoint) {
+  return {...participant, status, acknowledgedAt: now,
+    updatedAt: now,
+    ...(fence !== undefined && fence !== null ? {fenceToken: fence} : {}),
+    ...(checkpoint !== undefined && checkpoint !== null ?
+      {checkpoint: mergeParticipantCheckpoint(participant.checkpoint, checkpoint)} : {})};
+}
+
+// The record metadata an accepted acknowledgement leaves: the source's terminal
+// cleanup releases its mirror custody grants, and a source failure before
+// cutover records the authorization it carries.
+function acknowledgedMetadata(workflow, key, status, fence) {
+  const metadata = workflow.metadata;
+  const splitDone = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED &&
+    workflow.status === STATE.SPLIT_CUTOVER_ACTIVE &&
+    key === SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION;
+  const mergeDone = status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED &&
+    workflow.status === STATE.MERGE_CUTOVER_ACTIVE;
+  const grants = metadata.mirrorCustodyGrants;
+  const nextMetadata = grants && (splitDone || mergeDone) ? {...metadata,
+    mirrorCustodyGrants: grants.map((item) => (splitDone ?
+      metadata.sourcePartitionId === item.partitionId :
+      buildMergeSourceParticipantKey(item.partitionId) === key) ?
+      {...item, release: true} : item)} : metadata;
+  return isPreCutoverSourceFailure(workflow, key, status) ? {...nextMetadata,
+    splitSourceFailure: metadata.splitSourceFailure ??
+      sourceFailureAuthorization(workflow, key, status, fence)} : nextMetadata;
+}
+
 /**
  * A participant acknowledgement (the owner's own, or a non-owner's): the
  * participant must exist on the RECORD, and the fence, duplicate and graph
@@ -404,31 +446,11 @@ function acknowledgementChange(owner, ack, isAllowed) {
           attempt: ack[PARTICIPANT_ACK_FIELD.ATTEMPT] ?? null});
     }
     const now = owner.now();
-    const acknowledged = {...participant, status, acknowledgedAt: now,
-      updatedAt: now,
-      ...(fence !== undefined && fence !== null ? {fenceToken: fence} : {}),
-      ...(checkpoint !== undefined && checkpoint !== null ?
-        {checkpoint: mergeParticipantCheckpoint(participant.checkpoint, checkpoint)} : {})};
+    const acknowledged = acknowledgedParticipant(participant, status, now, fence, checkpoint);
     const participants = new Map(workflow.participants);
     participants.set(key, acknowledged);
-    const metadata = workflow.metadata;
-    const splitDone = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED &&
-      workflow.status === STATE.SPLIT_CUTOVER_ACTIVE &&
-      key === SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION;
-    const mergeDone = status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED &&
-      workflow.status === STATE.MERGE_CUTOVER_ACTIVE;
-    const grants = metadata.mirrorCustodyGrants;
-    const nextMetadata = grants && (splitDone || mergeDone) ? {...metadata,
-      mirrorCustodyGrants: grants.map((item) => (splitDone ?
-        metadata.sourcePartitionId === item.partitionId :
-        buildMergeSourceParticipantKey(item.partitionId) === key) ?
-        {...item, release: true} : item)} : metadata;
-    const failure = sourceFailureAuthorization(workflow, key, status, fence);
     return renewLeaseRidingWrite(owner, {...workflow, participants,
-      metadata: failure ?
-        {...nextMetadata, splitSourceFailure: metadata.splitSourceFailure ?? failure} :
-        nextMetadata,
-      updatedAt: now});
+      metadata: acknowledgedMetadata(workflow, key, status, fence), updatedAt: now});
   };
 }
 
@@ -588,16 +610,22 @@ function isStaleParticipantFence(participant, fence) {
     fence < participant.fenceToken;
 }
 
+// An acknowledgement that may end the source is stale unless it carries the
+// record's and the participant's current fence.
+function endsSourceAtStaleFence(participant, status, fence, workflowFence) {
+  const mayEndSource = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED ||
+    status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED ||
+    SPLIT_ACK_FAILURE_STATUSES.has(status) || MERGE_ACK_FAILURE_STATUSES.has(status);
+  return mayEndSource && (!Number.isSafeInteger(fence) || fence <= 0 ||
+    fence !== workflowFence || fence !== participant.fenceToken);
+}
+
 function acknowledgementRejectionOf(participant, key, status, fence,
   isAllowed, checkpoint, workflowFence) {
   if (!participant) {
     return PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND;
   }
-  const mayEndSource = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED ||
-    status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED ||
-    SPLIT_ACK_FAILURE_STATUSES.has(status) || MERGE_ACK_FAILURE_STATUSES.has(status);
-  if (mayEndSource && (!Number.isSafeInteger(fence) || fence <= 0 ||
-      fence !== workflowFence || fence !== participant.fenceToken)) {
+  if (endsSourceAtStaleFence(participant, status, fence, workflowFence)) {
     return PARTICIPANT_ACK_RESULT.STALE_FENCE;
   }
   if (isStaleParticipantFence(participant, fence)) {

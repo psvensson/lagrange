@@ -22,18 +22,29 @@ function terminalGrantForSource(row, partitionId) {
 }
 
 const pending = new WeakMap();
+const LOG_MIRROR_RELEASE_AWAITING_REDELIVERY = 'Source mirror release awaiting redelivery';
+
+function mirrorWorkflowOwnerOf(service, family) {
+  return family === WORKFLOW_FAMILY.SPLIT ? service.sqlQueryEngine?.managedSplitWorkflow :
+    service.sqlQueryEngine?.managedMergeWorkflow;
+}
+
+// No grant of the record at the custody's fence, or a durable pin of this
+// partition that names another custody.
+function isGrantOutsideCustody(grant, fence, pin, metadata) {
+  return !grant.grants.some((item) => item.fence === fence) ||
+    (pin && !sameMirrorCustody(pin, metadata));
+}
 
 async function releaseTerminalGrant(service, pin, family) {
-  const owner = family === WORKFLOW_FAMILY.SPLIT ? service.sqlQueryEngine?.managedSplitWorkflow :
-    service.sqlQueryEngine?.managedMergeWorkflow;
+  const owner = mirrorWorkflowOwnerOf(service, family);
   if (!owner) return;
   const row = await authoritativeRecordOf(owner, service.tableId);
   const grant = terminalGrantForSource(row, service.partitionId);
   if (row?.table_id !== service.tableId || grant?.family !== family) return;
   const fence = pin?.workflowFenceToken ?? grant.grants[0].fence;
   const metadata = {...grant.metadata, workflowFenceToken: fence, family};
-  if (!grant.grants.some((item) => item.fence === fence) ||
-      (pin && !sameMirrorCustody(pin, metadata))) return;
+  if (isGrantOutsideCustody(grant, fence, pin, metadata)) return;
   const receipt = await releaseSourceMirrorRetentionCustody(service, metadata, {
     family, barrierIndex: pin?.barrierIndex ?? 0,
   });
@@ -41,10 +52,16 @@ async function releaseTerminalGrant(service, pin, family) {
   return true;
 }
 
+// The TABLES projection of the partition's table: only a wake hint. The
+// record owner, which releaseTerminalGrant re-reads, decides every release.
+function projectedTableRowOf(service) {
+  return service.systemTableCache?.get?.(TABLES.TABLES, service.tableId);
+}
+
 export async function reconcileFailedMirrorCustody(service) {
   if (pending.has(service)) return pending.get(service);
   const pin = readDurableMirrorRetentionCustodyIn(service.db);
-  const row = service.systemTableCache?.get?.(TABLES.TABLES, service.tableId);
+  const row = projectedTableRowOf(service);
   const family = pin?.family ?? terminalGrantForSource(row, service.partitionId)?.family;
   if (!family) return;
   const work = releaseTerminalGrant(service, pin, family).finally(() => pending.delete(service));
@@ -60,24 +77,30 @@ export function isStoppedSplitWorker(handle) {
     handle.terminal === true && handle.quiesced === true;
 }
 
+// No mirror worker runs here (a stopped split worker counts as none) while the
+// record still grants this partition live custody at the workflow's fence.
+function isLiveCustodyUnworked(service, metadata) {
+  return (!service.splitReplication || isStoppedSplitWorker(service.splitReplication)) &&
+    !service.mergeReplication &&
+    metadata?.mirrorCustodyGrants?.some((grant) => grant.partitionId === service.partitionId &&
+      grant.fence === metadata.workflowFenceToken && !grant.release) &&
+    !metadata.mirrorExecutionEnded;
+}
+
 // A terminal row is held by the record owner until all grants have a durable
 // release acknowledgement. Its projection is only a wake hint.
 export function redriveFailedMirrorRelease(service) {
   if (!service.isLeader || service.isShutdown || pending.has(service)) return;
-  const row = service.systemTableCache?.get?.(TABLES.TABLES, service.tableId);
+  const row = projectedTableRowOf(service);
   if (!terminalGrantForSource(row, service.partitionId)) {
     const transition = parseTablePartitionTransition(row);
     const metadata = transition?.metadata;
-    if ((!service.splitReplication || isStoppedSplitWorker(service.splitReplication)) &&
-        !service.mergeReplication &&
-        metadata?.mirrorCustodyGrants?.some((grant) => grant.partitionId === service.partitionId &&
-          grant.fence === metadata.workflowFenceToken && !grant.release) &&
-          !metadata.mirrorExecutionEnded) {
+    if (isLiveCustodyUnworked(service, metadata)) {
       service.resumeDurableMirrorReplicationWorkers();
     }
     return;
   }
   reconcileFailedMirrorCustody(service).catch((error) => service.logger.warn(
-    'Source mirror release awaiting redelivery', {partitionId: service.partitionId, error},
+    LOG_MIRROR_RELEASE_AWAITING_REDELIVERY, {partitionId: service.partitionId, error},
   ));
 }

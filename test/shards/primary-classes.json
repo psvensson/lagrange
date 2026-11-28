@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2473,
+    "unit": 2475,
     "integration": 137,
     "bootstrap": 234,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2851,
-  "digest": "fnv1a32-a3055d12",
+  "censusSize": 2853,
+  "digest": "fnv1a32-563aab57",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1757,6 +1757,7 @@
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "unit",
     "test/query/schema-provisioning-job-owner.test.js": "unit",
     "test/query/schema-provisioning-native-admission.test.js": "unit",
+    "test/query/schema-provisioning-retry-row-read.test.js": "unit",
     "test/query/schema-provisioning-transient-collision.test.js": "unit",
     "test/query/select-no-from.test.js": "unit",
     "test/query/self-published-leader-term-fenced-peer-probing.test.js": "unit",
@@ -2215,6 +2216,7 @@
     "test/rebalancer/replica-operations-single-writer.test.js": "unit",
     "test/rebalancer/replica-placement-adaptive-budget.test.js": "unit",
     "test/rebalancer/replica-placement-cure-policy.test.js": "unit",
+    "test/rebalancer/replica-placement-owner-admission-stop-reason.test.js": "unit",
     "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js": "unit",
     "test/rebalancer/replica-placement-owner-blocked-attempt.test.js": "unit",
     "test/rebalancer/replica-placement-owner-blocked-release.test.js": "unit",

@@ -12,8 +12,8 @@
     "distributed-harness": 226,
     "examples-e2e": 8,
     "pgwire-compat": 28,
-    "placement-rebalance": 313,
-    "query-sql": 231,
+    "placement-rebalance": 314,
+    "query-sql": 232,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2851,
-  "digest": "fnv1a32-8b03b849",
+  "censusSize": 2853,
+  "digest": "fnv1a32-aadebfd8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9fba03c6",
+  "observationDigest": "fnv1a32-2f8595ca",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1776,6 +1776,7 @@
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "query-sql",
     "test/query/schema-provisioning-job-owner.test.js": "query-sql",
     "test/query/schema-provisioning-native-admission.test.js": "query-sql",
+    "test/query/schema-provisioning-retry-row-read.test.js": "query-sql",
     "test/query/schema-provisioning-transient-collision.test.js": "query-sql",
     "test/query/select-no-from.test.js": "query-sql",
     "test/query/self-published-leader-term-fenced-peer-probing.test.js": "query-sql",
@@ -2234,6 +2235,7 @@
     "test/rebalancer/replica-operations-single-writer.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-adaptive-budget.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-cure-policy.test.js": "placement-rebalance",
+    "test/rebalancer/replica-placement-owner-admission-stop-reason.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-owner-blocked-attempt.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-owner-blocked-release.test.js": "placement-rebalance",
@@ -19034,6 +19036,14 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/query/schema-provisioning-retry-row-read.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/query/schema-provisioning-intent.js",
+        "src/query/schema-provisioning-job-constants.js",
+        "test/query/schema-provisioning-job-test-support.js"
+      ]
+    },
     "test/query/schema-provisioning-transient-collision.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
@@ -24961,6 +24971,11 @@
         "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
         "src/rebalancer/replica-placement-owner-capacity.js",
         "src/rebalancer/replica-placement-owner-constants.js"
+      ]
+    },
+    "test/rebalancer/replica-placement-owner-admission-stop-reason.test.js": {
+      "files": [
+        "src/rebalancer/replica-placement-owner-proposal-knowledge.js"
       ]
     },
     "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js": {

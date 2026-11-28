@@ -18,7 +18,7 @@
 //   reconciliation; the pass aborts.
 import {PLACEMENT_RESULT_FIELD} from '../partition/partition-placement-admission-constants.js';
 import {isWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
-import {PLACEMENT_OUTCOME} from './replica-placement-owner-constants.js';
+import {PLACEMENT_ADMISSION_STOP_REASON, PLACEMENT_OUTCOME} from './replica-placement-owner-constants.js';
 import {
   recordAdmittedOperation, recordCandidateFailure, recordLocalFailureAfterAdmission,
   recordUncertainCandidate,
@@ -64,6 +64,12 @@ function proposalKnowledgeOf(progress) {
     PROPOSAL_KNOWLEDGE.ADMITTED : PROPOSAL_KNOWLEDGE.REFUSED;
 }
 
+// An answer the ledger committed as a refusal (a definite non-admission).
+function isCommittedRefusal(answer) {
+  return answer?.committed === true &&
+    answer?.[PLACEMENT_RESULT_FIELD]?.outcome === PLACEMENT_OUTCOME.REFUSED;
+}
+
 function passAbortOf(partitionId, knowledge, cause) {
   const error = new Error(`Replica placement pass aborted: candidate ${partitionId} ` +
     `${knowledge}: ${cause?.message ?? String(cause)}`, {cause});
@@ -96,7 +102,10 @@ function classifyCandidateFailure(pass, partitionId, progress, error) {
   } else {
     recordUncertainCandidate(pass, partitionId, error);
   }
-  if (pass.decisionDiagnostics) pass.decisionDiagnostics.snapshot.stopReason = 'candidate_failure';
+  if (pass.decisionDiagnostics) {
+    pass.decisionDiagnostics.snapshot.stopReason =
+      PLACEMENT_ADMISSION_STOP_REASON.CANDIDATE_FAILURE;
+  }
   throw passAbortOf(partitionId, knowledge, error);
 }
 
@@ -105,6 +114,7 @@ export {
   REPLICA_PLACEMENT_PASS_ABORTED,
   classifyCandidateFailure,
   createProposalProgress,
+  isCommittedRefusal,
   recordProposalAnswer,
   recordProposalHandover,
 };

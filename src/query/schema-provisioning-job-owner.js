@@ -79,6 +79,7 @@ function isTerminalProvisioningSuccess(result) {
 }
 const SCHEMA_PROVISIONING_FAILED_MESSAGE = 'Schema provisioning failed';
 const SCHEMA_PROVISIONING_FAILED_CODE = 'SCHEMA_PROVISIONING_FAILED';
+const RETRY_ROW_READ = Object.freeze({FOUND: 'found', ABSENT: 'absent', NOT_RECOVERY_LEADER: 'not_recovery_leader'});
 
 function createIntentConflictError(intent) {
   const error = new Error(
@@ -393,11 +394,12 @@ class SchemaProvisioningJobOwner {
   }
 
   async readRetryRow(intent) {
-    if (!intent.recoveryPartitionId) return this.repository.findByTableIdentity(intent.tableIdentityKey);
-    const leader = this.recoveryLeaders().find((service) => service.partitionId === intent.recoveryPartitionId);
-    // Leadership activation always inventories both nonterminal statuses.
-    if (!leader) return null;
-    return this.repository.findRecoveryRow(leader, intent.tableIdentityKey);
+    const leader = intent.recoveryPartitionId ? this.recoveryLeaders()
+      .find((service) => service.partitionId === intent.recoveryPartitionId) : null;
+    if (intent.recoveryPartitionId && !leader) return {state: RETRY_ROW_READ.NOT_RECOVERY_LEADER}; // its leader's discovery inventories every tenure
+    const row = await (leader ? this.repository.findRecoveryRow(leader, intent.tableIdentityKey) :
+      this.repository.findByTableIdentity(intent.tableIdentityKey));
+    return row ? {state: RETRY_ROW_READ.FOUND, row} : {state: RETRY_ROW_READ.ABSENT};
   }
 
   scheduleRetry(intent, executor, notBeforeMs = 0) {
@@ -425,21 +427,18 @@ class SchemaProvisioningJobOwner {
       const execution = this.workflowCoordinator.runExclusive(
         intent.ownerKey,
         async () => {
-          let row;
+          let read;
           try {
-            row = await this.readRetryRow(intent);
+            read = await this.readRetryRow(intent);
           } catch (error) {
             this.scheduleRetry(intent, executor);
             throw error;
           }
           if (this.shuttingDown) return;
-          if (!row) {
-            if (!intent.recoveryPartitionId || this.recoveryLeaders().some(
-              (leader) => leader.partitionId === intent.recoveryPartitionId)) this.scheduleRetry(intent, executor);
-            return;
-          }
-          if (!matchesIntent(row, intent)) throw createIntentConflictError(intent);
-          this.refreshWorkflowFromRow(row);
+          if (read.state === RETRY_ROW_READ.ABSENT) this.scheduleRetry(intent, executor);
+          if (read.state !== RETRY_ROW_READ.FOUND) return;
+          if (!matchesIntent(read.row, intent)) throw createIntentConflictError(intent);
+          this.refreshWorkflowFromRow(read.row);
           return this.runJob(intent, executor, {background: true});
         },
       );
@@ -666,20 +665,17 @@ class SchemaProvisioningJobOwner {
   async reconcileContendedJob(intent, executor) {
     const current = this.workflowCoordinator.requireWorkflow(intent.workflowId);
     if (this.shuttingDown) return this.buildOutcome(current);
-    let row;
+    let read;
     try {
-      row = await this.readRetryRow(intent);
+      read = await this.readRetryRow(intent);
     } catch (error) {
       this.scheduleRetry(intent, executor);
       throw error;
     }
-    if (!row) {
-      if (!intent.recoveryPartitionId || this.recoveryLeaders().some(
-        (leader) => leader.partitionId === intent.recoveryPartitionId)) this.scheduleRetry(intent, executor);
-      return this.buildOutcome(current);
-    }
-    if (!matchesIntent(row, intent)) throw createIntentConflictError(intent);
-    const workflow = this.refreshWorkflowFromRow(row);
+    if (read.state === RETRY_ROW_READ.ABSENT) this.scheduleRetry(intent, executor);
+    if (read.state !== RETRY_ROW_READ.FOUND) return this.buildOutcome(current);
+    if (!matchesIntent(read.row, intent)) throw createIntentConflictError(intent);
+    const workflow = this.refreshWorkflowFromRow(read.row);
     if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
       this.clearScheduledRetry(intent.workflowId);
       this.retryCompletionHandlers.delete(intent.workflowId);
@@ -829,7 +825,9 @@ class SchemaProvisioningJobOwner {
       {tableName: datasetName}, {globalIndex: {generation}});
     for (const leader of this.recoveryLeaders()) {
       const row = await this.repository.findRecoveryRow(leader, tableIdentityKey);
-      if (row?.status === SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED) return recoverIntentFromRow(row);
+      if (row?.status === SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED) {
+        return recoverIntentFromRow(row);
+      }
     }
     return null;
   }
@@ -890,7 +888,9 @@ class SchemaProvisioningJobOwner {
       this.indexRecovery = Promise.resolve().then(() =>
         this.shuttingDown ? [] : this.onResumeSucceededGlobalIndexIntents())
         .catch((error) => this.logger?.warn?.(QUERY_LOG_MSG.SCHEMA_PROVISIONING_RECOVERY_DEFERRED,
-          {error: error.message})).finally(() => { this.indexRecovery = null; });
+          {error: error.message})).finally(() => {
+          this.indexRecovery = null;
+        });
     }
     let more = false;
     let failure;
