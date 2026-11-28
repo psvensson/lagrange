@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "transaction-redundant-progress-writes",
+  "epic": "scenario-a-measured-latency-and-efficiency",
+  "statement": "Remove the two durable progress writes whose information is retained elsewhere from every write transaction's path, at their single producers: (a) the ACTIVE row on sql_transaction_participants written at the first write to each table (the manifest on sql_transactions, appended before any participant request, is the admitted set; the participant's in-memory ACTIVE transition stays), and (b) the status = PREPARED update on sql_transactions between the PREPARED participant rows and the decision (recovery restores a FROZEN undecided row as PREPARING and decides from the participant rows' evidence). The live recovery sweep chooses the commit protocol for an undecided live transaction from the commit-point fact or COMMITTING instead of the PREPARED label. A write transaction then submits 5 + 3P coordinator-table writes on COMMIT (from 6 + 4P) and 5 + 2P on ROLLBACK (from 5 + 3P), and waits for up to P + 1 fewer consensus rounds; every crash point still ends in exactly one recorded outcome applied by every participant, with no orphaned participant session.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/transaction-redundant-progress-writes-guard.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "manifest-first-admission",
+      "statement": "The exact OPEN-row manifest compare-and-set stays the first durable act for every participant and precedes its BEGIN, QUERY or write; recovery derives the admitted set from the manifest alone and reads a missing participant row as a member without evidence."
+    },
+    {
+      "id": "prepare-evidence-before-decision",
+      "statement": "Every participant's PREPARED row with prepared_digest, prepare_index and prepare_term is durably persisted before a COMMIT decision is recorded (sealed constraints preserve-two-phase-decision-protocol and preserve-cas-and-prepared-evidence-authority stay in force)."
+    },
+    {
+      "id": "in-memory-begin-gate",
+      "statement": "A participant already begun in a transaction is never begun again: the in-memory participant transition to ACTIVE is kept when its durable row is removed."
+    },
+    {
+      "id": "sweep-routes-on-commit-point",
+      "statement": "The live recovery sweep continues the commit protocol for an undecided transaction only when its commit point is reached or its status is COMMITTING, and otherwise runs the rollback protocol; no decision is inferred from a progress label."
+    },
+    {
+      "id": "single-path-no-compatibility",
+      "statement": "Each write is deleted at its one producer; no flag, mode, alias, elided placeholder write or second path is introduced. Readers of durable rows keep accepting rows that earlier builds wrote (the release census contract tx1-query-set-v1 is not changed)."
+    },
+    {
+      "id": "explicit-supersession",
+      "statement": "Every changed assertion of a closed or open quest's witness or probe (fast-path guard priority 1 and its witness tests, the TX1 leg-a and restart hold points, the tx-metadata counts, the participant-set overlap and Finding 1B witnesses) is named in a supersession finding in this quest with the original record; closed records stay untouched."
+    },
+    {
+      "id": "recovery-regression-net",
+      "statement": "The recovery witnesses in test/query/transaction-redundant-progress-writes-recovery.test.js and the guard's preservation properties stay green and are not weakened."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Every source attempt requires independent verification newer than the attempt, recorded with verifier subagent:<id>, before landing."
+    }
+  ]
+}
