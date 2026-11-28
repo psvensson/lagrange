@@ -14,12 +14,17 @@ function splitDescriptorCommitFields(answer) {
   return {splitDescriptorReceipt, committed, logIndex, term};
 }
 
+// The fields of the destination's typed refusal that a one-target descriptor
+// answer keeps.
+const DESTINATION_REFUSAL_FIELDS = Object.freeze(['error', 'errorCode', 'failureCode', 'retryable',
+  'deferRetry']);
+
 // A one-target descriptor command can return the destination's typed refusal.
 // Keep the surrounding distributed participant diagnostics with that answer.
 function splitDescriptorFailureFields(answer) {
   if (typeof answer?.failureCode !== 'string' || typeof answer.errorCode !== 'string') return {};
   const fields = {};
-  for (const key of ['error', 'errorCode', 'failureCode', 'retryable', 'deferRetry']) {
+  for (const key of DESTINATION_REFUSAL_FIELDS) {
     if (Object.hasOwn(answer, key)) fields[key] = answer[key];
   }
   return fields;

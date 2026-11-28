@@ -59,6 +59,12 @@ function enforcementResult(state, columns = [], trigger = null, missingColumns =
     missingColumns: Object.freeze(missingColumns)});
 }
 
+// The coordinator ledger's schema inventory: its enforcement state and the
+// table's columns by name (empty for no table, null when it could not be read).
+function transactionSchemaInventory(enforcement, byName) {
+  return {enforcement, byName};
+}
+
 function readTransactionSchemaInventory(database) {
   try {
     const columns = database.prepare(SCHEMA_SQL).all();
@@ -67,19 +73,21 @@ function readTransactionSchemaInventory(database) {
       !byName.has(column.name)).map((column) => column.name);
     const trigger = database.prepare(TRIGGER_SQL).get('trigger', TRIGGER_NAME,
       TABLES.SQL_TRANSACTIONS)?.sql ?? null;
-    if (columns.length === 0) return {enforcement: enforcementResult(STATE.UNAVAILABLE), byName};
+    if (columns.length === 0) {
+      return transactionSchemaInventory(enforcementResult(STATE.UNAVAILABLE), byName);
+    }
     const shapeValid = byName.get('transaction_id')?.pk === 1 &&
       SQL_TRANSACTIONS_SCHEMA.columns.every((column) => !byName.has(column.name) ||
         byName.get(column.name).type.toUpperCase() === column.type.toUpperCase());
     if (!shapeValid || missing.length > 0 ||
         (trigger !== null && trigger !== INITIAL_ROW_TRIGGER_SQL)) {
-      return {enforcement: enforcementResult(STATE.INCOMPATIBLE, columns, trigger, missing),
-        byName};
+      return transactionSchemaInventory(
+        enforcementResult(STATE.INCOMPATIBLE, columns, trigger, missing), byName);
     }
-    return {enforcement: enforcementResult(trigger === INITIAL_ROW_TRIGGER_SQL ?
-      STATE.ENFORCED : STATE.REQUIRED, columns, trigger, missing), byName};
+    return transactionSchemaInventory(enforcementResult(trigger === INITIAL_ROW_TRIGGER_SQL ?
+      STATE.ENFORCED : STATE.REQUIRED, columns, trigger, missing), byName);
   } catch {
-    return {enforcement: enforcementResult(STATE.UNAVAILABLE), byName: null};
+    return transactionSchemaInventory(enforcementResult(STATE.UNAVAILABLE), null);
   }
 }
 

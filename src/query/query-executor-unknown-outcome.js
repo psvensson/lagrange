@@ -195,6 +195,10 @@ function createUnknownOutcomeRedelivery({
   };
   const isUnresolved = () => !forRead && !state.settled &&
     state.unknownAnswers + state.lostAnswers > 0;
+  // The entry an unresolved write is known by: the caller's, else the
+  // answered one, else the submitted one.
+  const unresolvedEntryId = () =>
+    entryId || state.answeredEntryId || state.submittedEntryId || null;
   return Object.freeze({
     recordDelivery(submittedEntryId) {
       state.submittedEntryId = submittedEntryId;
@@ -281,7 +285,7 @@ function createUnknownOutcomeRedelivery({
         return failureResult;
       }
       const spentWait = buildSpentWait(state, {
-        entryId: entryId || state.answeredEntryId || state.submittedEntryId || null,
+        entryId: unresolvedEntryId(),
         nowMs: now(),
       });
       reportSpentWaitOnce(state, logger, failureResult, spentWait);

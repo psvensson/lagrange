@@ -263,7 +263,21 @@ function createServeRefreshFixture(t, gateway) {
   return {clock, cache, state, readiness, engine};
 }
 
+// The CREATE TABLE AST of the schema-job tests: one TEXT primary key column,
+// plus an optional extra column.
+function createAst(extraColumn = null) {
+  return {
+    tableName: 'users',
+    columns: [
+      {name: 'id', dataType: {name: 'TEXT'}, primaryKey: true},
+      ...(extraColumn ? [extraColumn] : []),
+    ],
+    primaryKey: ['id'],
+    ifNotExists: false,
+  };
+}
+
 export {
-  createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
+  createAst, createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
   createServeRefreshClock, serveRefreshPublication,
 };

@@ -14,6 +14,17 @@ const SELECT_BY_IDENTITY =
   `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
   'WHERE table_identity_key = ? LIMIT 1';
 const RECOVERY_PAGE_SIZE = 32;
+// A recovery pass reads one status page by page. The existing (status,
+// updated_at) SQLite index ends in rowid; a page after the first seeks
+// backwards from the previous page's last row, so later appends cannot
+// perpetually extend a pass.
+const RECOVERY_PAGE_SQL = Object.freeze({
+  FIRST: `SELECT *, rowid AS recovery_rowid FROM ${TABLES.SCHEMA_OPERATIONS} ` +
+    `WHERE status = ? ORDER BY updated_at DESC, rowid DESC LIMIT ${RECOVERY_PAGE_SIZE}`,
+  AFTER_CURSOR: `SELECT *, rowid AS recovery_rowid FROM ${TABLES.SCHEMA_OPERATIONS} ` +
+    'WHERE status = ? AND (updated_at, rowid) < (?, ?) ' +
+    `ORDER BY updated_at DESC, rowid DESC LIMIT ${RECOVERY_PAGE_SIZE}`,
+});
 const WRITE_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
   deliveryPriority: 'critical',
@@ -172,15 +183,35 @@ function canPersistWorkflowCandidate(repository, candidate) {
     typeof repository.gateway?.submitMutation === 'function';
 }
 
-function isMatchingPersistedWorkflowRow(observed, current, nextWorkflow, nextRowVersion) {
-  return Boolean(observed) &&
-    observed.job_id === current.job_id && observed.workflow_id === nextWorkflow.workflowId &&
-    observed.owner_key === nextWorkflow.ownerKey && observed.intent_hash === current.intent_hash &&
-    observed.status === nextWorkflow.status && observed.current_step === nextWorkflow.step &&
+// The observed row is this job's row: the same job, workflow, owner key and intent.
+function isSameWorkflowJobRow(observed, current, nextWorkflow) {
+  return observed.job_id === current.job_id && observed.workflow_id === nextWorkflow.workflowId &&
+    observed.owner_key === nextWorkflow.ownerKey && observed.intent_hash === current.intent_hash;
+}
+
+// The observed row records exactly the transition this write proposed.
+function recordsProposedTransition(observed, nextWorkflow, nextRowVersion) {
+  return observed.status === nextWorkflow.status && observed.current_step === nextWorkflow.step &&
     normalizeNumber(observed.workflow_lease_expires_at) === nextWorkflow.leaseExpiresAt &&
     normalizeNumber(observed.row_version) === nextRowVersion &&
     normalizeNumber(observed.workflow_fence_token) === (nextWorkflow.fenceToken ?? 0) &&
     (observed.workflow_owner_id ?? null) === (nextWorkflow.workflowOwnerId ?? null);
+}
+
+function isMatchingPersistedWorkflowRow(observed, current, nextWorkflow, nextRowVersion) {
+  return Boolean(observed) &&
+    isSameWorkflowJobRow(observed, current, nextWorkflow) &&
+    recordsProposedTransition(observed, nextWorkflow, nextRowVersion);
+}
+
+// A refusal the owner must surface, never treat as a write that did not apply.
+function isTerminalWorkflowWriteRefusal(result) {
+  return result?.success === false && isTerminalSchemaWriteRejection(result);
+}
+
+// The write did not apply this workflow's one row.
+function isUnappliedWorkflowWrite(result, affectedRows) {
+  return result?.success === false || affectedRows !== 1;
 }
 
 function buildWorkflowMutationWhere(candidate, previousWorkflow, context) {
@@ -264,11 +295,11 @@ class SchemaProvisioningJobRepository {
       ),
       data,
     }, WRITE_OPTIONS);
-    if (result?.success === false && isTerminalSchemaWriteRejection(result)) {
+    if (isTerminalWorkflowWriteRefusal(result)) {
       throw Object.assign(new Error(result.error, {cause: result}), result);
     }
     const affectedRows = resolveAffectedRows(result);
-    if (result?.success === false || affectedRows !== 1) {
+    if (isUnappliedWorkflowWrite(result, affectedRows)) {
       const observed = current?.table_identity_key ?
         await this.findByTableIdentity(current.table_identity_key).catch(() => null) :
         null;
@@ -296,11 +327,7 @@ class SchemaProvisioningJobRepository {
   }
 
   async listRecoveryPage(leader, status, cursor) {
-    // The existing (status, updated_at) SQLite index ends in rowid. Seek
-    // backwards so later appends cannot perpetually extend a pass.
-    const sql = `SELECT *, rowid AS recovery_rowid FROM ${TABLES.SCHEMA_OPERATIONS} ` +
-      'WHERE status = ? ' + (cursor ? 'AND (updated_at, rowid) < (?, ?) ' : '') +
-      `ORDER BY updated_at DESC, rowid DESC LIMIT ${RECOVERY_PAGE_SIZE}`;
+    const sql = cursor ? RECOVERY_PAGE_SQL.AFTER_CURSOR : RECOVERY_PAGE_SQL.FIRST;
     const params = cursor ? [status, cursor.updatedAt, cursor.rowId] : [status];
     const result = await leader.executeLocalQuery(sql, params);
     if (result?.rowSetComplete !== true || result.partitionId !== leader.partitionId) {

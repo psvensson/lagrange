@@ -644,19 +644,22 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
     return buildAcceptedCompletion(ticket, delivery, redirectedFromAddress, routes);
   }
 
+  function completionRouteCurrency(deliveryStrictRouteCurrency) {
+    return typeof deliveryStrictRouteCurrency === 'boolean' ?
+      (forRead && deliveryStrictRouteCurrency) : strictRouteCurrency;
+  }
+
   function completeDelivery({
     ticket,
     delivery,
-    error = null,
-    redirectedFromAddress = undefined,
-    strictRouteCurrency: deliveryStrictRouteCurrency = undefined,
+    error,
+    redirectedFromAddress,
+    strictRouteCurrency: deliveryStrictRouteCurrency,
   }) {
     if (!isIssuedTicket(ticket)) {
       throw buildTypedAuthorityError(UNISSUED_READ_TICKET_MSG, UNISSUED_READ_TICKET_CODE);
     }
-    const requireStrictCurrency = typeof deliveryStrictRouteCurrency === 'boolean' ?
-      (forRead && deliveryStrictRouteCurrency) :
-      strictRouteCurrency;
+    const requireStrictCurrency = completionRouteCurrency(deliveryStrictRouteCurrency);
     const routes = refreshObservationsForCompletion(requireStrictCurrency);
     if (error) {
       return handleCompletionError(error, ticket, routes, requireStrictCurrency);

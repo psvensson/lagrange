@@ -65,6 +65,94 @@ function copyParticipantDisposition(error, result) {
   );
 }
 
+// The typed failure an INSERT refused by its partition throws: the refusal's
+// message and code and its retry hints.
+function buildInsertFailureError(result, partitionId) {
+  const error = new Error(
+    result.error || `Insert failed on partition: ${partitionId}`,
+  );
+  if (
+    typeof result?.errorCode === LOCAL_STR_STRING &&
+    result.errorCode.length > 0
+  ) {
+    error.code = result.errorCode;
+    error.errorCode = result.errorCode;
+  }
+  if (
+    Number.isFinite(result?.retryAfterMs) &&
+    result.retryAfterMs > 0
+  ) {
+    error.retryAfterMs = Math.floor(result.retryAfterMs);
+  }
+  if (result?.deferRetry === true) {
+    error.deferRetry = true;
+  }
+  return error;
+}
+
+// Which participants failed, the first of them, and where it ran.
+function copyParticipantFailureDetail(error, result) {
+  if (Array.isArray(result?.participantFailures)) {
+    error.participantFailures = result.participantFailures
+      .filter((entry) => entry && typeof entry === LOCAL_STR_OBJECT)
+      .map((entry) => ({...entry}));
+  }
+  if (
+    result?.firstFailedParticipant &&
+    typeof result.firstFailedParticipant === LOCAL_STR_OBJECT
+  ) {
+    error.firstFailedParticipant = {
+      ...result.firstFailedParticipant,
+    };
+  }
+  if (
+    typeof result?.participantNodeId === LOCAL_STR_STRING &&
+    result.participantNodeId.length > 0
+  ) {
+    error.participantNodeId = result.participantNodeId;
+  }
+  if (
+    typeof result?.participantAddress === LOCAL_STR_STRING &&
+    result.participantAddress.length > 0
+  ) {
+    error.participantAddress = result.participantAddress;
+  }
+}
+
+// Why the participant refused and how it took part.
+function copyFailureReason(error, result) {
+  if (
+    typeof result?.reasonCode === LOCAL_STR_STRING &&
+    result.reasonCode.length > 0
+  ) {
+    error.reasonCode = result.reasonCode;
+  }
+  if (
+    typeof result?.participationKind === LOCAL_STR_STRING &&
+    result.participationKind.length > 0
+  ) {
+    error.participationKind = result.participationKind;
+  }
+}
+
+// The table the refusal names, else the statement's table, and the failed table.
+function copyFailureTable(error, result, ast) {
+  if (
+    typeof result?.tableName === LOCAL_STR_STRING &&
+    result.tableName.length > 0
+  ) {
+    error.tableName = result.tableName;
+  } else if (typeof ast?.table === LOCAL_STR_STRING && ast.table.length > 0) {
+    error.tableName = ast.table;
+  }
+  if (
+    typeof result?.failedTable === LOCAL_STR_STRING &&
+    result.failedTable.length > 0
+  ) {
+    error.failedTable = result.failedTable;
+  }
+}
+
 function buildDistributedMutationResult(
   results,
   partitionIds,
@@ -297,77 +385,11 @@ const queryExecutorSqlCommandMethods = {
       executionOptions,
     );
     if (!result.success) {
-      const error = new Error(
-        result.error || `Insert failed on partition: ${partitionId}`,
-      );
-      if (
-        typeof result?.errorCode === LOCAL_STR_STRING &&
-        result.errorCode.length > 0
-      ) {
-        error.code = result.errorCode;
-        error.errorCode = result.errorCode;
-      }
-      if (
-        Number.isFinite(result?.retryAfterMs) &&
-        result.retryAfterMs > 0
-      ) {
-        error.retryAfterMs = Math.floor(result.retryAfterMs);
-      }
-      if (result?.deferRetry === true) {
-        error.deferRetry = true;
-      }
+      const error = buildInsertFailureError(result, partitionId);
       copyParticipantDisposition(error, result);
-      if (Array.isArray(result?.participantFailures)) {
-        error.participantFailures = result.participantFailures
-          .filter((entry) => entry && typeof entry === LOCAL_STR_OBJECT)
-          .map((entry) => ({...entry}));
-      }
-      if (
-        result?.firstFailedParticipant &&
-        typeof result.firstFailedParticipant === LOCAL_STR_OBJECT
-      ) {
-        error.firstFailedParticipant = {
-          ...result.firstFailedParticipant,
-        };
-      }
-      if (
-        typeof result?.participantNodeId === LOCAL_STR_STRING &&
-        result.participantNodeId.length > 0
-      ) {
-        error.participantNodeId = result.participantNodeId;
-      }
-      if (
-        typeof result?.participantAddress === LOCAL_STR_STRING &&
-        result.participantAddress.length > 0
-      ) {
-        error.participantAddress = result.participantAddress;
-      }
-      if (
-        typeof result?.reasonCode === LOCAL_STR_STRING &&
-        result.reasonCode.length > 0
-      ) {
-        error.reasonCode = result.reasonCode;
-      }
-      if (
-        typeof result?.participationKind === LOCAL_STR_STRING &&
-        result.participationKind.length > 0
-      ) {
-        error.participationKind = result.participationKind;
-      }
-      if (
-        typeof result?.tableName === LOCAL_STR_STRING &&
-        result.tableName.length > 0
-      ) {
-        error.tableName = result.tableName;
-      } else if (typeof ast?.table === LOCAL_STR_STRING && ast.table.length > 0) {
-        error.tableName = ast.table;
-      }
-      if (
-        typeof result?.failedTable === LOCAL_STR_STRING &&
-        result.failedTable.length > 0
-      ) {
-        error.failedTable = result.failedTable;
-      }
+      copyParticipantFailureDetail(error, result);
+      copyFailureReason(error, result);
+      copyFailureTable(error, result, ast);
       throw error;
     }
     return {

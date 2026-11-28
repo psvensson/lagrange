@@ -43,6 +43,29 @@ import {
  * Owns query-table graph extraction, per-table partition planning,
  * join strategy selection, and diagnostics envelope construction.
  */
+// The SELECT plan over its built parts; the first table plan names the index
+// access.
+function buildSelectPlan({planId, tablePlans, joinPlan, ast, fragmentPlans, mergePlan,
+  diagnostics}) {
+  const primaryTablePlan = Array.from(tablePlans.values())[0] || null;
+
+  return {
+    [PLAN_FIELD.PLAN_ID]: planId,
+    [PLAN_FIELD.STATEMENT_TYPE]: DISTRIBUTED_STATEMENT_TYPE.SELECT,
+    [PLAN_FIELD.TABLE_PLANS]: tablePlans,
+    [PLAN_FIELD.JOIN_PLAN]: joinPlan,
+    [PLAN_FIELD.SET_OPERATION_PLAN]: ast.setOperation || null,
+    [PLAN_FIELD.FRAGMENT_PLANS]: fragmentPlans,
+    [PLAN_FIELD.MERGE_PLAN]: mergePlan,
+    [PLAN_FIELD.EXECUTION_POLICY]: DISTRIBUTED_EXECUTION_POLICY.READ_FAIL_CLOSED,
+    [PLAN_FIELD.DIAGNOSTICS]: diagnostics,
+    [PLAN_FIELD.INDEX_ACCESS]: primaryTablePlan?.indexAccess || null,
+    [PLAN_FIELD.SELECTED_INDEX]: primaryTablePlan?.selectedIndex || null,
+    [PLAN_FIELD.REJECTED_INDEXES]: Array.from(tablePlans.values())
+      .flatMap((plan) => plan.rejectedIndexes || []),
+  };
+}
+
 class DistributedQueryPlanner {
   constructor(options = {}) {
     this.partitionResolver = options.partitionResolver || null;
@@ -80,6 +103,12 @@ class DistributedQueryPlanner {
     }
   }
 
+  resolveSelectTableGraph(selectTemplate, ast) {
+    return selectTemplate ?
+      clonePlanStructure(selectTemplate.tableGraph) :
+      this.extractTableGraph(ast);
+  }
+
   /**
    * Plan a distributed SELECT statement.
    * @param {Object} ast - SELECT AST.
@@ -90,9 +119,7 @@ class DistributedQueryPlanner {
   planSelect(ast, params = [], options = {}) {
     const structural = this.resolveStructuralTemplate(ast);
     const selectTemplate = structural?.selectTemplate || null;
-    const tableGraph = selectTemplate ?
-      clonePlanStructure(selectTemplate.tableGraph) :
-      this.extractTableGraph(ast);
+    const tableGraph = this.resolveSelectTableGraph(selectTemplate, ast);
     const tablePlans = this.buildTablePlans(
       tableGraph,
       ast,
@@ -125,23 +152,9 @@ class DistributedQueryPlanner {
       structural?.normalizedAst || null,
     );
 
-    const primaryTablePlan = Array.from(tablePlans.values())[0] || null;
-
-    return {
-      [PLAN_FIELD.PLAN_ID]: planId,
-      [PLAN_FIELD.STATEMENT_TYPE]: DISTRIBUTED_STATEMENT_TYPE.SELECT,
-      [PLAN_FIELD.TABLE_PLANS]: tablePlans,
-      [PLAN_FIELD.JOIN_PLAN]: joinPlan,
-      [PLAN_FIELD.SET_OPERATION_PLAN]: ast.setOperation || null,
-      [PLAN_FIELD.FRAGMENT_PLANS]: fragmentPlans,
-      [PLAN_FIELD.MERGE_PLAN]: mergePlan,
-      [PLAN_FIELD.EXECUTION_POLICY]: DISTRIBUTED_EXECUTION_POLICY.READ_FAIL_CLOSED,
-      [PLAN_FIELD.DIAGNOSTICS]: diagnostics,
-      [PLAN_FIELD.INDEX_ACCESS]: primaryTablePlan?.indexAccess || null,
-      [PLAN_FIELD.SELECTED_INDEX]: primaryTablePlan?.selectedIndex || null,
-      [PLAN_FIELD.REJECTED_INDEXES]: Array.from(tablePlans.values())
-        .flatMap((plan) => plan.rejectedIndexes || []),
-    };
+    return buildSelectPlan({
+      planId, tablePlans, joinPlan, ast, fragmentPlans, mergePlan, diagnostics,
+    });
   }
 
   /**
@@ -395,18 +408,9 @@ class DistributedQueryPlanner {
     return {indexAccess, selectedIndex, rejectedIndexes};
   }
 
-  /**
-   * Build access plan for a single table node.
-   * @param {Object} tableNode - Graph table node.
-   * @param {Object|null} ast - SELECT AST.
-   * @param {Array} params - Bound parameters.
-   * @return {Object} Table access plan.
-   * @private
-   */
-  buildSingleTablePlan(tableNode, ast, params, tableTemplate = null) {
-    const tableName = tableNode.tableName;
-    const tableAlias = tableNode.tableAlias;
-    const partitions = this.getTablePartitions(tableName) || [];
+  // The table's local and partition-target predicates: the structural
+  // template's when the statement has one, else derived from the AST.
+  resolveTablePredicates(ast, tableAlias, tableTemplate) {
     const isNestedOrCompound = tableTemplate ?
       false :
       Boolean(ast && hasSubqueryCteOrCompound(ast));
@@ -423,6 +427,23 @@ class DistributedQueryPlanner {
       (isNestedOrCompound ?
         null :
         (localPredicate || ast?.where || null));
+    return {localPredicate, targetPredicate};
+  }
+
+  /**
+   * Build access plan for a single table node.
+   * @param {Object} tableNode - Graph table node.
+   * @param {Object|null} ast - SELECT AST.
+   * @param {Array} params - Bound parameters.
+   * @return {Object} Table access plan.
+   * @private
+   */
+  buildSingleTablePlan(tableNode, ast, params, tableTemplate = null) {
+    const tableName = tableNode.tableName;
+    const tableAlias = tableNode.tableAlias;
+    const partitions = this.getTablePartitions(tableName) || [];
+    const {localPredicate, targetPredicate} =
+      this.resolveTablePredicates(ast, tableAlias, tableTemplate);
     const partitionIds = this.partitionResolver ?
       this.partitionResolver.resolvePartitions(
         tableName,

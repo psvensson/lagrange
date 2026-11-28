@@ -8,6 +8,7 @@
 import {LoggingService} from '../../logging/logging-service.js';
 import {ConfigurationManager} from '../../config/configuration-manager.js';
 import {METRICS_LOG_TAG} from '../../constants/index.js';
+import {TRANSPORT_EVENT} from '../../constants/transport.js';
 import {
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
@@ -67,7 +68,7 @@ function createParallelWriteSettlement(options) {
         if (!finishSubmitted) stopped.reject(signal.reason);
       };
       if (signal.aborted) onAbort();
-      else signal.addEventListener('abort', onAbort, {once: true});
+      else signal.addEventListener(TRANSPORT_EVENT.ABORT, onAbort, {once: true});
       try {
         const result = signal.aborted ? stopped.promise : run({
           signal,
@@ -86,7 +87,7 @@ function createParallelWriteSettlement(options) {
           }),
         ]);
       } finally {
-        signal.removeEventListener('abort', onAbort);
+        signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
         finishSubmitted = null;
       }
     },
@@ -150,6 +151,17 @@ function estimateResultPayloadBytes(result) {
 }
 
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
+const PARTITION_QUERY_EXECUTOR_REQUIRED =
+  'ParallelQueryCoordinator requires a partitionQueryExecutor';
+
+// The coordinator's one partition routing owner: a function, validated once
+// when the coordinator is constructed.
+function requirePartitionQueryExecutor(partitionQueryExecutor) {
+  if (typeof partitionQueryExecutor !== 'function') {
+    throw new TypeError(PARTITION_QUERY_EXECUTOR_REQUIRED);
+  }
+  return partitionQueryExecutor;
+}
 
 /**
  * ParallelQueryCoordinator handles parallel query execution across partitions
@@ -162,10 +174,7 @@ class ParallelQueryCoordinator {
    * @param {Function} options.partitionQueryExecutor - Partition routing owner.
    */
   constructor(options = {}) {
-    if (typeof options.partitionQueryExecutor !== 'function') {
-      throw new TypeError('ParallelQueryCoordinator requires a partitionQueryExecutor');
-    }
-    this.partitionQueryExecutor = options.partitionQueryExecutor;
+    this.partitionQueryExecutor = requirePartitionQueryExecutor(options.partitionQueryExecutor);
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.PARALLEL_QUERY_COORDINATOR;
     this.logger = this.initLogger();
 
@@ -363,6 +372,14 @@ class ParallelQueryCoordinator {
     }
   }
 
+  // Hedging is read-only and non-transactional, and needs more than one partition.
+  isHedgeableReadChunk(options, partitionIds) {
+    return this.speculativeExecutionEnabled &&
+      options.forRead === true &&
+      !options.transactionIdentity &&
+      partitionIds.length > 1;
+  }
+
   /**
    * Execute one partition chunk with timeout and straggler detection.
    * @param {string} sql - SQL query.
@@ -418,10 +435,7 @@ class ParallelQueryCoordinator {
       // non-transactional: a hedged write could be delivered twice, and a
       // hedged transactional read would exclude the leader replica holding the
       // participant session and route to a follower replica.
-      if (this.speculativeExecutionEnabled &&
-        options.forRead === true &&
-        !options.transactionIdentity &&
-        partitionIds.length > 1) {
+      if (this.isHedgeableReadChunk(options, partitionIds)) {
         return await this.executeWithSpeculativeExecution(
           sql,
           partitionIds,

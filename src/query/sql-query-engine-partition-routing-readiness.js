@@ -480,11 +480,12 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
           const snapshot = this.queryExecutor.getPartitionRoutingSnapshot(
             partitionId, routingReadinessDimension,
           );
-          const routableNodes = new Set(snapshot.routableServices
-            .map((service) => service.node_id || service.nodeId).filter(Boolean));
+          // The count the wait condition measures, from its one authority.
           return {
             requiredCount,
-            routableCount: routableNodes.size,
+            routableCount: this.getRoutablePartitionServiceNodeIds(
+              partitionId, routingReadinessDimension,
+            ).length,
             routingReadinessDimension,
             routing: this.queryExecutor.summarizePartitionRoutingSnapshot(snapshot),
           };

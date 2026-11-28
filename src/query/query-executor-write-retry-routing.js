@@ -24,6 +24,16 @@ const {
   normalizeParticipantRetryAfterMs,
 } = QUERY_EXECUTOR_SHARED;
 
+// A write refused because its target member is fenced for removal or retired.
+function isRemovalFencedWriteFailure(failure) {
+  return failure?.failureCode === ERRORS.MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED ||
+    (typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      (failure.error.includes(ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL) ||
+        failure.error.includes(
+          ERRORS.MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED,
+        )));
+}
+
 const CONTROL_PLANE_WRITE_RETRY_DECISION_TABLE = Object.freeze([
   Object.freeze({
     id: 'system_closed_target_widen',
@@ -568,13 +578,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     );
     const isPriorityControlPlaneWrite =
       !forRead && partitionClassification.priorityControlPlane;
-    const isRemovalFencedFailure =
-      failure?.failureCode === ERRORS.MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED ||
-      (typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        (failure.error.includes(ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL) ||
-          failure.error.includes(
-            ERRORS.MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED,
-          )));
+    const isRemovalFencedFailure = isRemovalFencedWriteFailure(failure);
     return this.buildControlPlaneWriteRetryDecision(
       evaluateControlPlaneWriteRetryDecision({
         isSystemTableWrite,

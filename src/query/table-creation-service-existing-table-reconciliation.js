@@ -177,6 +177,24 @@ async function loadOrRestoreExistingPartition(
   return {existingPartition: restored, partitionMetadataCreated: true};
 }
 
+// The existing partition declares its replication policy and, for a global
+// index schema job, the one that job's intent names.
+function assertExistingPartitionReplicationPolicy(desiredTarget,
+  {tableName, tableId, explicitPartition, options}) {
+  if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
+    throw new Error(
+      TABLE_CREATION_SERVICE_LITERAL.EXISTING_PARTITION_REPLICATION_POLICY_UNDECLARED +
+        String(tableName || tableId),
+    );
+  }
+  if (options.schemaJobId && options.globalIndex &&
+      desiredTarget.replicationFactor !== explicitPartition?.replicaCount) {
+    const error = new Error(`Partition replication policy conflicts with schema job ${options.schemaJobId}`);
+    error.code = SCHEMA_PROVISIONING_ERROR_CODE.INTENT_CONFLICT;
+    throw error;
+  }
+}
+
 const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
   /**
    * Re-run initial partition provisioning for existing CREATE TABLE IF NOT
@@ -207,18 +225,9 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
       tableId, tableName, existingTableRecord, partitionId, explicitPartition, options,
     });
     const desiredTarget = resolveDesiredReplicationFactor(existingPartition);
-    if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
-      throw new Error(
-        TABLE_CREATION_SERVICE_LITERAL.EXISTING_PARTITION_REPLICATION_POLICY_UNDECLARED +
-          String(tableName || tableId),
-      );
-    }
-    if (options.schemaJobId && options.globalIndex &&
-        desiredTarget.replicationFactor !== explicitPartition?.replicaCount) {
-      const error = new Error(`Partition replication policy conflicts with schema job ${options.schemaJobId}`);
-      error.code = SCHEMA_PROVISIONING_ERROR_CODE.INTENT_CONFLICT;
-      throw error;
-    }
+    assertExistingPartitionReplicationPolicy(desiredTarget, {
+      tableName, tableId, explicitPartition, options,
+    });
     await options.assertProvisioningOwnership?.();
     const provisioningSummary = await this.provisionInitialPartition({
       ...buildExistingPartitionProvisioningContext({

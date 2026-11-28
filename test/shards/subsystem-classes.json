@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 28,
     "placement-rebalance": 313,
-    "query-sql": 231,
+    "query-sql": 237,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2849,
-  "digest": "fnv1a32-0f421d86",
+  "censusSize": 2855,
+  "digest": "fnv1a32-e4627399",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9dee38fc",
+  "observationDigest": "fnv1a32-a80e707e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1663,6 +1663,7 @@
     "test/query/cancellation-token.test.js": "query-sql",
     "test/query/catalog-authority-and-visible-reconciliation.test.js": "query-sql",
     "test/query/contradiction-pruned-empty-query.test.js": "query-sql",
+    "test/query/control-plane-write-retry-removal-fenced.test.js": "query-sql",
     "test/query/coordinator-interim-refusals.test.js": "query-sql",
     "test/query/coordinator-merge-process-pool.test.js": "query-sql",
     "test/query/coordinator-resource-limits.property.test.js": "query-sql",
@@ -1677,6 +1678,7 @@
     "test/query/distributed-merge-engine.test.js": "query-sql",
     "test/query/distributed-query-parallelism.property.test.js": "query-sql",
     "test/query/distributed-query-planner-partition-key-update.test.js": "query-sql",
+    "test/query/distributed-query-planner-structural-template.test.js": "query-sql",
     "test/query/distributed-query-planner.property.test.js": "query-sql",
     "test/query/distributed-query-planner.test.js": "query-sql",
     "test/query/distributed-query-straggler-hedging.test.js": "query-sql",
@@ -1744,6 +1746,7 @@
     "test/query/query-executor-durable-commit-witness.test.js": "query-sql",
     "test/query/query-executor-executeonpartition-leader-resolution.test.js": "query-sql",
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": "query-sql",
+    "test/query/query-executor-insert-failure-fields.test.js": "query-sql",
     "test/query/query-executor-no-handler-quarantine-clock.test.js": "query-sql",
     "test/query/query-executor-recovery-owned-routing.test.js": "query-sql",
     "test/query/query-executor-recovery-read-lifetime.test.js": "query-sql",
@@ -1757,12 +1760,14 @@
     "test/query/queryable-core-j2-sql-key-read-journey.test.js": "query-sql",
     "test/query/read-completion-authority-and-storage-term.test.js": "query-sql",
     "test/query/readiness-routing-denial-observability.test.js": "query-sql",
+    "test/query/redirected-write-target-cooldown-abort.test.js": "query-sql",
     "test/query/reduce-by-key.test.js": "query-sql",
     "test/query/reduce-continuation.test.js": "query-sql",
     "test/query/replica-operation-structured-mutation-native.test.js": "query-sql",
     "test/query/result-stream.test.js": "query-sql",
     "test/query/retry-continuation-flow.test.js": "query-sql",
     "test/query/retry-idempotency.test.js": "query-sql",
+    "test/query/routable-count-wait-spent-report.test.js": "query-sql",
     "test/query/router-envelope-lost-write-answer.test.js": "query-sql",
     "test/query/routing-overlay-complete-state-retirement.test.js": "query-sql",
     "test/query/runtime-access-policy-enforcement.test.js": "query-sql",
@@ -1773,6 +1778,7 @@
     "test/query/scenario-a-oltp-review-witnesses.test.js": "query-sql",
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "query-sql",
     "test/query/schema-provisioning-job-owner.test.js": "query-sql",
+    "test/query/schema-provisioning-job-recovery-discovery.test.js": "query-sql",
     "test/query/schema-provisioning-native-admission.test.js": "query-sql",
     "test/query/schema-provisioning-transient-collision.test.js": "query-sql",
     "test/query/select-no-from.test.js": "query-sql",
@@ -18118,6 +18124,12 @@
         "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
+    "test/query/control-plane-write-retry-removal-fenced.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
+      ]
+    },
     "test/query/coordinator-interim-refusals.test.js": {
       "files": [
         "src/query/distributed/distributed-write-constraint-helpers.js",
@@ -18695,6 +18707,12 @@
         "src/partition/partition-write-kernel.js"
       ]
     },
+    "test/query/query-executor-insert-failure-fields.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
+      ]
+    },
     "test/query/query-executor-no-handler-quarantine-clock.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -18785,7 +18803,6 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
-        "src/query/query-executor-partition-candidate-state.js",
         "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
@@ -18797,6 +18814,13 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/readiness-planning-snapshot-owner.js"
+      ]
+    },
+    "test/query/redirected-write-target-cooldown-abort.test.js": {
+      "files": [
+        "src/query/query-executor-partition-candidate-state.js",
+        "src/query/query-executor-recovery-read-delivery.js",
+        "src/query/query-executor-self-leader-term-floor.js"
       ]
     },
     "test/query/replica-operation-structured-mutation-native.test.js": {
@@ -18841,6 +18865,15 @@
         "src/query/distributed/exchange-manager.js",
         "src/query/execution-context.js",
         "src/query/lineage-tracker.js"
+      ]
+    },
+    "test/query/routable-count-wait-spent-report.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/router-envelope-lost-write-answer.test.js": {
@@ -18968,6 +19001,14 @@
         "src/query/schema-provisioning-intent.js",
         "src/query/schema-provisioning-job-constants.js",
         "src/runtime/pgwire-protocol-constants.js"
+      ]
+    },
+    "test/query/schema-provisioning-job-recovery-discovery.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/owner-contract-outcome.js",
+        "src/query/schema-provisioning-intent.js",
+        "src/query/schema-provisioning-job-constants.js"
       ]
     },
     "test/query/schema-provisioning-native-admission.test.js": {

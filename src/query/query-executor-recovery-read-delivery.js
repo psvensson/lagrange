@@ -373,12 +373,43 @@ function handleFailedRedirectResponse(context, redirectAddress,
   return {action: REDIRECT_STEP_ACTION.CONTINUE, candidateIndex};
 }
 
+// A write redirect whose target is cooling down yields to the next candidate
+// that can be tried at once.
+function shouldYieldCoolingRedirect(context, redirectAddress) {
+  const {attemptedAddresses, candidateIndex, candidateQueue, readDelivery, targetRetryTracker} =
+    context;
+  if (!readDelivery &&
+      targetRetryTracker.getRemainingDelayMs(redirectAddress) > 0) {
+    if (targetRetryTracker.hasImmediateCandidateAfter(
+      candidateQueue, candidateIndex, attemptedAddresses,
+    )) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// The redirect target accepted the delivery: its cooldown ends and the
+// accepted, sealed result is the attempt's answer.
+function acceptedRedirectStep(context, redirectAddress, redirectCompletion) {
+  const {
+    executionOptions, executor, forRead, invocation, partitionId, targetRetryTracker,
+  } = context;
+  targetRetryTracker?.clearTarget(redirectAddress);
+  applySuccessfulCandidateAffinity(
+    executor, executionOptions, partitionId, redirectAddress, forRead);
+  return {
+    action: REDIRECT_STEP_ACTION.RETURN,
+    result: invocation.finalizeAcceptedResult(redirectCompletion.completedResult),
+  };
+}
+
 async function executePartitionLeaderRedirectAttempt(context) {
   const {
     activeTicket, address, attemptBudget, attemptedAddresses,
     buildDeadlineSpentFailureResult, buildLastFailureResult, buildRequest,
     buildRouterDeliveryOptions, candidateEligibility, candidateIndex, candidateQueue,
-    candidateState, executionOptions, executor, forRead, invocation,
+    candidateState, executionOptions, executor, invocation,
     markRecoverySubmission, params, partitionId,
     readDelivery, recordCandidateFailure, response, serviceInfo, sql,
     targetRetryTracker,
@@ -387,13 +418,8 @@ async function executePartitionLeaderRedirectAttempt(context) {
     fromAddress: address, leaderAddress: response.leaderAddress, partitionId,
   });
   const redirectAddress = response.leaderAddress;
-  if (!readDelivery &&
-      targetRetryTracker.getRemainingDelayMs(redirectAddress) > 0) {
-    if (targetRetryTracker.hasImmediateCandidateAfter(
-      candidateQueue, candidateIndex, attemptedAddresses,
-    )) {
-      return {action: REDIRECT_STEP_ACTION.CONTINUE};
-    }
+  if (shouldYieldCoolingRedirect(context, redirectAddress)) {
+    return {action: REDIRECT_STEP_ACTION.CONTINUE};
   }
   const admission = await invocation.prepareSubmission(redirectAddress,
     targetRetryTracker, () => buildRouterDeliveryOptions(
@@ -449,13 +475,7 @@ async function executePartitionLeaderRedirectAttempt(context) {
     return {action: REDIRECT_STEP_ACTION.RETURN, result: redirectCompletion.settledFailure};
   }
   if (redirectCompletion.accepted) {
-    targetRetryTracker?.clearTarget(redirectAddress);
-    applySuccessfulCandidateAffinity(
-      executor, executionOptions, partitionId, redirectAddress, forRead);
-    return {
-      action: REDIRECT_STEP_ACTION.RETURN,
-      result: invocation.finalizeAcceptedResult(redirectCompletion.completedResult),
-    };
+    return acceptedRedirectStep(context, redirectAddress, redirectCompletion);
   }
   const unknownDecision = context.unknownOutcome.observeAnswer(redirectCompletion.response);
   await candidateState.handleRedirectTransportNoHandler(

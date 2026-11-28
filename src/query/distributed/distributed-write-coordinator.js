@@ -79,6 +79,26 @@ function buildRejectedParticipantResult(partitionId, participant, reason) {
   };
 }
 
+// The typed code a thrown participant failure carries: its code, else its
+// errorCode, else none.
+function participantErrorCode(error) {
+  return typeof error?.code === LOCAL_STR_STRING && error.code.length > 0 ?
+    error.code :
+    (typeof error?.errorCode === LOCAL_STR_STRING &&
+    error.errorCode.length > 0 ?
+      error.errorCode :
+      null);
+}
+
+// The table a thrown participant failure names: its failed table, else its table.
+function participantFailedTable(error) {
+  return typeof error?.failedTable === LOCAL_STR_STRING ?
+    error.failedTable :
+    (typeof error?.tableName === LOCAL_STR_STRING ?
+      error.tableName :
+      null);
+}
+
 /**
  * Canonical owner for distributed INSERT/UPDATE/DELETE execution.
  */
@@ -350,57 +370,10 @@ class DistributedWriteCoordinator {
     }
 
     if (failedParticipants.length > 0) {
-      // The one participant failure entry (INSERT, UPDATE and DELETE alike).
-      const participantFailures = failedParticipants.map((result) =>
-        buildParticipantFailureEntry({
-          ...result,
-          error: result.error ||
-            QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-          failedTable: result.failedTable ?? result.tableName,
-        }));
-      const firstFailedParticipant =
-          participantFailures.length > 0 ?
-            participantFailures[0] :
-            null;
-      this.logger.warn(
-        QUERY_LOG_MSG.DISTRIBUTED_WRITE_PARTICIPANT_FAILURES,
-        buildParticipantFailureLogContext(plan, participantFailures),
-      );
-      const retryAfterMs = participantFailures.reduce(
-        (maxRetryAfterMs, result) => {
-          if (!Number.isFinite(result?.retryAfterMs) ||
-                result.retryAfterMs <= 0) {
-            return maxRetryAfterMs;
-          }
-          return Math.max(maxRetryAfterMs, result.retryAfterMs);
-        },
-        0,
-      );
-      const lockOverlay = resolveLockingReadFailureOverlay(participantFailures);
-      return {
-        success: false,
-        operation: plan.statementType,
-        ...affectedRowsField(affectedRows),
-        rows,
-        partitions: primaryPartitions,
-        mirrorPartitions,
-        failedPartitions: failedParticipants.map(
-          (result) => result.partitionId,
-        ),
-        partitionErrors: participantFailures.map((failure) => ({...failure})),
-        participantFailures,
-        firstFailedParticipant,
-        participantResults,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        ...lockOverlay,
-        ...(carriesSplitDescriptorIntent(executionOptions) && participantResults.length === 1 ?
-          splitDescriptorFailureFields(failedParticipants[0]) : {}),
-        idempotencyKey: plan.idempotencyKey,
-        operationId: plan.operationId,
-        retryCount,
-        retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
-      };
+      return this.buildParticipantFailureAnswer(plan, executionOptions, {
+        participantResults, failedParticipants, affectedRows, rows,
+        primaryPartitions, mirrorPartitions, retryCount,
+      });
     }
 
     // A primary participant acknowledged as a settled replay whose count is
@@ -424,6 +397,66 @@ class DistributedWriteCoordinator {
       idempotencyKey: plan.idempotencyKey,
       operationId: plan.operationId,
       retryCount,
+    };
+  }
+
+  /**
+   * The answer of a plan whose participants failed: every failure entry, the
+   * first one, the largest retry hint and a one-target descriptor's refusal.
+   * @private
+   */
+  buildParticipantFailureAnswer(plan, executionOptions, {participantResults,
+    failedParticipants, affectedRows, rows, primaryPartitions, mirrorPartitions, retryCount}) {
+    // The one participant failure entry (INSERT, UPDATE and DELETE alike).
+    const participantFailures = failedParticipants.map((result) =>
+      buildParticipantFailureEntry({
+        ...result,
+        error: result.error ||
+          QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        failedTable: result.failedTable ?? result.tableName,
+      }));
+    const firstFailedParticipant =
+        participantFailures.length > 0 ?
+          participantFailures[0] :
+          null;
+    this.logger.warn(
+      QUERY_LOG_MSG.DISTRIBUTED_WRITE_PARTICIPANT_FAILURES,
+      buildParticipantFailureLogContext(plan, participantFailures),
+    );
+    const retryAfterMs = participantFailures.reduce(
+      (maxRetryAfterMs, result) => {
+        if (!Number.isFinite(result?.retryAfterMs) ||
+              result.retryAfterMs <= 0) {
+          return maxRetryAfterMs;
+        }
+        return Math.max(maxRetryAfterMs, result.retryAfterMs);
+      },
+      0,
+    );
+    const lockOverlay = resolveLockingReadFailureOverlay(participantFailures);
+    return {
+      success: false,
+      operation: plan.statementType,
+      ...affectedRowsField(affectedRows),
+      rows,
+      partitions: primaryPartitions,
+      mirrorPartitions,
+      failedPartitions: failedParticipants.map(
+        (result) => result.partitionId,
+      ),
+      partitionErrors: participantFailures.map((failure) => ({...failure})),
+      participantFailures,
+      firstFailedParticipant,
+      participantResults,
+      errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+      error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+      ...lockOverlay,
+      ...(carriesSplitDescriptorIntent(executionOptions) && participantResults.length === 1 ?
+        splitDescriptorFailureFields(failedParticipants[0]) : {}),
+      idempotencyKey: plan.idempotencyKey,
+      operationId: plan.operationId,
+      retryCount,
+      retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
     };
   }
 
@@ -474,13 +507,7 @@ class DistributedWriteCoordinator {
       return {
         success: false,
         error: error.message,
-        errorCode:
-          typeof error?.code === LOCAL_STR_STRING && error.code.length > 0 ?
-            error.code :
-            (typeof error?.errorCode === LOCAL_STR_STRING &&
-            error.errorCode.length > 0 ?
-              error.errorCode :
-              null),
+        errorCode: participantErrorCode(error),
         ...pickTypedWriteAnswer(error),
         ...pickRoutingDenialFields(error),
         retryAfterMs:
@@ -496,12 +523,7 @@ class DistributedWriteCoordinator {
           typeof error?.participantAddress === LOCAL_STR_STRING ?
             error.participantAddress :
             null,
-        failedTable:
-          typeof error?.failedTable === LOCAL_STR_STRING ?
-            error.failedTable :
-            (typeof error?.tableName === LOCAL_STR_STRING ?
-              error.tableName :
-              null),
+        failedTable: participantFailedTable(error),
         attempts: 1,
       };
     }
