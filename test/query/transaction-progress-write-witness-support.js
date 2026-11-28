@@ -80,6 +80,21 @@ const LEDGER_OPEN_STATES = Object.freeze(new Set([STATE.ACTIVE,
   STATE.PREPARED]));
 
 /**
+ * Whether a participant request is a consensus proposal on the workload
+ * partition (R1 steps C2, C6, X3): PREPARE proposes PARTICIPANT_PREPARE, a
+ * COMMIT or a bound ROLLBACK proposes PARTICIPANT_DECISION. BEGIN, QUERY,
+ * the unbound read-only release and outcome reads propose nothing.
+ * @param {Object} message - The participant request.
+ * @return {boolean}
+ */
+function isParticipantProposal(message) {
+  return message.operation === QUERY_OPERATION.PREPARE ||
+    message.operation === QUERY_OPERATION.COMMIT ||
+    (message.operation === QUERY_OPERATION.ROLLBACK &&
+      typeof message.decisionDigest === 'string');
+}
+
+/**
  * Table definitions of one world: one partition per table, like Scenario A
  * (one Raft group per table), so P = number of tables written.
  * @param {string[]} tableNames - The user tables.
@@ -294,6 +309,7 @@ function createProgressWriteWorld(options = {}) {
         beforeMutation: async (mutation) => {
           timeline.push({kind: 'mutation', label: mutationLabelOf(mutation),
             tableName: mutation.tableName});
+          await engineOptions.consensusRound?.();
           await engineOptions.beforeMutation?.(mutation);
           await engineOptions.mutationHold?.wait(mutation);
         }});
@@ -317,6 +333,9 @@ function createProgressWriteWorld(options = {}) {
           }
           timeline.push({kind: 'delivery', operation: copy.operation,
             partitionId});
+          if (isParticipantProposal(copy)) {
+            await engineOptions.consensusRound?.();
+          }
           await engineOptions.deliveryHold?.wait(copy);
           return buildDeliveryEnvelope({acknowledged: true},
             ledger.answer(copy, partitionId));
@@ -543,6 +562,126 @@ async function restartAndRecover(world, transactionId, options = {}) {
       LEDGER_OPEN_STATES.has(entry.state)).map((entry) => entry.participantId),
     violations: [...world.ledger.violations],
   };
+}
+
+// Scenario A transaction shapes with one partition (one participant) per
+// table, as R1's step inventory counts them (reports/r1-commit-path.md
+// section 2): new_order reads item and writes five tables; payment writes
+// four. Repeated statements to a table cost hops, not rounds, so one
+// statement per table measures the round and proposal counts.
+const TRANSACTION_SHAPE = Object.freeze({
+  NEW_ORDER: Object.freeze({name: 'new_order', reads: Object.freeze(['item']),
+    writes: Object.freeze(['district', 'orders', 'new_order', 'stock',
+      'order_line'])}),
+  PAYMENT: Object.freeze({name: 'payment', reads: Object.freeze([]),
+    writes: Object.freeze(['warehouse', 'district', 'customer', 'history'])}),
+});
+const ROUND_CLOCK_QUIESCENCE_TURNS = 5;
+const ROUND_CLOCK_STALLED =
+  'round clock stalled: the transaction waits for something that is not a ' +
+  'consensus round';
+
+function quiescence() {
+  let turns = Promise.resolve();
+  for (let turn = 0; turn < ROUND_CLOCK_QUIESCENCE_TURNS; turn += 1) {
+    turns = turns.then(() => new Promise((resolve) => setImmediate(resolve)));
+  }
+  return turns;
+}
+
+/**
+ * A virtual clock on which every consensus round (a coordinator-table
+ * mutation, a participant PREPARE or decision proposal) takes one tick and
+ * everything else takes none: rounds started while the system is idle at
+ * the same tick run concurrently, a round started after another one ended
+ * follows it. The ticks a transaction needs are R1's "consensus rounds in
+ * sequence" on a uniform network with co-located participant leaders
+ * (R1 section 3, "rounds only"). It fails closed when the transaction waits
+ * for anything that is not a round.
+ * @return {{round: Function, run: Function}}
+ */
+function createRoundClock() {
+  let tick = 0;
+  let due = [];
+  return {
+    round: () => new Promise((resolve) => due.push(resolve)),
+    async run(work) {
+      let settled = false;
+      let failure = null;
+      let value;
+      const running = Promise.resolve().then(work).then((result) => {
+        value = result;
+      }, (error) => {
+        failure = error;
+      }).finally(() => {
+        settled = true;
+      });
+      const startTick = tick;
+      for (;;) {
+        await quiescence();
+        if (due.length === 0) {
+          if (settled) break;
+          throw new Error(ROUND_CLOCK_STALLED);
+        }
+        tick += 1;
+        const releasing = due;
+        due = [];
+        for (const release of releasing) release();
+      }
+      await running;
+      if (failure !== null) throw failure;
+      return {value, rounds: tick - startTick};
+    },
+  };
+}
+
+/**
+ * The sequential consensus rounds and the proposals of one write
+ * transaction of a shape: BEGIN, one SELECT per read table, one INSERT per
+ * write table, COMMIT. Proposals are the coordinator-table mutations plus
+ * the participants' PREPARE and decision proposals (R1 "Total proposals").
+ * @param {Object} shape - A TRANSACTION_SHAPE value.
+ * @return {Promise<Object>} {committed, rounds, proposals,
+ *   coordinatorTableProposals, workloadProposals}.
+ */
+async function measureTransactionShape(shape) {
+  const world = createProgressWriteWorld({tables: [...shape.reads,
+    ...shape.writes]});
+  try {
+    const clock = createRoundClock();
+    const {engine, gateway} = world.createEngine({
+      consensusRound: clock.round});
+    const sessionId = `shape-${shape.name}`;
+    const measured = await clock.run(async () => {
+      const begun = await engine.executeQuery('BEGIN', [], {sessionId});
+      const statements = [];
+      for (const table of shape.reads) {
+        statements.push((await engine.executeQuery(
+          `SELECT id FROM ${table} WHERE id = ?`, ['r'], {sessionId})).success);
+      }
+      for (const table of shape.writes) {
+        statements.push((await engine.executeQuery(
+          `INSERT INTO ${table} (id, name) VALUES (?, ?)`, [`${table}-1`, 'v'],
+          {sessionId})).success);
+      }
+      const committed = await engine.executeQuery('COMMIT', [], {sessionId,
+        expectedTransactionId: begun.transactionId});
+      return begun.success === true && committed.success === true &&
+        statements.every((success) => success === true);
+    });
+    const workloadProposals = world.timeline.filter((event) =>
+      event.kind === 'delivery' && (event.operation === QUERY_OPERATION.PREPARE ||
+        event.operation === QUERY_OPERATION.COMMIT)).length;
+    return {
+      committed: measured.value,
+      rounds: measured.rounds,
+      coordinatorTableProposals: gateway.mutations.length,
+      workloadProposals,
+      proposals: gateway.mutations.length + workloadProposals,
+    };
+  } finally {
+    await world.close();
+  }
 }
 
 const HOLD_WAIT_MS = 5000;
@@ -780,9 +919,11 @@ function timelinePositionsOf(timeline) {
 
 export {
   BEGIN_GATE_SCENARIO,
+  TRANSACTION_SHAPE,
   isDecisionWrite,
   isManifestFreezeWrite,
   measureBeginGate,
+  measureTransactionShape,
   measureWriteTransaction,
   nthParticipantRowWrite,
   participantDeliveryOf,
