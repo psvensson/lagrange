@@ -2398,6 +2398,7 @@
         "src/partition/partition-placement-admission.js"
       ],
       "tests": [
+        "test/index-management/global-index-founding-provisioning.test.js",
         "test/index-management/global-index-production-construction.test.js"
       ]
     },
@@ -5258,6 +5259,7 @@
       ],
       "contract": "gsi-founding-workflow-identity",
       "witnessTests": [
+        "test/index-management/global-index-founding-provisioning.test.js",
         "test/index-management/global-index-production-construction.test.js"
       ]
     },

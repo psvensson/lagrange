@@ -120,7 +120,6 @@ async function assertDurableRejoinStorageAdmission(
 }
 
 export {
-  DURABLE_REJOIN_LIFECYCLE_AUTHORITY_CHANGED,
   DURABLE_REJOIN_LIFECYCLE_AUTHORITY_UNAVAILABLE,
   DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK,
   assertDurableRejoinStorageAdmission,

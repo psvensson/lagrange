@@ -20,6 +20,8 @@ const RAFT_RS_FAULT_LOG_MSG = Object.freeze({
   [RUNTIME_FAULT_REPORT.RUNTIME_REPLACED]: 'raft-rs runtime replaced',
   [RUNTIME_FAULT_REPORT.RESEED_HOLD_WRITE_FAILED]:
     'raft-rs reseed hold not yet durable',
+  [RUNTIME_FAULT_REPORT.TRANSFER_ADMISSION_FAILED]:
+    'raft-rs transfer placement predicate failed',
 });
 
 // A spent wait bound of the runtime is written as the one wait_bound_spent

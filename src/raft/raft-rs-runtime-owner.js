@@ -23,10 +23,11 @@ import {openedLastIndex, persistedLastIndexAfter} from './raft-rs-local-log-guar
 import {
   applicationFailureOf, durableProgressOf, durableRecordReadFailure,
   enterReseedHold, hostFailure, recordReseedHold, refuseInboundStep,
-  reportCoreTrap, reportRuntimeReplaced, reportWaitBoundExceeded,
+  reportCoreTrap, reportRuntimeReplaced, reportTransferAdmissionFailure, reportWaitBoundExceeded,
 } from './raft-rs-runtime-faults.js';
 import {
-  decideLeadershipTransfer, droppedByLeadershipTransfer, leadershipTransferInProgress, transferRefusal,
+  decideLeadershipTransfer, droppedByLeadershipTransfer, leadershipTransferInProgress,
+  transferRefusal,
 } from './raft-rs-leadership-transfer.js';
 import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from './raft-rs-ready-loop-constants.js';
 import {RAFT_RS_INITIAL_APPLIED, RAFT_RS_READY_DRAIN_MAX_CYCLES} from './raft-rs-group-constants.js';
@@ -35,7 +36,8 @@ import {
   CONF_STATE_NOT_ANNOUNCED, CORE_CALL_WITHOUT_HANDLE, CORE_OPERATION,
   CORE_REFUSAL_KIND, DURABLE_PROGRESS_OBSERVATION,
   FOLLOWER_RAFT_STATE, HEALTHY, INBOUND_DRAIN_DELAY_MS, INBOUND_WAKE_DEBT,
-  NO_LEADER, PERSISTENCE_ADMISSION_WAIT, RECOVERY_REQUIRED, REPLACING,
+  ENTRY_APPLY_DURABLE_OK, MAX_SCHEDULED_INBOUND_DRAIN_BATCH, NO_LEADER, NO_REPLACEMENT_FAILURE,
+  NO_STATUS_OBSERVATION, PERSISTENCE_ADMISSION_WAIT, RECOVERY_REQUIRED, REPLACING,
   ROLE, ROLE_LEADER, RUNTIME_COMMAND, RUNTIME_FAULT_REPORT, RUNTIME_EVENT,
   RUNTIME_PHASE, RUNTIME_REASON, RUNTIME_RESUME_DELAY_MS, UNHEALTHY, USABLE,
 } from './raft-rs-runtime-owner-constants.js';
@@ -75,19 +77,14 @@ import {
 } from './raft-rs-application-transaction-owner.js';
 import {persistenceAdmitted, whenPersistenceAdmitted} from './raft-rs-persistence-admission.js';
 import {deepFreeze} from './raft-operation-port.js';
-import {continueTurn, pendingTurn, settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
+import {
+  continueTurn, pendingTurn, readHostAdmission, settleBatchTurn, settledTurn, turnChainValue,
+} from './raft-rs-turn-answer.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
 import {proposeMembershipTransition} from './raft-rs-membership-transition-runtime.js';
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
-const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
-const MAX_SCHEDULED_INBOUND_DRAIN_BATCH = 32;
-// A group holds no cached usable status answer (a discarded core's answers
-// are never reused).
-const NO_STATUS_OBSERVATION = null;
-// The shared replacement attempt has recorded no failure yet.
-const NO_REPLACEMENT_FAILURE = null;
 
 let core = null;
 let runtimeHealth = HEALTHY;
@@ -1631,14 +1628,12 @@ function transferLeadership(group, expectedGeneration, command) {
   if (command.admitExecution) {
     // The host predicate receives neither the command nor the native group.
     // Observe native authority after it returns, after the inbound drain.
-    const {admitExecution} = command;
-    let eligible = false;
-    try {
-      eligible = admitExecution() === true;
-    } catch {
-      // A failed placement read cannot authorize a transfer.
+    const admission = readHostAdmission(command.admitExecution);
+    if (!admission.admitted) {
+      // A failed placement read cannot authorize a transfer; its error is reported.
+      if (admission.threw) reportTransferAdmissionFailure(group, admission.error);
+      return settledTurn(transferRefusal(RUNTIME_REASON.PLACEMENT_WITHDRAWN, true));
     }
-    if (!eligible) return settledTurn(transferRefusal(RUNTIME_REASON.PLACEMENT_WITHDRAWN, true));
   }
   const observed = readGroupObservation(group, expectedGeneration);
   if (!observed.ok) {
@@ -2034,21 +2029,6 @@ function runScheduledInboundDrain(group) {
   if (!finished.settled) {
     finished.pending.catch(() => undefined);
   }
-}
-
-function settleBatchTurn(batch, firstDeferred, turn) {
-  const resolveAll = (val) => {
-    firstDeferred.resolve(val);
-    for (const item of batch) item.deferred.resolve(val);
-    return val;
-  };
-  if (!turn.settled) {
-    return pendingTurn(turn.pending.then(resolveAll, (err) => {
-      firstDeferred.reject(err);
-      for (const item of batch) item.deferred.reject(err);
-    }));
-  }
-  return settledTurn(resolveAll(turn.result));
 }
 
 function drainQueuedProposalBatch(group) {

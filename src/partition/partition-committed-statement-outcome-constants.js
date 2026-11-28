@@ -248,6 +248,37 @@ const MIRROR_RETENTION_CUSTODY_COMMAND_ERROR = Object.freeze({
   BYTES: 'mirror_retention_custody_bytes_invalid',
 });
 
+// The table of each committed statement's captured row effects (mirror replay
+// records) and the mirror retention barrier row: written by the mirror-effect
+// retention owner, read by it and by snapshot payload validation.
+const PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
+  TABLE: '_partition_statement_outcome_effects',
+  CREATE_TABLE:
+    'CREATE TABLE IF NOT EXISTS _partition_statement_outcome_effects (' +
+    'entry_key TEXT PRIMARY KEY, log_index INTEGER NOT NULL, ' +
+    'mutation_kind TEXT, typed_effects_json TEXT NOT NULL)',
+  CREATE_LOG_INDEX_IDX:
+    'CREATE INDEX IF NOT EXISTS idx_partition_statement_outcome_effects_log_index ' +
+    'ON _partition_statement_outcome_effects (log_index)',
+  TABLE_EXISTS: 'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?',
+  INSERT:
+    'INSERT INTO _partition_statement_outcome_effects ' +
+    '(entry_key, log_index, mutation_kind, typed_effects_json) VALUES (?, ?, ?, ?)',
+  SELECT_BY_ENTRY_KEY:
+    'SELECT entry_key, log_index, mutation_kind, typed_effects_json ' +
+    'FROM _partition_statement_outcome_effects WHERE entry_key = ?',
+  DELETE_THROUGH_LOG_INDEX:
+    'DELETE FROM _partition_statement_outcome_effects WHERE log_index > 0 AND log_index <= ?',
+  DELETE_BY_ENTRY_KEY:
+    'DELETE FROM _partition_statement_outcome_effects WHERE entry_key = ?',
+  UPSERT_RETENTION_BARRIER:
+    'INSERT INTO _partition_statement_outcome_effects ' +
+    '(entry_key, log_index, mutation_kind, typed_effects_json) VALUES (?, 0, ?, ?) ' +
+    'ON CONFLICT (entry_key) DO UPDATE SET ' +
+    'mutation_kind = excluded.mutation_kind, ' +
+    'typed_effects_json = excluded.typed_effects_json',
+});
+
 export {
   committedCommandDigest,
   committedStatementResult,
@@ -267,5 +298,6 @@ export {
   PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
   PARTITION_SETTLED_REPLAY,
   PARTITION_SQLITE_RESULT_CODE,
+  PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL,
   STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
 };

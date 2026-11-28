@@ -12,6 +12,12 @@
 // budget row excludes by name. It reads the answer's `then` once, through
 // captured intrinsics, so a hostile getter or replaced prototype method
 // cannot change what it decides.
+//
+// A host's admission predicate - the execution fence a host passes with an
+// operation - is such a foreign answer too: readHostAdmission is the one
+// reading of it. Only an answer of exactly true admits; any other answer
+// refuses, and a predicate that throws (or cannot be called) refuses with the
+// thrown error kept on the answer, so the failure stays observable.
 
 import {types as utilTypes} from 'node:util';
 
@@ -99,9 +105,50 @@ function turnFromForeignAnswer(value) {
   }));
 }
 
+const HOST_ADMITTED = objectFreeze({admitted: true, threw: false, error: null});
+const HOST_NOT_ADMITTED = objectFreeze({admitted: false, threw: false, error: null});
+
+function hostAdmissionFailure(error) {
+  return objectFreeze({admitted: false, threw: true, error});
+}
+
+/**
+ * Ask a host's admission predicate once, with no receiver and no arguments.
+ * @param {Function} predicate - The host's execution fence.
+ * @return {{admitted: boolean, threw: boolean, error: *}} Whether it admits,
+ *   and the error it threw when it threw.
+ */
+function readHostAdmission(predicate) {
+  try {
+    return predicate() === true ? HOST_ADMITTED : HOST_NOT_ADMITTED;
+  } catch (error) {
+    return hostAdmissionFailure(error);
+  }
+}
+
+// One turn's answer handed to a proposal batch: the first proposal's deferred
+// and every batched proposal's deferred settle with the same answer, at once
+// when the turn settled, or when its pending answer does.
+function settleBatchTurn(batch, firstDeferred, turn) {
+  const resolveAll = (val) => {
+    firstDeferred.resolve(val);
+    for (const item of batch) item.deferred.resolve(val);
+    return val;
+  };
+  if (!turn.settled) {
+    return pendingTurn(turn.pending.then(resolveAll, (err) => {
+      firstDeferred.reject(err);
+      for (const item of batch) item.deferred.reject(err);
+    }));
+  }
+  return settledTurn(resolveAll(turn.result));
+}
+
 export {
   continueTurn,
   pendingTurn,
+  readHostAdmission,
+  settleBatchTurn,
   settledTurn,
   turnChainValue,
   turnFromForeignAnswer,

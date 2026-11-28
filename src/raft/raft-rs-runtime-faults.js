@@ -188,6 +188,19 @@ function reportWaitBoundExceeded(group, kind, fields) {
   report(group, kind, fields);
 }
 
+/**
+ * A transfer's host placement predicate threw: one ERROR line naming the
+ * error, beside the withdrawn refusal the transfer answers (unchanged).
+ * @param {Object} group - The runtime group.
+ * @param {*} error - What the predicate threw.
+ */
+function reportTransferAdmissionFailure(group, error) {
+  report(group, RUNTIME_FAULT_REPORT.TRANSFER_ADMISSION_FAILED, {
+    error: String(error?.message ?? error),
+    ...(typeof error?.code === 'string' ? {code: error.code} : {}),
+  });
+}
+
 // The group's durable progress as its durable record holds it now: an
 // observation for a held group's status (nothing writes the record while
 // the group is held), or the named state that it could not be read.
@@ -249,5 +262,6 @@ export {
   refuseInboundStep,
   reportCoreTrap,
   reportRuntimeReplaced,
+  reportTransferAdmissionFailure,
   reportWaitBoundExceeded,
 };

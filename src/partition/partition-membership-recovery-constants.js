@@ -1,6 +1,8 @@
 // Constants and schema definitions for group-bound permanent member loss
 // recovery intents, generation bindings, and excluded-source fences.
 
+import {ERRORS} from '../constants/errors.js';
+
 const PARTITION_MEMBERSHIP_RECOVERY_TYPE = 'PARTITION_MEMBERSHIP_RECOVERY';
 const PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE_TYPE =
   'PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE';
@@ -32,7 +34,7 @@ const PARTITION_MEMBERSHIP_RECOVERY_ERROR = Object.freeze({
   'TARGET_INVALID': 'membership_recovery_target_invalid',
   'TARGET_CATCHUP_INCOMPLETE': 'membership_recovery_target_catchup_incomplete',
   'INTENT_CONFLICT': 'membership_recovery_intent_conflict',
-  'RETIRED_MEMBER_FENCED': 'membership_recovery_retired_member_fenced',
+  'RETIRED_MEMBER_FENCED': ERRORS.MEMBERSHIP_RECOVERY_RETIRED_MEMBER_FENCED,
 });
 
 const PARTITION_MEMBERSHIP_RECOVERY_DEFAULT = Object.freeze({

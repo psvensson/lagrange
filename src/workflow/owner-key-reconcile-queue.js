@@ -227,8 +227,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     const {completionWaiter, fenceToken} = admission;
     const existing = mapGet(this.pending, ownerKey);
     if (options?.preserveOwnedContext === true) {
-      const owned = existing || mapGet(this.retryWorkItems, ownerKey) ||
-        mapGet(this.inFlightItems, ownerKey) || mapGet(this.exhaustedWorkItems, ownerKey);
+      const owned = this._ownedWorkItem(ownerKey, existing);
       if (owned) context = owned.context;
     }
     if (existing) {
@@ -275,6 +274,11 @@ class OwnerKeyReconcileQueue extends EventEmitter {
 
     this.scheduleDrain();
     return true;
+  }
+
+  _ownedWorkItem(ownerKey, existing) {
+    return existing || mapGet(this.retryWorkItems, ownerKey) ||
+      mapGet(this.inFlightItems, ownerKey) || mapGet(this.exhaustedWorkItems, ownerKey);
   }
 
   _resolveEnqueueAdmission(ownerKey, reason, options) {

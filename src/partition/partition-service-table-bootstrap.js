@@ -15,6 +15,7 @@ import {
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
   renderTableDefinitionSql,
+  renderTableDefinitionSqlIfAbsent,
 } from '../query/sql-table-definition.js';
 
 const PARTITION_TABLE_OBSERVATION = Object.freeze({
@@ -139,8 +140,7 @@ function createTableAndIndexes(service) {
   if (!service.schema || !service.schema.columns) {
     return;
   }
-  const sql = renderTableDefinitionSql(service.tableName, service.schema)
-    .replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS ');
+  const sql = renderTableDefinitionSqlIfAbsent(service.tableName, service.schema);
   service.db.exec(sql);
   const indexSchema =
     service.tableName === SYSTEM_TABLE_NAME.WASM_OPERATIONS ?

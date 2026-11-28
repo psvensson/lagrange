@@ -22,6 +22,8 @@ import {QueryOptimizer} from '../../src/index-management/query-optimizer.js';
 import {DistributedQueryPlanner} from
   '../../src/query/distributed/distributed-query-planner.js';
 import {TABLES} from '../../src/constants/index.js';
+import {CONTROL_PLANE_READ_OUTCOME} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 beforeEach(() => {
@@ -112,7 +114,7 @@ function createTestSystemGateway(initialTables = [], initialPartitions = []) {
     db,
     async readRows(tableName, sql, params = []) {
       const rows = db.prepare(sql).all(...params);
-      return {rows};
+      return {rows, outcome: CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED};
     },
     async insertSystemTableRow(tableName, data) {
       if (tableName === TABLES.INDICES) {

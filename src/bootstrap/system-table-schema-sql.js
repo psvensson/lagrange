@@ -1,4 +1,4 @@
-import {renderTableDefinitionSql} from '../query/sql-table-definition.js';
+import {renderTableDefinitionSqlIfAbsent} from '../query/sql-table-definition.js';
 import {SYSTEM_TABLE_NAME} from './system-table-schema-shared-constants.js';
 
 const LOCAL_STR_RPAREN = ')';
@@ -17,8 +17,7 @@ function readSystemTableRowsIn(db, schema) {
 function generateCreateTableSQL(schema) {
   if (schema.tableName === SYSTEM_TABLE_NAME.NODES ||
       schema.tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
-    return renderTableDefinitionSql(schema.tableName, schema)
-      .replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS ');
+    return renderTableDefinitionSqlIfAbsent(schema.tableName, schema);
   }
   const columnDefs = schema.columns.map((col) => {
     let def = `${col.name} ${col.type}`;

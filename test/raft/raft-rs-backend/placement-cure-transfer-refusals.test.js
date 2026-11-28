@@ -5,6 +5,8 @@ import {RAFT_LEADERSHIP_TRANSFER_REASON as REASON, RAFT_LEADERSHIP_TRANSFER_SUCC
 import {RAFT_RS_CONF_CHANGE_TYPE} from '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {TransferLeadershipDriver, assertRefused, namedSuccessor} from './transfer-leadership-driver.js';
+import {capturingErrors} from './identity-reuse-harness.js';
+import {RUNTIME_FAULT_REPORT} from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 
 const [a, b, c] = ['placement-source', 'placement-other', 'placement-target'];
 function open(t) {
@@ -88,3 +90,30 @@ test('a matching stamp during joint consensus still refuses placement transfer',
   assert.ok(status.confState.voters.includes(driver.raftIdAt(a, c)));
   await assertRefusalSteps(driver, request(status), () => true, REASON.SOURCE_CHANGED);
 });
+
+test('a placement predicate that throws or answers non-true withdraws the transfer; a throw is reported',
+  async (t) => {
+    const driver = open(t);
+    const captured = request(driver.status(a));
+    const failure = Object.assign(new Error('placement read failed'), {code: 'PLACEMENT_READ'});
+    const errors = await capturingErrors(async () => {
+      await assertRefusalSteps(driver, captured, () => {
+        throw failure;
+      }, REASON.PLACEMENT_WITHDRAWN);
+    });
+    const reported = errors.filter(({context}) =>
+      context.report === RUNTIME_FAULT_REPORT.TRANSFER_ADMISSION_FAILED);
+    assert.equal(reported.length, 1, JSON.stringify(errors));
+    assert.equal(reported[0].context.error, 'placement read failed');
+    assert.equal(reported[0].context.code, 'PLACEMENT_READ');
+    assert.equal(reported[0].context.groupId, driver.status(a).groupId);
+    for (const answer of [1, 'true', {}, undefined]) {
+      const quiet = await capturingErrors(async () => {
+        await assertRefusalSteps(driver, captured, () => answer, REASON.PLACEMENT_WITHDRAWN);
+      });
+      assert.deepEqual(quiet.filter(({context}) =>
+        context.report === RUNTIME_FAULT_REPORT.TRANSFER_ADMISSION_FAILED), [],
+      `a ${JSON.stringify(answer)} answer is a withdrawal, not a failure`);
+    }
+    assert.equal(driver.leads(a), true);
+  });

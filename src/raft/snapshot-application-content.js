@@ -1,8 +1,9 @@
 import {assertMirrorReplayCoverageIn} from '../partition/partition-mirror-effect-retention.js';
 import {assertAppliedMirrorEffect, decodeMirrorCustodyRow, decodeMirrorReplayRecord} from '../partition/partition-mirror-custody-codec.js';
 import {detectCommittedStatementOutcomeFormat} from '../partition/partition-retained-store-observation.js';
-import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, PARTITION_COMMITTED_STATEMENT_FORMAT,
-  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
+import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
+  PARTITION_COMMITTED_STATEMENT_FORMAT,
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL, PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL} from
   '../partition/partition-committed-statement-outcome-constants.js';
 // Application and durable partition table policy for raft-rs replica-image
 // checkpoints (SN1 / F5). Separates partition state-machine payloads (which
@@ -21,7 +22,6 @@ const NO_COMMITTED_HLC = '0';
 const RAFT_RS_PEER_TABLE = 'raft_rs_peer_identity';
 const RAFT_INTERNAL_TABLE_PREFIX = '_raft_';
 const PARTICIPANT_TRANSACTIONS_TABLE = '_participant_transactions';
-const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
 const PREPARED_PARTICIPANT_STATE = 'PREPARED';
 const IDENTIFIER_QUOTE = '"';
 const IDENTIFIER_ESCAPED_QUOTE = '""';
@@ -36,9 +36,24 @@ const SELECT_RAFT_LOCAL_TABLES_SQL =
   'SELECT name FROM sqlite_master WHERE type = \'table\' AND name LIKE \'_raft_%\'';
 const SELECT_USER_TABLES_SQL =
   'SELECT name FROM sqlite_master WHERE type = \'table\'';
-const SELECT_OUTCOME_EFFECTS_ROWS_SQL =
-  'SELECT entry_key, log_index, mutation_kind, typed_effects_json ' +
-  `FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE}`;
+// The retained replay rows above the mirror retention barrier row, each with
+// its committed statement outcome (NULL outcome columns when it has none).
+const SELECT_PINNED_REPLAY_ROWS_SQL =
+  'SELECT e.entry_key, e.log_index, e.mutation_kind, e.typed_effects_json, ' +
+  'o.outcome, o.log_index AS outcome_index, o.changes, o.mirror_effect_required ' +
+  `FROM ${PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE} e ` +
+  `LEFT JOIN ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} o ON o.entry_key = e.entry_key ` +
+  'WHERE e.entry_key != ? ORDER BY e.log_index';
+const INVALID_PINNED_REPLAY_ROWS_MSG = 'Invalid pinned mirror replay rows';
+const MALFORMED_PINNED_REPLAY_PAYLOAD_MSG = 'Pinned mirror replay payload is malformed';
+// The columns the pinned replay reads from the effects table.
+const PINNED_REPLAY_EFFECT_COLUMNS = Object.freeze([
+  'entry_key', 'log_index', 'mutation_kind', 'typed_effects_json',
+]);
+// The SQLite result codes a payload's own bytes raise on a read: a corrupt
+// page, or a file that is no database (primary codes and their extensions).
+const PAYLOAD_CORRUPTION_SQLITE_CODES = Object.freeze(['SQLITE_CORRUPT', 'SQLITE_NOTADB']);
+const SQLITE_CODE_EXTENSION_SEPARATOR = '_';
 
 function quotedIdentifier(identifier) {
   return `${IDENTIFIER_QUOTE}${identifier.replaceAll(
@@ -95,31 +110,53 @@ function computeRaftRsMaxCommittedHlc(copyDb, groupId) {
   return max === null ? NO_COMMITTED_HLC : max.toString();
 }
 
-/**
- * Scrub replica-local consensus tables from a backup copy before sealing a
- * `raft_rs_replica_image` payload. Partition checkpoints keep committed user
- * tables and canonical partition metadata tables (`_transaction_outcomes`,
- * `_partition_statement_outcomes`, `_participant_transactions`,
- * `_partition_write_generation`, `_cdc_obligations`,
- * `_cdc_obligation_progress`, `sqlite_sequence`, `raft_rs_peer_identity`) while
- * dropping all `_raft_*` tables; message-group checkpoints additionally drop
- * all non-`sqlite_` tables except `raft_rs_peer_identity`.
- * @param {Object} copyDb - Open better-sqlite3 checkpoint copy.
- * @param {string} [entityKind] - Descriptor entity kind.
- */
+// A payload whose pinned replay cannot be read for a reason in its own bytes:
+// the mirror codec's BYTES code, as every other malformed retained record has.
+function malformedPinnedReplayPayload(cause) {
+  return Object.assign(new TypeError(MALFORMED_PINNED_REPLAY_PAYLOAD_MSG, {cause}),
+    {code: MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES});
+}
+
+function isPayloadCorruption(error) {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  return PAYLOAD_CORRUPTION_SQLITE_CODES.some((primary) => code === primary ||
+    code.startsWith(primary + SQLITE_CODE_EXTENSION_SEPARATOR));
+}
+
+// The pinned replay reads only tables a well-formed payload holds: the effects
+// table with the columns the replay reads, and the committed outcome table in
+// its current format (the replay's every row is checked against it).
+function assertPinnedReplayTables(db) {
+  const columns = db.pragma(
+    `table_info(${quotedIdentifier(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE)})`)
+    .map(({name}) => name);
+  if (!PINNED_REPLAY_EFFECT_COLUMNS.every((column) => columns.includes(column)) ||
+      detectCommittedStatementOutcomeFormat(db).outcome !==
+        PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT) {
+    throw malformedPinnedReplayPayload(null);
+  }
+}
+
+// Whether the pinned replay rows are complete and applied (false: no pin). Every
+// failure the payload's own bytes cause carries the BYTES code; any other
+// failure (a closed database, an I/O error) propagates.
 function validatePinnedReplayRows(db) {
-  const pin = db.prepare(SELECT_OUTCOME_EFFECTS_ROWS_SQL + ' WHERE entry_key = ?')
+  try {
+    assertPinnedReplayTables(db);
+    return readPinnedReplayRows(db);
+  } catch (error) {
+    if (isPayloadCorruption(error)) throw malformedPinnedReplayPayload(error);
+    throw error;
+  }
+}
+
+function readPinnedReplayRows(db) {
+  const pin = db.prepare(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
     .get(MIRROR_RETENTION_BARRIER_ENTRY_KEY);
   if (!pin) return false;
   const custody = decodeMirrorCustodyRow(pin);
   assertMirrorReplayCoverageIn(db, custody.barrierIndex);
-  const rows = db.prepare(
-    'SELECT e.entry_key, e.log_index, e.mutation_kind, e.typed_effects_json, ' +
-    'o.outcome, o.log_index AS outcome_index, o.changes, o.mirror_effect_required ' +
-    `FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} e ` +
-    `LEFT JOIN ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} o ON o.entry_key = e.entry_key ` +
-    'WHERE e.entry_key != ? ORDER BY e.log_index',
-  );
+  const rows = db.prepare(SELECT_PINNED_REPLAY_ROWS_SQL);
   let previousIndex = custody.barrierIndex;
   for (const row of rows.iterate(MIRROR_RETENTION_BARRIER_ENTRY_KEY)) {
     const {command, typedEffects} = decodeMirrorReplayRecord(row);
@@ -136,25 +173,40 @@ function validatePinnedReplayRows(db) {
 }
 
 function scrubStatementOutcomeEffectsTable(copyDb, entityKind) {
-  if (!copyDb.prepare(SELECT_TABLE_PRESENT_SQL).get(STATEMENT_OUTCOME_EFFECTS_TABLE)) return;
+  if (!copyDb.prepare(SELECT_TABLE_PRESENT_SQL)
+    .get(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE)) return;
   if (entityKind === ENTITY_TYPE.PARTITION && copyDb.prepare(
-    SELECT_OUTCOME_EFFECTS_ROWS_SQL + ' WHERE entry_key = ?',
+    PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY,
   ).get(MIRROR_RETENTION_BARRIER_ENTRY_KEY)) {
-    if (!validatePinnedReplayRows(copyDb)) throw new Error('Invalid pinned mirror replay rows');
+    if (!validatePinnedReplayRows(copyDb)) throw new Error(INVALID_PINNED_REPLAY_ROWS_MSG);
     return;
   }
-  copyDb.exec(`DROP TABLE ${quotedIdentifier(STATEMENT_OUTCOME_EFFECTS_TABLE)}`);
+  copyDb.exec(`DROP TABLE ${quotedIdentifier(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE)}`);
 }
 
 function hasValidPayloadStatementOutcomeEffectsTable(payloadDb, tables) {
-  if (!tables.includes(STATEMENT_OUTCOME_EFFECTS_TABLE)) return true;
+  if (!tables.includes(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE)) return true;
   try {
     return validatePinnedReplayRows(payloadDb);
-  } catch {
-    return false;
+  } catch (error) {
+    // Only the BYTES code is evidence that the payload is malformed.
+    if (error?.code === MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES) return false;
+    throw error;
   }
 }
 
+/**
+ * Scrub replica-local consensus tables from a backup copy before sealing a
+ * `raft_rs_replica_image` payload. Partition checkpoints keep committed user
+ * tables and canonical partition metadata tables (`_transaction_outcomes`,
+ * `_partition_statement_outcomes`, `_participant_transactions`,
+ * `_partition_write_generation`, `_cdc_obligations`,
+ * `_cdc_obligation_progress`, `sqlite_sequence`, `raft_rs_peer_identity`) while
+ * dropping all `_raft_*` tables; message-group checkpoints additionally drop
+ * all non-`sqlite_` tables except `raft_rs_peer_identity`.
+ * @param {Object} copyDb - Open better-sqlite3 checkpoint copy.
+ * @param {string} [entityKind] - Descriptor entity kind.
+ */
 function scrubRaftRsCheckpointPayload(copyDb, entityKind, entityId) {
   if (entityKind === ENTITY_TYPE.PARTITION && entityId === SYSTEM_TABLE_NAME.PARTITIONS &&
       (!partitionDescriptorsAreCurrentIn(copyDb) ||

@@ -35,7 +35,7 @@ import {
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
-import {settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
+import {readHostAdmission, settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
 
 const RAFT_GROUP_MEMBERSHIP_ADMISSION_LOG_MSG = Object.freeze({
   PEER_ADMISSION: 'Raft peer admission',
@@ -416,11 +416,7 @@ function learnerDeliveryMatches(receiver, delivery) {
 }
 
 function liveDelivery(admitExecution) {
-  try {
-    return admitExecution() === true;
-  } catch {
-    return false;
-  }
+  return readHostAdmission(admitExecution).admitted;
 }
 
 function deliveryRefusal() {

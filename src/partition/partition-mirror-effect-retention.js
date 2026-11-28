@@ -6,6 +6,7 @@ import {materializeTypedRowSetObjects} from '../query/sql-value-codec.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
+  PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL,
   MIRROR_RETENTION_BARRIER_ENTRY_KEY,
   MIRROR_RETENTION_BARRIER_KIND,
   MIRROR_RETENTION_CUSTODY_ACTION,
@@ -34,34 +35,7 @@ function registerMirrorRetentionRaftHooks(hooks = {}) {
 }
 
 const SYSTEM_TABLE_NAMES_SET = Object.freeze(new Set(Object.values(TABLES)));
-const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
 const CUSTODY_ENTRY_ID_PREFIX = 'mirror-retention';
-const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
-  CREATE_TABLE:
-    'CREATE TABLE IF NOT EXISTS _partition_statement_outcome_effects (' +
-    'entry_key TEXT PRIMARY KEY, log_index INTEGER NOT NULL, ' +
-    'mutation_kind TEXT, typed_effects_json TEXT NOT NULL)',
-  CREATE_LOG_INDEX_IDX:
-    'CREATE INDEX IF NOT EXISTS idx_partition_statement_outcome_effects_log_index ' +
-    'ON _partition_statement_outcome_effects (log_index)',
-  TABLE_EXISTS: 'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?',
-  INSERT:
-    'INSERT INTO _partition_statement_outcome_effects ' +
-    '(entry_key, log_index, mutation_kind, typed_effects_json) VALUES (?, ?, ?, ?)',
-  SELECT_BY_ENTRY_KEY:
-    'SELECT entry_key, log_index, mutation_kind, typed_effects_json ' +
-    'FROM _partition_statement_outcome_effects WHERE entry_key = ?',
-  DELETE_THROUGH_LOG_INDEX:
-    'DELETE FROM _partition_statement_outcome_effects WHERE log_index > 0 AND log_index <= ?',
-  DELETE_BY_ENTRY_KEY:
-    'DELETE FROM _partition_statement_outcome_effects WHERE entry_key = ?',
-  UPSERT_RETENTION_BARRIER:
-    'INSERT INTO _partition_statement_outcome_effects ' +
-    '(entry_key, log_index, mutation_kind, typed_effects_json) VALUES (?, 0, ?, ?) ' +
-    'ON CONFLICT (entry_key) DO UPDATE SET ' +
-    'mutation_kind = excluded.mutation_kind, ' +
-    'typed_effects_json = excluded.typed_effects_json',
-});
 
 function isUserTableNameEligibleForMirror(tableName) {
   return typeof tableName === 'string' && tableName.length > 0 &&
@@ -91,19 +65,20 @@ function partitionOwesDurableMirrorEffects(service, tableName = service?.tableNa
 function capturedRowEffectsTableExistsIn(db) {
   const state = sqliteConnectionState(db);
   return state.committedFact(
-    STATEMENT_OUTCOME_EFFECTS_TABLE,
-    STATEMENT_OUTCOME_EFFECTS_TABLE,
+    PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE,
+    PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE,
     () => state
-      .statement(STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
-      .get(STATEMENT_OUTCOME_EFFECTS_TABLE) !== undefined,
+      .statement(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
+      .get(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE) !== undefined,
   );
 }
 
 function ensureCapturedRowEffectsTableIn(db, state) {
   if (capturedRowEffectsTableExistsIn(db)) return;
-  db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
-  db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_LOG_INDEX_IDX);
-  state.forgetFact(STATEMENT_OUTCOME_EFFECTS_TABLE, STATEMENT_OUTCOME_EFFECTS_TABLE);
+  db.exec(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
+  db.exec(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_LOG_INDEX_IDX);
+  state.forgetFact(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE,
+    PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE);
 }
 
 function persistCapturedRowEffectsIn(
@@ -111,7 +86,7 @@ function persistCapturedRowEffectsIn(
 ) {
   ensureCapturedRowEffectsTableIn(service.db, state);
   state.runNonApplication(
-    STATEMENT_OUTCOME_EFFECTS_SQL.INSERT,
+    PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.INSERT,
     entryKey,
     logIndex,
     typeof mutationKind === 'string' ? mutationKind : null,
@@ -126,7 +101,7 @@ export function assertMirrorReplayCoverageIn(db, watermark) {
   const missing = db.prepare(
     `SELECT o.entry_key FROM ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} o ` +
     'WHERE o.mirror_effect_required = 1 AND o.log_index > ? ' +
-    (effectsPresent ? `AND NOT EXISTS (SELECT 1 FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} e ` +
+    (effectsPresent ? `AND NOT EXISTS (SELECT 1 FROM ${PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE} e ` +
       'WHERE e.entry_key = o.entry_key AND e.log_index = o.log_index) ' : '') +
     'LIMIT 1',
   ).get(watermark);
@@ -158,7 +133,7 @@ function pruneCompactedStatementOutcomeEffectsIn(db, compactedIndex) {
 function readCapturedRowEffectsIn(db, entryKey) {
   if (!capturedRowEffectsTableExistsIn(db)) return null;
   const row = sqliteConnectionState(db)
-    .statement(STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
+    .statement(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
     .get(entryKey);
   if (typeof row?.typed_effects_json !== 'string') return null;
   return {
@@ -170,7 +145,7 @@ function readCapturedRowEffectsIn(db, entryKey) {
 function readDurableMirrorRetentionCustodyIn(db) {
   if (!db?.open || !capturedRowEffectsTableExistsIn(db)) return null;
   const row = sqliteConnectionState(db)
-    .statement(STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
+    .statement(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
     .get(MIRROR_RETENTION_BARRIER_ENTRY_KEY);
   return row ? decodeMirrorCustodyRow(row) : null;
 }
@@ -178,7 +153,7 @@ function readDurableMirrorRetentionCustodyIn(db) {
 function writeDurableMirrorRetentionCustodyIn(service, state, custody) {
   ensureCapturedRowEffectsTableIn(service.db, state);
   state.runNonApplication(
-    STATEMENT_OUTCOME_EFFECTS_SQL.UPSERT_RETENTION_BARRIER,
+    PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.UPSERT_RETENTION_BARRIER,
     MIRROR_RETENTION_BARRIER_ENTRY_KEY,
     MIRROR_RETENTION_BARRIER_KIND,
     JSON.stringify(custody),
@@ -188,7 +163,7 @@ function writeDurableMirrorRetentionCustodyIn(service, state, custody) {
 function deleteDurableMirrorRetentionCustodyIn(service, state) {
   if (!service?.db?.open || !capturedRowEffectsTableExistsIn(service.db)) return;
   state.runNonApplication(
-    STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_BY_ENTRY_KEY,
+    PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_BY_ENTRY_KEY,
     MIRROR_RETENTION_BARRIER_ENTRY_KEY,
   );
 }
@@ -200,7 +175,7 @@ function resolveActiveMirrorRetentionBarrierIndex(service) {
 function pruneEffectsThroughFloorIn(state, floorIndex) {
   if (floorIndex > 0) {
     state.runNonApplication(
-      STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_THROUGH_LOG_INDEX,
+      PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_THROUGH_LOG_INDEX,
       floorIndex,
     );
   }
@@ -234,7 +209,7 @@ function isPinnedMirrorRetentionCustodyCommand(command) {
 // It crosses snapshot installation as application state. START may arrive
 // after RELEASE when the workflow reply was lost before the source proposed.
 function releasedMirrorAttemptIn(db, state) {
-  if (!state.statement(STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
+  if (!state.statement(PARTITION_STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
     .get('_partition_mirror_release')) return 0;
   return state.statement('SELECT attempt FROM _partition_mirror_release WHERE singleton = 1').get().attempt;
 }

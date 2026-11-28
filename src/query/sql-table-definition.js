@@ -7,6 +7,9 @@
  * - full (renderTableDefinitionSql): every column with its declared type,
  *   collation and constraints, plus the table constraints. A partition creates
  *   its table from it, and recognizes its own table by these exact bytes.
+ *   The same definition for a table that may already exist
+ *   (renderTableDefinitionSqlIfAbsent) differs only by `IF NOT EXISTS`, which
+ *   SQLite does not keep in the schema text, so the stored bytes are the same.
  * - column-only (renderTableColumnsSql): name, declared type and collation,
  *   nothing else. A coordinator table holding fragment rows uses it: an
  *   INTEGER PRIMARY KEY would alias the rowid the merge assigns, and
@@ -26,6 +29,7 @@ import {renderSqliteIdentifier} from './sqlite-identifier.js';
 
 const DDL = Object.freeze({
   CREATE_TABLE: 'CREATE TABLE ',
+  CREATE_TABLE_IF_NOT_EXISTS: 'CREATE TABLE IF NOT EXISTS ',
   PRIMARY_KEY: ' PRIMARY KEY',
   NOT_NULL: ' NOT NULL',
   UNIQUE: ' UNIQUE',
@@ -187,13 +191,7 @@ function renderTableConstraintSql(constraint, isCompositePk) {
   return null;
 }
 
-/**
- * The full projection: the CREATE TABLE a partition runs for a schema.
- * @param {string} tableName
- * @param {Object} schema - Catalog schema ({columns, primaryKey, tableConstraints}).
- * @return {string}
- */
-function renderTableDefinitionSql(tableName, schema) {
+function tableDefinitionSql(createTable, tableName, schema) {
   const shape = tableColumnSqlShape(schema);
   const items = schema.columns.map((col) => renderColumnDefinitionSql(col, shape));
   if (shape.isCompositePk) {
@@ -209,8 +207,29 @@ function renderTableDefinitionSql(tableName, schema) {
       items.push(clause);
     }
   }
-  return DDL.CREATE_TABLE + quoteTableName(tableName) + DDL.OPEN +
+  return createTable + quoteTableName(tableName) + DDL.OPEN +
     items.join(DDL.COMMA_SPACE) + DDL.CLOSE;
+}
+
+/**
+ * The full projection: the CREATE TABLE a partition runs for a schema.
+ * @param {string} tableName
+ * @param {Object} schema - Catalog schema ({columns, primaryKey, tableConstraints}).
+ * @return {string}
+ */
+function renderTableDefinitionSql(tableName, schema) {
+  return tableDefinitionSql(DDL.CREATE_TABLE, tableName, schema);
+}
+
+/**
+ * The full projection for a table that may already exist: the same
+ * definition, created only when absent.
+ * @param {string} tableName
+ * @param {Object} schema - Catalog schema ({columns, primaryKey, tableConstraints}).
+ * @return {string}
+ */
+function renderTableDefinitionSqlIfAbsent(tableName, schema) {
+  return tableDefinitionSql(DDL.CREATE_TABLE_IF_NOT_EXISTS, tableName, schema);
 }
 
 /**
@@ -228,5 +247,6 @@ function renderTableColumnsSql(tableName, schema) {
 export {
   renderTableColumnsSql,
   renderTableDefinitionSql,
+  renderTableDefinitionSqlIfAbsent,
   sqliteDeclaredTypeAffinity,
 };

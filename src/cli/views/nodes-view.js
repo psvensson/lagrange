@@ -27,6 +27,8 @@ const LOCAL_STR_STATUS_2 = 'Status';
 const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_HOST_CPU_UTILIZATION_PERCENT = 'host_cpu_utilization_percent';
 const LOCAL_STR_CPU = 'Host CPU%';
+// The detail panel's label for the host CPU utilization a node reports.
+const HOST_CPU_UTILIZATION_DETAIL_LABEL = 'Host CPU utilization';
 const LOCAL_NUM_EIGHT = 8;
 const LOCAL_STR_MEMORY_USAGE_PERCENT = 'memory_usage_percent';
 const LOCAL_STR_MEM = 'Mem%';
@@ -234,7 +236,8 @@ export class NodesView extends BaseView {
       {
         title: 'Resource Statistics',
         fields: [
-          {label: 'Host CPU utilization', value: this.formatPercent(node.host_cpu_utilization_percent)},
+          {label: HOST_CPU_UTILIZATION_DETAIL_LABEL,
+            value: this.formatPercent(node.host_cpu_utilization_percent)},
           {label: 'Memory Usage', value: this.formatPercent(node.memory_usage_percent)},
           {label: 'Memory Total', value: this.formatBytes(node.memory_total_bytes)},
           {label: 'Memory Used', value: this.formatBytes(node.memory_used_bytes)},

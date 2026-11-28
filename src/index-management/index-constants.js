@@ -79,6 +79,8 @@ const GLOBAL_INDEX_ERROR_MSG = Object.freeze({
   COLUMN_NAMES_REQUIRED: 'column_names is required for global secondary index',
   DISTRIBUTED_TX_IDENTITY_UNAVAILABLE:
     'Distributed transaction identity unavailable for global index write',
+  REPLICA_COUNT_UNDECLARED:
+    'Global index provisioning requires a declared replica count or the table creation default',
 });
 
 const GLOBAL_INDEX_STATEMENT_LABEL = Object.freeze({

@@ -4,6 +4,8 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CONTROL_PLANE_READ_OUTCOME} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {
   generateCreateTableSQL,
   getSchemaByTableName,
@@ -142,7 +144,8 @@ function createGatewayHandleForDbAndCache(db, cache, txGateway, {ownsDb = true} 
       if (TX_TABLES.has(tableName)) {
         return txGateway.readAuthoritativeRows(tableName, sql, params);
       }
-      return {success: true, rows: db.prepare(sql).all(...params)};
+      return {success: true, outcome: CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE,
+        rows: db.prepare(sql).all(...params)};
     },
     async insertSystemTableRow(tableName, data) {
       const res = executeSystemDbMutation(db, {operation: 'upsert', tableName, row: data});

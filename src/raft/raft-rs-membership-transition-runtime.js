@@ -9,7 +9,7 @@ import {
   transitionFenceKey,
 } from './raft-rs-membership-transition.js';
 import {deepFreeze} from './raft-operation-port.js';
-import {continueTurn, settledTurn} from './raft-rs-turn-answer.js';
+import {continueTurn, readHostAdmission, settledTurn} from './raft-rs-turn-answer.js';
 import {
   RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
   RAFT_MEMBERSHIP_TRANSITION_REASON,
@@ -259,15 +259,9 @@ function executionDeliveryRefusal(command) {
   // Generic privileged membership callers retain their existing native
   // contract. The issued-learner consumer always supplies this host fence.
   if (command.admitExecution === undefined) return null;
-  try {
-    if (typeof command.admitExecution === 'function' && command.admitExecution() === true) {
-      return null;
-    }
-  } catch {
-    // Unavailable lifetime evidence is never execution permission.
-    return staleDeliveryExecutionRefusal();
-  }
-  return staleDeliveryExecutionRefusal();
+  // Unavailable lifetime evidence is never execution permission.
+  return readHostAdmission(command.admitExecution).admitted ? null :
+    staleDeliveryExecutionRefusal();
 }
 
 function anchoredProposal(context, admitted) {

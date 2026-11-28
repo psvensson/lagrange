@@ -58,6 +58,25 @@ function roleOf(status) {
   return ROLE[status.raftState] || ROLE_FOLLOWER;
 }
 
+// A source-named request with the source binding it was captured under (term,
+// configuration, membership generation, lifecycle incarnation, runtime
+// generation) and the host's placement predicate, or SOURCE_CHANGED when any
+// of them is missing or out of range.
+function sourceNamedTransferCommand(request, successor, target, admitExecution) {
+  const {term, configurationKey, membershipGenerationIndex, lifecycleIncarnation,
+    runtimeGeneration} = request;
+  if (!Number.isSafeInteger(term) || term <= 0 ||
+      !Number.isSafeInteger(membershipGenerationIndex) ||
+      membershipGenerationIndex < 0 || !Number.isSafeInteger(runtimeGeneration) ||
+      runtimeGeneration < 0 ||
+      typeof lifecycleIncarnation !== 'string' || !lifecycleIncarnation ||
+      typeof configurationKey !== 'string' || !configurationKey || typeof admitExecution !== 'function') {
+    return {refusal: transferRefusal(RUNTIME_REASON.SOURCE_CHANGED)};
+  }
+  return {command: Object.freeze({successor, target: String(target), term, configurationKey,
+    membershipGenerationIndex, lifecycleIncarnation, runtimeGeneration, admitExecution})};
+}
+
 // {successor: NAMED, replicaIdentity} resolved to the raft id the replica's
 // registry reserved for it, {successor: MOST_CAUGHT_UP} as it is, or the
 // refusal naming how the request missed the canonical shape.
@@ -79,18 +98,7 @@ function normalizedTransferRequest(request, registry, admitExecution) {
     return {refusal: transferRefusal(RUNTIME_REASON.TARGET_UNRESERVED)};
   }
   if (sourceNamed) {
-    const {term, configurationKey, membershipGenerationIndex, lifecycleIncarnation,
-      runtimeGeneration} = request;
-    if (!Number.isSafeInteger(term) || term <= 0 ||
-        !Number.isSafeInteger(membershipGenerationIndex) ||
-        membershipGenerationIndex < 0 || !Number.isSafeInteger(runtimeGeneration) ||
-        runtimeGeneration < 0 ||
-        typeof lifecycleIncarnation !== 'string' || !lifecycleIncarnation ||
-        typeof configurationKey !== 'string' || !configurationKey || typeof admitExecution !== 'function') {
-      return {refusal: transferRefusal(RUNTIME_REASON.SOURCE_CHANGED)};
-    }
-    return {command: Object.freeze({successor, target: String(target), term, configurationKey,
-      membershipGenerationIndex, lifecycleIncarnation, runtimeGeneration, admitExecution})};
+    return sourceNamedTransferCommand(request, successor, target, admitExecution);
   }
   return {command: deepFreeze({successor, target: String(target)})};
 }
@@ -146,6 +154,37 @@ function decideMostCaughtUpTransfer({status, confState}, peerId) {
     accepted: transferAccepted(RUNTIME_REASON.TRANSFER_REQUESTED)};
 }
 
+// Whether this replica no longer holds the leadership the source-named
+// command was captured under: not the leader, a transfer to itself, another
+// term, configuration, membership generation, lifecycle incarnation or runtime
+// generation, an unapplied configuration change, a joint configuration, or a
+// closed participation gate.
+function sourceTransferStale(peerId, status, confState, observation, command) {
+  return roleOf(status) !== ROLE_LEADER || String(status.lead) !== String(peerId) ||
+    command.target === String(peerId) || Number(status.term) !== command.term ||
+    observation.configurationKey !== command.configurationKey ||
+    observation.membershipGenerationIndex !== command.membershipGenerationIndex ||
+    observation.lifecycleIncarnation !== command.lifecycleIncarnation ||
+    observation.runtimeGeneration !== command.runtimeGeneration ||
+    BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied) ||
+    confState.votersOutgoing.length > 0 || !observation.participation.gateOpen;
+}
+
+// A source-named transfer: refused as SOURCE_CHANGED (retryable) when the
+// captured source is stale, refused when the target is no settled voter,
+// otherwise decided as a named transfer.
+function decideSourceNamedTransfer(peerId, observation, command) {
+  const {status, confState} = observation;
+  if (sourceTransferStale(peerId, status, confState, observation, command)) {
+    return {answer: transferRefusal(RUNTIME_REASON.SOURCE_CHANGED, true)};
+  }
+  if (!confState.voters.includes(command.target) ||
+      confState.learnersNext.includes(command.target)) {
+    return {answer: transferRefusal(RUNTIME_REASON.TARGET_NOT_VOTER)};
+  }
+  return decideNamedTransfer(observation, command.target);
+}
+
 /**
  * What a normalized transfer command means against the core's facts.
  * @param {string} peerId - This replica's raft id.
@@ -157,22 +196,7 @@ function decideMostCaughtUpTransfer({status, confState}, peerId) {
  */
 function decideLeadershipTransfer(peerId, observation, command) {
   if (command.successor === RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.SOURCE_NAMED) {
-    const {status, confState} = observation;
-    if (roleOf(status) !== ROLE_LEADER || String(status.lead) !== String(peerId) ||
-        command.target === String(peerId) || Number(status.term) !== command.term ||
-        observation.configurationKey !== command.configurationKey ||
-        observation.membershipGenerationIndex !== command.membershipGenerationIndex ||
-        observation.lifecycleIncarnation !== command.lifecycleIncarnation ||
-        observation.runtimeGeneration !== command.runtimeGeneration ||
-        BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied) ||
-        confState.votersOutgoing.length > 0 || !observation.participation.gateOpen) {
-      return {answer: transferRefusal(RUNTIME_REASON.SOURCE_CHANGED, true)};
-    }
-    if (!confState.voters.includes(command.target) ||
-        confState.learnersNext.includes(command.target)) {
-      return {answer: transferRefusal(RUNTIME_REASON.TARGET_NOT_VOTER)};
-    }
-    return decideNamedTransfer(observation, command.target);
+    return decideSourceNamedTransfer(peerId, observation, command);
   }
   return command.successor === RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED ?
     decideNamedTransfer(observation, command.target) :

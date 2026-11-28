@@ -8,6 +8,21 @@ import {
   readParticipantCurrentStatus,
 } from './workflow-constants.js';
 
+// The participant key and status an acknowledgement names, both required
+// before any workflow or participant state is read.
+function readAckIdentity(ack) {
+  const participantKey =
+    ack?.[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY] || '';
+  if (!participantKey) {
+    throw new Error(WORKFLOW_ERROR_MSG.PARTICIPANT_KEY_REQUIRED);
+  }
+  const ackStatus = readStateField(ack?.[PARTICIPANT_ACK_FIELD.STATUS]);
+  if (ackStatus === STATE_ABSENT) {
+    throw new Error(WORKFLOW_ERROR_MSG.ACK_STATUS_REQUIRED);
+  }
+  return {participantKey, ackStatus};
+}
+
 /**
  * Participant acknowledgement methods for DurableWorkflowCoordinator:
  * the typed ack path (fence validation, duplicate detection, the
@@ -35,15 +50,7 @@ class WorkflowParticipantAckMethods {
    *   optional `reason`.
    */
   async acknowledgeParticipant(workflowId, ack) {
-    const participantKey =
-      ack?.[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY] || '';
-    if (!participantKey) {
-      throw new Error(WORKFLOW_ERROR_MSG.PARTICIPANT_KEY_REQUIRED);
-    }
-    const ackStatus = readStateField(ack?.[PARTICIPANT_ACK_FIELD.STATUS]);
-    if (ackStatus === STATE_ABSENT) {
-      throw new Error(WORKFLOW_ERROR_MSG.ACK_STATUS_REQUIRED);
-    }
+    const {participantKey, ackStatus} = readAckIdentity(ack);
 
     const workflow = this.requireWorkflow(workflowId);
     const participant = workflow.participants.get(participantKey);

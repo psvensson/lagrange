@@ -11,6 +11,7 @@ import {STRING, TABLES} from '../constants/index.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {CONTROL_PLANE_READ_OUTCOME} from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {
   GLOBAL_INDEX_ERROR_CODE,
   GLOBAL_INDEX_SQL_STATE,
@@ -33,6 +34,18 @@ import {
 } from './global-index-production-wiring.js';
 
 const LOCAL_STR_CRITICAL = 'critical';
+// The gateway's typed outcome decides whether its answer to the index catalog read
+// carries rows (true) or refuses the load (false); any other answer is malformed.
+const INDEX_CATALOG_READ_ANSWERED = Object.freeze(new Map([
+  [CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE, true],
+  [CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED, true],
+  [CONTROL_PLANE_READ_OUTCOME.CACHE_HIT, true],
+  [CONTROL_PLANE_READ_OUTCOME.BOOTSTRAP_SNAPSHOT, true],
+  [CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY, false],
+  [CONTROL_PLANE_READ_OUTCOME.DEFERRED, false],
+  [CONTROL_PLANE_READ_OUTCOME.REJECTED, false],
+  [CONTROL_PLANE_READ_OUTCOME.STALE_NOT_ALLOWED, false],
+]));
 const PERSIST_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG =
   'System-table write authority is unavailable for persisting index metadata';
 const DELETE_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG =
@@ -135,6 +148,20 @@ function buildLocalIndexMetadata(index) {
   };
 }
 
+// The rows of an answered index catalog read, or the one typed refusal that
+// carries the gateway's outcome (null when it named none) and its error.
+function indexCatalogRows(result) {
+  if (INDEX_CATALOG_READ_ANSWERED.get(result?.outcome) === true &&
+      Array.isArray(result.rows)) {
+    return result.rows;
+  }
+  const refusal = createUnavailableError(GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+    INDEX_LOG_MSG.INDICES_LOAD_FAILED);
+  refusal.outcome = result?.outcome ?? null;
+  refusal.cause = result?.error;
+  throw refusal;
+}
+
 /**
  * IndexService manages database indices for query optimization.
  * Indices are stored in the indices system table and maintained
@@ -198,10 +225,7 @@ class IndexService {
           'SELECT * FROM indices',
           [],
         );
-        if (result?.success === false || !Array.isArray(result?.rows)) {
-          throw new Error(result?.error || INDEX_LOG_MSG.INDICES_LOAD_FAILED);
-        }
-        indices = result.rows;
+        indices = indexCatalogRows(result);
       }
 
       for (const index of indices) {

@@ -228,6 +228,9 @@ const RUNTIME_FAULT_REPORT = Object.freeze({
   PERSISTENCE_ADMISSION_BOUND_EXCEEDED: 'persistence-admission-bound-exceeded',
   INBOUND_DRAIN_ADMISSION_BOUND_EXCEEDED:
     'inbound-drain-admission-bound-exceeded',
+  // A source-named transfer's host placement predicate threw: the transfer is
+  // refused as withdrawn (its answer unchanged) and the error is reported.
+  TRANSFER_ADMISSION_FAILED: 'transfer-admission-failed',
 });
 // A Ready already taken holds the core's pending Ready, so its remaining
 // durable writes cannot be refused after an asynchronous send: they wait for
@@ -251,6 +254,14 @@ const DURABLE_PROGRESS_OBSERVATION = Object.freeze({
   NOT_READ: 'not-read',
 });
 
+const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
+const MAX_SCHEDULED_INBOUND_DRAIN_BATCH = 32;
+// A group holds no cached usable status answer (a discarded core's answers
+// are never reused).
+const NO_STATUS_OBSERVATION = null;
+// The shared replacement attempt has recorded no failure yet.
+const NO_REPLACEMENT_FAILURE = null;
+
 export {
   CONF_STATE_NOT_ANNOUNCED,
   CORE_CALL_WITHOUT_HANDLE,
@@ -260,11 +271,15 @@ export {
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
   DURABLE_PROGRESS_OBSERVATION,
+  ENTRY_APPLY_DURABLE_OK,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
   INBOUND_WAKE_DEBT,
   INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT,
+  MAX_SCHEDULED_INBOUND_DRAIN_BATCH,
   NO_LEADER,
+  NO_REPLACEMENT_FAILURE,
+  NO_STATUS_OBSERVATION,
   PEER_ADDRESS_STATUS,
   PEER_DELIVERY_OBSERVATION_LIMIT,
   PEER_DELIVERY_OUTCOME,
