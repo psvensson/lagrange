@@ -1,7 +1,7 @@
 import {hostBusyPercent, hostTicks} from '../diagnostics/resource-cpu-capacity.js';
 import fs from 'node:fs';
 import os from 'node:os';
-import {NUM, STRING} from '../constants/index.js';
+import {FILE_TEXT, NUM, STRING} from '../constants/index.js';
 
 const samplesBySource = /* @__PURE__ */ new WeakMap();
 let nextHostStatisticsSampleId = 1;
@@ -14,7 +14,7 @@ export function readLinuxMemAvailableBytes(totalMemory, osFreeMemoryBytes, memin
   try {
     const content = typeof meminfoContent === 'string' ?
       meminfoContent :
-      fs.readFileSync(PROC_MEMINFO_PATH, STRING.ENCODING_UTF8);
+      fs.readFileSync(PROC_MEMINFO_PATH, FILE_TEXT.ENCODING_UTF8);
     const match = MEM_AVAILABLE_KB_PATTERN.exec(content);
     if (!match) return osFreeMemoryBytes;
     const availableBytes = Number(match[1]) * BYTES_PER_KIB;

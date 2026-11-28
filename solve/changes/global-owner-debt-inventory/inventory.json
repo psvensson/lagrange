@@ -7,13 +7,13 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "09cc2fdaa1c39149ef568c82902922c4b18825a5aca58e4b0cac76ee140c2811"
+        "sha256": "cf048b92d841c4c8c39873980c4346ed472fd8b101e29cf14b13a5b659cd5f5b"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "371644a50fb3f6eb9fed9466fd242bc87a7cc6c8188a5e455653438ba568c7df"
+        "sha256": "355d6eb423da9bae413e6d187321f7eb75fee31fbf9fc3d69413a6155acf3c02"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 4004579,
-        "sha256": "d3d0cbbcadfbed0eb5c05142a3975e1e60d8985a70af4409c6a30bd44c418e9f"
+        "bytes": 4004678,
+        "sha256": "4841463be863c9760a13ca2ed1cb65a546b702cfca1478565874c73ac3cb2d7d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "4bb3508e9614da8b349448888cfa272a70ff0e2f93263f16f588cfc593d4aa82"
+        "sha256": "b039291e283f8f5889143620b383b8af58e1a68273425be8fd78d95a9aa0fddc"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "9a2458fb018bc0e44b8e363ba443d2e430b09e42d6bd600b1dcba5008cbec2b3"
+        "sha256": "ce42e39887426b9d221a8bb616f53ce915cef9ff9e31f6e5338ec3041f8d240a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "c2284656b874e3ea0a41b670b30bdf1248bbbd3fbccf1590f2c4fdc40c1e91d9"
+    "inputDigest": "1e2db5582b75bb55449b21e201bad0c38691e049ff322904a9ea3e98942d7c4a"
   },
   "reconciliation": {
     "complexity": {
@@ -73,22 +73,22 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "09cc2fdaa1c39149ef568c82902922c4b18825a5aca58e4b0cac76ee140c2811"
+        "sha256": "cf048b92d841c4c8c39873980c4346ed472fd8b101e29cf14b13a5b659cd5f5b"
       },
-      "declaredCount": 1682,
-      "observedCount": 1682,
-      "assignedCount": 1682
+      "declaredCount": 1679,
+      "observedCount": 1679,
+      "assignedCount": 1679
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "371644a50fb3f6eb9fed9466fd242bc87a7cc6c8188a5e455653438ba568c7df"
+        "sha256": "355d6eb423da9bae413e6d187321f7eb75fee31fbf9fc3d69413a6155acf3c02"
       },
-      "declaredCount": 156,
-      "observedCount": 156,
-      "assignedCount": 156
+      "declaredCount": 155,
+      "observedCount": 155,
+      "assignedCount": 155
     },
     "fileSize": {
       "authority": {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "4bb3508e9614da8b349448888cfa272a70ff0e2f93263f16f588cfc593d4aa82"
+          "sha256": "b039291e283f8f5889143620b383b8af58e1a68273425be8fd78d95a9aa0fddc"
         },
         "cloneGroups": 32,
         "duplicatedLines": 1025,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "9a2458fb018bc0e44b8e363ba443d2e430b09e42d6bd600b1dcba5008cbec2b3"
+          "sha256": "ce42e39887426b9d221a8bb616f53ce915cef9ff9e31f6e5338ec3041f8d240a"
         },
         "cloneGroups": 593,
         "duplicatedLines": 21051,
@@ -173,41 +173,41 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 4004579,
-        "sha256": "d3d0cbbcadfbed0eb5c05142a3975e1e60d8985a70af4409c6a30bd44c418e9f"
+        "bytes": 4004678,
+        "sha256": "4841463be863c9760a13ca2ed1cb65a546b702cfca1478565874c73ac3cb2d7d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 9776,
         "sha256": "94a0181aa0d56c84540c59b8e6aae07e36cd8d56aeb4a95539fce8ec12555f7b"
       },
-      "sourceDigest": "a75935bf4d1ad696e45c843e87bb1074df113f7ef319ffa2737b10165476d204",
+      "sourceDigest": "248579fb49f02c067bfba52ae68e6df06694323ce52dc081646588245f7ce73e",
       "moduleCount": 6599,
-      "edgeCount": 40950,
+      "edgeCount": 40952,
       "unresolvedCount": 40
     }
   },
   "assignment": {
-    "sourceSignalCount": 2373,
-    "assignedSignalCount": 2373,
-    "uniqueAssignmentCount": 2373,
-    "digest": "4db65c743ccc1ea9f5542d9dd77e5caf47b7a198170f448c3e8bdda1166c7153"
+    "sourceSignalCount": 2369,
+    "assignedSignalCount": 2369,
+    "uniqueAssignmentCount": 2369,
+    "digest": "94d3840a7c64f818c1d5cd50d32e0e7cd4c3857169fa8ab3099738b23380a171"
   },
   "signalCounts": {
-    "cognitive": 156,
-    "complexity": 1682,
+    "cognitive": 155,
+    "complexity": 1679,
     "duplication": 441,
     "fileSize": 54,
     "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1284,
+    "filesWithDebt": 1283,
     "rankedBoundaryCount": 111,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 91,
     "declaredLogicalOwnerCount": 19,
     "unownedSourceBoundaryCount": 32,
-    "unownedSourceFileCount": 437,
+    "unownedSourceFileCount": 436,
     "childQuestCount": 16
   },
   "logicalOwnerAndAmbiguitySummary": {
@@ -621,9 +621,9 @@
     ],
     "contractAmbiguity": {
       "unownedSourceBoundaryCount": 32,
-      "unownedSourceFileCount": 437,
-      "unownedSourceSignalCount": 928,
-      "unownedSourceScore": 4261.8,
+      "unownedSourceFileCount": 436,
+      "unownedSourceSignalCount": 924,
+      "unownedSourceScore": 4241.8,
       "unownedSourceBoundaries": [
         {
           "boundary": "src/control-plane",
@@ -774,15 +774,15 @@
           "ownerAreas": [
             "src/diagnostics"
           ],
-          "fileCount": 9,
-          "signalCount": 18,
-          "score": 89.6,
+          "fileCount": 8,
+          "signalCount": 14,
+          "score": 69.6,
           "topPaths": [
             "src/diagnostics/topology-convergence-edge-resolvers.js",
             "src/diagnostics/control-plane-quiescence-snapshot.js",
-            "src/diagnostics/resource-cpu-capacity.js",
-            "src/diagnostics/resource-diagnostics-sampler.js",
-            "src/diagnostics/topology-convergence-owner-witness.js"
+            "src/diagnostics/topology-convergence-owner-witness.js",
+            "src/diagnostics/topology-convergence-graph.js",
+            "src/diagnostics/causal-graph-builder.js"
           ]
         },
         {
@@ -1919,24 +1919,24 @@
       "ownerAreas": [
         "src/diagnostics"
       ],
-      "fileCount": 9,
-      "signalCount": 18,
-      "complexity": 12,
-      "cognitive": 3,
+      "fileCount": 8,
+      "signalCount": 14,
+      "complexity": 9,
+      "cognitive": 2,
       "oversizedFiles": 1,
       "duplicatedLines": 56,
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 64,
-      "importOut": 34,
-      "score": 89.6,
+      "importIn": 61,
+      "importOut": 32,
+      "score": 69.6,
       "topPaths": [
         "src/diagnostics/topology-convergence-edge-resolvers.js",
         "src/diagnostics/control-plane-quiescence-snapshot.js",
-        "src/diagnostics/resource-cpu-capacity.js",
-        "src/diagnostics/resource-diagnostics-sampler.js",
-        "src/diagnostics/topology-convergence-owner-witness.js"
+        "src/diagnostics/topology-convergence-owner-witness.js",
+        "src/diagnostics/topology-convergence-graph.js",
+        "src/diagnostics/causal-graph-builder.js"
       ]
     },
     {

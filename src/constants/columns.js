@@ -5,6 +5,14 @@ const COLUMN = Object.freeze({
   MEMORY_MB: 'memory_mb',
   DISK_GB: 'disk_gb',
   HOST_CPU_UTILIZATION_PERCENT: 'host_cpu_utilization_percent',
+  // Placement resource-sample columns of the nodes table
+  // (diagnostics/placement-resource-sample.js).
+  RESOURCE_SAMPLE_INTERVAL_MS: 'resource_sample_interval_ms',
+  MAIN_THREAD_CPU_PERCENT: 'main_thread_cpu_percent',
+  PROCESS_CPU_CORES: 'process_cpu_cores',
+  EFFECTIVE_CPU_CORES: 'effective_cpu_cores',
+  EVENT_LOOP_UTILIZATION_PERCENT: 'event_loop_utilization_percent',
+  EVENT_LOOP_DELAY_MS: 'event_loop_delay_ms',
   MEMORY_USAGE_PERCENT: 'memory_usage_percent',
   DISK_USAGE_PERCENT: 'disk_usage_percent',
   STATUS: 'status',

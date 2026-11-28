@@ -57,6 +57,15 @@ const RESOURCE_DIAGNOSTICS_WARNING = Object.freeze({
     'Resource diagnostics signal limit reached; truncating component signal extraction',
 });
 
+const RESOURCE_DIAGNOSTICS_ERROR = Object.freeze({
+  CPU_CAPACITY_UNEXPECTED:
+    'Resource diagnostics could not read effective CPU capacity; publishing it as unavailable',
+});
+
+// The capacity answer names an unexpected error in this field, even when the
+// thrown value is undefined.
+const CPU_CAPACITY_ERROR_FIELD = 'error';
+
 const SIGNAL_PATH = Object.freeze({
   DOT: '.',
   LENGTH_SUFFIX: '.length',
@@ -89,6 +98,22 @@ function readIntervalEventLoopDelayMs(histogram) {
     (meanNs / NANOS_PER_MILLISECOND) - EVENT_LOOP_DELAY_RESOLUTION_MS,
   );
   return roundToTwo(delayMs);
+}
+
+function threadCpuDeltaUs(thread, lastThread) {
+  return thread && lastThread ?
+    thread.user - lastThread.user + thread.system - lastThread.system : null;
+}
+
+function writeBytesDeltaSince(writeBytesTotal, lastWriteBytes) {
+  return Number.isFinite(writeBytesTotal) && Number.isFinite(lastWriteBytes) ?
+    Math.max(0, writeBytesTotal - lastWriteBytes) :
+    null;
+}
+
+function mainThreadCpuPercentOf(threadDeltaUs, intervalUs) {
+  return intervalUs > 0 && threadDeltaUs !== null && threadDeltaUs >= 0 ?
+    roundToTwo(RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR * threadDeltaUs / intervalUs) : null;
 }
 
 function defaultNowMs() {
@@ -136,17 +161,13 @@ class ResourceDiagnosticsSampler {
     this.intervalClock = options.nowFn ?? (() => performance.now());
     this.cpuUsageFn = options.cpuUsageFn ?? (() => process.cpuUsage());
     this.cpusFn = options.cpusFn ?? (() => os.cpus());
+    this.cpuCapacityFn = options.cpuCapacityFn ?? effectiveCpuCores;
     this.threadCpuUsageFn = options.threadCpuUsageFn ??
       (() => isMainThread ? process.threadCpuUsage?.() : null);
     this.lastThreadUsage = this.threadCpuUsageFn();
     this.lastHostTicks = hostTicks(this.cpusFn());
     this.eluFn = options.eluFn ?? defaultEluSample;
-    this.eventLoopDelayHistogram = options.eventLoopDelayProvider ?
-      null :
-      monitorEventLoopDelay({resolution: EVENT_LOOP_DELAY_RESOLUTION_MS});
-    this.eventLoopDelayHistogram?.enable();
-    this.eventLoopDelayProvider = options.eventLoopDelayProvider ??
-      (() => readIntervalEventLoopDelayMs(this.eventLoopDelayHistogram));
+    this.bindEventLoopDelaySource(options);
 
     this.nextSampleId = 0;
     this.samples = [];
@@ -159,11 +180,26 @@ class ResourceDiagnosticsSampler {
     this.lastWriteTimestampMs = initialNowMs;
     this.lastEluSample = this.eluFn();
     this.signalLimitWarningLogged = false;
+    this.cpuCapacityErrorLogged = false;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(SUBSYSTEM.RESOURCE_DIAGNOSTICS) :
       console;
+  }
+
+  /**
+   * Own the event-loop delay histogram unless the caller supplies a provider.
+   * @param {Object} options
+   * @private
+   */
+  bindEventLoopDelaySource(options) {
+    this.eventLoopDelayHistogram = options.eventLoopDelayProvider ?
+      null :
+      monitorEventLoopDelay({resolution: EVENT_LOOP_DELAY_RESOLUTION_MS});
+    this.eventLoopDelayHistogram?.enable();
+    this.eventLoopDelayProvider = options.eventLoopDelayProvider ??
+      (() => readIntervalEventLoopDelayMs(this.eventLoopDelayHistogram));
   }
 
   /**
@@ -246,6 +282,25 @@ class ResourceDiagnosticsSampler {
   }
 
   /**
+   * Read the effective CPU capacity. A refusal is published as unavailable
+   * (NULL); an unexpected error is also logged once per sampler.
+   * @return {number|null}
+   * @private
+   */
+  readEffectiveCpuCores() {
+    const capacity = this.cpuCapacityFn();
+    if (Object.hasOwn(capacity, CPU_CAPACITY_ERROR_FIELD) && !this.cpuCapacityErrorLogged) {
+      this.cpuCapacityErrorLogged = true;
+      this.logger.error(RESOURCE_DIAGNOSTICS_ERROR.CPU_CAPACITY_UNEXPECTED, {
+        nodeId: this.nodeId,
+        error: capacity.error?.message,
+        stack: capacity.error?.stack,
+      });
+    }
+    return capacity.refusal === undefined ? capacity.cores : null;
+  }
+
+  /**
    * Collect and store one sample.
    * @return {Object}
    */
@@ -264,18 +319,14 @@ class ResourceDiagnosticsSampler {
     const thread = this.threadCpuUsageFn();
     const sampleIntervalMs = intervalEndMs - this.lastCpuTimestampMs;
     const intervalUs = sampleIntervalMs * RESOURCE_DIAGNOSTICS_DEFAULT.MICROS_PER_MILLISECOND;
-    const threadDeltaUs = thread && this.lastThreadUsage ?
-      thread.user - this.lastThreadUsage.user + thread.system - this.lastThreadUsage.system : null;
+    const threadDeltaUs = threadCpuDeltaUs(thread, this.lastThreadUsage);
 
     const writeBytesTotal = this.readProcessWriteBytes();
     const elapsedIoMs = Math.max(
       RESOURCE_DIAGNOSTICS_DEFAULT.MIN_ELAPSED_MS,
       nowMs - this.lastWriteTimestampMs,
     );
-    const writeBytesDelta = Number.isFinite(writeBytesTotal) &&
-      Number.isFinite(this.lastWriteBytes) ?
-      Math.max(0, writeBytesTotal - this.lastWriteBytes) :
-      null;
+    const writeBytesDelta = writeBytesDeltaSince(writeBytesTotal, this.lastWriteBytes);
     const writeBytesPerSec = Number.isFinite(writeBytesDelta) ?
       writeBytesDelta /
         (elapsedIoMs / RESOURCE_DIAGNOSTICS_DEFAULT.MILLIS_PER_SECOND) :
@@ -304,10 +355,9 @@ class ResourceDiagnosticsSampler {
         processCpuPercentOfHostCores: this.calculateProcessCpuPercentOfHostCores(cpuDeltaTotalUs,
           sampleIntervalMs, cpuCount),
         sampleIntervalMs: sampleIntervalMs > 0 ? sampleIntervalMs : null,
-        mainThreadCpuPercent: intervalUs > 0 && threadDeltaUs !== null && threadDeltaUs >= 0 ?
-          roundToTwo(100 * threadDeltaUs / intervalUs) : null,
+        mainThreadCpuPercent: mainThreadCpuPercentOf(threadDeltaUs, intervalUs),
         processCpuCores: intervalUs > 0 ? cpuDeltaTotalUs / intervalUs : null,
-        effectiveCpuCores: effectiveCpuCores(),
+        effectiveCpuCores: this.readEffectiveCpuCores(),
         hostCpuUtilizationPercent: intervalUs > 0 ?
           hostBusyPercent(this.lastHostTicks, currentHostTicks) : null,
         eventLoopUtilizationPercent: intervalUs > 0 && Number.isFinite(eluDelta.utilization) ?
