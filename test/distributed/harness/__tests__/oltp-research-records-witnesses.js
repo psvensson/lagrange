@@ -1,5 +1,5 @@
-// In-process witnesses of the quest scenario-a-research-substrate, read by
-// scripts/checks/oltp-research-substrate-guard.js. Each witness answers null
+// In-process witnesses of the quest scenario-a-research-records, read by
+// scripts/checks/oltp-research-records-guard.js. Each witness answers null
 // when its property holds and the failure text when it does not; it imports
 // the harness owners and the controlled in-memory product, and starts no
 // cluster, container or network exchange. The only child process is a local
@@ -78,12 +78,18 @@ const RESEARCH = Object.freeze({
   EVIDENCE_MISSING: 'statement_evidence_missing',
   EVIDENCE_MISMATCH: 'statement_evidence_digest_mismatch',
 });
+// The substrate ladder (owner, 2026-11-28): a single lab host is a first look,
+// separate lab hosts are the working evidence, same-zone cloud VMs the final
+// verification.
 const SUBSTRATE_KIND = Object.freeze({
   SINGLE_HOST: 'lab-single-host',
   MULTI_HOST: 'lab-multi-host',
+  GCP: 'gcp-same-zone',
 });
+const EVIDENCE_USE = Object.freeze({FIRST_LOOK: 'first-look',
+  WORKING: 'working-evidence', FINAL: 'final-verification'});
 const INTER_NODE_PATH = Object.freeze({LAN: 'lan', BRIDGE: 'docker-bridge',
-  LOOPBACK: 'loopback'});
+  LOOPBACK: 'loopback', VPC: 'vpc-same-zone'});
 const RESET_METHOD = Object.freeze({
   CREATED: 'created-and-loaded',
   TRUNCATED: 'truncated-and-reloaded',
@@ -122,6 +128,8 @@ const TEXT = Object.freeze({
   UNREFUSED_PLAN: 'a plan with three nodes on one host and no substrate was not refused',
   UNREFUSED_FACTS: 'host facts accepted one machine without a substrate',
   FACTS_INCOMPLETE: 'host facts of one machine are incomplete',
+  LADDER: 'a descriptor does not carry the evidence use of its rung (first look, working ' +
+    'evidence, final verification), or accepts two nodes of a multi-host record on one host',
   DESCRIPTOR: 'the descriptor builder does not state kind and path, or accepts a lan or loopback ' +
     'path for one host',
   NO_RETAINED_FILE: 'the guard workload retained no statement file',
@@ -613,9 +621,11 @@ async function matrixProblem() {
     `the round-trip matrix has ${entries.length} entries, ${pairs.size} distinct`;
 }
 
-async function descriptorProblem() {
-  const build = hostPreparation.buildSubstrateDescriptor;
-  const input = {kind: SUBSTRATE_KIND.SINGLE_HOST, interNodePath: INTER_NODE_PATH.BRIDGE,
+const OWN_HOST = (nodeIndex) => nodeIndex;
+const TWO_ON_ONE_HOST = (nodeIndex) => Math.min(nodeIndex, 1);
+
+function singleHostInput() {
+  return {kind: SUBSTRATE_KIND.SINGLE_HOST, interNodePath: INTER_NODE_PATH.BRIDGE,
     hosts: [{hostId: LAB_HOST_NAME, ip: LAB_HOST_IP, bootId: LAB_BOOT_ID, cpus: 12,
       memGb: 15, primaryIface: 'eth0', linkType: 'wired'}],
     loadGeneratorHostId: LAB_HOST_NAME,
@@ -623,13 +633,44 @@ async function descriptorProblem() {
       declaredHostId: LAB_HOST_NAME})),
     declaredHostCount: SINGLE_HOST_DECLARED_COUNT,
     storage: {root: STORAGE_ROOT, kind: 'bind'}};
+}
+
+async function descriptorProblem() {
+  const build = hostPreparation.buildSubstrateDescriptor;
+  const input = singleHostInput();
   const single = build(input);
+  const multi = build(multiInput(SUBSTRATE_KIND.MULTI_HOST, INTER_NODE_PATH.LAN, OWN_HOST));
   const lanRefused = await refusedBy(() => build({...input,
     interNodePath: INTER_NODE_PATH.LAN})) && await refusedBy(() => build({...input,
     interNodePath: INTER_NODE_PATH.LOOPBACK}));
   return hostPreparation.COMPARATIVE_SUBSTRATE_KIND?.SINGLE_HOST === SUBSTRATE_KIND.SINGLE_HOST &&
     single.kind === SUBSTRATE_KIND.SINGLE_HOST &&
-    single.interNodePath === INTER_NODE_PATH.BRIDGE && lanRefused ? null : TEXT.DESCRIPTOR;
+    single.interNodePath === INTER_NODE_PATH.BRIDGE && lanRefused &&
+    multi.kind === SUBSTRATE_KIND.MULTI_HOST ? null : TEXT.DESCRIPTOR;
+}
+
+function multiInput(kind, interNodePath, hostOfNode) {
+  const hosts = arrayMap(DATA_HOSTS, (ip, index) => ({hostId: `lab-${index}`, ip,
+    bootId: `boot-${index}`, cpus: 12, memGb: 15, primaryIface: 'eth0', linkType: 'wifi'}));
+  return {kind, interNodePath, hosts, loadGeneratorHostId: 'lab-load',
+    nodeHostMap: arrayMap(NODE_INDEXES, (nodeIndex) => ({nodeIndex,
+      hostId: `lab-${hostOfNode(nodeIndex)}`, declaredHostId: `lab-${hostOfNode(nodeIndex)}`})),
+    declaredHostCount: NODE_COUNT, storage: {root: STORAGE_ROOT, kind: 'bind'}};
+}
+
+async function witnessLadder() {
+  const build = hostPreparation.buildSubstrateDescriptor;
+  if (typeof build !== 'function') return TEXT.NO_SUBSTRATE;
+  const lab = build(multiInput(SUBSTRATE_KIND.MULTI_HOST, INTER_NODE_PATH.LAN, OWN_HOST));
+  const gcp = build(multiInput(SUBSTRATE_KIND.GCP, INTER_NODE_PATH.VPC, OWN_HOST));
+  const single = build(singleHostInput());
+  const twoOnOne = await refusedBy(() => build(multiInput(SUBSTRATE_KIND.MULTI_HOST,
+    INTER_NODE_PATH.LAN, TWO_ON_ONE_HOST)));
+  const unknown = await refusedBy(() => build(multiInput('lab-whatever',
+    INTER_NODE_PATH.LAN, OWN_HOST)));
+  return single.evidenceUse === EVIDENCE_USE.FIRST_LOOK &&
+    lab.evidenceUse === EVIDENCE_USE.WORKING && gcp.evidenceUse === EVIDENCE_USE.FINAL &&
+    twoOnOne && unknown ? null : TEXT.LADDER;
 }
 
 async function witnessSubstrate() {
@@ -651,9 +692,11 @@ const WITNESS = Object.freeze({
   seedGate: witnessSeedGate,
   oneHost: witnessOneHost,
   substrate: witnessSubstrate,
+  ladder: witnessLadder,
 });
 
 export {
+  EVIDENCE_USE,
   INTER_NODE_PATH,
   MATRIX_ENTRIES,
   NODE_COUNT,

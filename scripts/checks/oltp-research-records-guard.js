@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * Acceptance guard of the quest `scenario-a-research-substrate`.
+ * Acceptance guard of the quest `scenario-a-research-records`.
  *
- *   node scripts/checks/oltp-research-substrate-guard.js [--metric]
+ *   node scripts/checks/oltp-research-records-guard.js [--metric]
  *
  * Prints the number of unmet properties on stdout (the quest's `doneWhen`
  * metric; exit code 0 only when it is 0) and one line per property on stderr.
  * It imports the harness modules in process (the witnesses live in
- * test/distributed/harness/__tests__/oltp-research-substrate-witnesses.js) and
+ * test/distributed/harness/__tests__/oltp-research-records-witnesses.js) and
  * reads the declared retained artifacts; it starts no cluster and no container.
  *
- * Ten properties, one count each when unmet:
+ * Twelve properties, one count each when unmet:
  *   1 a research campaign manifest can be built
  *   2 admission refuses a research record by one explicit reason
  *   3 the record writer refuses the published store path
@@ -20,7 +20,9 @@
  *   7 an unverified seed is never warmed up or measured
  *   8 three nodes can be placed on one host, and host facts accept one machine
  *   9 a substrate descriptor and a round-trip matrix exist
- *  10 the retained single-host run holds every property of the evaluator
+ *  10 the substrate ladder: every descriptor carries the use of its rung
+ *  11 the retained single-host run holds every property of the evaluator
+ *  12 the retained three-host run holds every property of the evaluator
  *
  * The evaluator that reads the retained runs is itself witnessed by negative
  * controls: mutated records that must be rejected and ideal records that must
@@ -34,6 +36,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {
+  EVIDENCE_USE,
   INTER_NODE_PATH,
   MATRIX_ENTRIES,
   NODE_COUNT,
@@ -49,7 +52,7 @@ import {
   removeDir,
   scratchDir,
   sha256Of,
-} from '../../test/distributed/harness/__tests__/oltp-research-substrate-witnesses.js';
+} from '../../test/distributed/harness/__tests__/oltp-research-records-witnesses.js';
 import {
   arrayEvery,
   arrayFilter,
@@ -109,9 +112,10 @@ const SQL_COMMIT = 'COMMIT';
 const STATUS_OK = 'ok';
 const IDEAL_OP_ID = 'measurement:0:0';
 
-const QUEST_EVIDENCE = 'solve/quests/scenario-a-research-substrate/evidence';
+const QUEST_EVIDENCE = 'solve/quests/scenario-a-research-records/evidence';
 const RETAINED = Object.freeze({
   SINGLE_HOST: `${QUEST_EVIDENCE}/lab-single-host/raw-observations.ndjson`,
+  THREE_HOST: `${QUEST_EVIDENCE}/lab-three-host/raw-observations.ndjson`,
 });
 
 // --- retained runs: the evaluator ---------------------------------------------
@@ -196,6 +200,10 @@ function substrateIssues(header, expectedKind) {
       substrate.declaredHostCount !== expectedHosts) {
     arrayPush(issues, TEXT.HOST_MAP);
   }
+  const wantedUse = single ? EVIDENCE_USE.FIRST_LOOK : EVIDENCE_USE.WORKING;
+  if (substrate.evidenceUse !== wantedUse) {
+    arrayPush(issues, `evidence use ${JSON.stringify(substrate.evidenceUse)}, ${wantedUse} expected`);
+  }
   const wantedPath = single ? INTER_NODE_PATH.BRIDGE : INTER_NODE_PATH.LAN;
   if (substrate.interNodePath !== wantedPath) {
     arrayPush(issues, `inter-node path ${JSON.stringify(substrate.interNodePath)}, ` +
@@ -277,8 +285,11 @@ const PROPERTY = Object.freeze([
   Object.freeze({id: 8, name: 'one-host placement and facts', witness: WITNESS.oneHost}),
   Object.freeze({id: 9, name: 'substrate descriptor and round trip',
     witness: WITNESS.substrate}),
-  Object.freeze({id: 10, name: 'retained single-host run',
+  Object.freeze({id: 10, name: 'substrate ladder', witness: WITNESS.ladder}),
+  Object.freeze({id: 11, name: 'retained single-host run',
     witness: async () => witnessRetained(RETAINED.SINGLE_HOST, SUBSTRATE_KIND.SINGLE_HOST)}),
+  Object.freeze({id: 12, name: 'retained three-host run',
+    witness: async () => witnessRetained(RETAINED.THREE_HOST, SUBSTRATE_KIND.MULTI_HOST)}),
 ]);
 
 // --- negative controls --------------------------------------------------------
@@ -321,7 +332,8 @@ function idealRecords(kind) {
   const single = kind === SUBSTRATE_KIND.SINGLE_HOST;
   const hosts = single ? SINGLE_HOSTS : MULTI_HOSTS;
   return [{recordType: HEADER_TYPE, comparable: false,
-    substrate: {kind, interNodePath: single ? INTER_NODE_PATH.BRIDGE : INTER_NODE_PATH.LAN,
+    substrate: {kind, evidenceUse: single ? EVIDENCE_USE.FIRST_LOOK : EVIDENCE_USE.WORKING,
+      interNodePath: single ? INTER_NODE_PATH.BRIDGE : INTER_NODE_PATH.LAN,
       declaredHostCount: single ? 1 : NODE_COUNT,
       nodeHostMap: arrayMap(hosts, (hostId, nodeIndex) => ({nodeIndex, hostId,
         declaredHostId: hostId}))}},
@@ -383,6 +395,21 @@ const MUTANT = Object.freeze({
   'a round trip measured inside the window': (records) => {
     records[1].observations.network.roundTrip.after.startedAt = ISO_WINDOW_START;
   },
+  'a single-host record without its first-look marking': (records) => {
+    records[0].substrate.evidenceUse = EVIDENCE_USE.WORKING;
+  },
+});
+
+const MULTI_MUTANT = Object.freeze({
+  'a multi-host record with two nodes on one host': (records) => {
+    records[0].substrate.nodeHostMap[2].hostId = MULTI_HOSTS[1];
+  },
+  'a multi-host round trip with six entries': (records) => {
+    records[1].observations.network.roundTrip.after.entries.length = MATRIX_ENTRIES - 1;
+  },
+  'a multi-host record marked as a first look': (records) => {
+    records[0].substrate.evidenceUse = EVIDENCE_USE.FIRST_LOOK;
+  },
 });
 
 function controlProblems() {
@@ -397,6 +424,13 @@ function controlProblems() {
   const context = {expectedKind: SUBSTRATE_KIND.SINGLE_HOST, baseDir: os.tmpdir()};
   for (const [name, change] of Object.entries(MUTANT)) {
     if (evaluateRetainedRecords(mutated(single, change), context).length === 0) {
+      arrayPush(problems, `control: ${name} was accepted`);
+    }
+  }
+  const multi = idealRecords(SUBSTRATE_KIND.MULTI_HOST);
+  const multiContext = {expectedKind: SUBSTRATE_KIND.MULTI_HOST, baseDir: os.tmpdir()};
+  for (const [name, change] of Object.entries(MULTI_MUTANT)) {
+    if (evaluateRetainedRecords(mutated(multi, change), multiContext).length === 0) {
       arrayPush(problems, `control: ${name} was accepted`);
     }
   }
@@ -428,7 +462,7 @@ async function main(argv) {
   for (const problem of controls) process.stderr.write(`${problem}${LINE_SEPARATOR}`);
   const metric = unmet.length + controls.length;
   if (!arrayIncludes(argv, METRIC_FLAG)) {
-    process.stderr.write(`oltp-research-substrate-guard: ${metric} unmet${LINE_SEPARATOR}`);
+    process.stderr.write(`oltp-research-records-guard: ${metric} unmet${LINE_SEPARATOR}`);
   }
   process.stdout.write(`${metric}${LINE_SEPARATOR}`);
   return metric === 0 ? 0 : 1;
