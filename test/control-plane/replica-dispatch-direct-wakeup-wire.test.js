@@ -91,16 +91,16 @@ async function exercise(t, record, reference) {
   const ackHeld = Promise.withResolvers();
   const replyDropped = Promise.withResolvers();
   const sendRaw = receiver.router.sendRaw.bind(receiver.router);
-  receiver.router.sendRaw = (ws, frame, family) => {
+  receiver.router.sendRaw = (ws, frame) => {
     if (frame.type === FRAME.ACK) {
-      ackHeld.resolve(() => sendRaw(ws, frame, family));
+      ackHeld.resolve(() => sendRaw(ws, frame));
       return;
     }
     if (frame.type === FRAME.SERVICE_RESPONSE) {
       replyDropped.resolve();
       return;
     }
-    return sendRaw(ws, frame, family);
+    return sendRaw(ws, frame);
   };
 
   const first = sender.dispatchOperationRow(initial);

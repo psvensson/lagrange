@@ -322,8 +322,8 @@ class MessageRouterDeliveryDelegation {
     );
   }
 
-  sendRaw(ws, message, family) {
-    return sendRaw(this, ws, message, family);
+  sendRaw(ws, message) {
+    return sendRaw(this, ws, message);
   }
 
   isRegistered(address) {

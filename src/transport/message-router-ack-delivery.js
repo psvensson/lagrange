@@ -1,5 +1,3 @@
-import {observeServiceSendReturned, observeWriteBoundary, socketEvidence} from './message-router-socket-evidence.js';
-import {CDC_DELIVERY_REMAINING_MS} from '../cdc/cdc-delivery-budget.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {assertDeliveryOpen, deliveryAbortReason, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
@@ -37,7 +35,6 @@ function rejectBeforeSend(router, connection, targetNodeId, reject) {
 
 function reportAckTimeout(router, pending, connection, targetAddress) {
   const {messageId, targetNodeId, clock, sentAt, deliveryTimeoutMs} = pending;
-  const beforeRecovery = socketEvidence(router, targetNodeId, connection, pending.writeSocket);
   const recoveryOwner = router.quarantineConnectionAfterAckTimeout(
     targetNodeId, connection, messageId, targetAddress,
   );
@@ -53,11 +50,7 @@ function reportAckTimeout(router, pending, connection, targetAddress) {
       sameConnection: active === connection,
       quarantineOwnerChanged: Boolean(recoveryOwner) && recoveryOwner !== connection,
     },
-    // Keep changing frame IDs out of the flood-control fingerprint.
-    scope: {nodeId: router.nodeId ?? null, targetNodeId, messageId, targetAddress,
-      beforeRecovery, sentAt, writeEnteredAt: pending.writeEnteredAt ?? null,
-      writeCallbackAt: pending.writeCallbackAt ?? null,
-      bufferedBytesAtWrite: pending.bufferedBytesAtWrite ?? null},
+    scope: {nodeId: router.nodeId ?? null, targetNodeId, messageId},
     subject: targetNodeId,
   });
 }
@@ -98,7 +91,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
     // is required to reject an expired dispatch.
     assertDeliveryOpen(options);
     const pending = {
-      messageId, targetNodeId, clock, writeSocket: ws,
+      messageId, targetNodeId, clock,
       sentAt: clock.now(),
       deliveryTimeoutMs: remainingDeliveryMs(options),
       timeout: null,
@@ -157,15 +150,10 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       return;
     }
     try {
-      observeWriteBoundary(pending, ws);
       writeStarted = true;
       ws.send(bytes, {binary: false}, (error) => {
-        observeWriteBoundary(pending, ws, true);
         if (finishWrite(error) && error) pending.reject(error);
       });
-      const lifetime = options.deliveryLifetime;
-      observeServiceSendReturned(ws, bytes, lifetime.context !== undefined ||
-        lifetime.durationField === CDC_DELIVERY_REMAINING_MS, options.deliverySource);
     } catch (_sendError) {
       // Once ws.send has been entered, a thrown error is not proof that its
       // compression/write child released the encoded copy. The existing close
