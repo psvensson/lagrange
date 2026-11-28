@@ -101,6 +101,10 @@ function withMember(member, use) {
 
 function establishStorage(f, member) {
   withMember(member, (db) => {
+    // Production order: the application table exists before the durable consensus record.
+    if (member.serviceType === SERVICE_TYPE.PARTITION) {
+      createApplicationOwners(db, f.declaration, member);
+    }
     const lifecycle = new RaftRsReplicaLifecycleOwner({db, groupId: member.groupId,
       peerId: member.peerId, replicaIdentity: member.replicaId});
     const store = new RaftRsDurableStore(db);
@@ -111,9 +115,6 @@ function establishStorage(f, member) {
       }, {bootstrapIndex: '0', admissionIndex: '0'});
       lifecycle.recordOpeningHistory(member.incarnation);
     }, RAFT_RS_COMMIT_DURABILITY.SYNCED);
-    if (member.serviceType === SERVICE_TYPE.PARTITION) {
-      createApplicationOwners(db, f.declaration, member);
-    }
   });
 }
 

@@ -101,13 +101,16 @@ function fixture(t, tableName = SYSTEM_TABLE_NAME.MESSAGE_GROUPS) {
   const member = memberOf(declaration, tableName);
   const db = new Database(':memory:');
   t.after(() => db.close());
+  // Production order (partition-service-raft-init-base.js: createTable() at init, durable
+  // consensus record written later): the application table exists before any durable
+  // bootstrap state; PARTITIONS/NODES open refuses a durable record without its table.
+  const service = tableName === null ? undefined : createApplicationOwners(db, declaration, member);
   const store = new RaftRsDurableStore(db);
   const confState = {voters: declaration.members.filter((candidate) =>
     candidate.groupId === member.groupId).map((candidate) => candidate.peerId)};
   store.putBootstrapAppliedState(member.groupId, confState,
     {bootstrapIndex: '0', admissionIndex: '0'});
   store.putHardState(member.groupId, {term: TERM, vote: member.peerId, commit: '0'});
-  const service = tableName === null ? undefined : createApplicationOwners(db, declaration, member);
   return {db, store, declaration, member, confState, service, afterCommitBatches: []};
 }
 
