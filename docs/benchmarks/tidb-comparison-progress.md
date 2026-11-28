@@ -89,8 +89,8 @@ Latest record per combination.
 - `unsupported`: the configuration cannot express this claim
 - `not-measured`: no observation exists
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 32 entries; 10 of them name the defect ids behind the withdrawal and 11 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 78 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 33 entries; 10 of them name the defect ids behind the withdrawal and 12 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 78 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ## Sources
 
-- `data/tidb-comparison/progress-summary.json` sha256:5bb113c02dd1c0dd9af2d564a2d9d50de5ef3aed6bb4b934012a5ba966c2ec74
+- `data/tidb-comparison/progress-summary.json` sha256:bb51d262e43f979e8790a04d6875a621ef0004e935187a343fe94fc68cadec34

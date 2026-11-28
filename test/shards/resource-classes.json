@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2820,
+    "ordinary": 2821,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2846,
-  "digest": "fnv1a32-7cf68882",
+  "censusSize": 2847,
+  "digest": "fnv1a32-d84e9816",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1750,6 +1750,7 @@
     "test/query/runtime-integration.test.js": "ordinary",
     "test/query/runtime-runner.test.js": "ordinary",
     "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": "ordinary",
+    "test/query/scenario-a-oltp-review-witnesses.test.js": "ordinary",
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "ordinary",
     "test/query/schema-provisioning-job-owner.test.js": "ordinary",
     "test/query/schema-provisioning-native-admission.test.js": "ordinary",

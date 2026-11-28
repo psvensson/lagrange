@@ -5,7 +5,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:da4fcfeaf2bad9e542f5218beaf2c2101a9094da9a92896c9287b7ce915bcad3"
+      "sha256": "sha256:27f99c3b692a92d8a9a2ecb32df7083f861b87ff05b05a096d4f620cc857dd9f"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -13,7 +13,7 @@
     },
     {
       "path": "data/tidb-comparison/invalidations.ndjson",
-      "sha256": "sha256:688afc8c2a4b8ded5191d95d3c9965bf245c5659d2f0db1c58420d2563229ed7"
+      "sha256": "sha256:8bd6b392804ec19017fa6aebe0b77fc70592c52b9a44566a447578c5d4b8c6bc"
     }
   ],
   "cells": [
@@ -4321,10 +4321,10 @@
       ],
       "evidence": {
         "runIds": [
-          "bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001"
+          "bench-oltp-1b0-three-2354-r001"
         ],
         "rawObservationsDigests": [
-          "sha256:89dfbd2b4eabe9dd81ac955c3d9abcd1d0242b91a71df19fc73aaa4942278f87"
+          "sha256:a3368d2ab16c1340fc2c60ccc5f87db4cb3c2f0be3e7ac72746c7a6c5c1ecde3"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r001",
@@ -4348,7 +4348,8 @@
           "bench-gcp-3sys-smoke-44eeb290a-20261124-r001",
           "bench-gcp-lagrange-smoke-77fe9bc52-20261124-r001",
           "bench-gcp-lagrange-smoke-dcbf6e266-20261124-r001",
-          "bench-gcp-lagrange-smoke-55c78e6dc-20261124-r001"
+          "bench-gcp-lagrange-smoke-55c78e6dc-20261124-r001",
+          "bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001"
         ],
         "forensic": [],
         "semanticProofIds": [
@@ -4394,10 +4395,10 @@
           "offered": 100,
           "issued": 100,
           "unissued": 0,
-          "attempts": 122,
-          "committed": 97,
-          "conflicts": 25,
-          "conflictExhausted": 3,
+          "attempts": 140,
+          "committed": 98,
+          "conflicts": 42,
+          "conflictExhausted": 2,
           "terminalFailures": {
             "product_error": 0,
             "correctness_failure": 0,
@@ -4409,7 +4410,7 @@
         },
         "runs": [
           {
-            "runId": "bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001",
+            "runId": "bench-oltp-1b0-three-2354-r001",
             "runStatus": "completed",
             "offeredRatePerSec": 5,
             "repetition": 1,
@@ -4417,10 +4418,10 @@
               "offered": 100,
               "issued": 100,
               "unissued": 0,
-              "attempts": 122,
-              "committed": 97,
-              "conflicts": 25,
-              "conflictExhausted": 3,
+              "attempts": 140,
+              "committed": 98,
+              "conflicts": 42,
+              "conflictExhausted": 2,
               "terminalFailures": {
                 "product_error": 0,
                 "correctness_failure": 0,
@@ -4430,27 +4431,27 @@
               "unresolved": 0,
               "ambiguousCommits": 0
             },
-            "drainOverrunMs": 221963.788,
-            "maxLatencyMs": 222242.261,
+            "drainOverrunMs": 163760.737,
+            "maxLatencyMs": 164113.954,
             "timingsSec": {
-              "totalScenarioSec": 721.37,
-              "clusterReadySec": 236.86,
-              "semanticGateTotalSec": 185.66,
-              "warmupSec": 21,
-              "workloadDrainSec": 241.96,
-              "postVerifySec": 35.88,
-              "maxSingleTxnExecutionSec": 14.496,
-              "maxSingleRequestSec": 222.242,
+              "totalScenarioSec": 692.26,
+              "clusterReadySec": 212.06,
+              "semanticGateTotalSec": 245.28,
+              "warmupSec": 15.48,
+              "workloadDrainSec": 183.76,
+              "postVerifySec": 35.67,
+              "maxSingleTxnExecutionSec": 13.291,
+              "maxSingleRequestSec": 164.114,
               "partsSec": {
-                "loadAndCases1To2Sec": 69.54,
-                "case3PaymentSec": 3.04,
-                "case4OrderStatusSec": 5.64,
-                "case5DeliverySec": 10.37,
-                "case6StockLevelSec": 6.39,
-                "case7FailureAtomicitySec": 4.74,
-                "case8RetryableConflictSec": 4.93,
-                "case9aDurabilityPreRestartSec": 4.23,
-                "case9bDurabilityRestartReloadSec": 76.78
+                "loadAndCases1To2Sec": 75.97,
+                "case3PaymentSec": 6.63,
+                "case4OrderStatusSec": 8.05,
+                "case5DeliverySec": 17.99,
+                "case6StockLevelSec": 19.37,
+                "case7FailureAtomicitySec": 11.07,
+                "case8RetryableConflictSec": 7.88,
+                "case9aDurabilityPreRestartSec": 7.45,
+                "case9bDurabilityRestartReloadSec": 90.87
               }
             }
           }
