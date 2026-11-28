@@ -13,10 +13,7 @@ import {
   launchCoordinatorPartitionLeaderPlacementCure,
   reconcileCoordinatorPartitionLeaderPlacementCure,
 } from '../../src/rebalancer/rebalance-coordinator-recovery-helper.js';
-import {
-  ReplicaOperationField,
-  ReplicaOperationReason,
-} from '../../src/rebalancer/replica-operation-constants.js';
+import {pendingTurn} from '../../src/raft/raft-rs-turn-answer.js';
 
 const NOW_MS = 2_000_000;
 const NODE_1 = 'node-1';
@@ -66,11 +63,25 @@ function selectNonSeedNonPriorityIds(state, count) {
 
 function buildCoordinatorFixture(state, partitionIds, options = {}) {
   const emitter = new EventEmitter();
-  const deliveries = [];
+  const admitted = [];
+  const attempted = [];
   let nowMs = options.startNowMs ?? NOW_MS;
   const servicesMap = new Map(partitionIds.map((partitionId) => [
-    partitionId,
+    partitionId + '-r1',
     {
+      raft: {readStatus: () => ({role: RAFT_ROLE.LEADER, groupId: partitionId,
+        replicaIdentity: partitionId + '-r1', term: 3, runtimeGeneration: 1,
+        configurationKey: 'test-voters', lifecycleIncarnation: 'test-open', membershipGenerationIndex: 1})},
+      requestLeadershipTransfer(request, admitExecution) {
+        attempted.push(partitionId);
+        return pendingTurn((async () => {
+          await coordinator.beforeAdmission(partitionId);
+          if (!admitExecution()) return {outcome: 'CORE_REFUSED', reason: 'transfer-placement-withdrawn'};
+          admitted.push(partitionId);
+          await coordinator.afterAdmission(partitionId, request);
+          return {outcome: 'CORE_OK', reason: 'transfer-requested'};
+        })());
+      },
       isLeader: true,
       isMetadataPublicationReady: () => true,
       isShutdown: false,
@@ -82,16 +93,10 @@ function buildCoordinatorFixture(state, partitionIds, options = {}) {
   ]));
   const coordinator = Object.assign(emitter, {
     cdcIntegrationService: {partitionServicesProvider: () => servicesMap},
-    deliveries,
+    admitted, attempted, beforeAdmission: () => {}, afterAdmission: () => {},
     isLeader: true,
     isShuttingDown: false,
     logger: {debug: () => {}, error: () => {}, info: () => {}, warn: () => {}},
-    messageRouter: {
-      deliver: async (target, request, deliveryOptions) => {
-        deliveries.push({options: deliveryOptions, request, target});
-        return {status: 'completed'};
-      },
-    },
     nodeId: NODE_1,
     nowFn: () => {
       nowMs += 1;
@@ -121,16 +126,6 @@ function buildCoordinatorFixture(state, partitionIds, options = {}) {
   return coordinator;
 }
 
-function targetHandoffPartitionIds(deliveries) {
-  return deliveries
-    .filter(
-      (entry) =>
-        entry.request[ReplicaOperationField.REASON] ===
-          ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
-    )
-    .map((entry) => entry.request[ReplicaOperationField.PARTITION_ID]);
-}
-
 test('rotating cursor prevents early failing services from monopolizing the per-pass handoff cap',
   async (t) => {
     const state = buildSystemCohortState();
@@ -139,12 +134,8 @@ test('rotating cursor prevents early failing services from monopolizing the per-
 
     // First two services always fail handoff and remain leaders on node-1.
     const alwaysFailingIds = new Set(candidateIds.slice(0, 2));
-    coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
-      coordinator.deliveries.push({options: deliveryOptions, request, target});
-      if (alwaysFailingIds.has(request[ReplicaOperationField.PARTITION_ID])) {
-        throw new Error('simulated slow/failing target');
-      }
-      return {status: 'completed'};
+    coordinator.afterAdmission = partitionId => {
+      if (alwaysFailingIds.has(partitionId)) throw new Error('injected unknown answer');
     };
 
     // Pass 1 establishes census stability for all 6 partitions.
@@ -154,23 +145,23 @@ test('rotating cursor prevents early failing services from monopolizing the per-
     // Pass 2 dispatches candidateIds[0] and candidateIds[1] (both fail).
     const pass2 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
     t.equal(pass2.dispatchedCount, MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS);
-    t.same(targetHandoffPartitionIds(coordinator.deliveries), candidateIds.slice(0, 2));
+    t.same(coordinator.admitted, candidateIds.slice(0, 2));
 
     // Advance past retry suppression so candidateIds[0..1] would be eligible again if cursor reset.
     coordinator.advanceNowBy(LEADER_HANDOFF_RETRY_AFTER_MS + 10);
-    coordinator.deliveries.length = 0;
+    coordinator.admitted.length = 0;
 
     // Pass 3 must rotate to candidateIds[2] and candidateIds[3], not re-attempt [0..1].
     const pass3 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
     t.equal(pass3.dispatchedCount, MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS);
-    t.same(targetHandoffPartitionIds(coordinator.deliveries), candidateIds.slice(2, 4));
+    t.same(coordinator.admitted, candidateIds.slice(2, 4));
 
     // Pass 4 rotates to candidateIds[4] and candidateIds[5].
     coordinator.advanceNowBy(LEADER_HANDOFF_RETRY_AFTER_MS + 10);
-    coordinator.deliveries.length = 0;
+    coordinator.admitted.length = 0;
     const pass4 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
     t.equal(pass4.dispatchedCount, MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS);
-    t.same(targetHandoffPartitionIds(coordinator.deliveries), candidateIds.slice(4, 6));
+    t.same(coordinator.admitted, candidateIds.slice(4, 6));
     t.end();
   },
 );
@@ -183,23 +174,14 @@ test('mid-pass coordinator leadership loss stops subsequent handoffs after await
 
     await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
 
-    coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
-      coordinator.deliveries.push({options: deliveryOptions, request, target});
-      if (
-        request[ReplicaOperationField.REASON] ===
-          ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION &&
-        request[ReplicaOperationField.PARTITION_ID] === candidateIds[0]
-      ) {
-        // Coordinator loses leadership while candidate 1 handoff is in flight.
-        coordinator.isLeader = false;
-      }
-      return {status: 'completed'};
+    coordinator.afterAdmission = partitionId => {
+      if (partitionId === candidateIds[0]) coordinator.isLeader = false;
     };
 
     const pass2 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
     t.equal(pass2.dispatchedCount, 1, 'stops after candidate 1 when coordinator loses leadership');
     t.equal(pass2.cancelled, true);
-    t.same(targetHandoffPartitionIds(coordinator.deliveries), [candidateIds[0]]);
+    t.same(coordinator.admitted, [candidateIds[0]]);
     t.end();
   },
 );
@@ -212,19 +194,14 @@ test('mid-pass service role change, service shutdown, and new in-flight operatio
 
     await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
 
-    coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
-      coordinator.deliveries.push({options: deliveryOptions, request, target});
-      if (
-        request[ReplicaOperationField.REASON] ===
-          ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION &&
-        request[ReplicaOperationField.PARTITION_ID] === candidateIds[0]
-      ) {
+    coordinator.afterAdmission = partitionId => {
+      if (partitionId === candidateIds[0]) {
         // While candidate 0's handoff was pending:
         // - candidate 1 stepped down (role became follower)
         // - candidate 2 shut down
         // - candidate 3 acquired an in-flight replica operation
-        coordinator.servicesMap.get(candidateIds[1]).role = RAFT_ROLE.FOLLOWER;
-        coordinator.servicesMap.get(candidateIds[2]).isShutdown = true;
+        coordinator.servicesMap.get(candidateIds[1] + '-r1').role = RAFT_ROLE.FOLLOWER;
+        coordinator.servicesMap.get(candidateIds[2] + '-r1').isShutdown = true;
         state.operationRows.push({
           entity_id: candidateIds[3],
           operation_id: `op-${candidateIds[3]}`,
@@ -234,13 +211,12 @@ test('mid-pass service role change, service shutdown, and new in-flight operatio
           workflow_step: 'SYNCING',
         });
       }
-      return {status: 'completed'};
     };
 
     const pass2 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
     t.equal(pass2.dispatchedCount, 2);
     t.same(
-      targetHandoffPartitionIds(coordinator.deliveries),
+      coordinator.admitted,
       [candidateIds[0], candidateIds[4]],
       'skips demoted, shut-down, and newly in-flight candidates and dispatches candidate 4',
     );
@@ -248,185 +224,74 @@ test('mid-pass service role change, service shutdown, and new in-flight operatio
   },
 );
 
-test('coordinator shutdown mid-handoff cancels target leg and retains custody.inFlight until promise settles',
-  async (t) => {
-    const state = buildSystemCohortState();
-    const candidateIds = selectNonSeedNonPriorityIds(state, 4);
-    const coordinator = buildCoordinatorFixture(state, candidateIds);
+test('shutdown during queued transfer keeps pass custody until the source refuses', async (t) => {
+  const state = buildSystemCohortState();
+  const ids = selectNonSeedNonPriorityIds(state, 4);
+  const coordinator = buildCoordinatorFixture(state, ids);
+  await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  const held = Promise.withResolvers();
+  coordinator.beforeAdmission = () => held.promise;
+  const pass = launchCoordinatorPartitionLeaderPlacementCure(coordinator);
+  t.same(coordinator.attempted, [ids[0]]);
+  coordinator.isShuttingDown = true;
+  coordinator.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN);
+  t.equal((await pass).cancelled, true);
+  t.equal(coordinator.leaderPlacementCureState.inFlight, true);
+  held.resolve();
+  await coordinator.leaderPlacementCureState.settledPromise;
+  t.equal(coordinator.leaderPlacementCureState.inFlight, false);
+  t.same(coordinator.attempted, [ids[0]]);
+  t.same(coordinator.admitted, []);
+  t.end();
+});
 
-    await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+test('cancelled placement never enters source execution', async (t) => {
+  const state = buildSystemCohortState();
+  const [id] = selectNonSeedNonPriorityIds(state, 1);
+  const coordinator = buildCoordinatorFixture(state, [id]);
+  await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  const context = coordinator.servicesMap.get(id + '-r1').userTableLeaderPlacementCureContext;
+  await dispatchLeaderHandoff(context, {target: {nodeId: NODE_2, replicaId: id + '-r2'}},
+    NOW_MS, {isCancelled: () => true});
+  t.same(coordinator.attempted, []);
+  t.end();
+});
 
-    let resolveDemotion = null;
-    coordinator.messageRouter.deliver = (target, request, deliveryOptions) => {
-      coordinator.deliveries.push({options: deliveryOptions, request, target});
-      if (
-        request[ReplicaOperationField.REASON] ===
-          ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF &&
-        !resolveDemotion
-      ) {
-        return new Promise((resolve) => {
-          resolveDemotion = () => resolve({status: 'completed'});
-        });
+test('a new in-flight operation blocks a queued source transfer', async (t) => {
+  const state = buildSystemCohortState();
+  const ids = selectNonSeedNonPriorityIds(state, 2);
+  const coordinator = buildCoordinatorFixture(state, ids);
+  await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  coordinator.beforeAdmission = partitionId => {
+    if (partitionId === ids[0]) state.operationRows.push({
+      entity_id: partitionId, partition_id: partitionId, operation_id: 'mid-handoff',
+      status: 'syncing', type: 'GROWTH_PROMOTE', workflow_step: 'SYNCING',
+    });
+  };
+  await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  t.same(coordinator.attempted, ids);
+  t.same(coordinator.admitted, [ids[1]]);
+  t.end();
+});
+
+test('a target becoming a learner blocks a queued source transfer', async (t) => {
+  const state = buildSystemCohortState();
+  const ids = selectNonSeedNonPriorityIds(state, 1);
+  const coordinator = buildCoordinatorFixture(state, ids);
+  await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  coordinator.beforeAdmission = partitionId => {
+    for (const row of state.serviceRows) {
+      if (row.partition_id === partitionId && row.node_id !== NODE_1) {
+        row.raft_role = RAFT_ROLE.LEARNER;
+        row.status = 'syncing';
       }
-      return Promise.resolve({status: 'completed'});
-    };
-
-    const passPromise = launchCoordinatorPartitionLeaderPlacementCure(coordinator);
-    await Promise.resolve();
-    t.equal(typeof resolveDemotion, 'function', 'demotion leg is in flight');
-    t.equal(coordinator.leaderPlacementCureState.inFlight, true);
-
-    // Trigger coordinator shutdown mid-demotion.
-    coordinator.isShuttingDown = true;
-    coordinator.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN);
-
-    const passResult = await passPromise;
-    t.equal(passResult.cancelled, true);
-    t.equal(
-      coordinator.leaderPlacementCureState.inFlight,
-      true,
-      'custody.inFlight remains true while underlying demotion delivery is still pending',
-    );
-
-    // Complete the underlying demotion leg; target-side leg must be skipped.
-    resolveDemotion();
-    await coordinator.leaderPlacementCureState.settledPromise;
-    t.equal(
-      coordinator.leaderPlacementCureState.inFlight,
-      false,
-      'custody.inFlight clears only after the underlying handoff promise settles',
-    );
-    t.same(
-      targetHandoffPartitionIds(coordinator.deliveries),
-      [],
-      'target-side STEP_DOWN_REPLICA leg is skipped after cancellation',
-    );
-    t.equal(
-      coordinator.deliveries.length,
-      1,
-      'no target leg or second candidate was dispatched after shutdown',
-    );
-    t.end();
-  },
-);
-
-test('dispatchLeaderHandoff checks isCancelled before target-side step-down leg',
-  async (t) => {
-    const deliveries = [];
-    let cancelled = false;
-    const rebalancer = {
-      entityId: 'orders-p2',
-      isShuttingDown: false,
-      logger: {debug: () => {}, error: () => {}, info: () => {}, warn: () => {}},
-      messageRouter: {
-        deliver: async (target, request, options) => {
-          deliveries.push({options, request, target});
-          if (
-            request[ReplicaOperationField.REASON] ===
-              ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF
-          ) {
-            cancelled = true;
-          }
-          return {status: 'completed'};
-        },
-      },
-      nodeId: NODE_1,
-      replicaId: 'orders-p2-r1',
-    };
-    await dispatchLeaderHandoff(
-      rebalancer,
-      {target: {nodeId: NODE_2, replicaId: 'orders-p2-r2'}},
-      NOW_MS,
-      {isCancelled: () => cancelled},
-    );
-    t.equal(deliveries.length, 1, 'only demotion leg ran before cancellation fired');
-    t.equal(
-      deliveries[0].request[ReplicaOperationField.REASON],
-      ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
-    );
-    t.end();
-  },
-);
-
-test('new nonterminal replica operation appearing during awaited source demotion skips target leg',
-  async (t) => {
-    const state = buildSystemCohortState();
-    const candidateIds = selectNonSeedNonPriorityIds(state, 2);
-    const coordinator = buildCoordinatorFixture(state, candidateIds);
-
-    await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
-
-    coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
-      coordinator.deliveries.push({options: deliveryOptions, request, target});
-      if (
-        request[ReplicaOperationField.REASON] ===
-          ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF &&
-        request[ReplicaOperationField.PARTITION_ID] === candidateIds[0]
-      ) {
-        state.operationRows.push({
-          entity_id: candidateIds[0],
-          operation_id: `op-mid-demote-${candidateIds[0]}`,
-          partition_id: candidateIds[0],
-          status: 'syncing',
-          type: 'GROWTH_PROMOTE',
-          workflow_step: 'SYNCING',
-        });
-      }
-      return {status: 'completed'};
-    };
-
-    const pass2 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
-    t.equal(pass2.dispatchedCount, 2);
-    t.same(
-      targetHandoffPartitionIds(coordinator.deliveries),
-      [candidateIds[1]],
-      'candidate 0 target election leg is skipped when a nonterminal op arrives during demotion',
-    );
-    const candidate0Deliveries = coordinator.deliveries.filter(
-      (entry) => entry.request[ReplicaOperationField.PARTITION_ID] === candidateIds[0],
-    );
-    t.equal(candidate0Deliveries.length, 1);
-    t.equal(
-      candidate0Deliveries[0].request[ReplicaOperationField.REASON],
-      ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
-    );
-    t.end();
-  },
-);
-
-test('target follower demotion to learner during awaited source demotion skips target leg',
-  async (t) => {
-    const state = buildSystemCohortState();
-    const candidateIds = selectNonSeedNonPriorityIds(state, 1);
-    const coordinator = buildCoordinatorFixture(state, candidateIds);
-
-    await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
-
-    coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
-      coordinator.deliveries.push({options: deliveryOptions, request, target});
-      if (
-        request[ReplicaOperationField.REASON] ===
-          ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF
-      ) {
-        for (const row of state.serviceRows) {
-          if (row.partition_id === candidateIds[0] && row.node_id !== NODE_1) {
-            row.raft_role = RAFT_ROLE.LEARNER;
-            row.status = 'syncing';
-          }
-        }
-      }
-      return {status: 'completed'};
-    };
-
-    await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
-    t.same(
-      targetHandoffPartitionIds(coordinator.deliveries),
-      [],
-      'target election leg is skipped when target node is no longer an active voter follower',
-    );
-    t.end();
-  },
-);
+    }
+  };
+  await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  t.same(coordinator.attempted, ids);
+  t.same(coordinator.admitted, []);
+  t.end();
+});
 
 test('sibling partition transitioning to splitting during first handoff rebuilds pass census ' +
   'and suppresses second candidate as census_unstable',
@@ -449,17 +314,8 @@ async (t) => {
   );
   t.ok(siblingRow, 'found settled sibling partition in cohort');
 
-  coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
-    coordinator.deliveries.push({options: deliveryOptions, request, target});
-    if (
-      request[ReplicaOperationField.REASON] ===
-        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION &&
-      request[ReplicaOperationField.PARTITION_ID] === candidateIds[0]
-    ) {
-      // Another partition in the settled cohort transitions to splitting mid-pass.
-      siblingRow.state = 'splitting';
-    }
-    return {status: 'completed'};
+  coordinator.afterAdmission = partitionId => {
+    if (partitionId === candidateIds[0]) siblingRow.state = 'splitting';
   };
 
   const pass2 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
@@ -469,13 +325,13 @@ async (t) => {
     'only the first candidate dispatches before the rebuilt census sees the splitting sibling',
   );
   t.same(
-    targetHandoffPartitionIds(coordinator.deliveries),
+    coordinator.admitted,
     [candidateIds[0]],
     'subsequent candidates see census_unstable from rebuilt pass census and do not dispatch',
   );
   t.equal(
     coordinator.servicesMap
-      .get(candidateIds[1])
+      .get(candidateIds[1] + '-r1')
       .userTableLeaderPlacementCureContext
       .userTableLeaderPlacementCureState
       .lastLoggedState,

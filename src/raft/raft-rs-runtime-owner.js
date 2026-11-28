@@ -26,7 +26,7 @@ import {
   reportCoreTrap, reportRuntimeReplaced, reportWaitBoundExceeded,
 } from './raft-rs-runtime-faults.js';
 import {
-  decideLeadershipTransfer, droppedByLeadershipTransfer, leadershipTransferInProgress,
+  decideLeadershipTransfer, droppedByLeadershipTransfer, leadershipTransferInProgress, transferRefusal,
 } from './raft-rs-leadership-transfer.js';
 import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from './raft-rs-ready-loop-constants.js';
 import {RAFT_RS_INITIAL_APPLIED, RAFT_RS_READY_DRAIN_MAX_CYCLES} from './raft-rs-group-constants.js';
@@ -1628,6 +1628,18 @@ function probePeerProgress(group, expectedGeneration, replicaIdentity) {
 // queued turn. The answer is acceptance; completion is the role and leader
 // events the drains announce.
 function transferLeadership(group, expectedGeneration, command) {
+  if (command.admitExecution) {
+    // The host predicate receives neither the command nor the native group.
+    // Observe native authority after it returns, after the inbound drain.
+    const {admitExecution} = command;
+    let eligible = false;
+    try {
+      eligible = admitExecution() === true;
+    } catch {
+      // A failed placement read cannot authorize a transfer.
+    }
+    if (!eligible) return settledTurn(transferRefusal(RUNTIME_REASON.PLACEMENT_WITHDRAWN, true));
+  }
   const observed = readGroupObservation(group, expectedGeneration);
   if (!observed.ok) {
     return settledTurn(observed.result);
@@ -2081,6 +2093,68 @@ function executeCommand(group, command) {
     perform(group, withSubmittedTerm(group, command))));
 }
 
+function releaseGroupDispatcher(group, enterCore) {
+  group.closed = true;
+  group.inbound.length = 0;
+  group.inboundBytes = 0;
+  group.draining = false;
+  group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
+  const timerCleanupError = cancelOwnedInboundDrainTimer(group);
+  // Even a timer-clear failure must not skip release of the native group.
+  const complete = (result) => {
+    if (timerCleanupError === null) return result;
+    return result.outcome === CORE_OK ?
+      outcome(HOST_FAILURE, {phase: RUNTIME_PHASE.INBOUND_TIMER_CLEANUP,
+        reason: String(timerCleanupError?.message ?? timerCleanupError), timerCleanupError}) :
+      outcome(result.outcome, {...result, timerCleanupError});
+  };
+  cancelOwnedResumptionTimer(group);
+  cancelOwnedRecoveryTimer(group);
+  if (runtimeHealth === REPLACING) {
+    return complete(outcome(CORE_OK, {reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY}));
+  }
+  groups.delete(group.key);
+  if (groups.size === 0 && runtimeHealth !== HEALTHY) {
+    core = null; runtimeRecovery = null; runtimeHealth = HEALTHY; group.handle = null;
+  } else if (runtimeHealth === UNHEALTHY && groups.size > 0) {
+    const remaining = groups.values().next().value;
+    const delayMs = runtimeRecovery === null ? 0 :
+      Math.max(0, runtimeRecovery.retryNotBefore - runtimeRecovery.clock.now());
+    scheduleGroupRecovery(remaining, delayMs);
+  }
+  // A failed group's node lives in the current core until it is freed.
+  if (!enterCore || group.handle === null || runtimeHealth !== HEALTHY) {
+    group.handle = null;
+    return complete(outcome(CORE_OK, {reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY}));
+  }
+  const freed = invokeCore(group, 'free');
+  group.handle = null;
+  return complete(freed.ok ? outcome(CORE_OK, {reason: RUNTIME_REASON.CLOSED}) : freed.result);
+}
+
+function openRegisteredGroupOrThrow(group) {
+  // A record that cannot be read leaves the group held by that failure: its
+  // port exists and answers typed, and the group's next operation after its
+  // retry window reconstructs it. Any other failure to open refuses the port.
+  let opening; let opened;
+  try {
+    opening = readOpeningRecord(group);
+    opened = opening.ok ? openGroupInCurrentRuntime(group, opening) : opening.result;
+  } catch (error) {
+    releaseGroupDispatcher(group, true); throw error;
+  }
+  if (opened.outcome === CORE_REFUSED || (opening.ok && opened.outcome !== CORE_OK)) {
+    const released = releaseGroupDispatcher(group, true);
+    throw Object.assign(new Error(opened.reason), {consensus: opened,
+      ...(released.outcome === CORE_OK ? {} : {cleanupFailure: released})});
+  }
+  const first = opening.ok ? invokeCore(group, 'status') : {ok: false};
+  if (first.ok) {
+    group.lastStatus = first.value;
+    settleStatusObservation(group, runtimeGeneration, first.value);
+  }
+}
+
 function createRuntimeDispatcher(request) {
   // This is a refused opening, not admitted work or a second recovery driver.
   // Existing groups retain the continuation; a final close clears a failed
@@ -2170,26 +2244,7 @@ function createRuntimeDispatcher(request) {
     closed: false,
   };
   groups.set(group.key, group);
-  // A record that cannot be read leaves the group held by that failure: its
-  // port exists and answers typed, and the group's next operation after its
-  // retry window reconstructs it. Any other failure to open refuses the port.
-  const opening = readOpeningRecord(group);
-  const opened = opening.ok ? openGroupInCurrentRuntime(group, opening) :
-    opening.result;
-  if (opened.outcome === CORE_REFUSED ||
-      (opening.ok && opened.outcome !== CORE_OK)) {
-    const released = group.handle !== null && runtimeHealth === HEALTHY ?
-      invokeCore(group, 'free') : {ok: true};
-    group.handle = null;
-    groups.delete(group.key);
-    throw Object.assign(new Error(opened.reason), {consensus: opened,
-      ...(released.ok ? {} : {cleanupFailure: released.result})});
-  }
-  const first = opening.ok ? invokeCore(group, 'status') : {ok: false};
-  if (first.ok) {
-    group.lastStatus = first.value;
-    settleStatusObservation(group, runtimeGeneration, first.value);
-  }
+  openRegisteredGroupOrThrow(group);
   return Object.freeze({
     enqueueStep: Object.freeze((envelope) => {
       if (runtimeHealth === REPLACING || (runtimeRecovery !== null &&
@@ -2258,51 +2313,8 @@ function createRuntimeDispatcher(request) {
     effectiveRaftTiming: Object.freeze(() => groupCoreTiming.snapshot(group)),
     containUnexpectedThrow: Object.freeze((error) =>
       containUnexpectedThrow(group, error)),
-    close: Object.freeze(({enterCore}) => {
-      group.closed = true;
-      group.inbound.length = 0;
-      group.inboundBytes = 0;
-      group.draining = false;
-      group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
-      const timerCleanupError = cancelOwnedInboundDrainTimer(group);
-      // Even a timer-clear failure must not skip release of the native group.
-      const complete = (result) => {
-        if (timerCleanupError === null) return result;
-        return result.outcome === CORE_OK ?
-          outcome(HOST_FAILURE, {
-            phase: RUNTIME_PHASE.INBOUND_TIMER_CLEANUP,
-            reason: String(timerCleanupError?.message ?? timerCleanupError),
-            timerCleanupError}) :
-          outcome(result.outcome, {...result, timerCleanupError});
-      };
-      cancelOwnedResumptionTimer(group);
-      cancelOwnedRecoveryTimer(group);
-      if (runtimeHealth === REPLACING) {
-        return complete(outcome(CORE_OK, {
-          reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY}));
-      }
-      groups.delete(group.key);
-      if (groups.size === 0 && runtimeHealth !== HEALTHY) {
-        core = null;
-        runtimeRecovery = null;
-        runtimeHealth = HEALTHY;
-        group.handle = null;
-      } else if (runtimeHealth === UNHEALTHY && groups.size > 0) {
-        const remaining = groups.values().next().value;
-        const delayMs = runtimeRecovery === null ? 0 :
-          Math.max(0, runtimeRecovery.retryNotBefore - runtimeRecovery.clock.now());
-        scheduleGroupRecovery(remaining, delayMs);
-      }
-      // A failed group's node lives in the current core until it is freed.
-      if (!enterCore || group.handle === null || runtimeHealth !== HEALTHY) {
-        return complete(outcome(CORE_OK, {
-          reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY,
-        }));
-      }
-      const freed = invokeCore(group, 'free');
-      return complete(freed.ok ? outcome(CORE_OK, {reason: RUNTIME_REASON.CLOSED}) :
-        freed.result);
-    }),
+    close: Object.freeze(({enterCore}) =>
+      releaseGroupDispatcher(group, enterCore)),
   });
 }
 

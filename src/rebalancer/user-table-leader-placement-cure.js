@@ -1,26 +1,27 @@
-import {readStateField} from '../utils/state-field-read.js';
-import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {
   classifySystemPartition,
   getPartitionRowFromCache,
   resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
 import {resolveDesiredReplicationFactor} from '../bootstrap/replication-target-authority.js';
-import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
+import {
+  normalizeNodeRow,
+  normalizeServiceRow,
+} from '../control-plane/system-row-normalizers.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {SERVICE_STATUS} from '../constants/service-status.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
-import {
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationReason,
-} from './replica-operation-constants.js';
+import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from '../raft/raft-operation-port-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {REBALANCE_PLANNING_GATE} from './rebalancer-planning-gate-constants.js';
-import {isTargetEligibleAfterDemotion} from './user-table-leader-placement-revalidation.js';
+import {isTargetEligibleForHandoff} from './user-table-leader-placement-revalidation.js';
 
 const {
+  COLUMN,
   EntityType,
+  STATE,
   SYSTEM_TABLE_NAME,
   TERMINAL_STATUSES,
   isTerminalReplicaOperationRecord,
@@ -35,14 +36,12 @@ const CURE_LITERAL = Object.freeze({
   ONE: 1,
   EMPTY: '',
   FINGERPRINT_SEPARATOR: ',',
+  SOURCE_AUTHORITY_UNAVAILABLE: 'source-authority-unavailable',
 });
 const MIN_SETTLED_PARTITION_COUNT = 2;
 const MIN_SURPLUS_LEADER_COUNT = 2;
 const LEADER_HANDOFF_RETRY_AFTER_MS =
   PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.REQUEST_RETRY_AFTER_MS;
-const CURE_OPERATION_ID_PREFIX = 'user-table-leader-spread';
-const CURE_DEMOTION_OPERATION_SUFFIX = 'demote';
-const REPLICA_HANDLER_TARGET_SUFFIX = '/service/replica-handler';
 const NORMAL_PARTITION_STATE = 'normal';
 
 const USER_TABLE_LEADER_PLACEMENT_CURE_STATE = Object.freeze({
@@ -68,19 +67,10 @@ function isUserTableLeaderCureGapActionable(decision) {
   return Boolean(decision) && CURE_GAP_ACTIONABLE_STATES.has(decision.state);
 }
 
-const CURE_DEMOTION_SKIP_REASON = Object.freeze({
-  NO_OWN_REPLICA_ID: 'own replicaId unavailable',
-});
-
 const CURE_LOG_MSG = Object.freeze({
   DECISION: 'User-table leader placement cure decision',
-  DEMOTION_COMPLETED: 'User-table leader placement cure demoted local source leader',
-  DEMOTION_FAILED: 'User-table leader placement cure local demotion dispatch failed',
-  DEMOTION_SKIPPED: 'User-table leader placement cure skipped local demotion',
-  DISPATCHED: 'User-table leader placement cure dispatched leader handoff',
-  DISPATCH_FAILED: 'User-table leader placement cure handoff dispatch failed',
-  TARGET_DISPATCH_SKIPPED:
-    'User-table leader placement cure skipped target election after post-demotion revalidation',
+  DISPATCHED: 'Leader placement cure source transfer answered',
+  DISPATCH_FAILED: 'Leader placement cure source transfer unavailable',
 });
 
 function readText(value) {
@@ -449,7 +439,47 @@ function resolveSettledSystemPartitionsFromCensus(rebalancer, passCensus) {
   return settled;
 }
 
-function collectOwnVoterFollowers(rebalancer) {
+function readCachedNodeRowForHandoff(systemTableCache, nodeId) {
+  if (!systemTableCache || !nodeId) return null;
+  return systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) || null;
+}
+
+function isCachedNodeLeaseExpired(nodeRow, nowMs) {
+  if (!Object.hasOwn(nodeRow, COLUMN.READY_LEASE_EXPIRES_AT)) return false;
+  const leaseExpiresAt = nodeRow[COLUMN.READY_LEASE_EXPIRES_AT];
+  return leaseExpiresAt === null ||
+    (Number.isFinite(leaseExpiresAt) &&
+      Number.isFinite(nowMs) &&
+      leaseExpiresAt <= nowMs);
+}
+
+function isCachedNodeRowIneligible(nodeRow, nowMs) {
+  if (!nodeRow) return false;
+  const normalized = normalizeNodeRow(nodeRow);
+  if (normalized.status && normalized.status !== SERVICE_STATUS.ACTIVE) {
+    return true;
+  }
+  if (
+    normalized.connectionState &&
+    normalized.connectionState !== STATE.READY
+  ) {
+    return true;
+  }
+  return isCachedNodeLeaseExpired(nodeRow, nowMs);
+}
+
+function isCachedNodeIneligibleForHandoff(rebalancer, nodeId, nowMs) {
+  if (!nodeId) return true;
+  const liveness =
+    rebalancer?.controlPlaneReadinessService?.projectNodeLiveness?.(nodeId);
+  if (liveness?.readyNow === false) return true;
+  return isCachedNodeRowIneligible(
+    readCachedNodeRowForHandoff(rebalancer?.systemTableCache, nodeId),
+    nowMs,
+  );
+}
+
+function collectOwnVoterFollowers(rebalancer, nowMs = Date.now()) {
   const followers = [];
   for (const row of rebalancer.getCurrentReplicas()) {
     const service = normalizeServiceRow(row);
@@ -457,7 +487,8 @@ function collectOwnVoterFollowers(rebalancer) {
       service.nodeId &&
       service.nodeId !== rebalancer.nodeId &&
       service.status === SERVICE_STATUS.ACTIVE &&
-      isVoterRaftRole(service.raftRole)
+      isVoterRaftRole(service.raftRole) &&
+      !isCachedNodeIneligibleForHandoff(rebalancer, service.nodeId, nowMs)
     ) {
       const replicaId = service.serviceId || service.replicaId;
       if (replicaId) followers.push({nodeId: service.nodeId, replicaId});
@@ -477,90 +508,7 @@ function resolveCureState(rebalancer) {
   return rebalancer.userTableLeaderPlacementCureState;
 }
 
-function buildStepDownRequest(rebalancer, operationId, replicaId, reason) {
-  return {
-    [ReplicaOperationField.TYPE]: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-    [ReplicaOperationField.OPERATION_ID]: operationId,
-    [ReplicaOperationField.PARTITION_ID]: rebalancer.entityId,
-    [ReplicaOperationField.REPLICA_ID]: replicaId,
-    [ReplicaOperationField.REASON]: reason,
-  };
-}
-
-function buildHandoffRequest(rebalancer, decision) {
-  return buildStepDownRequest(
-    rebalancer, `${CURE_OPERATION_ID_PREFIX}:${rebalancer.entityId}`,
-    decision.target.replicaId, ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
-  );
-}
-
-function buildSourceDemotionRequest(rebalancer) {
-  return buildStepDownRequest(
-    rebalancer,
-    `${CURE_OPERATION_ID_PREFIX}:${rebalancer.entityId}:${CURE_DEMOTION_OPERATION_SUFFIX}`,
-    rebalancer.replicaId, ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
-  );
-}
-
-function resolveOwnSourceReplicaId(rebalancer) {
-  return typeof rebalancer.replicaId === 'string' &&
-    rebalancer.replicaId.length > CURE_LITERAL.ZERO ?
-    rebalancer.replicaId :
-    null;
-}
-
-async function deliverStepDownLeg(
-  rebalancer,
-  targetNodeId,
-  request,
-  successMsg,
-  failMsg,
-  logExtra,
-) {
-  const target = `${targetNodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`;
-  try {
-    const deliveryEnvelope = await rebalancer.messageRouter.deliver(
-      target,
-      request,
-      {targetNodeId},
-    );
-    const response = deliveryAnswerOf(deliveryEnvelope);
-    rebalancer.logger.info(successMsg, {
-      entityId: rebalancer.entityId,
-      handoffBranch: response?.handoffBranch || null,
-      handoffTrackedRole: response?.handoffTrackedRole || null,
-      responseStatus: readStateField(response?.status),
-      ...logExtra,
-    });
-  } catch (error) {
-    rebalancer.logger.warn(failMsg, {
-      entityId: rebalancer.entityId,
-      error: error?.message || String(error),
-      ...logExtra,
-    });
-  }
-}
-
-async function demoteLocalSourceLeader(rebalancer) {
-  const sourceReplicaId = resolveOwnSourceReplicaId(rebalancer);
-  if (sourceReplicaId === null) {
-    rebalancer.logger.warn(CURE_LOG_MSG.DEMOTION_SKIPPED, {
-      entityId: rebalancer.entityId,
-      reason: CURE_DEMOTION_SKIP_REASON.NO_OWN_REPLICA_ID,
-    });
-    return;
-  }
-  await deliverStepDownLeg(
-    rebalancer,
-    rebalancer.nodeId,
-    buildSourceDemotionRequest(rebalancer),
-    CURE_LOG_MSG.DEMOTION_COMPLETED,
-    CURE_LOG_MSG.DEMOTION_FAILED,
-    {sourceReplicaId},
-  );
-}
-
-const POST_DEMOTION_REVALIDATION_DEPS = Object.freeze({
+const HANDOFF_REVALIDATION_DEPS = Object.freeze({
   buildSharedLeaderPlacementPassCensus,
   buildSystemCohortCensus,
   censusFingerprint,
@@ -578,45 +526,47 @@ const POST_DEMOTION_REVALIDATION_DEPS = Object.freeze({
 async function dispatchLeaderHandoff(rebalancer, decision, nowMs, options = {}) {
   const {
     isCancelled = HANDOFF_NOT_CANCELLED,
-    nowFn = () => (Number.isFinite(nowMs) ? nowMs : Date.now()),
-  } = options || {};
-  if (rebalancer.isShuttingDown || isCancelled()) {
-    return;
+    nowFn = Number.isFinite(options.nowMs) ? () => options.nowMs : Date.now,
+  } = options;
+  if (rebalancer.isShuttingDown || isCancelled()) return;
+  resolveCureState(rebalancer).lastDispatchAtMs = nowMs;
+  const {entityId, replicaId} = rebalancer;
+  const {nodeId: targetNodeId, replicaId: targetReplicaId} = decision.target;
+  const detail = {entityId, replicaId, targetNodeId, targetReplicaId};
+  try {
+    const currentSource = () => {
+      const services = rebalancer.cdcIntegrationService.partitionServicesProvider();
+      const service = services?.get(replicaId);
+      return service?.partitionId === entityId && service.replicaId === replicaId ? service : null;
+    };
+    const source = currentSource();
+    const port = source?.raft;
+    const status = port?.readStatus();
+    if (!status || status.role !== RAFT_ROLE.LEADER || status.groupId !== entityId ||
+        status.replicaIdentity !== replicaId || !replicaId || targetReplicaId === replicaId) {
+      rebalancer.logger.warn(CURE_LOG_MSG.DISPATCH_FAILED, {
+        ...detail,
+        reason: CURE_LITERAL.SOURCE_AUTHORITY_UNAVAILABLE,
+      });
+      return;
+    }
+    const admitExecution = () => !isCancelled() && isRebalancerEligibleForCure(rebalancer) &&
+      currentSource() === source && source.raft === port && !source.isShutdown &&
+      isTargetEligibleForHandoff(rebalancer, decision, nowFn(), HANDOFF_REVALIDATION_DEPS);
+    const result = await turnChainValue(source.requestLeadershipTransfer({
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.SOURCE_NAMED,
+      replicaIdentity: targetReplicaId,
+      term: status.term,
+      lifecycleIncarnation: status.lifecycleIncarnation,
+      runtimeGeneration: status.runtimeGeneration,
+      configurationKey: status.configurationKey,
+      membershipGenerationIndex: status.membershipGenerationIndex,
+    }, admitExecution));
+    rebalancer.logger.info(CURE_LOG_MSG.DISPATCHED, {...detail, term: status.term,
+      outcome: result.outcome, reason: result.reason});
+  } catch (error) {
+    rebalancer.logger.warn(CURE_LOG_MSG.DISPATCH_FAILED, {...detail, error: error.message});
   }
-  const cureState = resolveCureState(rebalancer);
-  cureState.lastDispatchAtMs = nowMs;
-  await demoteLocalSourceLeader(rebalancer);
-  if (rebalancer.isShuttingDown || isCancelled()) {
-    return;
-  }
-  const postDemotionNowMs = nowFn();
-  if (
-    !isTargetEligibleAfterDemotion(
-      rebalancer,
-      decision,
-      postDemotionNowMs,
-      options,
-      POST_DEMOTION_REVALIDATION_DEPS,
-    )
-  ) {
-    rebalancer.logger.info(CURE_LOG_MSG.TARGET_DISPATCH_SKIPPED, {
-      entityId: rebalancer.entityId,
-      targetNodeId: decision?.target?.nodeId || null,
-      targetReplicaId: decision?.target?.replicaId || null,
-    });
-    return;
-  }
-  await deliverStepDownLeg(
-    rebalancer,
-    decision.target.nodeId,
-    buildHandoffRequest(rebalancer, decision),
-    CURE_LOG_MSG.DISPATCHED,
-    CURE_LOG_MSG.DISPATCH_FAILED,
-    {
-      targetNodeId: decision.target.nodeId,
-      targetReplicaId: decision.target.replicaId,
-    },
-  );
 }
 
 function isOrdinaryUserTablePartition(rebalancer, partitionRow) {
@@ -655,7 +605,7 @@ function evaluateSystemCohortCureForRebalancer(
     lastDispatchAtMs: cureState.lastDispatchAtMs,
     nodeId: rebalancer.nodeId,
     nowMs,
-    ownVoterFollowers: collectOwnVoterFollowers(rebalancer),
+    ownVoterFollowers: collectOwnVoterFollowers(rebalancer, nowMs),
     partitionId: rebalancer.entityId,
     previousCensusFingerprint: cureState.censusFingerprint,
     settledPartitions:
@@ -671,7 +621,7 @@ function evaluateUserTableCureForRebalancer(rebalancer, tableId, cureState, nowM
     lastDispatchAtMs: cureState.lastDispatchAtMs,
     nodeId: rebalancer.nodeId,
     nowMs,
-    ownVoterFollowers: collectOwnVoterFollowers(rebalancer),
+    ownVoterFollowers: collectOwnVoterFollowers(rebalancer, nowMs),
     partitionId: rebalancer.entityId,
     previousCensusFingerprint: cureState.censusFingerprint,
     settledPartitions,
@@ -741,7 +691,7 @@ async function applyUserTableLeaderPlacementCure(rebalancer, options = {}) {
     decision?.state ===
       USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF
   ) {
-    await dispatchLeaderHandoff(rebalancer, decision, nowMs);
+    await dispatchLeaderHandoff(rebalancer, decision, nowMs, options);
   }
   return decision;
 }

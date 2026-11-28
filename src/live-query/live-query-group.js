@@ -39,6 +39,7 @@ import {
   fanOutToClients,
   isComplexQuery,
   isPartitionVisibleForRouting,
+  normalizeLiveQueryRowForPresentation,
   projectSingleColumn,
   recordInitialFrontiers,
   renewClientSubscription,
@@ -453,24 +454,31 @@ class QueryGroup extends EventEmitter {
    */
   async handleCDCEvent(change, partitionId = null) {
     const eventVersion = extractEventVersion(change);
-    if (!checkAndAdvanceFrontier(
+    if (shouldSkipBufferedEvent(
       this.partitionFrontiers, partitionId, eventVersion, this.compareVersions,
     )) {
       return null;
     }
-    this.cdcEventEpoch += 1;
 
     // Tier 2: Queries with JOIN, GROUP BY, aggregates, ORDER BY, LIMIT re-execute
     if (this.isComplex) {
+      checkAndAdvanceFrontier(
+        this.partitionFrontiers, partitionId, eventVersion, this.compareVersions,
+      );
+      this.cdcEventEpoch += 1;
       await this.reexecuteQuery();
       return null;
     }
 
-    // Tier 1: Incremental delta evaluation
+    // Tier 1: Incremental delta evaluation before advancing partition frontier
     const result = this.evaluateChange(change);
     if (result) {
       this._fanOutResult(result, change);
     }
+    checkAndAdvanceFrontier(
+      this.partitionFrontiers, partitionId, eventVersion, this.compareVersions,
+    );
+    this.cdcEventEpoch += 1;
     return result;
   }
 
@@ -506,17 +514,20 @@ class QueryGroup extends EventEmitter {
    * @return {Object} Projected row.
    */
   projectRow(row) {
-    if (!row || typeof row !== 'object' || this.isStarProjection()) {
+    if (!row || typeof row !== 'object') {
       return row;
+    }
+    if (this.isStarProjection()) {
+      return normalizeLiveQueryRowForPresentation(row);
     }
     const cols = this.parsedQuery?.columns;
     if (!cols || cols.length === 0) {
-      return row;
+      return normalizeLiveQueryRowForPresentation(row);
     }
     const projected = {};
     for (const col of cols) {
       if (!projectSingleColumn(projected, row, col)) {
-        return row;
+        return normalizeLiveQueryRowForPresentation(row);
       }
     }
     return projected;

@@ -6,6 +6,9 @@ import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
   isWriteOutcomeUnknown,
 } from '../partition/partition-write-kernel.js';
+import {PARTICIPANT_TRANSACTION_FAILURE_CODE} from
+  '../partition/partition-participant-transaction-constants.js';
+import {QUERY_ERROR_CODE} from './query-constants.js';
 
 // The executor's partition delivery is the one owner that re-delivers a
 // write whose outcome is not known. A write is delivered under one entryId
@@ -44,8 +47,72 @@ const EXECUTOR_ENTRY_ID_PREFIX = 'qexec-';
 const STRING_TYPE = 'string';
 const FUNCTION_TYPE = 'function';
 
+const SETTLED_PARTICIPANT_STAGING_FAILURE_CODES = Object.freeze(new Set([
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.IDENTITY_REQUIRED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.IDENTITY_MISMATCH,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.ALREADY_ACTIVE,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.NOT_ACTIVE,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARING,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.SEALED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.TERMINAL,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARE_REFUSED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARE_CONTENT_CONFLICT,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.NOT_PREPARED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.COMMIT_REFUSED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.HISTORICAL_PREPARED_CONTRADICTION,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.DECISION_BINDING_REQUIRED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.DECISION_DIGEST_MISMATCH,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.DECISION_CONFLICT,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.SESSION_WRITE_PARAM_UNSUPPORTED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.SESSION_WRITE_NONDETERMINISTIC,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.STATEMENT_FAILED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.REPLAY_DIVERGED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.STALE_READ,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.REPLAY_BUDGET_EXCEEDED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.DETERMINISM_SELF_CHECK_FAILED,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.UNREPLICATED_LOCAL_MUTATION,
+  PARTICIPANT_TRANSACTION_FAILURE_CODE.CONNECTION_SERVED_LEGACY,
+]));
+
 function isNonEmptyString(value) {
   return typeof value === STRING_TYPE && value.length > 0;
+}
+
+function isSettledWriteFailureAnswer(answer, isParticipantStagingWrite = false) {
+  if (answer?.committed === true) {
+    return true;
+  }
+  if (!isParticipantStagingWrite || answer?.deferRetry === true) {
+    return false;
+  }
+  if (answer?.errorCode === QUERY_ERROR_CODE.LOCK_NOT_AVAILABLE) {
+    return true;
+  }
+  return SETTLED_PARTICIPANT_STAGING_FAILURE_CODES.has(answer?.failureCode);
+}
+
+function resolveNonUnknownAnswerDecision(entryId, unresolved) {
+  if (!unresolved) {
+    return UNKNOWN_OUTCOME_DECISION.NONE;
+  }
+  return isNonEmptyString(entryId) ?
+    UNKNOWN_OUTCOME_DECISION.REDELIVER :
+    UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE;
+}
+
+function recordUnknownAnswerInState(state, answer, markUnresolved) {
+  state.unknownAnswers += 1;
+  if (isNonEmptyString(answer.entryId)) {
+    state.answeredEntryId = answer.entryId;
+  }
+  if (answer.consensus) {
+    state.lastConsensus = answer.consensus;
+  }
+  markUnresolved({
+    state: answer.failureCode,
+    reason: answer.consensus?.reason ?? null,
+    logIndex: answer.logIndex ?? null,
+  });
 }
 
 /**
@@ -101,7 +168,12 @@ function reportSpentWaitOnce(state, logger, failureResult, spentWait) {
  * @param {Function} options.now - The executor's clock.
  * @return {Object} The tracker.
  */
-function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
+function createUnknownOutcomeRedelivery({
+  entryId,
+  forRead,
+  isParticipantStagingWrite = false,
+  now,
+}) {
   const state = {
     deliveries: 0,
     unknownAnswers: 0,
@@ -112,6 +184,8 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
     reported: false,
     redeliveryDelays: 0,
     answeredEntryId: null,
+    submittedEntryId: null,
+    submittedAtMs: null,
   };
   const markUnresolved = (observed) => {
     if (state.firstUnresolvedAtMs === null) {
@@ -122,7 +196,9 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
   const isUnresolved = () => !forRead && !state.settled &&
     state.unknownAnswers + state.lostAnswers > 0;
   return Object.freeze({
-    recordDelivery() {
+    recordDelivery(submittedEntryId) {
+      state.submittedEntryId = submittedEntryId;
+      state.submittedAtMs = now();
       state.deliveries += 1;
     },
     /**
@@ -136,20 +212,14 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
       if (forRead) {
         return UNKNOWN_OUTCOME_DECISION.NONE;
       }
-      if (answer?.committed === true) {
+      if (isSettledWriteFailureAnswer(answer, isParticipantStagingWrite)) {
         state.settled = true;
         return UNKNOWN_OUTCOME_DECISION.NONE;
       }
       if (!isWriteOutcomeUnknown(answer)) {
-        return UNKNOWN_OUTCOME_DECISION.NONE;
+        return resolveNonUnknownAnswerDecision(entryId, isUnresolved());
       }
-      state.unknownAnswers += 1;
-      state.answeredEntryId = answer.entryId ?? state.answeredEntryId;
-      markUnresolved({
-        state: answer.failureCode,
-        reason: answer.consensus?.reason ?? null,
-        logIndex: answer.logIndex ?? null,
-      });
+      recordUnknownAnswerInState(state, answer, markUnresolved);
       return isNonEmptyString(entryId) && answer.entryId === entryId ?
         UNKNOWN_OUTCOME_DECISION.REDELIVER :
         UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE;
@@ -162,6 +232,7 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
       if (forRead) {
         return;
       }
+      state.firstUnresolvedAtMs ??= state.submittedAtMs;
       state.lostAnswers += 1;
       markUnresolved({
         state: UNKNOWN_OUTCOME_LOST_ANSWER_STATE,
@@ -210,12 +281,14 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
         return failureResult;
       }
       const spentWait = buildSpentWait(state, {
-        entryId: isNonEmptyString(entryId) ? entryId : state.answeredEntryId,
+        entryId: entryId || state.answeredEntryId || state.submittedEntryId || null,
         nowMs: now(),
       });
       reportSpentWaitOnce(state, logger, failureResult, spentWait);
       return {
         ...failureResult,
+        ...(state.lastConsensus && !failureResult?.consensus ?
+          {consensus: state.lastConsensus} : {}),
         error: state.unknownAnswers > 0 ?
           ERRORS.WRITE_OUTCOME_UNKNOWN : failureResult?.error,
         errorCode: null,

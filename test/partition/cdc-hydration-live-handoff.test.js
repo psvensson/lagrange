@@ -73,7 +73,7 @@ for (const earlierCount of [1, 3]) {
       const handshake = await leader.subscribeToCDCWithHandshake(late, {subscriberId: 'B'});
       const image = leader.readHydrationImage(IMAGE_SQL);
       const position = Number(image.appliedIndex);
-      const imageHadDeletedRow = image.rows.some((row) => row.id === DELETED_IMAGE_ROW);
+      const imageHadDeletedRow = image.rows.some((row) => row.group_id === DELETED_IMAGE_ROW);
       const appliedAtRead = durableAppliedIndex(leader);
       const committedAbove = commitLaterTraffic(leader, 'live');
       await settleTicks();

@@ -196,7 +196,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       existing?.context,
       extractOperationDispatchProgressContext(options),
     );
+    const visibilityOnly = errorLike?.code ===
+      REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_VISIBILITY_LAG;
     if (existing) {
+      existing.visibilityOnly &&= visibilityOnly;
       return updateExistingOperationDispatchDeferredRetry({
         deferredContext,
         desiredAttemptAt,
@@ -211,6 +214,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     }
 
     const deferredRetry = {
+      visibilityOnly,
       context: deferredContext,
       errorMessage,
       nextAttemptAt: desiredAttemptAt,
@@ -298,7 +302,8 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       }
       this.operationDispatchQueue.enqueue(
         operationId,
-        RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
+        deferredRetry.visibilityOnly ? RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY :
+          RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
         Object.keys(context).length > 0 ? context : undefined,
       );
       this.logger.debug(DISPATCH_LOG_MSG.OPERATION_DISPATCH_DEFERRED_RETRY, {
@@ -389,7 +394,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @return {boolean}
    * @private
    */
-  coalesceActiveDirectDispatchWakeup(operationId, row = null) {
+  coalesceActiveDirectDispatchWakeup(operationId, row = null, validatedReplay = false) {
     if (!operationId) {
       return false;
     }
@@ -405,14 +410,14 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     ) {
       return true;
     }
-    if (!this.directDispatchWakeupsInFlight.has(operationId)) {
+    const current = this.directDispatchWakeupsInFlight.get(operationId);
+    if (!current) {
       return false;
     }
-    if (row) {
-      this.directDispatchWakeupsInFlight.set(
-        operationId,
-        this.cloneDeferredOperationDispatchRow(row),
-      );
+    if (row && row !== current.row) {
+      this.directDispatchWakeupsInFlight.set(operationId, {
+        row: this.cloneDeferredOperationDispatchRow(row), validatedReplay,
+      });
     }
     return true;
   }
@@ -424,14 +429,11 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @return {void}
    * @private
    */
-  markDirectDispatchWakeupInFlight(operationId, row = null) {
+  markDirectDispatchWakeupInFlight(operationId, row = null, validatedReplay = false) {
     if (!operationId) {
       return;
     }
-    this.directDispatchWakeupsInFlight.set(
-      operationId,
-      this.cloneDeferredOperationDispatchRow(row),
-    );
+    this.directDispatchWakeupsInFlight.set(operationId, {row: this.cloneDeferredOperationDispatchRow(row), validatedReplay});
   }
 
   /**
@@ -442,7 +444,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @private
    */
   clearDirectDispatchWakeupInFlight(operationId, fallbackRow = null) {
-    const retainedRow = this.directDispatchWakeupsInFlight.get(operationId);
+    const retainedRow = this.directDispatchWakeupsInFlight.get(operationId)?.row;
     this.directDispatchWakeupsInFlight.delete(operationId);
     return retainedRow || this.cloneDeferredOperationDispatchRow(fallbackRow);
   }

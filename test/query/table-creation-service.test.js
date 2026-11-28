@@ -10,10 +10,9 @@ import {
   isPartitionField, stripPartitionDetails, validatePrimaryKey,
 } from '../../src/query/table-creation-service-result-projection.js';
 import {
-  buildColumnMetadata, buildSchemaDefinition, derivePartitionKey,
-  extractColumnCheckConstraints, extractColumnCollations, extractColumnDefaults,
-  extractColumnNames, extractColumnTypes, extractNotNullColumns,
-  extractTableConstraints, extractUniqueColumns, findPrimaryKeyColumn,
+  buildColumnMetadata,
+  buildSchemaDefinition,
+  derivePartitionKey,
   normalizeDataType,
 } from '../../src/query/table-creation-service-schema-derivation.js';
 import {
@@ -1430,17 +1429,41 @@ test('TableCreationService - pure schema derivation, result projection, and ' +
 
   t.equal(derivePartitionKey(ast.primaryKey), 'account_id');
   t.equal(normalizeDataType('VARCHAR'), 'TEXT');
-  t.same(extractColumnNames(ast), ['account_id', 'balance']);
-  t.equal(findPrimaryKeyColumn(ast), 'account_id');
-  t.same(extractNotNullColumns(ast), ['account_id', 'balance']);
-  t.same(extractColumnTypes(ast), {account_id: 'INTEGER', balance: 'INTEGER'});
-  t.same(extractColumnDefaults(ast), {account_id: undefined, balance: '0'});
-  t.same(extractColumnCollations(ast), {account_id: 'BINARY', balance: 'BINARY'});
-  t.same(extractUniqueColumns(ast), ['account_id']);
-  t.same(extractColumnCheckConstraints(ast), [{name: 'balance', checkSql: 'balance >= 0'}]);
-  t.same(extractTableConstraints(ast), [{type: 'CHECK', checkSql: 'balance >= 0'}]);
+  const derivedSchema = buildSchemaDefinition(ast);
+  t.same(
+    derivedSchema.columns.map((col) => col.name),
+    ['account_id', 'balance'],
+  );
+  t.same(derivedSchema.primaryKey, ['account_id']);
+  t.same(
+    derivedSchema.columns.filter((col) => col.notNull).map((col) => col.name),
+    ['account_id', 'balance'],
+  );
+  t.same(
+    Object.fromEntries(derivedSchema.columns.map((col) => [col.name, col.type])),
+    {account_id: 'INTEGER', balance: 'INTEGER'},
+  );
+  t.same(
+    Object.fromEntries(derivedSchema.columns.map((col) => [col.name, col.defaultValue])),
+    {account_id: undefined, balance: '0'},
+  );
+  t.same(
+    Object.fromEntries(derivedSchema.columns.map((col) => [col.name, col.collation])),
+    {account_id: 'BINARY', balance: 'BINARY'},
+  );
+  t.same(
+    derivedSchema.columns.filter((col) => col.unique).map((col) => col.name),
+    ['account_id'],
+  );
+  t.same(
+    derivedSchema.columns
+      .filter((col) => Boolean(col.checkSql))
+      .map((col) => ({name: col.name, checkSql: col.checkSql})),
+    [{name: 'balance', checkSql: 'balance >= 0'}],
+  );
+  t.same(derivedSchema.tableConstraints, [{type: 'CHECK', checkSql: 'balance >= 0'}]);
   t.equal(buildColumnMetadata(ast.columns[0]).type, 'INTEGER');
-  t.equal(buildSchemaDefinition(ast).primaryKey[0], 'account_id');
+  t.equal(derivedSchema.primaryKey[0], 'account_id');
   t.equal(validatePrimaryKey(ast).valid, true);
   t.equal(isPartitionField('_partition_id'), true);
   t.equal(isPartitionField('balance'), false);
@@ -1448,16 +1471,25 @@ test('TableCreationService - pure schema derivation, result projection, and ' +
     {rows: [{account_id: 1}]});
 
   t.same(decideCreateTableAction({
-    ast, options: {}, existingTable: {table_id: 'tbl-1'}, hasPersistenceAuthority: true,
+    ast, options: {}, existingTable: {table_id: 'tbl-1'},
   }), {action: CREATE_TABLE_ACTION.THROW_TABLE_EXISTS});
   t.same(decideCreateTableAction({
     ast: {...ast, ifNotExists: true}, options: {},
-    existingTable: {table_id: 'tbl-1'}, hasPersistenceAuthority: true,
+    existingTable: {table_id: 'tbl-1'},
   }), {action: CREATE_TABLE_ACTION.RECONCILE_EXISTING});
   t.same(decideCreateTableAction({
-    ast, options: {}, existingTable: null, hasPersistenceAuthority: true,
+    ast, options: {}, existingTable: null,
   }), {action: CREATE_TABLE_ACTION.CREATE_PERSISTED});
-  t.same(decideCreateTableAction({
-    ast, options: {}, existingTable: null, hasPersistenceAuthority: false,
-  }), {action: CREATE_TABLE_ACTION.CREATE_EPHEMERAL});
+  t.equal(CREATE_TABLE_ACTION.CREATE_EPHEMERAL, undefined);
+
+  const unpersistedService = new TableCreationService({
+    systemCache: {find: () => null},
+    controlPlaneSystemTableGateway: null,
+  });
+  unpersistedService.findExistingTableRecord = async () => null;
+  await t.rejects(
+    unpersistedService.executeCreateTableProvisioning(ast),
+    {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE},
+  );
+  await unpersistedService.shutdown();
 });

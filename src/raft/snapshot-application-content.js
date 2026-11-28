@@ -1,3 +1,9 @@
+import {assertMirrorReplayCoverageIn} from '../partition/partition-mirror-effect-retention.js';
+import {assertAppliedMirrorEffect, decodeMirrorCustodyRow, decodeMirrorReplayRecord} from '../partition/partition-mirror-custody-codec.js';
+import {detectCommittedStatementOutcomeFormat} from '../partition/partition-retained-store-observation.js';
+import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, PARTITION_COMMITTED_STATEMENT_FORMAT,
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
+  '../partition/partition-committed-statement-outcome-constants.js';
 // Application and durable partition table policy for raft-rs replica-image
 // checkpoints (SN1 / F5). Separates partition state-machine payloads (which
 // preserve user tables and canonical partition metadata tables while scrubbing
@@ -5,6 +11,8 @@
 // (which carry only `raft_rs_peer_identity`), and enforces the
 // `PREPARED_TRANSACTIONS_PENDING` gate and HLC non-regression across compaction.
 
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schema-shared-constants.js';
+import {PARTITIONS_SCHEMA_UNSUPPORTED, partitionDescriptorsAreCurrentIn} from '../partition/partition-service-table-bootstrap.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
@@ -13,6 +21,7 @@ const NO_COMMITTED_HLC = '0';
 const RAFT_RS_PEER_TABLE = 'raft_rs_peer_identity';
 const RAFT_INTERNAL_TABLE_PREFIX = '_raft_';
 const PARTICIPANT_TRANSACTIONS_TABLE = '_participant_transactions';
+const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
 const PREPARED_PARTICIPANT_STATE = 'PREPARED';
 const IDENTIFIER_QUOTE = '"';
 const IDENTIFIER_ESCAPED_QUOTE = '""';
@@ -27,6 +36,9 @@ const SELECT_RAFT_LOCAL_TABLES_SQL =
   'SELECT name FROM sqlite_master WHERE type = \'table\' AND name LIKE \'_raft_%\'';
 const SELECT_USER_TABLES_SQL =
   'SELECT name FROM sqlite_master WHERE type = \'table\'';
+const SELECT_OUTCOME_EFFECTS_ROWS_SQL =
+  'SELECT entry_key, log_index, mutation_kind, typed_effects_json ' +
+  `FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE}`;
 
 function quotedIdentifier(identifier) {
   return `${IDENTIFIER_QUOTE}${identifier.replaceAll(
@@ -95,13 +107,67 @@ function computeRaftRsMaxCommittedHlc(copyDb, groupId) {
  * @param {Object} copyDb - Open better-sqlite3 checkpoint copy.
  * @param {string} [entityKind] - Descriptor entity kind.
  */
-function scrubRaftRsCheckpointPayload(copyDb, entityKind) {
+function validatePinnedReplayRows(db) {
+  const pin = db.prepare(SELECT_OUTCOME_EFFECTS_ROWS_SQL + ' WHERE entry_key = ?')
+    .get(MIRROR_RETENTION_BARRIER_ENTRY_KEY);
+  if (!pin) return false;
+  const custody = decodeMirrorCustodyRow(pin);
+  assertMirrorReplayCoverageIn(db, custody.barrierIndex);
+  const rows = db.prepare(
+    'SELECT e.entry_key, e.log_index, e.mutation_kind, e.typed_effects_json, ' +
+    'o.outcome, o.log_index AS outcome_index, o.changes, o.mirror_effect_required ' +
+    `FROM ${STATEMENT_OUTCOME_EFFECTS_TABLE} e ` +
+    `LEFT JOIN ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} o ON o.entry_key = e.entry_key ` +
+    'WHERE e.entry_key != ? ORDER BY e.log_index',
+  );
+  let previousIndex = custody.barrierIndex;
+  for (const row of rows.iterate(MIRROR_RETENTION_BARRIER_ENTRY_KEY)) {
+    const {command, typedEffects} = decodeMirrorReplayRecord(row);
+    assertAppliedMirrorEffect(command, row.log_index, previousIndex, typedEffects.rows.length, {
+      mutationKind: row.mutation_kind,
+      outcome: row.outcome,
+      logIndex: row.outcome_index,
+      changes: row.changes,
+      mirrorEffectRequired: row.mirror_effect_required,
+    });
+    previousIndex = row.log_index;
+  }
+  return true;
+}
+
+function scrubStatementOutcomeEffectsTable(copyDb, entityKind) {
+  if (!copyDb.prepare(SELECT_TABLE_PRESENT_SQL).get(STATEMENT_OUTCOME_EFFECTS_TABLE)) return;
+  if (entityKind === ENTITY_TYPE.PARTITION && copyDb.prepare(
+    SELECT_OUTCOME_EFFECTS_ROWS_SQL + ' WHERE entry_key = ?',
+  ).get(MIRROR_RETENTION_BARRIER_ENTRY_KEY)) {
+    if (!validatePinnedReplayRows(copyDb)) throw new Error('Invalid pinned mirror replay rows');
+    return;
+  }
+  copyDb.exec(`DROP TABLE ${quotedIdentifier(STATEMENT_OUTCOME_EFFECTS_TABLE)}`);
+}
+
+function hasValidPayloadStatementOutcomeEffectsTable(payloadDb, tables) {
+  if (!tables.includes(STATEMENT_OUTCOME_EFFECTS_TABLE)) return true;
+  try {
+    return validatePinnedReplayRows(payloadDb);
+  } catch {
+    return false;
+  }
+}
+
+function scrubRaftRsCheckpointPayload(copyDb, entityKind, entityId) {
+  if (entityKind === ENTITY_TYPE.PARTITION && entityId === SYSTEM_TABLE_NAME.PARTITIONS &&
+      (!partitionDescriptorsAreCurrentIn(copyDb) || detectCommittedStatementOutcomeFormat(copyDb).outcome !==
+        PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT)) {
+    throw Object.assign(new Error(PARTITIONS_SCHEMA_UNSUPPORTED), {code: PARTITIONS_SCHEMA_UNSUPPORTED});
+  }
   const raftTables = copyDb.prepare(SELECT_RAFT_LOCAL_TABLES_SQL)
     .all()
     .map(({name}) => name);
   for (const table of raftTables) {
     copyDb.exec(`DROP TABLE IF EXISTS ${quotedIdentifier(table)}`);
   }
+  scrubStatementOutcomeEffectsTable(copyDb, entityKind);
   if (entityKind !== ENTITY_TYPE.PARTITION) {
     const tables = copyDb.prepare(SELECT_USER_TABLES_SQL)
       .all()
@@ -130,10 +196,17 @@ function validateRaftRsPayloadTables(payloadDb, descriptor) {
     .map(({name}) => name)
     .filter((name) => !name.startsWith('sqlite_'));
   if (descriptor.entity?.kind === ENTITY_TYPE.PARTITION) {
-    if (!tables.includes(RAFT_RS_PEER_TABLE)) {
+    const outcomeFormat = detectCommittedStatementOutcomeFormat(payloadDb).outcome;
+    if (descriptor.entity.id === SYSTEM_TABLE_NAME.PARTITIONS &&
+        (!partitionDescriptorsAreCurrentIn(payloadDb) || outcomeFormat !== PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT)) {
       return false;
     }
-    if (tables.some((name) => name.startsWith(RAFT_INTERNAL_TABLE_PREFIX))) {
+    if (!tables.includes(RAFT_RS_PEER_TABLE) ||
+        outcomeFormat === PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
+      return false;
+    }
+    if (tables.some((name) => name.startsWith(RAFT_INTERNAL_TABLE_PREFIX)) ||
+        !hasValidPayloadStatementOutcomeEffectsTable(payloadDb, tables)) {
       return false;
     }
     if (hasPendingPreparedParticipantTransactions(payloadDb)) {

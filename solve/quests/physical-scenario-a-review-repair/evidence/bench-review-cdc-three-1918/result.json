@@ -1,0 +1,50 @@
+{
+  "campaignId": "bench-review-cdc-three-1918",
+  "sourceCommit": "ecaa827ac16459edb00f4221ad588870ea4bb02c",
+  "imageRepoDigest": "lagrange@sha256:f394581336f510002da05266bb2ea7a49e1534d669d8f5ca3d42087d043564c0",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T19:25:05.846Z",
+  "lastCompleteCensusAt": "2026-11-26T19:25:00.852Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 7,
+  "attempted": [
+    {
+      "runId": "bench-review-cdc-three-1918-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 88,
+    "medianMs": 1409,
+    "p95Ms": 9687,
+    "maxMs": 17729
+  },
+  "evidenceSha256": {
+    "bench-review-cdc-three-1918-deadline-census.ndjson": "c129c270a27f297c90137d7195a028ad88ddbcc6d837dbc817073caff1d347f7",
+    "bench-review-cdc-three-1918-decision-samples.ndjson": "91efdbca1fb2ed54a8d742a600f1b3eba7c28d0f12bd69680c06ef3ae2c071da",
+    "bench-review-cdc-three-1918-formation.ndjson": "930ebfa7ffa999e2c4521e2c2dbbe635f5ee313c7dd8fbb85f3a112eef7528a0",
+    "bench-review-cdc-three-1918-node1-tcp.ndjson.gz": "13b190c1ef52651815e3ea946135bf76a71d4f2fb9274290c681459e666ea64b",
+    "bench-review-cdc-three-1918-node1.log.gz": "d9c535391165d22fde776a8c8e8b68430cc4ed5f9c3d1e49eac30e14497262b2",
+    "bench-review-cdc-three-1918-node2-tcp.ndjson.gz": "935ef70d6c2d41b1f65dc2fad54b6b12cfdec993d2febc53e698b0d40af2e4d8",
+    "bench-review-cdc-three-1918-node2.log.gz": "7ddf454c8c5c0fadd47497df48e456c9a70fd960e46326273c12705b6161ef74",
+    "bench-review-cdc-three-1918-node3-tcp.ndjson.gz": "bd12446f325a1249eb8161a49334eaccb4e60d3a9223a708951fd9e7486086a3",
+    "bench-review-cdc-three-1918-node3.log.gz": "38227c1fbf41e9b781796ef4d8cc0795ade144db7c6aaa84964d3164518de86d",
+    "bench-review-cdc-three-1918-raw.ndjson": "3c3302032e5a5548d38b12e01d67e56c0870a3fea21b1d4a2b92a8a0de85f591",
+    "comparative-campaign-bench-review-cdc-three-1918.json": "4f26e45b8369d1ea139479d4af102defb4d50a1f273d9f55185e94e9a426b297",
+    "partition-admission.md": "7e24e525b294c60cdc45a3ac71dabcbeda0f885678570c3ff77083c9e2f3aee8",
+    "partition-waits.json": "85ee35b190efb7ff11f02691a68e4e9f8f8430e910c16cb231ea86b2c4cc32de",
+    "partition-waits.md": "1901d55790f935130e49648eb42b8ef5151ac05632564c635ee4b71b9d060405",
+    "stage-results.txt": "7aa29511d97948adde145d7f4f6ae184902af8fccc72956971a62242efec20dd"
+  }
+}

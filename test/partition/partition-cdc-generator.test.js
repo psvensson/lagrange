@@ -261,7 +261,7 @@ describe('PartitionCDCGenerator', () => {
       );
     });
 
-    it('should attach a supplied sequence number when hydrating an envelope',
+    it('should attach a supplied sequence number when building events',
       () => {
         const entry = {
           type: 'INSERT',
@@ -270,20 +270,46 @@ describe('PartitionCDCGenerator', () => {
           timestamp: Date.now(),
         };
 
-        const envelopeResult = generator.resolveEventEnvelope(entry);
+        const buildResult = generator.buildEvents(entry, {
+          sequenceNumber: 7,
+        });
         assert.strictEqual(
-          envelopeResult.state,
+          buildResult.state,
           PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
         );
 
-        const cdcEvent = generator.hydrateEventEnvelope(entry, envelopeResult, {
-          sequenceNumber: 7,
-        });
+        const [cdcEvent] = buildResult.cdcEvents;
 
         assert.strictEqual(cdcEvent.sequenceNumber, 7);
         assert.strictEqual(cdcEvent.tableName, 'test_table');
         assert.strictEqual(cdcEvent.operation, CDC_OPERATION.INSERT);
       });
+
+    it('should emit all rows from entry.affectedRows in buildEvents', () => {
+      const entry = {
+        type: 'QUERY',
+        sql: 'UPDATE test_table SET value = 99 WHERE value < 50',
+        affectedRows: [
+          {id: 'row-a', name: 'first', value: 99},
+          {id: 'row-b', name: 'second', value: 99},
+        ],
+        changes: 2,
+        timestamp: '100-0-test',
+      };
+
+      const buildResult = generator.buildEvents(entry, {
+        suppressNoOpWrite: true,
+      });
+      assert.strictEqual(
+        buildResult.state,
+        PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
+      );
+      assert.strictEqual(buildResult.cdcEvents.length, 2);
+      assert.deepStrictEqual(
+        buildResult.cdcEvents.map((e) => e.data.id),
+        ['row-a', 'row-b'],
+      );
+    });
   });
 
   describe('SQL parsing for QUERY type entries', () => {

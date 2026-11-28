@@ -36,12 +36,12 @@ function committedStatement(leader, entryId, sql, params) {
     timestamp: leader.hlcClock.now().toString(), proposedBy: ELSEWHERE, proposedAt: 0};
 }
 const upsertOf = (leader, tag, index) => committedStatement(leader, `${tag}-${index}`,
-  `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
+  `INSERT OR REPLACE INTO ${CDC_TABLE} (group_id, representative_node_id) VALUES (?, ?)`,
   [`r-${index % IMAGE_ROW_KEYS}`, `${tag}-${index}`]);
 const insertOf = (leader, tag, index) => committedStatement(leader, `${tag}-d-${index}`,
-  `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`, [`${tag}-${index}`, `v-${index}`]);
+  `INSERT OR REPLACE INTO ${CDC_TABLE} (group_id, representative_node_id) VALUES (?, ?)`, [`${tag}-${index}`, `v-${index}`]);
 const deleteOf = (leader, tag) => committedStatement(leader, `${tag}-del`,
-  `DELETE FROM ${CDC_TABLE} WHERE id = ?`, [DELETED_IMAGE_ROW]);
+  `DELETE FROM ${CDC_TABLE} WHERE group_id = ?`, [DELETED_IMAGE_ROW]);
 // The durable event key a committed statement's obligation carries.
 const eventKeyOf = (command) => `entry:${command.entryId}`;
 
@@ -82,14 +82,14 @@ function commitLaterTraffic(leader, tag, followers = []) {
 // The late subscriber's view: the image, then every event above P it was
 // handed, in log order (once per event key).
 function viewOf(imageRows, events, position) {
-  const view = new Map(imageRows.map((row) => [row.id, row.value]));
+  const view = new Map(imageRows.map((row) => [row.group_id, row.representative_node_id]));
   const above = [...new Map(events.filter((event) => event.logIndex > position)
     .map((event) => [event.eventKey, event])).values()]
     .sort((left, right) => left.logIndex - right.logIndex);
   for (const event of above) {
-    const id = event.data?.id ?? event.oldData?.id ?? event.previousData?.id;
+    const id = event.data?.group_id ?? event.oldData?.group_id ?? event.previousData?.group_id;
     if (event.operation === 'DELETE') view.delete(id);
-    else view.set(id, event.data?.value);
+    else view.set(id, event.data?.representative_node_id);
   }
   return view;
 }
@@ -99,7 +99,8 @@ function viewOf(imageRows, events, position) {
 function measure(leader, late, image, position, committedAbove) {
   const received = new Set(late.events.filter((event) => event.logIndex > position)
     .map((event) => event.eventKey));
-  const truth = new Map(leader.db.prepare(IMAGE_SQL).all().map((row) => [row.id, row.value]));
+  const truth = new Map(leader.db.prepare(IMAGE_SQL).all()
+    .map((row) => [row.group_id, row.representative_node_id]));
   const view = viewOf(image, late.events, position);
   const keys = new Set([...truth.keys(), ...view.keys()]);
   return {

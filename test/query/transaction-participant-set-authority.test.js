@@ -689,11 +689,15 @@ test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert 
       'upsertParticipant(ACTIVE) must start concurrently with executeWrite');
     assert.equal(writeOutcomeBeforePersistReleased, 0,
       'sql_write_operations persistence waits until concurrent upsertParticipant(ACTIVE) and executeWrite settle');
-    assert.equal(gateway.rows('sql_write_operations')[0].status, 'SUCCEEDED');
+    assert.equal(
+      coordinator.getTransaction('overlap-tx').writeOperations[0].status,
+      'SUCCEEDED',
+    );
 
     // Mixed read+write COMMIT must persist status='COMMITTED' concurrently while p-ro rollback RPC is blocked.
     const commitPromise = coordinator.commit('overlap-tx');
     await roReleaseStarted.promise;
+    assert.equal(gateway.rows('sql_write_operations')[0].status, 'SUCCEEDED');
     assert.equal(gateway.rows('sql_transactions')[0].status, 'COMMITTED',
       'COMMITTED status update must overlap with releaseReadOnlyParticipants without waiting for p-ro RPC');
     releaseRoRollback.resolve();
@@ -874,4 +878,237 @@ test('Finding 1B: parallel ACTIVE persistence waits for all siblings before rele
     const finalCommit = await coordinator.commit('f1b-tx');
     assert.equal(finalCommit.success, true);
     assert.deepEqual(roRollbacks, ['p-ro']);
+  });
+
+test('P2: concurrent PREPARE settles delayed sibling RPC and PREPARED write before releasing session queue to rollbackTransaction',
+  async (t) => {
+    const gateway = createTransactionPersistenceGateway();
+    t.after(() => gateway.db.close());
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      logger,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    t.after(() => engine.shutdown());
+    const coordinator = engine.transactionCoordinator;
+
+    const timeline = [];
+    const p1PreparedFailed = deferred();
+    const p2PrepareStarted = deferred();
+    const releaseP2Prepare = deferred();
+    const p2PreparedPersistStarted = deferred();
+    const releaseP2PreparedPersist = deferred();
+    let failP1PreparedOnce = true;
+    let holdP2PreparedOnce = true;
+
+    const baseSubmit = gateway.submitMutation.bind(gateway);
+    gateway.submitMutation = async (mutation, options) => {
+      if (mutation.tableName === 'sql_transaction_participants' &&
+          mutation.row?.status === 'PREPARED') {
+        if (mutation.row.partition_id === 'p1' && failP1PreparedOnce) {
+          failP1PreparedOnce = false;
+          timeline.push('p1:persist_prepared:fail');
+          p1PreparedFailed.resolve();
+          throw new Error('p1 PREPARED metadata write failed');
+        }
+        if (mutation.row.partition_id === 'p2' && holdP2PreparedOnce) {
+          holdP2PreparedOnce = false;
+          timeline.push('p2:persist_prepared:start');
+          p2PreparedPersistStarted.resolve();
+          await releaseP2PreparedPersist.promise;
+          timeline.push('p2:persist_prepared:done');
+        }
+      }
+      return baseSubmit(mutation, options);
+    };
+
+    coordinator.beginParticipant = async () => {};
+    coordinator.prepareParticipant = async (_s, partitionId) => {
+      timeline.push(`${partitionId}:prepare:start`);
+      if (partitionId === 'p2') {
+        p2PrepareStarted.resolve();
+        await releaseP2Prepare.promise;
+      }
+      timeline.push(`${partitionId}:prepare:done`);
+      return {
+        preparedDigest: `digest-${partitionId}`.padEnd(64, '0'),
+        prepareIndex: 1,
+        prepareTerm: 1,
+      };
+    };
+    coordinator.commitParticipant = async () => {};
+    coordinator.rollbackParticipant = async (_s, partitionId) => {
+      timeline.push(`rollback:${partitionId}`);
+      return {
+        success: true,
+        durable: true,
+        state: 'ROLLED_BACK',
+        outcome: 'NOT_COMMITTED',
+      };
+    };
+
+    const begun = await coordinator.begin('p2-prepare-settle');
+    assert.equal(begun.success, true);
+    assert.equal(
+      (await coordinator.enlistParticipants('p2-prepare-settle', ['p1', 'p2'])).success,
+      true,
+    );
+
+    let commitSettled = false;
+    const commitPromise = coordinator.commit('p2-prepare-settle').finally(() => {
+      commitSettled = true;
+      timeline.push('commit:settled');
+    });
+
+    await Promise.all([p1PreparedFailed.promise, p2PrepareStarted.promise]);
+    const rollbackPromise = coordinator.rollbackTransaction('p2-prepare-settle');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      commitSettled,
+      false,
+      'commit must wait for delayed sibling p2 prepare RPC after p1 PREPARED write fails',
+    );
+    assert.equal(
+      timeline.some((entry) => entry.startsWith('rollback:')),
+      false,
+      'queued rollbackTransaction must not begin while sibling p2 prepare RPC is still in flight',
+    );
+
+    releaseP2Prepare.resolve();
+    await p2PreparedPersistStarted.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      commitSettled,
+      false,
+      'commit must wait for delayed sibling p2 PREPARED metadata write before releasing session queue',
+    );
+    assert.equal(
+      timeline.some((entry) => entry.startsWith('rollback:')),
+      false,
+      'queued rollbackTransaction must not begin while sibling p2 PREPARED write is in flight',
+    );
+
+    releaseP2PreparedPersist.resolve();
+    await assert.rejects(commitPromise, /p1 PREPARED metadata write failed/u);
+    const rollbackResult = await rollbackPromise;
+    assert.equal(rollbackResult.success, true);
+
+    const p1FailIdx = timeline.indexOf('p1:persist_prepared:fail');
+    const p2PrepareDoneIdx = timeline.indexOf('p2:prepare:done');
+    const p2PersistDoneIdx = timeline.indexOf('p2:persist_prepared:done');
+    const commitSettledIdx = timeline.indexOf('commit:settled');
+    const firstRollbackIdx = timeline.findIndex((entry) => entry.startsWith('rollback:'));
+
+    assert.ok(p1FailIdx >= 0);
+    assert.ok(p2PrepareDoneIdx > p1FailIdx);
+    assert.ok(p2PersistDoneIdx > p2PrepareDoneIdx);
+    assert.ok(commitSettledIdx > p2PersistDoneIdx);
+    assert.ok(firstRollbackIdx > commitSettledIdx,
+      `expected zero timeline overlap before rollback, got: ${JSON.stringify(timeline)}`);
+    assert.deepEqual(
+      timeline.slice(firstRollbackIdx).sort(),
+      ['rollback:p1', 'rollback:p2'],
+    );
+    assert.equal(gateway.rows('sql_transactions')[0].status, 'ROLLED_BACK');
+  });
+
+test('P2: concurrent COMMIT settles delayed sibling before throwing and reverts failed COMMITTED participant status for retry',
+  async (t) => {
+    const gateway = createTransactionPersistenceGateway();
+    t.after(() => gateway.db.close());
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      logger,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    t.after(() => engine.shutdown());
+    const coordinator = engine.transactionCoordinator;
+
+    const timeline = [];
+    const p1CommittedFailed = deferred();
+    const p2CommitStarted = deferred();
+    const releaseP2Commit = deferred();
+    let failP1CommittedOnce = true;
+
+    const baseSubmit = gateway.submitMutation.bind(gateway);
+    gateway.submitMutation = async (mutation, options) => {
+      if (mutation.tableName === 'sql_transaction_participants' &&
+          mutation.row?.status === 'COMMITTED' &&
+          mutation.row.partition_id === 'p1' &&
+          failP1CommittedOnce) {
+        failP1CommittedOnce = false;
+        timeline.push('p1:persist_committed:fail');
+        p1CommittedFailed.resolve();
+        throw new Error('p1 COMMITTED metadata write failed');
+      }
+      return baseSubmit(mutation, options);
+    };
+
+    coordinator.beginParticipant = async () => {};
+    coordinator.prepareParticipant = async (_s, partitionId) => ({
+      preparedDigest: `digest-${partitionId}`.padEnd(64, '0'),
+      prepareIndex: 1,
+      prepareTerm: 1,
+    });
+    coordinator.commitParticipant = async (_s, partitionId) => {
+      timeline.push(`${partitionId}:commit:start`);
+      if (partitionId === 'p2') {
+        p2CommitStarted.resolve();
+        await releaseP2Commit.promise;
+      }
+      timeline.push(`${partitionId}:commit:done`);
+    };
+
+    const begun = await coordinator.begin('p2-commit-settle');
+    assert.equal(begun.success, true);
+    assert.equal(
+      (await coordinator.enlistParticipants('p2-commit-settle', ['p1', 'p2'])).success,
+      true,
+    );
+
+    const firstCommitPromise = coordinator.commit('p2-commit-settle');
+    await Promise.all([p1CommittedFailed.promise, p2CommitStarted.promise]);
+
+    let retryStartedBeforeP2Settled = false;
+    let p2CommitReleased = false;
+    const tx = coordinator.workflowCoordinator.getWorkflowByOwnerKey('p2-commit-settle');
+    const origCommit = coordinator.commitParticipant;
+    coordinator.commitParticipant = async (sessionId, partitionId, req) => {
+      if (!p2CommitReleased) {
+        retryStartedBeforeP2Settled = true;
+      }
+      return origCommit(sessionId, partitionId, req);
+    };
+    const retryCommitPromise = coordinator.commit('p2-commit-settle');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(retryStartedBeforeP2Settled, false);
+
+    p2CommitReleased = true;
+    releaseP2Commit.resolve();
+    await assert.rejects(firstCommitPromise, /p1 COMMITTED metadata write failed/u);
+    const retryResult = await retryCommitPromise;
+    assert.equal(retryResult.success, true);
+    assert.equal(retryStartedBeforeP2Settled, false);
+    assert.equal(
+      timeline.filter((entry) => entry === 'p1:commit:start').length,
+      2,
+      'p1 whose COMMITTED persistence failed must revert to COMMITTING and re-drive COMMITTED on retry',
+    );
+    assert.equal(
+      timeline.filter((entry) => entry === 'p2:commit:start').length,
+      1,
+      'p2 whose COMMITTED persistence succeeded must not be re-driven on retry',
+    );
+    assert.equal(tx.participants.get('p1').status, 'COMMITTED');
+    assert.equal(gateway.rows('sql_transactions')[0].status, 'COMMITTED');
+    assert.equal(
+      gateway.rows('sql_transaction_participants').every((row) => row.status === 'COMMITTED'),
+      true,
+    );
   });

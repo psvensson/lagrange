@@ -245,8 +245,8 @@ test('DistributedTransactionCoordinator - supports recovery payloads', async (t)
   const coordinator = createTestTransactionCoordinator();
   coordinator.recover([
     {
-      sessionId: 's4',
-      transactionId: 'tx-s4-1',
+      session_id: 's4',
+      transaction_id: 'tx-s4-1',
       status: TRANSACTION_STATUS.PREPARED,
       transactionEpoch: 1,
       ...frozenTransactionDecision(1),

@@ -3,7 +3,7 @@ import {describe, it} from 'node:test';
 import {NodeJoiningPublicationActivation} from '../../src/bootstrap/node-joining-publication-activation.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {NODES_SCHEMA, SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -117,20 +117,22 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
   'refused CDC subscription', 'unacknowledged CDC path', 'uncaptured native return',
   'mismatched native return', 'repeated handoff']) {
   it(`fresh CREATE custody with the production factory: ${scenario}`, {timeout: 10_000}, async () => {
+    const unacknowledged = scenario === 'unacknowledged CDC path';
+    const rejectedSubscription = scenario === 'refused CDC subscription';
     const row = operationRow();
     const outcomes = [];
     const fixture = await createHandlerFixture({
       row, targetRow: targetLifecycle(row),
+      ...(rejectedSubscription || unacknowledged ?
+        {tableName: SYSTEM_TABLE_NAME.NODES, schema: NODES_SCHEMA} : {}),
       authorityFor: (cache) => sqlOperationsAuthority(cache, [row]),
       executorOutcomeEmitter: {emitOutcome: (_type, _id, step) => outcomes.push(step)},
     });
     const {handler, authority} = fixture;
     const openedAndHeld = Promise.withResolvers();
     const finishFactory = Promise.withResolvers();
-    const unacknowledged = scenario === 'unacknowledged CDC path';
     const uncapturedReturn = scenario === 'uncaptured native return';
     const mismatchedReturn = scenario === 'mismatched native return';
-    const rejectedSubscription = scenario === 'refused CDC subscription';
     let enteredCdc = false;
     const joining = Object.assign(Object.create(NodeJoiningPublicationActivation.prototype), {
       nodeId: row.target_node_id,
@@ -154,7 +156,6 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
     const resolveContext = handler.resolveReplicaContextWithRetry.bind(handler);
     handler.resolveReplicaContextWithRetry = async (...args) => ({
       ...await resolveContext(...args),
-      ...(rejectedSubscription || unacknowledged ? {tableName: SYSTEM_TABLE_NAME.NODES} : {}),
       // The ownership handoff is independent of group growth. Use one real
       // native voter so this fixture needs no synthetic remote membership.
       replicaIds: [row.replica_id],
@@ -220,6 +221,7 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
         assert.equal(handler.messageRouter.getRegisteredHandler(opened.unifiedAddress), null);
         return;
       }
+      if (rejectedSubscription) assert.equal(enteredCdc, true);
       if (uncapturedReturn || mismatchedReturn) {
         assert.ok(other?.raft && other.db?.open, 'the foreign native runtime is live');
       }

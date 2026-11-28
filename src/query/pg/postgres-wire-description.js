@@ -670,7 +670,14 @@ function buildEmptyStatementDescription(paramTypes) {
   });
 }
 
-function parseStatementOrDetectEmpty(statementSql, isExplainDistributed) {
+function parseStatementOrDetectEmpty(
+  statementSql,
+  isExplainDistributed,
+  parsedAst = null,
+) {
+  if (parsedAst && typeof parsedAst === 'object') {
+    return {isEmpty: false, ast: parsedAst};
+  }
   try {
     return {isEmpty: false, ast: parseSqlForDescription(statementSql)};
   } catch (error) {
@@ -721,13 +728,18 @@ function describePostgresSqlStatement({
   sql,
   paramTypes = [],
   resolveTableSchema = noUserTableSchema,
+  parsedAst = null,
 }) {
   if (classifyServiceLifecycleSql(sql).kind ===
       SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
     return describeLifecycleStatement(sql, paramTypes);
   }
   const {isExplainDistributed, statementSql} = stripExplainDistributedPrefix(sql);
-  const parsed = parseStatementOrDetectEmpty(statementSql, isExplainDistributed);
+  const parsed = parseStatementOrDetectEmpty(
+    statementSql,
+    isExplainDistributed,
+    parsedAst,
+  );
   if (parsed.isEmpty) return buildEmptyStatementDescription(paramTypes);
 
   const ast = parsed.ast;

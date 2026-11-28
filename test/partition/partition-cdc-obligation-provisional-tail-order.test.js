@@ -30,7 +30,7 @@ async (t) => {
   const f = await fixture(t, {rows: ['A', 'B'], subscribers: 1});
   const script = {A: ['provisional'], B: ['backpressure']};
   f.behavior = (_index, events, _context, groupId) => {
-    const step = (script[events[0].data.id] ?? []).shift();
+    const step = (script[events[0].data.group_id] ?? []).shift();
     return step === 'backpressure' ?
       {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE), retryAfterMs: 20} :
       recipientAnswer(events, groupId, step !== 'provisional');

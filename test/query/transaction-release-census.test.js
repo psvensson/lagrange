@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import Database from 'better-sqlite3';
 import {createTransactionPersistenceGateway} from '../test-helpers/transaction-persistence-gateway.js';
 import {
   openParticipantTransactionStore,
@@ -14,9 +15,15 @@ import {readTransactionReleaseCensus} from
 
 test('query release census: measured empty schema is clear; unreadable or incomplete schema is unavailable',
   (t) => {
-    const gateway = createTransactionPersistenceGateway();
-    t.after(() => gateway.db.close());
+    let schemaReads = 0;
+    const db = new Database(':memory:', {verbose(sql) {
+      if (sql === 'PRAGMA table_info(sql_transactions)') schemaReads++;
+    }});
+    const gateway = createTransactionPersistenceGateway({db});
+    t.after(() => db.close());
+    const before = schemaReads;
     const empty = readTransactionReleaseCensus(gateway.db);
+    assert.equal(schemaReads - before, 1);
     assert.equal(empty.state, 'clear');
     assert.equal(empty.currentSchemaValid, true);
     assert.equal(empty.schemaVersion, 2);
@@ -25,6 +32,8 @@ test('query release census: measured empty schema is clear; unreadable or incomp
     gateway.db.exec('ALTER TABLE sql_transactions DROP COLUMN participant_set_text');
     const missingColumn = readTransactionReleaseCensus(gateway.db);
     assert.equal(missingColumn.state, 'unavailable');
+    assert.equal(schemaReads - before, 2);
+    assert.deepEqual(missingColumn.enforcement.missingColumns, ['participant_set_text']);
     assert.equal(missingColumn.enforcement.state, 'incompatible');
     assert.equal(missingColumn.currentSchemaValid, false);
     assert.equal(missingColumn.schemaVersion, null);

@@ -45,7 +45,7 @@ test('source progress is fair across expired invocations and releases only compl
     let releaseLast = false;
     f.behavior = (index, events, context, groupId) => {
       assert.equal(events.length, 1, 'weak coverage never widens the shipping window');
-      if (events[0].data.id === 'B') return recipientAnswer(events, groupId, false);
+      if (events[0].data.group_id === 'B') return recipientAnswer(events, groupId, false);
       visits[index] += 1;
       if (index === 1 && visits[index] === 1) {
         f.clock.elapseWithoutCallbacks(context.remainingMs());
@@ -337,7 +337,7 @@ test('a lane held by typed backpressure preserves its open ACK batch until the f
   const hintMs = 20;
   let refused = false;
   f.behavior = (_index, events, _context, groupId) => {
-    if (!refused && events.some((event) => event.data.id === 'ack-batch-4')) {
+    if (!refused && events.some((event) => event.data.group_id === 'ack-batch-4')) {
       refused = true;
       return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE), retryAfterMs: hintMs};
     }

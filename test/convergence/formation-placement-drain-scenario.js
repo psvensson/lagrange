@@ -266,14 +266,24 @@ function getOrCreateSimulatedLedgerStore(cache) {
     logIndex: 1,
     applyingPlacementCommand: false,
   };
-  cache.onCacheApplyChange((tableName, operation, row) => {
+  const syncChangeToDb = (tableName, operation, row) => {
     if (tableName !== TABLES.REPLICA_OPERATIONS || store.applyingPlacementCommand) return;
     if (operation === CDC_OPERATION.DELETE) {
       if (row?.[COLUMN.OPERATION_ID]) deleteStmt.run(row[COLUMN.OPERATION_ID]);
     } else {
-      syncRowToDb(row);
+      const current = row?.[COLUMN.OPERATION_ID] ?
+        cache.get(TABLES.REPLICA_OPERATIONS, row[COLUMN.OPERATION_ID]) || row :
+        row;
+      syncRowToDb(current);
     }
-  });
+  };
+  const baseApplyChange = cache.applySystemTableChange.bind(cache);
+  cache.applySystemTableChange = (tableName, operation, row, options) => {
+    const result = baseApplyChange(tableName, operation, row, options);
+    syncChangeToDb(tableName, operation, row);
+    return result;
+  };
+  cache.onCacheApplyChange(syncChangeToDb);
   LEDGER_STORE_BY_CACHE.set(cache, store);
   return store;
 }
@@ -384,6 +394,9 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
     leadershipTenure: leadership.leadershipTenure,
     raft: {
       subscribe: leadership.raft.subscribe,
+      observeCurrentAuthority() {
+        return this.readStatus();
+      },
       readStatus: () => ({
         outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
         role: service.isLeader ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,

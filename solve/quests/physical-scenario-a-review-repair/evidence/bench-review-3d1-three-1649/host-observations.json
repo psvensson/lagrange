@@ -1,0 +1,65 @@
+{
+  "cpuCapacityBeforeDeadline": [
+    {
+      "host": "192.168.86.34",
+      "at": "2026-11-26T16:54:49.020860+00:00",
+      "imageId": "sha256:7c35aff4790053c99bad51a39f170c4c99d7dd3170fa8f32659fea24c5bef78d",
+      "cpuAllowed": "0-7",
+      "nanoCpus": 0,
+      "cpuQuota": 0,
+      "cgroupV2CpuMaxFromLeaf": [
+        "max 100000",
+        "max 100000"
+      ],
+      "cgroupV2CpuStat": "usage_usec 133026118\nuser_usec 129082164\nsystem_usec 3943954\nnice_usec 0\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0"
+    },
+    {
+      "host": "192.168.86.41",
+      "at": "2026-11-26T16:54:48.908095+00:00",
+      "imageId": "sha256:7c35aff4790053c99bad51a39f170c4c99d7dd3170fa8f32659fea24c5bef78d",
+      "cpuAllowed": "0-3",
+      "nanoCpus": 0,
+      "cpuQuota": 0,
+      "cgroupV2CpuMaxFromLeaf": [
+        "max 100000",
+        "max 100000"
+      ],
+      "cgroupV2CpuStat": "usage_usec 102704236\nuser_usec 98687784\nsystem_usec 4016451\nnice_usec 0\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0"
+    },
+    {
+      "host": "192.168.86.32",
+      "at": "2026-11-26T16:54:51.829285+00:00",
+      "imageId": "sha256:7c35aff4790053c99bad51a39f170c4c99d7dd3170fa8f32659fea24c5bef78d",
+      "cpuAllowed": "0-11",
+      "nanoCpus": 0,
+      "cpuQuota": 0,
+      "cgroupV2CpuMaxFromLeaf": [
+        "max 100000",
+        "max 100000"
+      ],
+      "cgroupV2CpuStat": "usage_usec 69252578\nuser_usec 65432489\nsystem_usec 3820088\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0"
+    }
+  ],
+  "thermalSamples": {
+    "node1": {
+      "maxSampledCelsius": {
+        "coretemp/Package id 0": 73.0,
+        "nvme/Composite": 27.85
+      },
+      "cpu0PackageThrottleCountDelta": 0
+    },
+    "node2": {
+      "maxSampledCelsius": {
+        "coretemp/Package id 0": 45.0
+      },
+      "cpu0PackageThrottleCountDelta": 0
+    },
+    "node3": {
+      "maxSampledCelsius": {
+        "coretemp/Package id 0": 68.0,
+        "nvme/Composite": 44.85
+      },
+      "cpu0PackageThrottleCountDelta": 0
+    }
+  }
+}

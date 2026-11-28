@@ -1,3 +1,5 @@
+import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from
+  './partition-split-descriptor-command.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
 import {unreplicatedLocalMutationRefusal} from './partition-local-mutation-admission.js';
@@ -19,7 +21,7 @@ import {
   PARTITION_STATEMENT_PATH,
 } from './partition-statement-admission-constants.js';
 import {
-  answerSettledStatement,
+  answerSettledStatement, pendingOwnerDigestOf,
   readCommittedStatementOutcome,
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
@@ -36,6 +38,10 @@ import {transactionSchemaWriteRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {refuseRoutedClientSystemTableWrite} from
   '../query/sql-statement-ingress.js';
+import {
+  excludedMemberFenceRefusalOf,
+  isLocalReplicaExcludedFenced,
+} from './partition-membership-recovery-store.js';
 
 
 const {
@@ -73,6 +79,7 @@ function buildQueryOperation(sql, params, options) {
     operationId: options.operationId || null,
     idempotencyKey: options.idempotencyKey || null,
     splitMirrorOrigin: options.splitMirrorOrigin || null,
+    ...(Object.hasOwn(options, 'splitDescriptorIntent') ? {splitDescriptorIntent: options.splitDescriptorIntent} : {}),
   };
 }
 
@@ -200,6 +207,9 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       // its outcome row by applyWrite (nothing is proposed), before any
       // admission rule or the ceiling pre-check: state that changed after the
       // write committed never turns its outcome into a refusal.
+      if (usesSplitDescriptorIdentity(operation) && !decodeSplitDescriptorCommand(this, operation)) {
+        return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+      }
       if (this.isSettledRedelivery(operation)) {
         return this.proposeWrite(operation);
       }
@@ -212,7 +222,13 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       if (!admission.admitted) {
         return partitionStatementRefusalAnswer(this, sql, admission);
       }
-      if (admission.kind !== PARTITION_STATEMENT_KIND.READ) return this.proposeWrite(operation);
+      if (admission.kind !== PARTITION_STATEMENT_KIND.READ) {
+        return this.proposeWrite(
+          typeof admission.mutationKind === 'string' ?
+            {...operation, mutationKind: admission.mutationKind} :
+            operation,
+        );
+      }
       return (options.appliedPositionRead === true ? executeReadAtAppliedPosition :
         executeAdmittedReadQuery)(this, admission, params, options);
     } catch (error) {
@@ -469,6 +485,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
     };
   }
   async proposeWrite(operation, options) {
+    if (isLocalReplicaExcludedFenced(this)) return excludedMemberFenceRefusalOf(this);
     const proposeStartMs = this.timeSource.now();
     const timestamp = this.hlcClock.now();
     const entryBuildStartMs = this.timeSource.now();
@@ -686,12 +703,18 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
    * @private
    */
   async applyWrite(entry, phaseTimings = null) {
+    if (isLocalReplicaExcludedFenced(this)) return excludedMemberFenceRefusalOf(this);
     const applyStartMs = this.timeSource.now();
-    entry = buildPartitionWriteEntry(entry, {
-      timestamp: entry?.timestamp,
-      proposedBy: entry?.proposedBy || this.replicaId,
-      proposedAt: entry?.proposedAt,
-    });
+    entry = buildPartitionWriteEntry(
+      {
+        ...entry,
+      },
+      {
+        timestamp: entry?.timestamp,
+        proposedBy: entry?.proposedBy || this.replicaId,
+        proposedAt: entry?.proposedAt,
+      },
+    );
     const schemaRefusal = transactionSchemaWriteRefusal(this.db, this.tableName,
       readPartitionWriteOrigin(this.db) !== null);
     if (schemaRefusal !== null) {
@@ -706,8 +729,16 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       entryType: entry.type,
     });
     const entryKey = this.getCommittedEntryKey(entry);
+    const descriptor = usesSplitDescriptorIdentity(entry) ? decodeSplitDescriptorCommand(this, entry) : null;
+    if (usesSplitDescriptorIdentity(entry) && descriptor === null) {
+      return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+    }
     const pendingOutcome = this.getPendingCommittedWriteOutcome(entry.entryId);
     if (pendingOutcome) {
+      const digest = pendingOwnerDigestOf(pendingOutcome);
+      if ((descriptor || isSplitDescriptorDigest(digest)) && descriptor?.digest !== digest) {
+        return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.COLLISION);
+      }
       return pendingOutcome;
     }
     // A command the application would refuse, or consume without answering
@@ -723,35 +754,16 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       );
       return committedCommandRefusalResult(admission, this.partitionId);
     }
-    // A settled entry key is answered from its durable outcome row, before
-    // anything is proposed: a retry never adds a log entry, and its answer is
-    // the same in process and after a restart.
     const settledAnswer = this.answerSettledWrite(entry, entryKey);
     if (settledAnswer !== undefined) {
       this.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-        applyStartMs,
-      );
+        phaseTimings, WRITE_PHASE_FIELD_APPLY_WRITE_MS, applyStartMs);
       return settledAnswer;
     }
-    // The write commit owner: parked unproposed while a prepared participant
-    // transaction reserves the partition (re-admitted by its decision);
-    // otherwise only the consensus leader proposes, once, through the port,
-    // and the committed-entry application answers it with its durable commit
-    // witness.
     return startAdmittedPartitionWrite(this, {
-      entry,
-      phaseTimings,
-      applyStartMs,
-    });
+      entry, phaseTimings, applyStartMs, commandDigest: descriptor?.digest});
   }
-  async applyWriteSideEffectPlan({
-    entry,
-    result,
-    sideEffectPlan,
-    commitPromise,
-  }) {
+  async applyWriteSideEffectPlan({entry, result, sideEffectPlan, commitPromise}) {
     if (commitPromise) {
       this.setPendingCommittedWriteResult(entry.entryId, result);
     }

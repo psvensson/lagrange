@@ -1,0 +1,36 @@
+{
+  "schema": "lagrange-comparative-campaign-summary/v1",
+  "executionTarget": "lab",
+  "rawObservationsPath": "solve/quests/physical-scenario-a-review-repair/evidence/bench-oltp-1b0-three-2354/raw-observations.ndjson",
+  "campaignId": "bench-oltp-1b0-three-2354",
+  "manifestDigest": "sha256:58df296aa980c938f3b5bfa7bfea168c09b445e81b54770361b94d2a77d8443f",
+  "attempted": [
+    {
+      "runId": "bench-oltp-1b0-three-2354-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "completed",
+      "failureCode": null,
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 0,
+  "admission": {
+    "outcome": "passed",
+    "cells": [
+      {
+        "claimKey": "lagrange/scenarioA/smoke",
+        "status": "valid-observed",
+        "reasons": [
+          "smoke-profile-no-capacity-claim"
+        ]
+      }
+    ]
+  },
+  "closure": {
+    "loadGeneratorWorktree": {
+      "status": "complete",
+      "error": null
+    }
+  }
+}

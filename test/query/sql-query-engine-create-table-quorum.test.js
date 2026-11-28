@@ -28,6 +28,9 @@ test('SQLQueryEngine - default CREATE TABLE quorum does not fall back ' +
   ];
 
   const cache = {
+    find(type, predicate) {
+      return this.getAll(type).find(predicate);
+    },
     filter(type, predicate) {
       if (type === TABLES.NODES) {
         return nodes.filter(predicate);

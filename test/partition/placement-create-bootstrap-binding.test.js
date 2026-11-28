@@ -8,7 +8,7 @@ import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js'
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
-import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE, ReplicaCreateAdmissionOwner} from '../../src/node/replica-create-admission-owner.js';
 import {CONTROL_PLANE_MUTATION_OPERATION, ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
@@ -31,12 +31,13 @@ import {
   OPERATION_METADATA_KEY, OperationType, WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {
-  REBALANCER_SKIP_REASON,
+  REBALANCER_SKIP_REASON, REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCE_COORDINATOR_DEFER_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
   ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
 import {
@@ -203,10 +204,40 @@ test('native ADD dispatch bootstrap is durable and reused by a fresh workflow', 
           [step, WORKFLOW_STEP_TO_STATUS[step], at,
             JSON.stringify({step, timestamp: at}), row.operation_id]), null);
         const [sending] = ledgerRows(leader);
-        await reconstructed.workflowOwner.executeOperationInternal(
-          reconstructed.repository.rowToOperation(sending), {},
-        );
-        assert.equal(emittedRequests.length, 1, 'the real workflow delivered one CREATE');
+        const owner = reconstructed.workflowOwner;
+        const sendLogs = [];
+        const outcomes = [];
+        owner.logger = Object.create(owner.logger);
+        for (const level of ['info', 'debug']) {
+          owner.logger[level] = (message, fields) => {
+            if (message === REBALANCE_COORDINATOR_LOG_MSG.CREATE_DISPATCH_OUTCOME) {
+              outcomes.push(fields);
+              throw new Error('outcome sink unavailable');
+            }
+            if (message === REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION) sendLogs.push({level, fields});
+          };
+        }
+        const dispatchWake = {reasons: [RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY], handoffMode: null};
+        for (let send = 0; send < 3; send++) {
+          const operation = reconstructed.repository.rowToOperation(sending);
+          const result = await owner.advanceReservationClearedDispatch(operation.operationId, operation,
+            {routineCreateRearmWake: true, dispatchWake});
+          assert.equal(result.reason, REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING);
+        }
+        assert.equal(emittedRequests.length, 3, 'a deferred CREATE response leaves the next send eligible');
+        assert.deepEqual(sendLogs.map(({level}) => level), ['info', 'info', 'debug']);
+        assert.deepEqual(sendLogs.map(({fields}) => fields.firstRepeatCreate), [false, true, false]);
+        assert.deepEqual(sendLogs.map(({fields}) => fields.firstAttemptForStep), [true, false, false]);
+        assert.deepEqual(sendLogs[1].fields.dispatchWake, dispatchWake);
+        assert.equal(sendLogs[1].fields.workflowStep, WORKFLOW_STEP.SENDING);
+        assert.equal(sendLogs[1].fields.createReceipt.priorReceiptStatus, null);
+        assert.deepEqual(outcomes, emittedRequests.slice(0, 2).map(({request}) => ({
+          operationId: row.operation_id, workflowStep: WORKFLOW_STEP.SENDING,
+          targetNodeId: NODE.B, attemptToken: request.createAdmissionAttemptToken,
+          deliveryState: 'delivered', transportReason: null, thrown: false, errorCode: null,
+          answerStatus: null, answerReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+          answerSuccess: false,
+        })));
         const [{address, request}] = emittedRequests;
         assert.equal(address, `${NODE.B}/service/replica-handler`);
         assert.equal(request.operationId, row.operation_id);
@@ -217,6 +248,92 @@ test('native ADD dispatch bootstrap is durable and reused by a fresh workflow', 
       } finally {
         await reconstructed.shutdown();
       }
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+});
+
+function targetAdmissionOnLedger(leader) {
+  return new ReplicaCreateAdmissionOwner({nodeId: NODE.B, ownerIncarnation: 1,
+    gateway: {
+      async readAuthoritativeRows(table, sql, params) {
+        const rows = table === SYSTEM_TABLE_NAME.NODES ?
+          [{node_id: NODE.B, boot_incarnation: 1}] : leader.db.prepare(sql).all(...params);
+        return {success: true, rows};
+      },
+      async updateSystemTableRow(tableName, whereClause, data) {
+        const {sql, params} = planner.buildSqlMutationPlan({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE, tableName, whereClause, data,
+        });
+        const entry = 'bootstrap:target-first-claim';
+        assert.equal(commitLedgerStatement(leader, entry, sql, params), null);
+        return {success: true, partitionResult: {
+          affectedRows: readCommittedStatementOutcome(leader, `entry:${entry}`).changes,
+        }};
+      },
+    }});
+}
+
+function claimIssuedCreate(target, request) {
+  return target.claim({...request, admissionToken: request.createAdmissionToken,
+    workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt,
+    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq});
+}
+
+test('lost native placement CREATE preserves first claim and fences stale progress', async () => {
+  await withNativeCreate(async (leader, row) => {
+    const requests = [];
+    const target = targetAdmissionOnLedger(leader);
+    const coordinator = createBindingCoordinator(leader, () => committedStampFor([VOTER_ID]),
+      async (_address, request) => {
+        requests.push(request);
+        throw new Error('lost CREATE reply');
+      });
+    const owner = coordinator.workflowOwner;
+    const load = () => coordinator.repository.rowToOperation(ledgerRows(leader)[0]);
+    const dispatch = () => owner.advanceReservationClearedDispatch(row.operation_id, load());
+    try {
+      await dispatch();
+      const first = load();
+      assert.equal(requests.length, 1);
+      const [request] = requests;
+      // Deliver the already-issued request after its source has resolved the
+      // lost response. Exercise the target CAS even when the predecessor
+      // wrongly advanced: one assertion reports both durable decisions.
+      let claimError = null;
+      try {
+        await claimIssuedCreate(target, request);
+      } catch (error) {
+        claimError = error.code ?? error.message;
+      }
+      assert.deepEqual({sourceStep: first.workflowStep, beforeGrant: first.createAdmissionState,
+        claimError, afterGrant: load().createAdmissionState, terminal: first.completedAt},
+      {sourceStep: WORKFLOW_STEP.SENDING, beforeGrant: null, claimError: null,
+        afterGrant: CREATE_ADMISSION_STATE.ADMITTED, terminal: null});
+      const admitted = load();
+      assert.equal(admitted.workflowStep, WORKFLOW_STEP.SENDING);
+      assert.equal(admitted.createAdmissionState, CREATE_ADMISSION_STATE.ADMITTED);
+      const stale = {...admitted, createAdmissionOwnerIncarnation: 2};
+      assert.equal(await owner.updateStep({...stale}, WORKFLOW_STEP.CREATING),
+        OPERATION_RECONCILE_OUTCOME.WAITING);
+      const projected = advanceOperationFixture(stale, WORKFLOW_STEP.CREATING, stale.updatedAt + 1);
+      const refused = await coordinator.repository.persistOperationUpdate(projected,
+        {expectedWorkflowStep: WORKFLOW_STEP.SENDING});
+      assert.equal(refused.persisted, false);
+      assert.equal(load().workflowStep, WORKFLOW_STEP.SENDING);
+      const wrongAttempt = {...admitted, createAdmissionAttemptToken: 'superseded-attempt'};
+      assert.equal(await owner.updateStep(wrongAttempt, WORKFLOW_STEP.CREATING),
+        OPERATION_RECONCILE_OUTCOME.WAITING);
+      assert.equal(load().workflowStep, WORKFLOW_STEP.SENDING);
+      await dispatch();
+      assert.equal(requests.length, 2);
+      assert.equal(requests[1].createAdmissionAttemptToken, requests[0].createAdmissionAttemptToken);
+      const retained = load();
+      assert.equal(retained.workflowStep, WORKFLOW_STEP.CREATING);
+      assert.equal(retained.createAdmissionState, CREATE_ADMISSION_STATE.ADMITTED);
+      assert.equal(retained.createAdmissionAttemptToken, requests[0].createAdmissionAttemptToken);
+      assert.equal(retained.completedAt, null);
     } finally {
       await coordinator.shutdown();
     }
@@ -462,13 +579,17 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
             row.operation_id]), null);
       }
       const [interrupted] = ledgerRows(leader);
+      assert.equal(interrupted.workflow_step, step);
+      assert.equal(interrupted.create_admission_state, null);
+      const target = targetAdmissionOnLedger(leader);
       const requests = [];
       let membershipReads = 0;
       const coordinator = createBindingCoordinator(leader, () => {
         membershipReads += 1;
         return committedStampFor([VOTER_ID]);
-      }, (_address, request) => {
+      }, async (_address, request) => {
         requests.push(request);
+        await claimIssuedCreate(target, request);
         return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
         });
@@ -488,6 +609,8 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
       try {
         assert.equal(await recover(), OPERATION_RECONCILE_OUTCOME.REFUSED);
         assert.deepEqual(ledgerRows(leader), [interrupted]);
+        assert.equal(requests.length, 0);
+        assert.equal(membershipReads, 0);
 
         reservation = {authorityUnavailable: true};
         await assert.rejects(recover, {reservationAuthorityUnavailable: true, deferRetry: true});
@@ -501,6 +624,11 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         assert.equal(membershipReads, 1);
         assert.equal(requests.length, 1, 'the original attempt crossed the delivery boundary');
         assert.equal(requests[0].operationId, row.operation_id);
+        const [progress] = ledgerRows(leader);
+        assert.equal(progress.workflow_step, WORKFLOW_STEP.CREATING);
+        assert.equal(progress.completed_at, null);
+        assert.equal(progress.create_admission_state, CREATE_ADMISSION_STATE.ADMITTED);
+        assert.equal(progress.create_admission_attempt_token, requests[0].createAdmissionAttemptToken);
         assert.deepEqual(reservationOptions,
           [{allowCreate: false}, {allowCreate: false}, {allowCreate: false}]);
       } finally {

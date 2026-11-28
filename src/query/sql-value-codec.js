@@ -71,6 +71,7 @@ const isUint8Array = types.isUint8Array.bind(types);
 const jsonStringify = JSON.stringify;
 const numberIsNaN = Number.isNaN;
 const numberToString = Function.call.bind(Number.prototype.toString);
+const objectDefineProperty = Object.defineProperty;
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
 const objectIs = Object.is;
@@ -80,6 +81,9 @@ const stringCharCodeAt = Function.call.bind(String.prototype.charCodeAt);
 const stringIsWellFormed = Function.call.bind(String.prototype.isWellFormed);
 const toBigInt = BigInt;
 const toNumber = Number;
+
+const MIN_SAFE_BIGINT = toBigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_BIGINT = toBigInt(Number.MAX_SAFE_INTEGER);
 
 const CODEC_VERSION = 1;
 const VERSION_FIELD = 'v';
@@ -538,6 +542,62 @@ function assembleTypedRowSet(columns, encodedRows) {
   return {v: CODEC_VERSION, columns: names, rows: encodedRows};
 }
 
+function normalizeMaterializedCellValue(value, coerceSafeBigIntToNumber) {
+  if (
+    coerceSafeBigIntToNumber &&
+    typeof value === 'bigint' &&
+    value >= MIN_SAFE_BIGINT &&
+    value <= MAX_SAFE_BIGINT
+  ) {
+    return toNumber(value);
+  }
+  return value === undefined ? null : value;
+}
+
+/**
+ * Materialize frozen row objects from positional `(columns, rawRows)` using
+ * `Object.defineProperty` so column names such as `"__proto__"` are defined as
+ * own enumerable data properties rather than invoking prototype setters.
+ * @param {string[]} columns
+ * @param {Array<Array<*>>} rawRows
+ * @param {Object} [options={}]
+ * @param {boolean} [options.coerceSafeBigIntToNumber=false]
+ * @return {Array<Object>}
+ */
+function materializeCapturedRowObjects(columns, rawRows, options = {}) {
+  const coerceSafeBigIntToNumber = options?.coerceSafeBigIntToNumber === true;
+  return objectFreeze(
+    rawRows.map((values) => {
+      const row = {};
+      for (let index = 0; index < columns.length; index += 1) {
+        objectDefineProperty(row, columns[index], {
+          value: normalizeMaterializedCellValue(
+            values[index],
+            coerceSafeBigIntToNumber,
+          ),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      }
+      return objectFreeze(row);
+    }),
+  );
+}
+
+/**
+ * Decode a `TypedRowSet` and materialize its rows into frozen own-property row
+ * objects in one canonical step.
+ * @param {{v: number, columns: string[], rows: Array<Array<?string>>}} rowSet
+ * @param {Object} [options={}]
+ * @param {boolean} [options.coerceSafeBigIntToNumber=false]
+ * @return {Array<Object>}
+ */
+function materializeTypedRowSetObjects(rowSet, options = {}) {
+  const {columns, rows} = decodeTypedRowSet(rowSet);
+  return materializeCapturedRowObjects(columns, rows, options);
+}
+
 export {
   SqlValueCodecError,
   assembleTypedRowSet,
@@ -546,5 +606,7 @@ export {
   encodeAndMeasureTypedRow,
   encodeTypedParams,
   encodeTypedRowSet,
+  materializeCapturedRowObjects,
+  materializeTypedRowSetObjects,
   typedRowSetByteLength,
 };

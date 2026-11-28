@@ -510,17 +510,35 @@ async function runCase(proofCase, context, options, journey) {
   const cleanupState = {};
   let adapter = null;
   let caseRecord = null;
+  let datasetNotified = false;
+  const notifyDatasetPreparedOnce = (createdAdapter) => {
+    if (datasetNotified) return;
+    datasetNotified = true;
+    if (typeof journey.onCaseDatasetPrepared === 'function') {
+      journey.onCaseDatasetPrepared({
+        caseId: proofCase.id,
+        adapter: createdAdapter,
+        resetOutcome: createdAdapter?.schemaProvisioning ?? null,
+      });
+    }
+  };
+  const caseOptions = {
+    ...options,
+    createAdapter: async (adapterOpts) => {
+      const created = await options.createAdapter(adapterOpts);
+      notifyDatasetPreparedOnce(created);
+      return created;
+    },
+  };
   try {
     const outcome = await awaitWithJourneySignal(
-      () => CASE_EXECUTORS[proofCase.id]({context, options, cluster: null}),
+      () => CASE_EXECUTORS[proofCase.id]({context, options: caseOptions, cluster: null}),
       journey,
       'run-case',
       proofCase.id,
     );
     adapter = outcome.adapter;
-    if (typeof journey.onCaseDatasetPrepared === 'function') {
-      journey.onCaseDatasetPrepared({caseId: proofCase.id, adapter});
-    }
+    notifyDatasetPreparedOnce(adapter);
     assertJourneyActive(journey, 'after-case', proofCase.id);
     const evidence = buildProofEvidence(outcome);
     const deployment = await observedDeployment(journey, proofCase, context);

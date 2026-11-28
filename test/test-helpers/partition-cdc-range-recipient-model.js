@@ -204,7 +204,7 @@ function installRecipientModel(f, {faults = new Map(), onWave = () => {}} = {}) 
   };
   f.propagate = (index, events, _context, groupId) => {
     const wave = {index, keys: events.map((event) => event.eventKey),
-      ids: events.map((event) => event.data?.id ?? null), rows: events.length,
+      ids: events.map((event) => event.data?.group_id ?? null), rows: events.length,
       digest: cdcCommitWaitIdentity(events), frozen: Object.isFrozen(events),
       window: diagnosticsOf(f).shipWindow, fault: takeFault(model, index, events)};
     model.waves.push(wave);

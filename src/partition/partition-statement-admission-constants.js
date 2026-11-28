@@ -101,6 +101,9 @@ const PARTITION_STATEMENT_REFUSAL_LAYER = Object.freeze({
   // A direct SQL write targeting publication_id = 'cluster_formation' or
   // publication_kind = 'cluster_formation' on control_plane_publications.
   FORMATION_RECORD_PROTECTED: 'formation_record_protected',
+  // An INSERT or UPDATE on services targeting a replica generation excluded
+  // by a committed permanent-member-loss recovery decision.
+  EXCLUDED_RECOVERY_SERVICE_REPLICA: 'excluded_recovery_service_replica',
 });
 
 // What an admitted statement is.

@@ -59,7 +59,7 @@ function enforcementResult(state, columns = [], trigger = null, missingColumns =
     missingColumns: Object.freeze(missingColumns)});
 }
 
-function readTransactionSchemaEnforcement(database) {
+function readTransactionSchemaInventory(database) {
   try {
     const columns = database.prepare(SCHEMA_SQL).all();
     const byName = new Map(columns.map((column) => [column.name, column]));
@@ -67,19 +67,23 @@ function readTransactionSchemaEnforcement(database) {
       !byName.has(column.name)).map((column) => column.name);
     const trigger = database.prepare(TRIGGER_SQL).get('trigger', TRIGGER_NAME,
       TABLES.SQL_TRANSACTIONS)?.sql ?? null;
-    if (columns.length === 0) return enforcementResult(STATE.UNAVAILABLE);
+    if (columns.length === 0) return {enforcement: enforcementResult(STATE.UNAVAILABLE), byName};
     const shapeValid = byName.get('transaction_id')?.pk === 1 &&
       SQL_TRANSACTIONS_SCHEMA.columns.every((column) => !byName.has(column.name) ||
         byName.get(column.name).type.toUpperCase() === column.type.toUpperCase());
     if (!shapeValid || missing.length > 0 ||
         (trigger !== null && trigger !== INITIAL_ROW_TRIGGER_SQL)) {
-      return enforcementResult(STATE.INCOMPATIBLE, columns, trigger, missing);
+      return {enforcement: enforcementResult(STATE.INCOMPATIBLE, columns, trigger, missing), byName};
     }
-    return enforcementResult(trigger === INITIAL_ROW_TRIGGER_SQL ?
-      STATE.ENFORCED : STATE.REQUIRED, columns, trigger, missing);
+    return {enforcement: enforcementResult(trigger === INITIAL_ROW_TRIGGER_SQL ?
+      STATE.ENFORCED : STATE.REQUIRED, columns, trigger, missing), byName};
   } catch {
-    return enforcementResult(STATE.UNAVAILABLE);
+    return {enforcement: enforcementResult(STATE.UNAVAILABLE), byName: null};
   }
+}
+
+function readTransactionSchemaEnforcement(database) {
+  return readTransactionSchemaInventory(database).enforcement;
 }
 
 function enforcementError() {
@@ -129,7 +133,7 @@ function coordinatorTableSchemaRefusal(tableName) {
       error: MIGRATION_REFUSAL_MESSAGE}) : null;
 }
 
-export {isCoordinatorTable, readTransactionSchemaEnforcement, installTransactionSchemaEnforcement,
+export {readTransactionSchemaInventory, isCoordinatorTable, readTransactionSchemaEnforcement, installTransactionSchemaEnforcement,
   assertTransactionSchemaWriteEnforced, coordinatorTableSchemaRefusal,
   transactionSchemaWriteRefusal, TRANSACTION_SCHEMA_ENFORCEMENT_STATE,
   TRANSACTION_SCHEMA_ENFORCEMENT_ERROR};

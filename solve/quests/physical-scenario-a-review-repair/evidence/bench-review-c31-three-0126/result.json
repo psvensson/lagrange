@@ -1,0 +1,229 @@
+{
+  "campaignId": "bench-review-c31-three-0126",
+  "sourceCommit": "c3175e36de7ef7ab952f1ec063ee03a929cce4f3",
+  "productImage": "sha256:baa0e43c93c39ae616708939ad3817de4a159fc82062f8c0dda1a67ca4cb7b1a",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "readiness": {
+    "state": "ready",
+    "observedAt": "2026-11-27T00:31:38.558Z",
+    "clusterStableAt": "2026-11-27T00:31:29.374Z",
+    "clusterTimeToReadyMs": 161670,
+    "probeReadbackAt": "2026-11-27T00:31:37.943Z",
+    "probeTimeToReadyMs": 8568
+  },
+  "semanticCases": [
+    {
+      "file": "semantic-gate/scenario-a-delivery-lagrange.json",
+      "sha256": "3d42080626751bfcc371d62314151292a312e909580733e5db80ebc158ab9b37",
+      "caseId": "scenario-a-delivery-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-durability-lagrange.json",
+      "sha256": "3e7266463ab034da027561ed0831d860e18c21cb2ed8ad5c9c80e5b90fce1300",
+      "caseId": "scenario-a-durable-commit-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-failure-atomicity-lagrange.json",
+      "sha256": "a8d99bf8d50f783071d50817ecbff6f0f7fef072a7ef5b62b12ffa441653e4ae",
+      "caseId": "scenario-a-failure-atomicity-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-new-order-contention-lagrange.json",
+      "sha256": "2e57a264caac368ad63137722a7732209c1cd232a76adc313df029fb494040ab",
+      "caseId": "scenario-a-new-order-district-contention-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-order-status-lagrange.json",
+      "sha256": "aeef7b518b5c66528bb0e8d5aea00dc6aa8bcbb6ed4259d847446ad72611a2ee",
+      "caseId": "scenario-a-order-status-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-payment-lagrange.json",
+      "sha256": "a593bd48d15480bfbf4427d649e6f1bfa765206f531c5d9b1a656065081caf39",
+      "caseId": "scenario-a-payment-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-retryable-conflict-lagrange.json",
+      "sha256": "acd0983f9f32fb065e8452b5e91a306d29089b6e36f57d5605e27602c8cae2ff",
+      "caseId": "scenario-a-retryable-conflict-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-stock-level-lagrange.json",
+      "sha256": "237ebdd3ba3ec8f9aa888a0a2a8afe4d6fcdd640677251bcace70f61eceadd0c",
+      "caseId": "scenario-a-stock-level-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-visibility-lagrange.json",
+      "sha256": "e334353d5165833c292fc6977b81657385bf96aa1b6fe1b853a4d108f94aaf87",
+      "caseId": "scenario-a-visibility-v1",
+      "status": "passed"
+    }
+  ],
+  "warmupAccounting": {
+    "offered": 10,
+    "issued": 10,
+    "unissued": 0,
+    "attempts": 13,
+    "committed": 10,
+    "conflicts": 3,
+    "conflictExhausted": 0,
+    "terminalFailures": {
+      "product_error": 0,
+      "correctness_failure": 0,
+      "transport_failure": 0,
+      "harness_fault": 0
+    },
+    "unresolved": 0,
+    "ambiguousCommits": 0
+  },
+  "accounting": {
+    "offered": 100,
+    "issued": 100,
+    "unissued": 0,
+    "attempts": 137,
+    "committed": 96,
+    "conflicts": 41,
+    "conflictExhausted": 4,
+    "terminalFailures": {
+      "product_error": 0,
+      "correctness_failure": 0,
+      "transport_failure": 0,
+      "harness_fault": 0
+    },
+    "unresolved": 0,
+    "ambiguousCommits": 0
+  },
+  "measurementWindow": {
+    "scheduledMs": 20000,
+    "drainMs": 196468.66358700002,
+    "drainOverrunMs": 176468.66358700002,
+    "accountingWindowMs": 196468.66358700002,
+    "startedAt": "2026-11-27T00:35:24.732Z",
+    "endedAt": "2026-11-27T00:38:41.200Z"
+  },
+  "committedLatencyMs": {
+    "count": 0,
+    "avg": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "min": null,
+    "max": null
+  },
+  "finalState": {
+    "status": "reconciled",
+    "before": {
+      "observed": true,
+      "stateSha256": "8b34aef3e0b9b31dba4b8c905c0d97c146ec59920462fe78bb8f5209f5f94bc0",
+      "logicalChecksum": "sha256:65628b029effe33e8563e78c8937d1fa47a05ff7a02ac1b327415230caf6709c",
+      "tableRows": {
+        "warehouse": 1,
+        "district": 2,
+        "customer": 60,
+        "item": 200,
+        "stock": 200,
+        "orders": 4,
+        "new_order": 4,
+        "order_line": 39,
+        "history": 5
+      }
+    },
+    "after": {
+      "observed": true,
+      "stateSha256": "12f878a363715ad70744289e9edd7964ea99e1458b305f31da7c2a99d648ba2b",
+      "logicalChecksum": "sha256:e8c723ea964962e57e1b0b4b53b8626923a404d61c81e1602336531ec2716889",
+      "tableRows": {
+        "warehouse": 1,
+        "district": 2,
+        "customer": 60,
+        "item": 200,
+        "stock": 200,
+        "orders": 52,
+        "new_order": 44,
+        "order_line": 554,
+        "history": 40
+      }
+    },
+    "deltas": {
+      "warehouse": 0,
+      "district": 0,
+      "customer": 0,
+      "item": 0,
+      "stock": 0,
+      "orders": 48,
+      "new_order": 40,
+      "order_line": 515,
+      "history": 35
+    },
+    "committedEffects": {
+      "newOrders": 48,
+      "payments": 35,
+      "deliveredOrders": 8,
+      "orderLines": 515
+    },
+    "unresolvedRequests": {
+      "newOrders": 0,
+      "payments": 0,
+      "deliveries": 0
+    },
+    "checks": [
+      {
+        "name": "orders",
+        "observedDelta": 48,
+        "expectedDelta": 48,
+        "exact": true,
+        "explainedByUnresolved": false
+      },
+      {
+        "name": "history",
+        "observedDelta": 35,
+        "expectedDelta": 35,
+        "exact": true,
+        "explainedByUnresolved": false
+      },
+      {
+        "name": "new_order",
+        "observedDelta": 40,
+        "expectedDelta": 40,
+        "exact": true,
+        "explainedByUnresolved": false
+      },
+      {
+        "name": "order_line",
+        "observedDelta": 515,
+        "expectedDelta": 515,
+        "exact": true,
+        "explainedByUnresolved": false
+      }
+    ]
+  },
+  "admission": {
+    "outcome": "passed",
+    "cells": [
+      {
+        "claimKey": "lagrange/scenarioA/smoke",
+        "status": "valid-observed",
+        "reasons": [
+          "smoke-profile-no-capacity-claim"
+        ]
+      }
+    ]
+  },
+  "cleanupComplete": true,
+  "exitCode": 0,
+  "rawFileSha256": "4da3c38fcc77f209e2045a31b58423287b450865327e55f69a98a3cdf7576fa8",
+  "campaignFileSha256": "fc6a3d0a0dc804a1c45e1fba2d5e5f5369d2af6cf60f86e867f6c4ef55eb12a5"
+}

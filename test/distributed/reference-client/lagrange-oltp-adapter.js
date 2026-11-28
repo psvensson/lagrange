@@ -278,15 +278,30 @@ async function rollbackAfterAbortedCommit(rollback, commitError) {
 function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
   const useNativeForUpdate = lockingReadMode === NATIVE_LOCKING_READ_MODE;
   const strippedSet = new Set(LAGRANGE_OLTP_TRANSLATION_AUDIT.strippedStatementIds);
+  // Owed by this worker connection even after the failed invocation has
+  // returned its statement and rollback errors to the operation recorder.
+  let rollbackPending = false;
+  async function rollback() {
+    rollbackPending = true;
+    await client.query('ROLLBACK');
+    rollbackPending = false;
+  }
   const session = {
     async transaction(callback) {
+      if (rollbackPending) {
+        try {
+          await rollback();
+        } catch (cause) {
+          throw new Error('Previous transaction rollback failed before BEGIN', {cause});
+        }
+      }
       await client.query('BEGIN');
       let result;
       try {
         result = await callback(session);
       } catch (error) {
         try {
-          await client.query('ROLLBACK');
+          await rollback();
         } catch (rollbackError) {
           throw new AggregateError(
             [error, rollbackError],
@@ -305,7 +320,7 @@ function createLagrangeSession(client, lockingReadMode = LOCKING_READ_MODE) {
         // or a typed unknown outcome leaves the commit unresolved.
         if (resolveOltpCommitFailureOutcome(commitError) ===
             OLTP_COMMIT_FAILURE_OUTCOME.ABORTED) {
-          await rollbackAfterAbortedCommit(() => client.query('ROLLBACK'), commitError);
+          await rollbackAfterAbortedCommit(rollback, commitError);
           if (commitError && typeof commitError === 'object') {
             commitError.commitAborted = true;
           }
@@ -742,10 +757,39 @@ async function createSchemaStatement(client, statement, provisioning) {
   }
 }
 
-async function createSchema(client, provisioning) {
+async function createSchema(client, provisioning, presentTables = new Set()) {
   for (const statement of CREATE_SCHEMA) {
+    const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1];
+    if (presentTables.has(table)) continue;
     await createSchemaStatement(client, statement, provisioning);
   }
+}
+
+function isTruncateCapabilityUnsupportedError(error) {
+  const code = error?.sqlState || error?.code || '';
+  if (code === '0A000' || code === '42601') {
+    return true;
+  }
+  const message = String(error?.message || '');
+  return /unsupported|not supported|unknown statement|syntax error/iu.test(message);
+}
+
+function enrichTruncateExecutionFailure(table, error) {
+  const rawMessage = error?.message || String(error);
+  const enriched = new Error(
+    `TRUNCATE TABLE ${table} failed during cohort-preserving reset: ${rawMessage}`,
+    {cause: error},
+  );
+  const sqlState = error?.sqlState || error?.code || null;
+  if (sqlState) {
+    enriched.code = sqlState;
+    enriched.sqlState = sqlState;
+  }
+  if (error?.detail !== undefined) {
+    enriched.detail = error.detail;
+  }
+  enriched.failureTable = table;
+  return enriched;
 }
 
 async function resetCanonicalDataset(
@@ -754,30 +798,56 @@ async function resetCanonicalDataset(
   tables,
   lockingReadMode = LOCKING_READ_MODE,
 ) {
+  const resetStartedAtMs = Date.now();
   await validateAllCanonicalTableSchemas(client, lockingReadMode);
   for (const table of DROP_TABLES) {
     const startedMs = Date.now();
     try {
       await client.query(`TRUNCATE TABLE ${table}`);
     } catch (error) {
-      throw resetUnsupportedError(
-        `TRUNCATE TABLE ${table} failed during cohort-preserving reset: ` +
-          `${error?.message || error}`,
-        error,
-      );
+      if (isTruncateCapabilityUnsupportedError(error)) {
+        throw resetUnsupportedError(
+          `TRUNCATE TABLE ${table} failed during cohort-preserving reset: ` +
+            `${error?.message || error}`,
+          error,
+        );
+      }
+      throw enrichTruncateExecutionFailure(table, error);
     }
-    const observed = await observeTableState(client, table);
-    if (observed !== TABLE_PRESENT) {
-      throw observed.error;
+    const truncateEndedMs = Date.now();
+    const postTruncateRowCount = await countRows(client, table);
+    if (postTruncateRowCount !== ZERO) {
+      const residualError = new Error(
+        `TRUNCATE TABLE ${table} left ${postTruncateRowCount} residual rows ` +
+          'during cohort-preserving reset',
+      );
+      residualError.code = 'truncate-residual-rows';
+      residualError.failureTable = table;
+      residualError.residualRowCount = postTruncateRowCount;
+      throw residualError;
     }
     tables.push(Object.freeze({
       table,
       outcome: OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE,
       schemaSha256: CANONICAL_SCHEMA_SHA256,
+      truncateStartedAt: new Date(startedMs).toISOString(),
+      truncateEndedAt: new Date(truncateEndedMs).toISOString(),
+      truncateDurationMs: truncateEndedMs - startedMs,
+      postTruncateRowCount,
       states: Object.freeze([stateEntry(startedMs, TABLE_PRESENT, null)]),
     }));
   }
+  const seedLoadStartedAtMs = Date.now();
   await loadDataset(client, dataset);
+  const seedLoadEndedAtMs = Date.now();
+  return Object.freeze({
+    resetStartedAt: new Date(resetStartedAtMs).toISOString(),
+    resetEndedAt: new Date(seedLoadEndedAtMs).toISOString(),
+    resetDurationMs: seedLoadEndedAtMs - resetStartedAtMs,
+    seedLoadStartedAt: new Date(seedLoadStartedAtMs).toISOString(),
+    seedLoadEndedAt: new Date(seedLoadEndedAtMs).toISOString(),
+    seedLoadDurationMs: seedLoadEndedAtMs - seedLoadStartedAtMs,
+  });
 }
 
 async function loadDataset(client, dataset) {
@@ -871,24 +941,24 @@ async function prepareDataset(
       await loadDataset(client, dataset);
       return evidence();
     }
-    const existingTables = [];
+    const presentTables = new Set();
+    let preservedCohort = false;
     for (const table of DROP_TABLES) {
-      if (await tableExists(client, table)) existingTables.push(table);
+      const observed = await observeTableState(client, table);
+      if (observed === TABLE_PRESENT) presentTables.add(table);
+      if (observed.state !== OLTP_PROVISIONING_STATE.TABLE_MISSING) preservedCohort = true;
     }
-    if (existingTables.length === ZERO) {
-      await createSchema(client, tables);
-      await validateAllCanonicalTableSchemas(client, lockingReadMode);
-      await loadDataset(client, dataset);
-      return evidence();
+    if (presentTables.size < DROP_TABLES.length) {
+      for (const table of presentTables) await validateCanonicalTableSchema(client, table);
+      await createSchema(client, tables, presentTables);
     }
-    if (existingTables.length === DROP_TABLES.length) {
-      await resetCanonicalDataset(client, dataset, tables, lockingReadMode);
-      return evidence();
+    if (preservedCohort) {
+      const resetTimings = await resetCanonicalDataset(client, dataset, tables, lockingReadMode);
+      return Object.freeze({...evidence(), ...resetTimings});
     }
-    throw schemaMismatchError(
-      `Lagrange OLTP cohort has partial schema (${existingTables.length} of ` +
-        `${DROP_TABLES.length} tables present: ${existingTables.join(', ')})`,
-    );
+    await validateAllCanonicalTableSchemas(client, lockingReadMode);
+    await loadDataset(client, dataset);
+    return evidence();
   } catch (error) {
     throw provisioningFailure(error, evidence());
   } finally {
@@ -1046,11 +1116,14 @@ async function createLagrangeOltpAdapter(options = {}) {
       const tables = [];
       const client = await openClient(createClient, resolvedClientOptions);
       try {
-        await resetCanonicalDataset(client, dataset, tables, resolvedLockingReadMode);
+        const resetTimings = await resetCanonicalDataset(
+          client, dataset, tables, resolvedLockingReadMode,
+        );
         return Object.freeze({
           outcome: OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE,
           schemaSha256: CANONICAL_SCHEMA_SHA256,
           tables: Object.freeze([...tables]),
+          ...resetTimings,
         });
       } finally {
         await client.end();
@@ -1086,6 +1159,7 @@ async function createLagrangeOltpAdapter(options = {}) {
 }
 
 export {
+  CREATE_SCHEMA as LAGRANGE_OLTP_SCHEMA_DDL,
   CANONICAL_REQUIRED_INDEXES,
   CANONICAL_SCHEMA_SHA256,
   CANONICAL_TABLE_COLUMNS,

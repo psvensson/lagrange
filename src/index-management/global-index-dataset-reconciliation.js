@@ -21,8 +21,8 @@ import {
   buildIndexDatasetSchema,
   getGlobalIndexDatasetName,
 } from './global-index-dataset-manager.js';
-import {resolveHostedPartitionService} from './global-index-partition-discovery.js';
-import {GLOBAL_INDEX_STATEMENT_LABEL} from './index-constants.js';
+import {createUnavailableError, resolveHostedPartitionService} from './global-index-partition-discovery.js';
+import {GLOBAL_INDEX_ERROR_CODE, GLOBAL_INDEX_STATEMENT_LABEL} from './index-constants.js';
 
 const LOCAL_STR_CRITICAL = 'critical';
 const LOCAL_STR_ID = 'id';
@@ -144,9 +144,12 @@ function buildProvisionedIndexMetadata(indexService, context) {
   });
   const partitionId = `__gsi_${tableName}_${indexName}_p0`;
   const partitionKeyType = resolvedColumnTypes?.[columnNames[0]] || LOCAL_STR_TEXT;
-  const replicaCount = Number.isInteger(context.replicaCount) && context.replicaCount > 0 ?
-    context.replicaCount :
-    1;
+  const replicaCount = context.replicaCount === undefined ?
+    indexService.sqlQueryEngine?.tableCreationService?.defaultReplicaCount : context.replicaCount;
+  if (!Number.isSafeInteger(replicaCount) || replicaCount < 1) {
+    throw createUnavailableError(GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+      'Global index provisioning requires a declared replica count or the table creation default');
+  }
   const now = Date.now();
   const activeVersion = resolveIndexActivePartitionVersion(indexService, tableName);
   const partitionMetadata = buildCanonicalPartitionRow(

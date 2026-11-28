@@ -1,6 +1,11 @@
 // Read-only SQLite mechanics shared by the existing retained application
 // stores. Each caller supplies its own complete projection and owned DDL;
 // this module defines no bootstrap eligibility or application schema.
+import {
+  PARTITION_COMMITTED_STATEMENT_FORMAT,
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
+} from './partition-committed-statement-outcome-constants.js';
+
 const RETAINED_STORE_ERROR = Object.freeze({
   SCHEMA_UNAVAILABLE: 'partition_retained_store_schema_unavailable',
   SCHEMA_CONTRARY: 'partition_retained_store_schema_contrary',
@@ -72,6 +77,34 @@ function isStoredNullableInteger(value, minimum = null) {
   return value === null || isStoredInteger(value, minimum);
 }
 
+const RETAINED_STORE_FORMAT_REFUSALS = Object.freeze(new Set(
+  Object.values(RETAINED_STORE_ERROR)));
+
+function outcomeTableFormatIn(db) {
+  const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
+  try {
+    if (!retainedStoreTableExistsIn(db, sql.TABLE)) {
+      return PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT;
+    }
+    readRetainedStoreRowsIn(db, {table: sql.TABLE, select: sql.FORMAT_PROBE,
+      create: sql.CREATE_TABLE});
+    return PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT;
+  } catch (error) {
+    if (RETAINED_STORE_FORMAT_REFUSALS.has(error?.code)) {
+      return PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED;
+    }
+    throw error;
+  }
+}
+
+function detectCommittedStatementOutcomeFormat(db) {
+  const outcome = db.transaction(() => outcomeTableFormatIn(db))();
+  const columns = Object.freeze(db
+    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
+    .all().map((column) => column.name));
+  return Object.freeze({outcome, columns});
+}
+
 export {RETAINED_STORE_ERROR, retainedStoreError, retainedStoreTableExistsIn,
-  readRetainedStoreRowsIn,
+  readRetainedStoreRowsIn, detectCommittedStatementOutcomeFormat,
   isStoredInteger, isStoredNullableText, isStoredNullableInteger};

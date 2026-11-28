@@ -58,7 +58,7 @@ function commitSourceStatement(leader, {entryId, sql, params, wallMs = 1000}) {
 
 function addSourceRow(leader, id, value = PAYLOAD_SENTINEL) {
   commitSourceStatement(leader, {entryId: `progress-${id}`,
-    sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [id, value]});
+    sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`, params: [id, value]});
 }
 
 // One committed transaction decision of several operations through the real
@@ -78,7 +78,7 @@ function addSourceEntry(leader, tag, operations, wallMs = 1000) {
 }
 
 const insertOperation = (id, value = PAYLOAD_SENTINEL) =>
-  ({sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [id, value]});
+  ({sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`, params: [id, value]});
 
 function addSubscriber(f, index) {
   const service = {groupId: `component-recipient-${index}`,
@@ -121,13 +121,13 @@ async function fixture(t, {rows = ['A', 'B'], subscribers = 3, statements = [],
     // propagatePartitionCDCEvent (one vector per call), and its completion
     // hook. A call records the row ids its vector carried, in order.
     propagate: (index, events, context, groupId) => {
-      f.calls.push({index, ids: events.map((event) => event.data.id),
+      f.calls.push({index, ids: events.map((event) => event.data.group_id),
         eventKeys: events.map((event) => event.eventKey),
         remainingMs: context.remainingMs()});
       return f.behavior(index, events, context, groupId);
     },
     afterPropagation: (index, events) =>
-      f.hooks.push({index, ids: events.map((event) => event.data.id)}),
+      f.hooks.push({index, ids: events.map((event) => event.data.group_id)}),
     acks: () => proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED),
     drive: () => leader.cdcDelivery.driveCdcObligations(REASON.DELIVERY_RETRY),
   };

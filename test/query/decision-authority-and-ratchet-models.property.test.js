@@ -40,6 +40,7 @@ test('evaluateControlPlaneWriteRetryDecision is total, deterministic, and satisf
     isRetryable: fc.boolean(),
     isDeferredFailure: fc.boolean(),
     isRemovalFencedFailure: fc.boolean(),
+    isTargetConnectionClosed: fc.boolean(),
   });
 
   fc.assert(
@@ -55,7 +56,9 @@ test('evaluateControlPlaneWriteRetryDecision is total, deterministic, and satisf
       );
       assert.equal(allowedStates.has(first.state), true);
 
-      if (
+      if (facts.isSystemTableWrite && facts.isTargetConnectionClosed) {
+        assert.equal(first.state, 'widen_to_recovery_candidate');
+      } else if (
         facts.isSystemTableWrite &&
         facts.isPriorityControlPlaneWrite &&
         facts.isRetryable &&
@@ -196,10 +199,9 @@ test('decideCreateTableAction and metadata decoders enforce single-interpretatio
         } else {
           assert.equal(decision.action, CREATE_TABLE_ACTION.THROW_TABLE_EXISTS);
         }
-      } else if (input.hasPersistenceAuthority) {
-        assert.equal(decision.action, CREATE_TABLE_ACTION.CREATE_PERSISTED);
       } else {
-        assert.equal(decision.action, CREATE_TABLE_ACTION.CREATE_EPHEMERAL);
+        assert.equal(decision.action, CREATE_TABLE_ACTION.CREATE_PERSISTED);
+        assert.equal(CREATE_TABLE_ACTION.CREATE_EPHEMERAL, undefined);
       }
     }),
     {numRuns: PROPERTY_RUNS},

@@ -7,15 +7,15 @@ import {fileURLToPath} from 'node:url';
 import Ajv from 'ajv';
 
 import {
+  CONCRETE_TEXT_SCHEMA,
   hasConcreteText,
   isObjectRecord,
   listFiles,
   mainResultToExitCode,
   readJsonFile,
+  registerConcreteTextKeyword,
   relativeToCwd,
   renderValidationResult,
-  requireConcreteArray,
-  requireConcreteField,
   uniqueValues,
 } from './system-contract-utils.js';
 
@@ -33,10 +33,7 @@ const ROOT_FIELD_LABEL = 'decision table';
 const SLASH_SEPARATOR = '/';
 const DOT_SEPARATOR = '.';
 const WILDCARD = '*';
-const NON_EMPTY_STRING_SCHEMA = Object.freeze({
-  type: JSON_SCHEMA_STRING_TYPE,
-  minLength: 1,
-});
+const NON_EMPTY_STRING_SCHEMA = CONCRETE_TEXT_SCHEMA;
 const NAMED_VALUES_RECORD_SCHEMA = Object.freeze({
   type: JSON_SCHEMA_OBJECT_TYPE,
   additionalProperties: false,
@@ -125,7 +122,7 @@ const DECISION_TABLE_JSON_SCHEMA = Object.freeze({
     }),
   }),
 });
-const ajv = new Ajv({allErrors: true, strict: true});
+const ajv = registerConcreteTextKeyword(new Ajv({allErrors: true, strict: true}));
 const validateDecisionTableSchema = ajv.compile(DECISION_TABLE_JSON_SCHEMA);
 const HELP_TEXT = [
   'Usage: npm run model:decision-tables -- [--json] [table.json ...]',
@@ -160,19 +157,15 @@ function tableFilesFromArgs(files) {
 }
 
 function validateNamedValues(errors, filePath, fieldPath, entries) {
-  if (!Array.isArray(entries) || entries.length === 0) {
-    errors.push(`${filePath}: ${fieldPath} must contain at least one entry.`);
+  if (!Array.isArray(entries)) {
     return;
   }
   const names = [];
   for (const [index, entry] of entries.entries()) {
     const entryPath = `${fieldPath}[${index}]`;
     if (!isObjectRecord(entry)) {
-      errors.push(`${filePath}: ${entryPath} must be an object.`);
       continue;
     }
-    requireConcreteField(errors, filePath, `${entryPath}.name`, entry.name);
-    requireConcreteArray(errors, filePath, `${entryPath}.values`, entry.values);
     if (hasConcreteText(entry.name)) {
       names.push(entry.name);
     }
@@ -186,24 +179,14 @@ function validateNamedValues(errors, filePath, fieldPath, entries) {
 }
 
 function validateInvariants(errors, filePath, invariants) {
-  if (!Array.isArray(invariants) || invariants.length === 0) {
-    errors.push(`${filePath}: invariants must contain at least one invariant.`);
+  if (!Array.isArray(invariants)) {
     return;
   }
   const ids = [];
-  for (const [index, invariant] of invariants.entries()) {
-    const invariantPath = `invariants[${index}]`;
+  for (const invariant of invariants) {
     if (!isObjectRecord(invariant)) {
-      errors.push(`${filePath}: ${invariantPath} must be an object.`);
       continue;
     }
-    requireConcreteField(errors, filePath, `${invariantPath}.id`, invariant.id);
-    requireConcreteField(
-      errors,
-      filePath,
-      `${invariantPath}.statement`,
-      invariant.statement,
-    );
     if (hasConcreteText(invariant.id)) {
       ids.push(invariant.id);
     }
@@ -249,61 +232,74 @@ function validateRuleInvariantRefs(errors, filePath, rulePath, rule, invariantId
 
 function validateRuleInputs(errors, filePath, rulePath, rule, inputNames, inputValues) {
   if (!isObjectRecord(rule.when)) {
-    errors.push(`${filePath}: ${rulePath}.when must be an object.`);
-  } else {
-    for (const inputName of inputNames) {
-      const value = rule.when[inputName];
-      if (value === undefined) {
-        errors.push(`${filePath}: ${rulePath}.when.${inputName} is required.`);
-      } else if (value !== WILDCARD && !inputValues[inputName].has(value)) {
-        errors.push(
-          `${filePath}: ${rulePath}.when.${inputName} has invalid value ${value}.`,
-        );
-      }
+    return;
+  }
+  for (const inputName of inputNames) {
+    const value = rule.when[inputName];
+    if (value === undefined) {
+      errors.push(`${filePath}: ${rulePath}.when.${inputName} is required.`);
+    } else if (value !== WILDCARD && !inputValues[inputName].has(value)) {
+      errors.push(
+        `${filePath}: ${rulePath}.when.${inputName} has invalid value ${value}.`,
+      );
     }
-    for (const key of Object.keys(rule.when)) {
-      if (!inputNames.includes(key)) {
-        errors.push(`${filePath}: ${rulePath}.when.${key} is not a declared input.`);
-      }
+  }
+  for (const key of Object.keys(rule.when)) {
+    if (!inputNames.includes(key)) {
+      errors.push(`${filePath}: ${rulePath}.when.${key} is not a declared input.`);
     }
   }
 }
 
 function validateRuleOutcome(errors, filePath, rulePath, rule, outputSpecs, outputValues) {
   if (!isObjectRecord(rule.outcome)) {
-    errors.push(`${filePath}: ${rulePath}.outcome must be an object.`);
-  } else {
-    for (const outputSpec of outputSpecs) {
-      const value = rule.outcome[outputSpec.name];
-      if (value === undefined) {
-        errors.push(
-          `${filePath}: ${rulePath}.outcome.${outputSpec.name} is required.`,
-        );
-      } else if (!outputValues[outputSpec.name].has(value)) {
-        errors.push(
-          `${filePath}: ${rulePath}.outcome.${outputSpec.name} has invalid value ${value}.`,
-        );
-      }
+    return;
+  }
+  for (const outputSpec of outputSpecs) {
+    const value = rule.outcome[outputSpec.name];
+    if (value === undefined) {
+      errors.push(
+        `${filePath}: ${rulePath}.outcome.${outputSpec.name} is required.`,
+      );
+    } else if (!outputValues[outputSpec.name].has(value)) {
+      errors.push(
+        `${filePath}: ${rulePath}.outcome.${outputSpec.name} has invalid value ${value}.`,
+      );
     }
-    for (const key of Object.keys(rule.outcome)) {
-      if (!outputValues[key]) {
-        errors.push(`${filePath}: ${rulePath}.outcome.${key} is not declared.`);
-      }
+  }
+  for (const key of Object.keys(rule.outcome)) {
+    if (!outputValues[key]) {
+      errors.push(`${filePath}: ${rulePath}.outcome.${key} is not declared.`);
     }
   }
 }
 
 function validateRuleShape(errors, filePath, table, inputNames, outputSpecs) {
-  if (!Array.isArray(table.rules) || table.rules.length === 0) {
-    errors.push(`${filePath}: rules must contain at least one rule.`);
+  if (!Array.isArray(table.rules) ||
+      !Array.isArray(table.inputs) ||
+      !Array.isArray(table.outputs)) {
     return;
   }
   const ruleIds = [];
   const inputValues = Object.fromEntries(
-    table.inputs.map((input) => [input.name, new Set(input.values)]),
+    table.inputs
+      .filter(
+        (input) =>
+          isObjectRecord(input) &&
+          hasConcreteText(input.name) &&
+          Array.isArray(input.values),
+      )
+      .map((input) => [input.name, new Set(input.values)]),
   );
   const outputValues = Object.fromEntries(
-    table.outputs.map((output) => [output.name, new Set(output.values)]),
+    table.outputs
+      .filter(
+        (output) =>
+          isObjectRecord(output) &&
+          hasConcreteText(output.name) &&
+          Array.isArray(output.values),
+      )
+      .map((output) => [output.name, new Set(output.values)]),
   );
   const invariantIds = new Set(
     (table.invariants || [])
@@ -314,17 +310,8 @@ function validateRuleShape(errors, filePath, table, inputNames, outputSpecs) {
   for (const [index, rule] of table.rules.entries()) {
     const rulePath = `rules[${index}]`;
     if (!isObjectRecord(rule)) {
-      errors.push(`${filePath}: ${rulePath} must be an object.`);
       continue;
     }
-    requireConcreteField(errors, filePath, `${rulePath}.id`, rule.id);
-    requireConcreteField(errors, filePath, `${rulePath}.reason`, rule.reason);
-    requireConcreteArray(
-      errors,
-      filePath,
-      `${rulePath}.invariantRefs`,
-      rule.invariantRefs,
-    );
     validateRuleInvariantRefs(errors, filePath, rulePath, rule, invariantIds);
     if (hasConcreteText(rule.id)) {
       ruleIds.push(rule.id);
@@ -341,7 +328,16 @@ function validateCoverage(errors, filePath, table) {
   if (!Array.isArray(table.inputs) || !Array.isArray(table.rules)) {
     return;
   }
-  for (const combination of cartesianProduct(table.inputs)) {
+  const validInputs = table.inputs.filter(
+    (input) => isObjectRecord(input) &&
+      hasConcreteText(input.name) &&
+      Array.isArray(input.values) &&
+      input.values.length > 0,
+  );
+  if (validInputs.length === 0) {
+    return;
+  }
+  for (const combination of cartesianProduct(validInputs)) {
     const matches = table.rules.filter((rule) =>
       isObjectRecord(rule) && ruleMatchesCombination(rule, combination));
     if (matches.length !== 1) {
@@ -369,20 +365,16 @@ function formatSchemaInstancePath(instancePath) {
   return formatted || ROOT_FIELD_LABEL;
 }
 
-function appendSchemaValidationErrors(errors, filePath, schemaErrors, beforeCount) {
+function appendSchemaValidationErrors(errors, filePath, schemaErrors) {
   const entries = Array.isArray(schemaErrors) ? schemaErrors : [];
   for (const error of entries) {
+    const targetPath = formatSchemaInstancePath(error.instancePath);
     if (error.keyword === ADDITIONAL_PROPERTIES_KEYWORD) {
-      const targetPath = formatSchemaInstancePath(error.instancePath);
       errors.push(
         `${filePath}: ${targetPath} contains unsupported property ` +
         `${error.params.additionalProperty}.`,
       );
-    }
-  }
-  if (errors.length === beforeCount) {
-    for (const error of entries) {
-      const targetPath = formatSchemaInstancePath(error.instancePath);
+    } else {
       errors.push(`${filePath}: ${targetPath} ${error.message}.`);
     }
   }
@@ -402,34 +394,28 @@ function validateDecisionTable(filePath) {
     errors.push(`${relativeFilePath}: decision table must be a JSON object.`);
     return {table: null, errors};
   }
-  const beforeCount = errors.length;
   const schemaValid = validateDecisionTableSchema(table);
-  requireConcreteField(errors, relativeFilePath, 'schema', table.schema);
-  if (table.schema !== TABLE_SCHEMA) {
-    errors.push(`${relativeFilePath}: schema must be ${TABLE_SCHEMA}.`);
+  if (!schemaValid) {
+    appendSchemaValidationErrors(
+      errors,
+      relativeFilePath,
+      validateDecisionTableSchema.errors,
+    );
   }
-  requireConcreteField(errors, relativeFilePath, 'id', table.id);
-  requireConcreteField(errors, relativeFilePath, 'owner', table.owner);
-  requireConcreteField(errors, relativeFilePath, 'boundary', table.boundary);
   validateNamedValues(errors, relativeFilePath, 'inputs', table.inputs);
   validateNamedValues(errors, relativeFilePath, 'outputs', table.outputs);
   validateInvariants(errors, relativeFilePath, table.invariants);
   const inputNames = Array.isArray(table.inputs) ?
-    table.inputs.map((input) => input.name).filter(hasConcreteText) :
+    table.inputs
+      .filter(isObjectRecord)
+      .map((input) => input.name)
+      .filter(hasConcreteText) :
     [];
   const outputSpecs = Array.isArray(table.outputs) ?
     table.outputs.filter((output) => isObjectRecord(output) && hasConcreteText(output.name)) :
     [];
   validateRuleShape(errors, relativeFilePath, table, inputNames, outputSpecs);
   validateCoverage(errors, relativeFilePath, table);
-  if (!schemaValid) {
-    appendSchemaValidationErrors(
-      errors,
-      relativeFilePath,
-      validateDecisionTableSchema.errors,
-      beforeCount,
-    );
-  }
   return {table, errors};
 }
 

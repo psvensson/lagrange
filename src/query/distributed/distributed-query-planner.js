@@ -28,8 +28,10 @@ import {
   extractTableLocalPredicate,
 } from './distributed-query-planner-projection-helpers.js';
 import {
+  clonePlanStructure,
   createDeterministicPlanId,
   normalizePlanPayload,
+  resolveStructuralPlanTemplate,
 } from './distributed-query-planner-plan-id.js';
 import {
   collectAllBaseTableNames,
@@ -42,56 +44,27 @@ import {
  * join strategy selection, and diagnostics envelope construction.
  */
 class DistributedQueryPlanner {
-  /**
-   * @param {Object} options
-   * @param {Object} [options.partitionResolver]
-   * @param {Function} [options.getTablePartitions]
-   * @param {Function} [options.getTableInfo]
-   * @param {Object} [options.queryOptimizer]
-   * @param {Object} [options.indexService]
-   */
   constructor(options = {}) {
     this.partitionResolver = options.partitionResolver || null;
-    this.getTablePartitions = options.getTablePartitions ||
-      (() => []);
-    this.getTableInfo = options.getTableInfo ||
-      (() => null);
+    this.getTablePartitions = options.getTablePartitions || (() => []);
+    this.getTableInfo = options.getTableInfo || (() => null);
     this.queryOptimizer = options.queryOptimizer || null;
     this.indexService = options.indexService || null;
+    this.structuralTemplates = new Map();
   }
 
-  /**
-   * Create deterministic read execution plan for a SELECT statement AST.
-   * @param {Object} ast - Parsed SELECT AST.
-   * @param {Array} [params] - Bound parameters.
-   * @param {Object} [options] - Planning options.
-   * @return {Object} Distributed query plan.
-   */
+  resolveStructuralTemplate(ast) {
+    return resolveStructuralPlanTemplate(this, ast);
+  }
+
   createReadExecutionPlan(ast, params = [], options = {}) {
     return this.planSelect(ast, params, options);
   }
 
-  /**
-   * Build deterministic explain plan for a statement AST.
-   * @param {Object} ast - Parsed statement AST.
-   * @param {Array} [params] - Bound parameters.
-   * @param {Object} [options] - Planning options.
-   * @return {Object} Distributed explain plan.
-   */
   buildExplainPlan(ast, params = [], options = {}) {
-    return this.planStatement(ast, params, {
-      ...options,
-      explain: true,
-    });
+    return this.planStatement(ast, params, {...options, explain: true});
   }
 
-  /**
-   * Build a canonical distributed query plan for a statement AST.
-   * @param {Object} ast - Parsed statement AST.
-   * @param {Array} params - Bound parameters.
-   * @param {Object} options - Planning options.
-   * @return {Object} Distributed plan object.
-   */
   planStatement(ast, params = [], options = {}) {
     switch (ast.type) {
     case QUERY_AST_TYPE.SELECT:
@@ -115,11 +88,27 @@ class DistributedQueryPlanner {
    * @return {Object} Distributed query plan.
    */
   planSelect(ast, params = [], options = {}) {
-    const tableGraph = this.extractTableGraph(ast);
-    const tablePlans = this.buildTablePlans(tableGraph, ast, params);
+    const structural = this.resolveStructuralTemplate(ast);
+    const selectTemplate = structural?.selectTemplate || null;
+    const tableGraph = selectTemplate ?
+      clonePlanStructure(selectTemplate.tableGraph) :
+      this.extractTableGraph(ast);
+    const tablePlans = this.buildTablePlans(
+      tableGraph,
+      ast,
+      params,
+      selectTemplate?.tableTemplates || null,
+    );
     const joinPlan = this.buildJoinPlan(ast, tablePlans);
-    const fragmentPlans = this.buildReadFragmentPlans(tablePlans, ast, params);
-    const mergePlan = this.buildMergePlan(ast);
+    const fragmentPlans = this.buildReadFragmentPlans(
+      tablePlans,
+      ast,
+      params,
+      selectTemplate?.tableTemplates || null,
+    );
+    const mergePlan = selectTemplate ?
+      clonePlanStructure(selectTemplate.mergePlan) :
+      this.buildMergePlan(ast);
     const diagnostics = this.buildDiagnostics(
       tableGraph,
       tablePlans,
@@ -133,6 +122,7 @@ class DistributedQueryPlanner {
       params,
       tablePlans,
       joinPlan,
+      structural?.normalizedAst || null,
     );
 
     const primaryTablePlan = Array.from(tablePlans.values())[0] || null;
@@ -162,6 +152,7 @@ class DistributedQueryPlanner {
    * @return {Object} Distributed write plan.
    */
   planInsert(ast, params = [], _options = {}) {
+    const structural = this.resolveStructuralTemplate(ast);
     const tableAlias = ast.table;
     const tableGraph = [{
       tableName: ast.table,
@@ -175,6 +166,7 @@ class DistributedQueryPlanner {
       params,
       tablePlans,
       null,
+      structural?.normalizedAst || null,
     );
     return {
       [PLAN_FIELD.PLAN_ID]: planId,
@@ -202,6 +194,7 @@ class DistributedQueryPlanner {
    * @return {Object} Distributed write plan.
    */
   planUpdate(ast, params = [], _options = {}) {
+    const structural = this.resolveStructuralTemplate(ast);
     const tableAlias = ast.table;
     this.assertUpdateDoesNotMutatePartitionKey(ast);
     const tableGraph = [{
@@ -220,6 +213,7 @@ class DistributedQueryPlanner {
       params,
       tablePlans,
       null,
+      structural?.normalizedAst || null,
     );
     return {
       [PLAN_FIELD.PLAN_ID]: planId,
@@ -281,6 +275,7 @@ class DistributedQueryPlanner {
    * @return {Object} Distributed write plan.
    */
   planDelete(ast, params = [], _options = {}) {
+    const structural = this.resolveStructuralTemplate(ast);
     const tableAlias = ast.table;
     const tableGraph = [{
       tableName: ast.table,
@@ -298,6 +293,7 @@ class DistributedQueryPlanner {
       params,
       tablePlans,
       null,
+      structural?.normalizedAst || null,
     );
     return {
       [PLAN_FIELD.PLAN_ID]: planId,
@@ -407,20 +403,26 @@ class DistributedQueryPlanner {
    * @return {Object} Table access plan.
    * @private
    */
-  buildSingleTablePlan(tableNode, ast, params) {
+  buildSingleTablePlan(tableNode, ast, params, tableTemplate = null) {
     const tableName = tableNode.tableName;
     const tableAlias = tableNode.tableAlias;
     const partitions = this.getTablePartitions(tableName) || [];
-    const isNestedOrCompound = Boolean(ast && hasSubqueryCteOrCompound(ast));
-    const localPredicate = isNestedOrCompound ?
-      null :
-      this.extractTableLocalPredicate(
-        ast?.where || null,
-        tableAlias,
-      );
-    const targetPredicate = isNestedOrCompound ?
-      null :
-      (localPredicate || ast?.where || null);
+    const isNestedOrCompound = tableTemplate ?
+      false :
+      Boolean(ast && hasSubqueryCteOrCompound(ast));
+    const localPredicate = tableTemplate ?
+      tableTemplate.localPredicate :
+      (isNestedOrCompound ?
+        null :
+        this.extractTableLocalPredicate(
+          ast?.where || null,
+          tableAlias,
+        ));
+    const targetPredicate = tableTemplate ?
+      tableTemplate.targetPredicate :
+      (isNestedOrCompound ?
+        null :
+        (localPredicate || ast?.where || null));
     const partitionIds = this.partitionResolver ?
       this.partitionResolver.resolvePartitions(
         tableName,
@@ -451,8 +453,12 @@ class DistributedQueryPlanner {
       tableAlias,
       partitions: partitionIds,
       prunedEmpty,
-      localPredicate,
-      projectedColumns: this.extractProjectedColumns(ast, tableAlias),
+      localPredicate: tableTemplate ?
+        clonePlanStructure(tableTemplate.localPredicate) :
+        localPredicate,
+      projectedColumns: tableTemplate ?
+        clonePlanStructure(tableTemplate.projectedColumns) :
+        this.extractProjectedColumns(ast, tableAlias),
       keyPredicateShape: resolutionInfo?.predicateShape ||
         DISTRIBUTED_PREDICATE_SHAPE.SCATTER,
       indexAccess,
@@ -466,15 +472,21 @@ class DistributedQueryPlanner {
    * @param {Object[]} tableGraph - Ordered table graph.
    * @param {Object|null} ast - SELECT-like AST shape.
    * @param {Array} params - Bound parameters.
+   * @param {Map<string, Object>|null} [tableTemplates] - Optional cached templates.
    * @return {Map<string, Object>} Table alias -> TableAccessPlan.
    */
-  buildTablePlans(tableGraph, ast, params) {
+  buildTablePlans(tableGraph, ast, params, tableTemplates = null) {
     const tablePlans = new Map();
     for (const tableNode of tableGraph) {
       if (tableNode.tableName && tableNode.tableAlias) {
         tablePlans.set(
           tableNode.tableAlias,
-          this.buildSingleTablePlan(tableNode, ast, params),
+          this.buildSingleTablePlan(
+            tableNode,
+            ast,
+            params,
+            tableTemplates?.get(tableNode.tableAlias) || null,
+          ),
         );
       }
     }
@@ -486,13 +498,21 @@ class DistributedQueryPlanner {
    * @param {Map<string, Object>} tablePlans - Table access plans.
    * @param {Object} _ast - SELECT AST.
    * @param {Array} params - Bound parameters.
+   * @param {Map<string, Object>|null} [tableTemplates] - Optional cached templates.
    * @return {Object[]} Fragment plans.
    */
-  buildReadFragmentPlans(tablePlans, _ast, params) {
+  buildReadFragmentPlans(tablePlans, _ast, params, tableTemplates = null) {
     const fragments = [];
     for (const [tableAlias, tablePlan] of tablePlans) {
-      const fragmentSql = this.buildFragmentSql(tablePlan);
-      const fragmentParams = this.resolveFragmentParams(tablePlan, params);
+      const tableTemplate = tableTemplates?.get(tableAlias) || null;
+      const fragmentSql = tableTemplate ?
+        tableTemplate.fragmentSql :
+        this.buildFragmentSql(tablePlan);
+      const fragmentParams = this.resolveFragmentParams(
+        tablePlan,
+        params,
+        tableTemplate?.fragmentParamNodes || null,
+      );
       for (const partitionId of tablePlan.partitions) {
         fragments.push({
           fragmentId: `${tableAlias}:${partitionId}`,
@@ -516,17 +536,20 @@ class DistributedQueryPlanner {
    * emitted placeholder order.
    * @param {Object} tablePlan - Table access plan.
    * @param {Array} params - Statement bound parameters.
+   * @param {Object[]|null} [cachedParamNodes] - Pre-extracted parameter nodes.
    * @return {Array} Fragment-scoped parameter values.
    * @private
    */
-  resolveFragmentParams(tablePlan, params) {
+  resolveFragmentParams(tablePlan, params, cachedParamNodes = null) {
     if (!tablePlan?.localPredicate) {
       return [];
     }
-    const paramNodes = renderExpressionWithParameters(
-      tablePlan.localPredicate,
-      (paramNode) => paramNode,
-    ).params;
+    const paramNodes = Array.isArray(cachedParamNodes) ?
+      cachedParamNodes :
+      renderExpressionWithParameters(
+        tablePlan.localPredicate,
+        (paramNode) => paramNode,
+      ).params;
     if (paramNodes.length === 0) {
       return [];
     }
@@ -687,74 +710,44 @@ class DistributedQueryPlanner {
     };
   }
 
-  /**
-   * Build deterministic plan ID from normalized planning payload.
-   * @param {string} statementType - Statement type.
-   * @param {Object} ast - Statement AST.
-   * @param {Array} params - Bound params.
-   * @param {Map<string, Object>} tablePlans - Table access plans.
-   * @param {Object[]|null} joinPlan - Join plan.
-   * @return {string} Deterministic plan ID.
-   */
-  createDeterministicPlanId(statementType, ast, params, tablePlans, joinPlan) {
-    return createDeterministicPlanId(statementType, ast, params, tablePlans, joinPlan);
+  createDeterministicPlanId(
+    statementType,
+    ast,
+    params,
+    tablePlans,
+    joinPlan,
+    preNormalizedAst = null,
+  ) {
+    return createDeterministicPlanId(
+      statementType,
+      ast,
+      params,
+      tablePlans,
+      joinPlan,
+      preNormalizedAst,
+    );
   }
 
-  /**
-   * Normalize an object into a JSON-safe payload for deterministic hashing.
-   * @param {*} value - Input value.
-   * @return {*} Normalized value.
-   */
   normalizePlanPayload(value) {
     return normalizePlanPayload(value);
   }
 
-  /**
-   * Extract table-local predicate expression from WHERE clause.
-   * @param {Object|null} expr - WHERE expression.
-   * @param {string} tableAlias - Target table alias.
-   * @return {Object|null} Local predicate AST or null.
-   */
   extractTableLocalPredicate(expr, tableAlias) {
     return extractTableLocalPredicate(expr, tableAlias);
   }
 
-  /**
-   * Check whether expression references only a target table alias.
-   * @param {Object} expr - Expression AST.
-   * @param {string} tableAlias - Target table alias.
-   * @return {boolean} True when local to target alias.
-   */
   expressionReferencesAlias(expr, tableAlias) {
     return expressionReferencesAlias(expr, tableAlias);
   }
 
-  /**
-   * Compute projected columns for a table alias.
-   * @param {Object|null} ast - SELECT AST.
-   * @param {string} tableAlias - Table alias.
-   * @return {string[]|null} Projected columns or null for wildcard.
-   */
   extractProjectedColumns(ast, tableAlias) {
     return extractProjectedColumns(ast, tableAlias);
   }
 
-  /**
-   * Collect column refs for a table alias from an expression.
-   * @param {Object} expr - Expression AST.
-   * @param {string} tableAlias - Table alias.
-   * @param {Set<string>} out - Output column set.
-   */
   collectProjectedColumns(expr, tableAlias, out) {
     return collectProjectedColumns(expr, tableAlias, out);
   }
 
-  /**
-   * Build pushdown fragment SQL for one table access plan.
-   * @param {Object} tablePlan - Table access plan.
-   * @return {string} Fragment SQL.
-   * @private
-   */
   buildFragmentSql(tablePlan) {
     const projection = Array.isArray(tablePlan.projectedColumns) &&
       tablePlan.projectedColumns.length > 0 ?

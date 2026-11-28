@@ -5,13 +5,17 @@ import {describe, it} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {
+  DRY_RUN_HOST_ID,
   RELEASE_OUTCOME,
+  buildInstalledDryRunInvocation,
   classifyRegistryState,
   describePublishMismatch,
+  launchInstalledRuntimeWithoutAmbientHostIdentity,
   normalizeRepositoryUrl,
   releaseChannel,
   validatePackageStructure,
   validateWorkspaceManifest,
+  withoutAmbientHostIdentity,
 } from '../../scripts/release-npm-package.js';
 
 const VERSION = '0.1.0';
@@ -197,5 +201,56 @@ describe('workspace manifest and Dockerfile hardening (Q06/Q07/Q15)', () => {
     assert.match(dockerfile, /^USER 10001:10001$/mu);
     assert.match(dockerfile, /^COPY wit\/ \.\/wit\/$/mu);
     assert.match(dockerfile, /COPY --from=builder --chown=10001:10001 \/data \/data/u);
+  });
+
+  it('provides explicit host identity and strips ambient NODE_HOST_ID in installed verification', () => {
+    const ambientEnv = {
+      PATH: '/usr/bin',
+      NODE_HOST_ID: 'ambient-controller-host',
+      LAGRANGE_HOST_ID: 'ambient-lagrange-host',
+    };
+    const sanitized = withoutAmbientHostIdentity(ambientEnv);
+    assert.equal(sanitized.PATH, '/usr/bin');
+    assert.equal('NODE_HOST_ID' in sanitized, false);
+    assert.equal('LAGRANGE_HOST_ID' in sanitized, false);
+
+    const dryRun = buildInstalledDryRunInvocation(
+      '/consumer/node_modules/.bin/lagrange',
+      '/tmp/verify-root',
+      '/consumer',
+      ambientEnv,
+    );
+    assert.deepEqual(dryRun.args, [
+      '--dry-run',
+      '--data-dir',
+      path.join('/tmp/verify-root', 'data'),
+    ]);
+    assert.equal(dryRun.options.cwd, '/consumer');
+    assert.equal(dryRun.options.env.NODE_HOST_ID, DRY_RUN_HOST_ID);
+    assert.equal('LAGRANGE_HOST_ID' in dryRun.options.env, false);
+
+    let capturedSpawn = null;
+    launchInstalledRuntimeWithoutAmbientHostIdentity(
+      process.execPath,
+      ['/consumer/.lagrange-runtime-smoke.mjs', '{}'],
+      {cwd: '/consumer', env: ambientEnv},
+      (command, args, options) => {
+        capturedSpawn = {command, args, options};
+        return {pid: 12345};
+      },
+    );
+    assert.ok(capturedSpawn);
+    assert.equal('NODE_HOST_ID' in capturedSpawn.options.env, false);
+    assert.equal('LAGRANGE_HOST_ID' in capturedSpawn.options.env, false);
+
+    const repoRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)), '..', '..',
+    );
+    const consumerSource = fs.readFileSync(
+      path.join(repoRoot, 'scripts', 'npm-runtime-smoke-consumer.js'),
+      'utf8',
+    );
+    assert.match(consumerSource, /const HOST_ID = 'npm-runtime-smoke-host';/u);
+    assert.match(consumerSource, /node: \{id: NODE_ID, hostId: HOST_ID, restApiPort: ports\[0\], wsPort: ports\[2\]\}/u);
   });
 });

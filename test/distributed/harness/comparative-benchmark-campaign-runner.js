@@ -611,15 +611,15 @@ async function unmeasuredAttempt({run, manifest, deps, events, error, signal}) {
   const setupCode = isDeploymentFailure(error) ? error.code :
     (interrupted ? DEPLOYMENT_FAILURE.WATCHDOG_STOPPED : DEPLOYMENT_FAILURE.READINESS_EXHAUSTED);
   const attempt = {deployment, workload: null, productsAfter: null, roleObservations: null};
-  attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment,
-    signal: null, semanticGate: null,
+  attempt.workload = await withAttempt(attempt, () => deps.executeWorkloadRun({run, manifest,
+    deployment, signal: null, semanticGate: null,
     setupFailure: {failureClass, sqlState: null,
       code: setupCode, message: errorText(error),
       ...(interrupted ? {aborted: true} : {}),
       ...(timedOut ? {timedOut: true} : {}),
-      ...(lastObservation !== null ? {lastObservation} : {})}});
+      ...(lastObservation !== null ? {lastObservation} : {})}}));
   events.push(...(attempt.workload.events || []));
-  attempt.productsAfter = await deps.inspectProducts(deployment);
+  attempt.productsAfter = await withAttempt(attempt, () => deps.inspectProducts(deployment));
   events.push(...compareProductIdentity(deployment.identity.products, attempt.productsAfter,
     iso(deps.now())));
   return attempt;

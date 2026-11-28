@@ -116,6 +116,7 @@ const PARTICIPANT_TRANSACTION_FAILURE_CODE = Object.freeze({
     'participant_transaction_session_write_nondeterministic',
   STATEMENT_FAILED: 'participant_transaction_statement_failed',
   REPLAY_DIVERGED: 'participant_transaction_replay_diverged',
+  STALE_READ: 'participant_transaction_stale_read',
   REPLAY_BUDGET_EXCEEDED: 'participant_transaction_replay_budget_exceeded',
   DETERMINISM_SELF_CHECK_FAILED:
     'participant_transaction_determinism_self_check_failed',
@@ -207,8 +208,11 @@ const PARTICIPANT_TRANSACTION_BYTES = Object.freeze({
   GENERATION_DIGEST_PREFIX: 'generation:',
   VALIDATION_SCOPE: 'partition',
   IDENTITY_SEPARATOR: ':',
+  BEGIN_ENTRY_SUFFIX: 'begin',
   PREPARE_ENTRY_SUFFIX: 'prepare',
   DECISION_ENTRY_SUFFIX: 'decision',
+  UNBOUND_ROLLBACK_ENTRY_SUFFIX: 'rollback',
+  OUTCOME_ENTRY_SUFFIX: 'outcome',
   GENERATION_ORIGIN_ENTRY_SUFFIX: 'generation-origin',
   OPERATION_OUTCOME_PREFIX: 'txop',
 });

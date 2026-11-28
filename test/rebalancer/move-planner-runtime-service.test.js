@@ -48,6 +48,8 @@ function createMoveStateProvider(options = {}) {
       );
     },
     getInFlightOperations: () => inFlightOperations,
+    getGlobalTopologyBlockingInFlightOperations: () =>
+      options.globalInFlightOperations ?? inFlightOperations,
     hasPendingMove: (id) => pendingMoves.has(id),
     hasPendingAddForNode: (id) => pendingAddNodes.has(id),
   };
@@ -65,9 +67,9 @@ test('MovePlanner calculateTargetState for runtime_service', async (t) => {
   await t.test('uses partition placement strategy for runtime services',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
       const planner = new MovePlanner({
         entityId: 'sys-postgres-wire',
@@ -85,11 +87,11 @@ test('MovePlanner calculateTargetState for runtime_service', async (t) => {
   await t.test('enforces cluster-global target (not per-node)',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
-        {node_id: 'n4', cpu_usage_percent: 40},
-        {node_id: 'n5', cpu_usage_percent: 50},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
+        {node_id: 'n4', host_cpu_utilization_percent: 40},
+        {node_id: 'n5', host_cpu_utilization_percent: 50},
       ];
       const planner = new MovePlanner({
         entityId: 'sys-postgres-wire',
@@ -113,8 +115,8 @@ test('MovePlanner calculateTargetState for runtime_service', async (t) => {
   await t.test('marks degraded when fewer nodes than target',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
       ];
       const planner = new MovePlanner({
         entityId: 'sys-postgres-wire',
@@ -135,9 +137,9 @@ test('MovePlanner calculateTargetState for runtime_service', async (t) => {
   await t.test('sorts nodes by suitability using policy constraints',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 90, memory_usage_percent: 80},
-        {node_id: 'n2', cpu_usage_percent: 10, memory_usage_percent: 10},
-        {node_id: 'n3', cpu_usage_percent: 50, memory_usage_percent: 50},
+        {node_id: 'n1', host_cpu_utilization_percent: 90, memory_usage_percent: 80},
+        {node_id: 'n2', host_cpu_utilization_percent: 10, memory_usage_percent: 10},
+        {node_id: 'n3', host_cpu_utilization_percent: 50, memory_usage_percent: 50},
       ];
       const planner = new MovePlanner({
         entityId: 'sys-postgres-wire',
@@ -155,6 +157,77 @@ test('MovePlanner calculateTargetState for runtime_service', async (t) => {
       t.ok(result.targetNodes.includes('n2'));
       t.ok(result.targetNodes.includes('n3'));
     });
+
+  await t.test(
+    'defers nodes receiving in-flight global system partition ADD operations during formation without blocking multi-replica ADD moves',
+    async (t) => {
+      const nodes = [
+        {node_id: 'n1', host_cpu_utilization_percent: 12.5, memory_usage_percent: 25},
+        {node_id: 'n2', host_cpu_utilization_percent: 25, memory_usage_percent: 25},
+        {node_id: 'n3', host_cpu_utilization_percent: 8.3, memory_usage_percent: 20},
+      ];
+      const globalInFlightOperations = [
+        {
+          operation_id: 'op-sys-add-n2',
+          type: 'ADD',
+          partition_id: 'services-p1',
+          entity_type: 'partition',
+          entity_id: 'services-p1',
+          status: 'creating',
+          workflow_step: 'CREATING',
+          target_node_id: 'n2',
+        },
+        {
+          operation_id: 'op-sys-add-n3',
+          type: 'ADD',
+          partition_id: 'partitions-p1',
+          entity_type: 'partition',
+          entity_id: 'partitions-p1',
+          status: 'creating',
+          workflow_step: 'CREATING',
+          target_node_id: 'n3',
+        },
+      ];
+      const planner = new MovePlanner({
+        entityId: 'sys-postgres-wire',
+        entityType: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
+        moveStateProvider: createMoveStateProvider({
+          nodes,
+          inFlightOperations: [],
+          globalInFlightOperations,
+        }),
+      });
+      const singleReplicaPolicy = {
+        ...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE,
+        targetReplicaCount: 1,
+      };
+      const singleTarget = await planner.calculateTargetState(
+        [],
+        singleReplicaPolicy,
+      );
+      t.same(
+        singleTarget.targetNodes,
+        ['n1'],
+        'single-replica runtime service prefers seed node n1 without in-flight system partition ADD operations over lower-CPU joiner n3',
+      );
+
+      const threeReplicaPolicy = {
+        ...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE,
+        targetReplicaCount: 3,
+      };
+      const threeTarget = await planner.calculateTargetState(
+        [],
+        threeReplicaPolicy,
+      );
+      t.equal(threeTarget.targetNodes.length, 3);
+      const threeMoves = planner.calculateMoves([], threeTarget);
+      t.equal(
+        threeMoves.filter((m) => m.type === REBALANCER_MOVE_TYPE.ADD).length,
+        3,
+        'runtime service ADD moves still include deferred nodes when targetReplicaCount requires them',
+      );
+    },
+  );
 });
 
 // --- calculateMoves ADD/REMOVE/REPLACE for runtime_service ---
@@ -168,9 +241,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
 
   await t.test('generates ADD moves when under target', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
-      {node_id: 'n3', cpu_usage_percent: 30},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
+      {node_id: 'n3', host_cpu_utilization_percent: 30},
     ];
     const currentReplicas = [
       {
@@ -204,8 +277,8 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
 
   await t.test('generates REMOVE moves when over target', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
     ];
     const currentReplicas = [
       {
@@ -249,9 +322,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
 
   await t.test('generates REPLACE when node changes', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
-      {node_id: 'n3', cpu_usage_percent: 30},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
+      {node_id: 'n3', host_cpu_utilization_percent: 30},
     ];
     const currentReplicas = [
       {
@@ -296,9 +369,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
 
   await t.test('removes failed replicas', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
-      {node_id: 'n3', cpu_usage_percent: 30},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
+      {node_id: 'n3', host_cpu_utilization_percent: 30},
     ];
     const currentReplicas = [
       {
@@ -343,9 +416,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
   await t.test('returns empty when in-flight operations exist',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
       const currentReplicas = [
         {
@@ -385,9 +458,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
   await t.test('priority control-plane partitions keep planning with in-flight operations',
     async (t) => {
       const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
+        {node_id: 'n1', host_cpu_utilization_percent: 10},
+        {node_id: 'n2', host_cpu_utilization_percent: 20},
+        {node_id: 'n3', host_cpu_utilization_percent: 30},
       ];
       const currentReplicas = [
         {
@@ -439,9 +512,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
 
   await t.test('returns no moves when at target', async (t) => {
     const nodes = [
-      {node_id: 'n1', cpu_usage_percent: 10},
-      {node_id: 'n2', cpu_usage_percent: 20},
-      {node_id: 'n3', cpu_usage_percent: 30},
+      {node_id: 'n1', host_cpu_utilization_percent: 10},
+      {node_id: 'n2', host_cpu_utilization_percent: 20},
+      {node_id: 'n3', host_cpu_utilization_percent: 30},
     ];
     const currentReplicas = [
       {

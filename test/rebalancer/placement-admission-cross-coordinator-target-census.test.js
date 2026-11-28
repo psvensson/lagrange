@@ -64,6 +64,19 @@ import {
 import {
   PartitionServiceRowOwner,
 } from '../../src/partition/partition-service-row-owner.js';
+import {
+  PLACEMENT_ADMIT_TYPE,
+  PLACEMENT_RESULT_FIELD,
+} from '../../src/partition/partition-placement-admission-constants.js';
+import {
+  decidePlacementAdmission,
+} from '../../src/partition/partition-placement-admission-decision.js';
+import {
+  PLACEMENT_OUTCOME,
+} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {
+  leaderReadRequestOf,
+} from '../../src/control-plane/control-plane-owner-fact-read-contract.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
 import {
@@ -92,13 +105,12 @@ const NODE_B = 'node-b';
 const NODE_C = 'node-c';
 const NODE_IDS = Object.freeze([NODE_A, NODE_B, NODE_C]);
 // Per-target capacity of unresolved copies onto one node.
-const K_TGT = 2;
+const K_TGT = 3;
 const RANDOM_SEED = 20261117;
 const READY_LEASE_MS = 10 * 60 * 1000;
 const STORAGE_BUDGET_BYTES = 64 * 1024 * 1024 * 1024;
 const STORAGE_BUDGET_SOURCE = 'configured';
 const SETTLE_TURNS = 24;
-const ADDED_REPLICA_SUFFIX = '-r4';
 const REPLICA_SUFFIX = '-r';
 const STATEMENT_ON_LEDGER = /\b(?:from|into|update)\s+(?:replica_operations|storage_reservations)\b/iu;
 const LEDGER_PARTITION_ID = INITIAL_PARTITION_IDS.replica_operations;
@@ -107,14 +119,15 @@ const ATTEMPT_READS_SHOWN = 6;
 const WHITESPACE_RUN = /\s+/gu;
 const SPACE = ' ';
 const TERMINAL_REASON = 'cross-coordinator census witness: terminal release';
-// Two system partitions led by A and one led by C, each below its declared
+// Three system partitions led by A and one led by C, each below its declared
 // spread (two distinct hosts of three) and none on B; nodes-p1 spread; the
 // ledger spread and led by B; every other partition on A and B only.
-const HELD_BY_A = Object.freeze(['tables-p1', 'indices-p1']);
+const HELD_BY_A = Object.freeze(['tables-p1', 'indices-p1', 'logs-p1']);
 const CONTENDER = 'config-p1';
 const PARTITION_LAYOUT = Object.freeze({
   'tables-p1': [NODE_A, NODE_A, NODE_C],
   'indices-p1': [NODE_A, NODE_A, NODE_C],
+  'logs-p1': [NODE_A, NODE_A, NODE_C],
   'config-p1': [NODE_C, NODE_C, NODE_A],
   'nodes-p1': [NODE_A, NODE_B, NODE_C],
   'replica_operations-p1': [NODE_B, NODE_A, NODE_C],
@@ -150,6 +163,43 @@ function seedCache(cache, nowMs) {
   const insert = (tableName, row) =>
     cache.applySystemTableChange(tableName, CDC_OPERATION.INSERT, row);
   for (const nodeId of NODE_IDS) insert(TABLES.NODES, readyNodeRow(nodeId, nowMs));
+  const formationEpoch = 3;
+  insert(TABLES.CONTROL_PLANE_PUBLICATIONS, {
+    publication_id: `cluster_membership-${formationEpoch}`,
+    publication_kind: 'cluster_membership',
+    publication_epoch: formationEpoch,
+    publisher_node_id: NODE_IDS[0],
+    published_active_node_ids: JSON.stringify(NODE_IDS),
+    required_ack_node_ids: JSON.stringify(NODE_IDS),
+    acknowledged_node_ids: JSON.stringify(NODE_IDS),
+    priority_partition_summary: null,
+    status: 'PUBLISHED',
+    created_at: nowMs,
+    updated_at: nowMs,
+  });
+  insert(TABLES.CONTROL_PLANE_PUBLICATIONS, {
+    publication_id: 'cluster_formation',
+    publication_kind: 'cluster_formation',
+    publication_epoch: formationEpoch,
+    publisher_node_id: NODE_IDS[0],
+    status: 'FORMED',
+    created_at: nowMs,
+    updated_at: nowMs,
+    formation_record: JSON.stringify({
+      version: 1,
+      status: 'FORMED',
+      clusterId: 'cross-coordinator-census',
+      declaredHostCount: NODE_IDS.length,
+      declaredByNodeId: NODE_IDS[0],
+      declaredAt: nowMs,
+      formedAt: nowMs,
+      formedByNodeId: NODE_IDS[0],
+      formedPublicationEpoch: formationEpoch,
+      formedHostIds: NODE_IDS,
+      formedReadyNodeIds: NODE_IDS,
+      priorityPartitionVoters: {},
+    }),
+  });
   for (const schema of SYSTEM_TABLE_SCHEMAS) {
     const partitionId = INITIAL_PARTITION_IDS[schema.tableName];
     if (!partitionId) continue;
@@ -202,6 +252,7 @@ function createLedgerStore(hostsById) {
   // SQLite binds no boolean and no undefined: they bind as 0/1 and NULL.
   const bind = (value) => (typeof value === 'boolean' ? Number(value) :
     value === undefined ? null : value);
+  let nextLogIndex = 0;
   return {
     readCount: () => reads.length,
     readsSince: (mark) => reads.slice(mark),
@@ -212,6 +263,32 @@ function createLedgerStore(hostsById) {
       held.delete(nodeId);
       for (const change of queued) apply(nodeId, change);
       return queued.length;
+    },
+    admit(payload, nowMs) {
+      nextLogIndex += 1;
+      const command = {
+        type: PLACEMENT_ADMIT_TYPE,
+        partitionId: LEDGER_PARTITION_ID,
+        entryId: payload.entryId,
+        proposedBy: `${LEDGER_PARTITION_ID}-r1`,
+        proposedAt: nowMs,
+        body: payload.body,
+      };
+      const {result} = decidePlacementAdmission(database, {
+        command,
+        statement: payload.body,
+        index: nextLogIndex,
+      });
+      publish();
+      return {
+        success: result.outcome !== PLACEMENT_OUTCOME.REFUSED,
+        committed: true,
+        entryId: payload.entryId,
+        partitionId: LEDGER_PARTITION_ID,
+        logIndex: nextLogIndex,
+        term: 1,
+        [PLACEMENT_RESULT_FIELD]: result,
+      };
     },
     execute(sql, params, options = {}) {
       try {
@@ -246,8 +323,42 @@ function createLedgerStore(hostsById) {
 // executor routes a partition read to its leader's engine.
 function bindNodeEngine(hosts, ledger, engines) {
   const seam = createSqlEngineSeam(hosts.cache);
+  const baseQueryExecutor = hosts.sqlQueryEngine.queryExecutor;
+  const queryExecutor = Object.freeze({
+    ...baseQueryExecutor,
+    async executeOnPartition(
+      partitionId,
+      statement,
+      params = [],
+      isReadOnly = true,
+      preferLeader = true,
+      allowFollowerFallback = false,
+      executionOptions = {},
+    ) {
+      const res = await baseQueryExecutor.executeOnPartition(
+        partitionId,
+        statement,
+        params,
+        isReadOnly,
+        preferLeader,
+        allowFollowerFallback,
+        executionOptions,
+      );
+      if (res?.readAuthorityWitness) {
+        return {
+          ...res,
+          readAuthorityWitness: Object.freeze({
+            ...res.readAuthorityWitness,
+            currentTermApplied: true,
+            leaderRead: leaderReadRequestOf(executionOptions?.ownerFactFloor),
+          }),
+        };
+      }
+      return res;
+    },
+  });
   const engine = Object.freeze({
-    queryExecutor: hosts.sqlQueryEngine.queryExecutor,
+    queryExecutor,
     async executeQuery(sql, params = [], options = {}) {
       return STATEMENT_ON_LEDGER.test(String(sql)) ?
         ledger.execute(sql, params, options) :
@@ -263,7 +374,7 @@ function bindNodeEngine(hosts, ledger, engines) {
 // Full-mesh transport; a CREATE is answered as initiated (the copy stays
 // live), every other request as completed; the committed-membership read is
 // answered from the rows.
-function installTransport(hosts) {
+function installTransport(hosts, ledger, nowMs) {
   const router = hosts.messageRouter;
   const localNodeId = hosts.nodeId;
   const remote = (nodeId) => nodeId !== localNodeId;
@@ -280,13 +391,18 @@ function installTransport(hosts) {
     (remote(nodeId) ? Object.freeze({nodeId,
       bootIncarnation: TEST_BOOT_INCARNATION,
       connectionId: `primary:${nodeId}`}) : null);
-  router.deliver = async (_target, payload) =>
-    buildDeliveryEnvelope({acknowledged: true}, {
+  router.deliver = async (_target, payload) => {
+    if (payload?.type === PLACEMENT_ADMIT_TYPE) {
+      return buildDeliveryEnvelope({acknowledged: true},
+        ledger.admit(payload, nowMs));
+    }
+    return buildDeliveryEnvelope({acknowledged: true}, {
       status: payload?.[ReplicaOperationField.TYPE] ===
         ReplicaOperationMessageType.CREATE_REPLICA ?
         ReplicaOperationResponseStatus.INITIATED :
         ReplicaOperationResponseStatus.COMPLETED,
     });
+  };
   withFixtureCommittedMembership(router, hosts.cache);
 }
 
@@ -305,7 +421,13 @@ function createWorld() {
       const leaderId = hostsById.get(NODE_B).cache.get(
         TABLES.PARTITIONS, partitionId)?.[COLUMN.LEADER_NODE_ID];
       return leaderId ?
-        Object.freeze({leaderId, term: 1, commitIndex: 1, appliedIndex: 1}) :
+        Object.freeze({
+          leaderId,
+          term: 1,
+          commitIndex: 1,
+          appliedIndex: 1,
+          electionLogApplied: true,
+        }) :
         null;
     },
     // The store is every replica of the ledger: a ledger read is served
@@ -330,7 +452,7 @@ function createWorld() {
   for (const hosts of hostsById.values()) {
     seedCache(hosts.cache, startMs);
     bindNodeEngine(hosts, ledger, engines);
-    installTransport(hosts);
+    installTransport(hosts, ledger, startMs);
   }
   const unresolvedOnto = (nodeId) => ledger.rows().filter((row) =>
     row[COLUMN.TARGET_NODE_ID] === nodeId &&
@@ -340,6 +462,9 @@ function createWorld() {
     ledger,
     unresolvedOnto,
     async settle() {
+      for (const hosts of hostsById.values()) {
+        await hosts.controlPlaneReadinessService.readServeEligibility();
+      }
       for (let turn = 0; turn < SETTLE_TURNS; turn += 1) {
         clock.advance(0);
         await new Promise((resolve) => setImmediate(resolve));
@@ -375,7 +500,6 @@ async function admitCopy(world, nodeId, partitionId, targetNodeId) {
       entityType: EntityType.PARTITION,
       entityId: partitionId,
       nodeId: targetNodeId,
-      replicaId: `${partitionId}${ADDED_REPLICA_SUFFIX}`,
       enforceConcurrentOperationBudget: true,
     });
     await world.settle();

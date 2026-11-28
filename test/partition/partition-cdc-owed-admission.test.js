@@ -7,7 +7,7 @@ import {createUnknownOutcomeRedelivery} from '../../src/query/query-executor-unk
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {runRetryableControlPlaneWrite} from '../../src/bootstrap/shared/retryable-control-plane-write.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {countCdcObligations, readOwedCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {countCdcObligations, readCdcObligationProgress, readOwedCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {
   CDC_TABLE, REPLICAS, applyCommitted, awaitProposal, clearFixtureSingletons,
   generationOf, resetFixtureSingletons, settleTicks, shutdownAll, startLeader,
@@ -50,10 +50,12 @@ test('refusing subscriber bounds actual write ingress and admits retry after com
       PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN);
     assert.equal(countCdcObligations(leader.db).owed, OWED_CAPACITY);
     assert.equal(generationOf(leader), generation);
-    assert.equal(leader.db.prepare(`SELECT * FROM ${CDC_TABLE} WHERE id = ?`).get('pressure-row'), undefined);
+    assert.equal(leader.db.prepare(`SELECT * FROM ${CDC_TABLE} WHERE group_id = ?`).get('pressure-row'), undefined);
     readiness.ready = true;
     await pump(timeSource, leader, proposed, new Set(), 50);
-    assert.equal(countCdcObligations(leader.db).owed, 0, 'actual CDC_DELIVERED application drains debt');
+    assert.deepEqual(countCdcObligations(leader.db), {owed: 0, delivered: OWED_CAPACITY});
+    assert.ok(readCdcObligationProgress(leader.db)?.reclaimed > 0,
+      'retry observes freed capacity after committed prefix reclamation');
     const retried = write(leader, 'full-capacity-write');
     const command = await awaitProposal(proposed, (entry) => entry.entryId === 'full-capacity-write');
     assert.ok(command);
@@ -89,8 +91,11 @@ test('concurrent proposals obey one committed-prefix capacity and losing same-en
     assert.equal(second.value?.failureCode, PRESSURE_CODE);
     assert.equal(generationOf(leader), generation, 'refusal has no write generation');
     assert.equal(generationOf(follower), generation);
-    assert.equal(leader.db.prepare(`SELECT value FROM ${CDC_TABLE} WHERE id = ?`).get('pressure-row').value,
-      'last-slot-winner');
+    assert.equal(
+      leader.db.prepare(`SELECT representative_node_id FROM ${CDC_TABLE} WHERE group_id = ?`)
+        .get('pressure-row').representative_node_id,
+      'last-slot-winner',
+    );
     await leader.subscribeToCDCWithHandshake(acknowledgingCdcSubscriber(), {subscriberId: 'drain-race'});
     await pump(timeSource, leader, proposed, new Set(), 50, [follower]);
     const retried = write(leader, 'last-slot-retry');
@@ -148,7 +153,7 @@ test('owed-event admission preserves the supported 2 MiB ordinary payload', asyn
     assert.equal(applyCommitted(leader, command), null);
     assert.equal((await pending).success, true);
     const [owed] = readOwedCdcObligations(leader.db);
-    assert.equal(JSON.parse(owed.eventJson).data.value, payload);
+    assert.equal(JSON.parse(owed.eventJson).data.representative_node_id, payload);
     assert.ok(Buffer.byteLength(owed.eventJson) > payload.length);
     assert.equal(countCdcObligations(leader.db).owed, 1);
   } finally {

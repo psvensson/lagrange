@@ -1,7 +1,4 @@
-import {dirname} from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {
-  computeSourceFingerprint,
   SOURCE_FINGERPRINT_ENV_VAR,
 } from './diagnostics/source-fingerprint.js';
 import {resolveAutoRejoinStartupDecision} from './bootstrap/rejoin-hints.js';
@@ -29,16 +26,9 @@ async function resolveLocalClusterIncarnationFence(options = {}) {
 
 async function resolveBootSourceProvenance(env = process.env) {
   const expectedSrcFingerprint = env[SOURCE_FINGERPRINT_ENV_VAR] || null;
-  let bootedSrcFingerprint = null;
-  if (expectedSrcFingerprint) {
-    try {
-      const sourceDir = dirname(fileURLToPath(import.meta.url));
-      bootedSrcFingerprint = await computeSourceFingerprint(sourceDir);
-    } catch {
-      bootedSrcFingerprint = null;
-    }
-  }
   const runtimeBuild = await runtimeBuildProvenance();
+  const bootedSrcFingerprint =
+    runtimeBuild?.content?.shortSourceFingerprint || null;
   const srcFingerprintMatches =
     expectedSrcFingerprint && bootedSrcFingerprint ?
       expectedSrcFingerprint === bootedSrcFingerprint :

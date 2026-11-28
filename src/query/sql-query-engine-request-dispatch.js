@@ -57,6 +57,11 @@ const {
   isSqlRequest,
 } = SQL_QUERY_ENGINE_SHARED;
 
+function isReservedSystemCreateTableAst(ast) {
+  return ast.type === QUERY_AST_TYPE.CREATE_TABLE &&
+    isSystemTableName(ast.tableName ?? ast.table);
+}
+
 const TYPED_PARSE_FAILURE_CODES = new Set([
   QUERY_ERROR_CODE.EMPTY_STATEMENT,
   QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED,
@@ -247,36 +252,49 @@ class SQLQueryEngineRequestDispatch extends
     };
   }
 
+  peekParsedStatementAst(statementText, dialect) {
+    return this.parseCache?.peekReadOnly?.(statementText, dialect) ?? null;
+  }
+
+  storeParsedStatementAst(statementText, dialect, ast) {
+    this.parseCache?.set?.(statementText, dialect, ast);
+  }
+
   async checkPlanRequestStatement(sqlRequest, queryOptions) {
     const statement = typeof sqlRequest?.statement === LOCAL_STR_STRING ?
       sqlRequest.statement.trim() : '';
     if (!statement) {
-      return {allowed: true};
+      return {allowed: true, ast: null};
     }
-    let ast;
-    try {
-      const parser = new SQLParser(statement, {dialect: queryOptions.dialect});
-      ast = parser.parse();
-    } catch (parseError) {
-      return {
-        allowed: false,
-        refusal: {
-          success: false,
-          error: parseError.message,
-          errorCode: resolveParseFailureCode(parseError),
-        },
-      };
+    let ast = this.peekParsedStatementAst(
+      statement,
+      queryOptions.dialect,
+    );
+    if (!ast) {
+      try {
+        const parser = new SQLParser(statement, {dialect: queryOptions.dialect});
+        ast = parser.parse();
+        this.storeParsedStatementAst(statement, queryOptions.dialect, ast);
+      } catch (parseError) {
+        return {
+          allowed: false,
+          refusal: {
+            success: false,
+            error: parseError.message,
+            errorCode: resolveParseFailureCode(parseError),
+          },
+        };
+      }
     }
     const clientRefusal = resolveClientStatementRefusal(
       ast,
       queryOptions,
-      this.resolveFormationAnswerForIngress?.(queryOptions),
+      this.resolveFormationAnswerForIngress(queryOptions),
     );
     if (clientRefusal !== null) {
       return {allowed: false, refusal: clientRefusal};
     }
-    if (ast.type === QUERY_AST_TYPE.CREATE_TABLE &&
-        isSystemTableName(ast.tableName ?? ast.table)) {
+    if (isReservedSystemCreateTableAst(ast)) {
       return {
         allowed: false,
         refusal: {
@@ -299,7 +317,9 @@ class SQLQueryEngineRequestDispatch extends
       ast,
       queryOptions,
     );
-    return accessFailure ? {allowed: false, refusal: accessFailure} : {allowed: true};
+    return accessFailure ?
+      {allowed: false, refusal: accessFailure} :
+      {allowed: true, ast};
   }
 
   async executePlanRequest(sqlRequest, executionOptions = {}) {
@@ -423,6 +443,7 @@ class SQLQueryEngineRequestDispatch extends
       descriptionResult = describePostgresSqlStatement({
         sql: sqlRequest.statement,
         paramTypes: sqlRequest.parameters,
+        parsedAst: statementCheck.ast ?? null,
         resolveTableSchema: (tableName) =>
           this.queryExecutor.resolveTableInfo(tableName),
       });
@@ -477,8 +498,15 @@ class SQLQueryEngineRequestDispatch extends
     if (!shouldDescribe) {
       return result;
     }
+    const parsedAst = executedType === QUERY_AST_TYPE.SELECT ?
+      this.peekParsedStatementAst(
+        sqlRequest.statement,
+        PARSER_DIALECT.POSTGRESQL,
+      ) :
+      null;
     const description = describePostgresSqlStatement({
       sql: sqlRequest.statement,
+      parsedAst,
       resolveTableSchema: (tableName) =>
         this.queryExecutor.resolveTableInfo(tableName),
     });

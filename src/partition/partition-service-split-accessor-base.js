@@ -1,3 +1,5 @@
+import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
+import {reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceCdcStreamBase} from './partition-service-cdc-stream-base.js';
 import {
@@ -13,7 +15,6 @@ import {
   reconstructSplitExecutionStateForService,
   resolveSplitDescriptorEpochEvidenceForService,
 } from './partition-service-split-replication-state.js';
-import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
@@ -113,14 +114,6 @@ function resolveConsensusLeadership(service, fields, statusLeaderId) {
   return {isLeader, leaderId};
 }
 
-async function authorizeSplitSnapshotStart(owner, metadata, options) {
-  if (options.startAuthorized === true) return;
-  const start = await owner.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
-  const r = start?.result;
-  if (r !== PARTICIPANT_ACK_RESULT.ACCEPTED && r !== PARTICIPANT_ACK_RESULT.DUPLICATE) {
-    throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
-  }
-}
 
 async function runSplitBackfillPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING) return;
@@ -137,8 +130,10 @@ async function runSplitBackfillPhase(owner, handle, metadata) {
 async function runSplitCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP) return;
   await owner.flushSplitReplicationQueue();
+  const settledWatermark = handle.replayWatermarkIndex;
+
   const cp = buildReplayCursorCheckpoint(
-    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, handle.replayWatermarkIndex,
+    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, settledWatermark,
   );
   const ack = await owner.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.CATCHUP_READY, cp);
   if (ack?.splitCutoverApplied !== true) {
@@ -150,14 +145,19 @@ async function runSplitCatchupPhase(owner, handle, metadata) {
 async function runSplitCutoverPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) return;
   await owner.flushSplitReplicationQueue();
+  const settledWatermark = handle.replayWatermarkIndex;
   const cp = buildReplayCursorCheckpoint(
-    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, handle.replayWatermarkIndex,
+    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, settledWatermark,
   );
   const cleanupAck = await owner.emitSplitSourceAck(
     metadata, SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
     {[SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false, ...cp},
   );
   handle.terminal = cleanupAck?.splitSourceRetired === true;
+  const accepted = cleanupAck?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
+    cleanupAck?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (!accepted) throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+  await reconcileFailedMirrorCustody(owner);
 }
 
 class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
@@ -166,14 +166,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
   }
   /**
    * Persist leader-owned size_bytes updates into the partitions system table.
-   * size_bytes is an own column (only this partition's leader writes it):
-   * the leader dedupes against the size its last committed write answered,
-   * never against the projection (census site 7, three-class rule, own row;
-   * quest replica-admission-from-committed-operation attempt 2). Only an
-   * applied write is kept, for its leader term (another leader may have
-   * written since): a failed write, or one that found no row, keeps nothing,
-   * so the next measurement writes again. Absent-row repeats (mainly a
-   * retired partition still measuring) are an R17 to the partition owner.
+   * Deduplicates against the size the last committed write answered for the
+   * current leader term, never against the projection.
    * @param {number} sizeBytes - Latest measured size.
    * @return {Promise<void>}
    * @private
@@ -201,10 +195,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       );
     }
   }
-
   /**
-   * Submit the retryable size_bytes mutation through the control-plane
-   * gateway, throwing when the gateway reports failure.
+   * Submit the retryable size_bytes mutation through the control-plane gateway.
    * @param {number} sizeBytes - Latest measured size.
    * @return {Promise<void>}
    * @private
@@ -268,22 +260,9 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     return assertSplitRoutingDescriptorEpochForService(this, metadata);
   }
   /**
-   * Reconstruct the transient split execution handle from durable
-   * workflow state after a process restart.
-   *
-   * The canonical split phase and participant state are owned by
-   * ManagedSplitWorkflow via DurableWorkflowCoordinator. This method
-   * rebuilds the local execution context so that
-   * handleSplitReplicationAfterWrite can route writes correctly while
-   * the workflow resumes.
-   *
-   * @param {Object} durableState - Durable workflow state.
-   * @param {string} durableState.phase - Canonical workflow phase from
-   *   PARTITION_TRANSITION_STATE.
-   * @param {Object} durableState.metadata - Normalized split
-   *   transition metadata (recoverable from the tables row).
-   * @return {Object|null} Reconstructed transient execution handle,
-   *   or null if the durable state is not an active split.
+   * Reconstruct the transient split execution handle from durable workflow state.
+   * @param {Object} durableState - Durable workflow state ({phase, metadata}).
+   * @return {Object|null} Reconstructed transient execution handle or null.
    */
   reconstructSplitExecutionState(durableState) {
     return reconstructSplitExecutionStateForService(this, durableState);
@@ -293,10 +272,10 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @return {Promise<void>}
    * @private
    */
-  async runSplitReplicationWorkflow(options = {}) {
+  async runSplitReplicationWorkflow() {
     const splitReplication = this.splitReplication;
     const metadata = splitReplication?.metadata || null;
-    if (!metadata) {
+    if (!metadata || !splitReplication.authorized) {
       throw new Error(
         PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
       );
@@ -305,7 +284,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       partitionId: this.partitionId, targetPartitionIds: metadata.targetPartitionIds,
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
-    await authorizeSplitSnapshotStart(this, metadata, options);
+
     await runSplitBackfillPhase(this, splitReplication, metadata);
     await runSplitCatchupPhase(this, splitReplication, metadata);
     await runSplitCutoverPhase(this, splitReplication, metadata);

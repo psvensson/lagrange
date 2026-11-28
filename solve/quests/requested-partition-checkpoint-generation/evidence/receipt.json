@@ -1,0 +1,11 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "requested-partitions-install-reopen",
+      "passed": false,
+      "evidence": "96ef83fde managed .32 generation 7 transfer_aborted/generation_unavailable [raftRs], /tmp/lagrange-1943-child-tv-dator.log:33. Repaired candidate awaits managed execution."
+    }
+  ]
+}

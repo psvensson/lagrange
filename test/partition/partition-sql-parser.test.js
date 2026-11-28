@@ -1,5 +1,6 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert';
+import Database from 'better-sqlite3';
 import {
   countSqlParameterPlaceholders,
   extractConjunctiveWhereColumns,
@@ -301,35 +302,88 @@ describe('partition-sql-parser', () => {
     );
   });
 
-  it('evaluates scalar functions in WHERE and SET clauses for DELETE and UPDATE', () => {
-    assert.deepStrictEqual(
-      extractDataFromParameterizedSQL(
-        'DELETE FROM config WHERE config_key = lower(?)',
-        ['PROBE.KEY'],
-        'config',
-        PARTITION_SERVICE_OPERATION.DELETE,
-        logger,
-      ),
-      {config_key: 'probe.key'},
-    );
+  it('evaluates scalar functions via SQLite db only and refuses JS function emulation when db is absent', () => {
+    const db = new Database(':memory:');
+    try {
+      assert.deepStrictEqual(
+        extractDataFromParameterizedSQL(
+          'DELETE FROM config WHERE config_key = lower(?)',
+          ['PROBE.KEY'],
+          'config',
+          PARTITION_SERVICE_OPERATION.DELETE,
+          logger,
+          db,
+        ),
+        {config_key: 'probe.key'},
+      );
 
-    assert.deepStrictEqual(
-      extractDataFromParameterizedSQL(
-        'UPDATE config SET config_value = \'new\' WHERE config_key = lower(?)',
-        ['PROBE.KEY'],
-        'config',
-        PARTITION_SERVICE_OPERATION.UPDATE,
-        logger,
-      ),
-      {config_value: 'new', config_key: 'probe.key'},
-    );
+      assert.deepStrictEqual(
+        extractDataFromParameterizedSQL(
+          'UPDATE config SET config_value = \'new\' WHERE config_key = lower(?)',
+          ['PROBE.KEY'],
+          'config',
+          PARTITION_SERVICE_OPERATION.UPDATE,
+          logger,
+          db,
+        ),
+        {config_value: 'new', config_key: 'probe.key'},
+      );
 
-    assert.deepStrictEqual(
-      extractDeleteDataFromSQL(
-        'DELETE FROM config WHERE config_key = lower(\'PROBE.KEY\')',
-        logger,
-      ),
-      {config_key: 'probe.key'},
-    );
+      assert.deepStrictEqual(
+        extractDeleteDataFromSQL(
+          'DELETE FROM config WHERE config_key = lower(\'PROBE.KEY\')',
+          logger,
+          db,
+        ),
+        {config_key: 'probe.key'},
+      );
+
+      // SQLite trim(X) strips only ASCII spaces (' ') by default, not tabs ('\t').
+      assert.deepStrictEqual(
+        extractDataFromParameterizedSQL(
+          'DELETE FROM items WHERE id = trim(?)',
+          ['\tA\t'],
+          'items',
+          PARTITION_SERVICE_OPERATION.DELETE,
+          logger,
+          db,
+        ),
+        {id: '\tA\t'},
+      );
+
+      // Without a SQLite db handle, scalar function expressions must not be emulated in JS.
+      assert.deepStrictEqual(
+        extractDataFromParameterizedSQL(
+          'DELETE FROM config WHERE config_key = lower(?)',
+          ['PROBE.KEY'],
+          'config',
+          PARTITION_SERVICE_OPERATION.DELETE,
+          logger,
+          null,
+        ),
+        {},
+      );
+      assert.deepStrictEqual(
+        extractDataFromParameterizedSQL(
+          'DELETE FROM items WHERE id = trim(?)',
+          ['\tA\t'],
+          'items',
+          PARTITION_SERVICE_OPERATION.DELETE,
+          logger,
+          null,
+        ),
+        {},
+      );
+      assert.deepStrictEqual(
+        extractDeleteDataFromSQL(
+          'DELETE FROM config WHERE config_key = lower(\'PROBE.KEY\')',
+          logger,
+          null,
+        ),
+        {},
+      );
+    } finally {
+      db.close();
+    }
   });
 });

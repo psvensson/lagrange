@@ -11,6 +11,7 @@ import {
 import {
   createPartitionCandidateDeliveryState,
   createPartitionCandidateEligibility,
+  createPartitionTargetRetryTracker,
   notifyHedgeDeliveryObserver,
 } from './query-executor-partition-candidate-state.js';
 import {
@@ -25,6 +26,7 @@ import {
   clearPinnedCandidateAddress,
   hasPlanningRefreshPendingDenial,
   resolveNoCandidateErrorMessage,
+  settleUnresolvedCaughtWriteError,
 } from './query-executor-partition-failure.js';
 import {resolvePartitionExecutionBuilders} from './query-executor-partition-request-builders.js';
 import {publishedLeaderGapOf} from '../control-plane/control-plane-owner-fact-read-contract.js';
@@ -39,6 +41,7 @@ import {
   deliveryTransportOf,
 } from '../transport/transport-semantic-outcome.js';
 import {
+  DEADLINE_EXPIRED_COMPLETION_CODE,
   READ_COMPLETION_STATE,
   REDIRECT_STEP_ACTION,
   createInvocationTermFloorTracker,
@@ -46,15 +49,9 @@ import {
 } from './query-executor-self-leader-term-floor.js';
 
 const {
-  CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
-  CONTROL_PLANE_READ_LEADER_MODE,
-  ERRORS,
-  LOG_MSG,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
-  QUERY_LOG_MSG,
-  QUERY_RESPONSE_TYPE,
+  CONTROL_PLANE_WRITE_RETRY_DECISION_STATE, CONTROL_PLANE_READ_LEADER_MODE,
+  ERRORS, LOG_MSG, QUERY_ERROR_CODE, QUERY_ERROR_MSG,
+  QUERY_EXECUTOR_ROUTING_OPTION_FIELD, QUERY_LOG_MSG, QUERY_RESPONSE_TYPE,
   normalizeParticipantFailureString,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -67,11 +64,8 @@ function isBooleanOrOmitted(value) {
 }
 
 function assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameLatencyGroup) {
-  if (
-    !isBooleanOrOmitted(forRead) ||
-    !isBooleanOrOmitted(preferLeader) ||
-    !isBooleanOrOmitted(preferSameLatencyGroup)
-  ) {
+  if (!isBooleanOrOmitted(forRead) || !isBooleanOrOmitted(preferLeader) ||
+      !isBooleanOrOmitted(preferSameLatencyGroup)) {
     throw new TypeError(EXECUTE_ON_PARTITION_BOOLEAN_ARGS_ERR);
   }
 }
@@ -79,81 +73,56 @@ function assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameL
 function shouldRequireCanonicalLeader(executionOptions) {
   return executionOptions?.requireLeader === true ||
     executionOptions?.strictRouteCurrency === true ||
-    executionOptions?.readAuthority?.leaderMode ===
-      CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+    executionOptions?.readAuthority?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
 }
 
 class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   async executeOnPartition(
-    partitionId,
-    sql,
-    params,
-    forRead,
-    preferLeader,
-    preferSameLatencyGroup,
-    deliveryOptions = {},
+    partitionId, sql, params, forRead, preferLeader, preferSameLatencyGroup, deliveryOptions = {},
   ) {
     assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameLatencyGroup);
-    // One entryId for every delivery of a write (the caller's, or minted
-    // once): a re-delivery is never a fresh entry.
     const executionOptions = withWriteEntryIdentity(deliveryOptions, forRead);
+    const resolveNowMs = () => (this.nowFn ? this.nowFn() : this.timeSource.now());
+    const isParticipantStagingWrite = !forRead &&
+      Boolean(executionOptions?.transactionIdentity) &&
+      typeof executionOptions?.buildRequest !== 'function';
     const unknownOutcome = createUnknownOutcomeRedelivery({
       entryId: executionOptions?.entryId ?? null,
       forRead,
-      now: () => (typeof this.nowFn === 'function' ? this.nowFn() : Date.now()),
+      isParticipantStagingWrite,
+      now: resolveNowMs,
     });
     const cancellationToken = executionOptions?.cancellationToken || null;
-    const failedTable = normalizeParticipantFailureString(
-      executionOptions?.tableName,
-    );
-    const routingReadinessDimension =
-      executionOptions.routingReadinessDimension ||
+    const failedTable = normalizeParticipantFailureString(executionOptions?.tableName);
+    const routingReadinessDimension = executionOptions.routingReadinessDimension ||
       this.defaultRoutingReadinessDimension;
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
     const requireCanonicalLeader = shouldRequireCanonicalLeader(executionOptions);
-    const isLeaderPinnedDelivery =
-      !forRead || Boolean(executionOptions?.transactionIdentity);
+    const isLeaderPinnedDelivery = !forRead || Boolean(executionOptions?.transactionIdentity);
     const attemptBudget = createPartitionAttemptBudget({
-      executor: this,
-      partitionId,
-      forRead,
-      executionOptions,
-      routingReadinessDimension,
-      cancellationToken,
+      executor: this, partitionId, forRead, executionOptions,
+      routingReadinessDimension, cancellationToken,
     });
     this.throwIfCancelled(cancellationToken);
     const readDelivery = attemptBudget.retainsRecoveryReadResponse ?
       createRecoveryReadDelivery(this, executionOptions) : null;
+    const buildFailureResult = (errorMessage, details = {}) =>
+      unknownOutcome.finish(buildPartitionExecutionFailureResult({
+        partitionId, failedTable, errorMessage, details,
+      }), this.logger);
+    let pendingWrite = false;
     try {
       const {
-        buildRouterDeliveryOptions,
-        getRemainingExecutionBudgetMs,
-        recoveryReadProbeMs,
-        waitForRetryBudget,
+        buildRouterDeliveryOptions, getRemainingExecutionBudgetMs,
+        recoveryReadProbeMs, waitForRetryBudget,
       } = attemptBudget;
-      // Every failure a delivery ends with: an unresolved write's is its typed
-      // unknown outcome (createUnknownOutcomeRedelivery).
-      const buildFailureResult = (errorMessage, details = {}) =>
-        unknownOutcome.finish(buildPartitionExecutionFailureResult({
-          partitionId,
-          failedTable,
-          errorMessage,
-          details,
-        }), this.logger);
       let candidateDeliveryAttempted = false;
-      const buildPreSubmissionRouteFailureResult = (
-        errorMessage,
-        details = {},
-      ) => {
+      const buildPreSubmissionRouteFailureResult = (errorMessage, details = {}) => {
         const failureResult = buildFailureResult(errorMessage, details);
-        if (candidateDeliveryAttempted) {
-          return failureResult;
-        }
-        return {
+        return candidateDeliveryAttempted ? failureResult : {
           ...failureResult,
-          deliveryDisposition:
-            QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+          deliveryDisposition: QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
         };
       };
 
@@ -221,11 +190,22 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           buildTimeoutFailureDetails(),
         ),
       });
+      const targetRetryTracker = createPartitionTargetRetryTracker({
+        now: resolveNowMs,
+        defaultRetryDelayMs: this.leaderRetryDelayMs,
+        waitForRetryBudget,
+      });
       // An unresolved write's re-deliveries back off (the redelivery owner).
-      const waitForLeaderRetryBudget = async () => waitForRetryBudget(
-        unknownOutcome.nextDeliveryDelayMs(resolvePartitionRetryDelayMs(
-          this.leaderRetryDelayMs, lastFailureDetails)),
-      );
+      const waitForLeaderRetryBudget = async () => {
+        const retryDelayMs = Math.max(
+          unknownOutcome.nextDeliveryDelayMs(resolvePartitionRetryDelayMs(
+            this.leaderRetryDelayMs, lastFailureDetails)),
+          targetRetryTracker.getMaxRemainingDelayMs(),
+        );
+        const ok = await waitForRetryBudget(retryDelayMs);
+        targetRetryTracker.creditElapsedWaitMs(retryDelayMs);
+        return ok;
+      };
       const returnReadAttemptsSpent = () => {
         attemptBudget.reportReadAttemptsSpent(currentMaxAttempts);
         return buildLastFailureResult();
@@ -247,6 +227,23 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           },
         ), Boolean(readDelivery), requireCanonicalLeader);
       const invocation = createInvocationTermFloorTracker(this, partitionId, {
+        onWriteSubmission: (ticket) => {
+          executionOptions.onWriteSubmitted?.((error) => {
+            if (pendingWrite) unknownOutcome.observeLostAnswer(error);
+            return buildFailureResult(error.message, error);
+          });
+          pendingWrite = true;
+          unknownOutcome.recordDelivery(ticket.request?.entryId);
+        },
+        onWriteReply: (delivery) => {
+          pendingWrite = false;
+          unknownOutcome.observeTransport(deliveryTransportOf(delivery));
+        },
+        finishCommittedFailure: (answer, ticket) => buildFailureResult(answer.error, {
+          ...answer,
+          participantAddress: ticket.address,
+          participantNodeId: ticket.serviceInfo?.nodeId,
+        }),
         buildSuccessResult,
         cancellationToken,
         candidateEligibility,
@@ -366,9 +363,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         ) => {
           if (shouldRetainTermFloorFailure(lastFailureDetails, failure)) return;
           lastError = errorMessage;
-          lastFailureDetails = buildQueryPartitionCandidateFailureDetails({
+          const nextDetails = buildQueryPartitionCandidateFailureDetails({
             executor: this, failure, forRead, participantNodeId, participantAddress,
           });
+          targetRetryTracker.recordTargetFailure(participantAddress, nextDetails);
+          lastFailureDetails = targetRetryTracker.mergeFailureRetryDetails(
+            lastFailureDetails,
+            nextDetails,
+          );
         };
         let submittedRecoveryRead = false;
         let inspectedRecoveryRead = false;
@@ -393,13 +395,20 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           const followRetryDecision = (decision, candidateAddress = address) => {
             if (decision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY) {
-              candidateState.requestDeferredPartitionRetry();
               return true;
             }
             widenWriteCandidate(candidateAddress);
             return false;
           };
           if (candidateState.shouldSkipCandidateDelivery(serviceInfo, address)) continue;
+          if (!readDelivery && targetRetryTracker.getRemainingDelayMs(address) > 0) {
+            if (targetRetryTracker.hasImmediateCandidateAfter(
+              candidateQueue, candidateIndex, attemptedAddresses,
+            )) {
+              candidateQueue.push(serviceInfo);
+              continue;
+            }
+          }
           const mayRetry = attempt <= currentMaxAttempts;
           if (readDelivery && !readDelivery.canSelect(serviceInfo, mayRetry)) continue;
           const moreUnstarted = readDelivery?.hasUnstarted(
@@ -413,17 +422,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               address, serviceCandidates.length);
             this.logger.debug(QUERY_LOG_MSG.ROUTING_QUERY_TO_PARTITION, {partitionId, address});
           };
-          if (!readDelivery) observeSubmission();
-          let deliverySubmitted = false;
           try {
             invocation.throwIfAborted();
             let request = buildRequest({
               partitionId, address, sql, params, executionOptions,
             });
-            const routerOptions = buildRouterDeliveryOptions(
-              candidateQueue, candidateIndex, attemptedAddresses,
+            const admission = await invocation.prepareSubmission(
+              address, targetRetryTracker, () => buildRouterDeliveryOptions(
+                candidateQueue, candidateIndex, attemptedAddresses),
             );
-            if (routerOptions === null) return buildDeadlineSpentFailureResult();
+            if (admission === null) return buildDeadlineSpentFailureResult();
             let delivery;
             let activeTicket;
             let deliveryError = null;
@@ -435,8 +443,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               if (inspectedRecoveryRead) readDelivery.reconcile(eligibleAtSubmit);
               if (!readDelivery.currentIn(ticket, eligibleAtSubmit)) break;
               inspectedRecoveryRead = true;
-              const selected = await readDelivery.select(ticket, routerOptions, eligibleAtSubmit,
-                recoveryReadProbeMs(routerOptions, serviceInfo));
+              const selected = await readDelivery.select(ticket, admission, eligibleAtSubmit,
+                recoveryReadProbeMs(admission.routerOptions, serviceInfo));
               if (selected === ROUTING_PROBE_ELAPSED) {
                 shouldRecheckRoutes = true;
                 if (!moreUnstarted) break;
@@ -447,20 +455,15 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               delivery = selected.delivery;
               deliveryError = selected.error ?? null;
             } else {
-              activeTicket = invocation.issueTicket({address, request, serviceInfo});
-              deliverySubmitted = true;
-              unknownOutcome.recordDelivery();
-              delivery = await this.messageRouter.deliver(address, request, routerOptions);
+              const submission = admission.submit({request, serviceInfo}, observeSubmission);
+              activeTicket = submission.ticket;
+              delivery = await submission.completion;
             }
             const completion = invocation.completeDelivery({
               ticket: activeTicket,
               delivery,
               error: deliveryError,
             });
-            if (delivery) {
-              unknownOutcome.observeTransport(deliveryTransportOf(delivery));
-            }
-            deliverySubmitted = false;
             if (completion.state === READ_COMPLETION_STATE.DEADLINE_EXPIRED) {
               attemptBudget.reportDeadlineSpentBeforeAttempt();
               return buildDeadlineSpentFailureResult();
@@ -475,7 +478,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               if (readDelivery) shouldRecheckRoutes = true;
               continue;
             }
+            if (completion.settledFailure) return completion.settledFailure;
             if (completion.accepted) {
+              targetRetryTracker.clearTarget(address);
               applySuccessfulCandidateAffinity(
                 this,
                 executionOptions,
@@ -512,9 +517,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 invocation,
                 isLeaderPinnedDelivery,
                 markRecoverySubmission,
-                onRedirectSubmissionState: (submitted) => {
-                  deliverySubmitted = submitted;
-                },
                 onRedirectTargetSelected: (nextAddress, nextInfo) => {
                   address = nextAddress;
                   serviceInfo = nextInfo;
@@ -526,6 +528,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 response,
                 serviceInfo,
                 sql,
+                targetRetryTracker,
                 unknownOutcome,
                 widenWriteCandidate,
               });
@@ -544,18 +547,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             // entryId until it is settled (the one re-delivery owner), never
             // routed again without that identity.
             const unknownDecision = unknownOutcome.observeAnswer(response);
-            if (unknownDecision !== UNKNOWN_OUTCOME_DECISION.NONE) {
+            if (unknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
               recordCandidateFailure(
                 response.error || ERRORS.QUERY_FAILED,
                 response,
                 serviceInfo?.nodeId,
                 address,
               );
-              if (unknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
-                return buildLastFailureResult();
-              }
-              candidateState.requestRetryCurrentAddress();
-              break;
+              return buildLastFailureResult();
             }
             if (deliveryTransportOf(delivery).reasonCode ===
                 TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
@@ -571,10 +570,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 serviceInfo?.nodeId,
                 address,
               );
-              candidateState.queueLeaderRecoveryCandidates(
-                candidateIndex,
-                serviceInfo?.nodeId || null,
-              );
+              widenWriteCandidate(address);
               continue;
             }
             const errorMessage = response.error || ERRORS.QUERY_FAILED;
@@ -589,6 +585,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   deferRetry: response?.deferRetry,
                 },
                 forRead,
+                deliveryTransportOf(delivery),
               );
             if (
               controlPlaneWriteRetryDecision.state !==
@@ -609,6 +606,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               isLeaderPinnedDelivery &&
               this.isLeaderUnavailable(errorMessage, response?.errorCode)
             ) {
+              recordCandidateFailure(
+                errorMessage,
+                response,
+                serviceInfo?.nodeId,
+                address,
+              );
+              widenWriteCandidate(address);
+              continue;
+            }
+            if (unknownDecision === UNKNOWN_OUTCOME_DECISION.REDELIVER) {
               recordCandidateFailure(
                 errorMessage,
                 response,
@@ -647,15 +654,24 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               ),
             };
           } catch (error) {
+            if (pendingWrite) {
+              pendingWrite = false;
+              if (!this.isNoHandlerFailure(error?.message || ERRORS.QUERY_FAILED)) {
+                unknownOutcome.observeLostAnswer(error);
+              }
+            }
             invocation.throwIfAborted();
+            if (error?.code === DEADLINE_EXPIRED_COMPLETION_CODE) {
+              return buildDeadlineSpentFailureResult();
+            }
             const errorMessage =
               typeof error?.message === 'string' &&
               error.message.length > 0 ?
                 error.message :
                 ERRORS.QUERY_FAILED;
-            if (deliverySubmitted && !this.isNoHandlerFailure(errorMessage)) {
-              // Sent, and its answer never arrived: the write may have applied.
-              unknownOutcome.observeLostAnswer(error);
+            if (unknownOutcome.observeAnswer(null) === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
+              recordCandidateFailure(errorMessage, error, serviceInfo?.nodeId, address);
+              return buildLastFailureResult();
             }
             if (this.isNoHandlerFailure(errorMessage)) {
               await candidateState.handleNoHandlerCandidate(
@@ -746,17 +762,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               error: errorMessage,
             });
             if (unknownOutcome.isUnresolved()) {
-              // A write whose outcome is unknown ends typed, never thrown.
-              return buildFailureResult(
-                errorMessage,
-                buildQueryPartitionCandidateFailureDetails({
-                  executor: this,
-                  failure: error,
-                  forRead,
-                  participantNodeId: serviceInfo?.nodeId,
-                  participantAddress: address,
-                }),
-              );
+              const unresolvedResult = settleUnresolvedCaughtWriteError({
+                executor: this, forRead, executionOptions, errorMessage, error,
+                serviceInfo, address, recordCandidateFailure,
+                widenWriteCandidate, buildFailureResult,
+              });
+              if (unresolvedResult === null) continue;
+              return unresolvedResult;
             }
             throw error;
           }
@@ -770,6 +782,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
       }
       return returnReadAttemptsSpent();
+    } catch (error) {
+      if (unknownOutcome.isUnresolved()) return buildFailureResult(error.message, error);
+      throw error;
     } finally {
       readDelivery?.dispose();
     }

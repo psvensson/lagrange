@@ -36,8 +36,8 @@ test('Bug: placement wrapping generates duplicate ADDs', async (t) => {
   t.test('2 nodes with targetCount=3 must not assign >1 replica per node',
     async (t) => {
       const nodes = [
-        {node_id: 'node-1', cpu_usage_percent: 50},
-        {node_id: 'node-2', cpu_usage_percent: 10},
+        {node_id: 'node-1', host_cpu_utilization_percent: 50},
+        {node_id: 'node-2', host_cpu_utilization_percent: 10},
       ];
 
       const planner = new MovePlanner({
@@ -86,9 +86,9 @@ test('Bug: placement wrapping generates duplicate ADDs', async (t) => {
   t.test('3 nodes with targetCount=3 should place 1 replica per node',
     async (t) => {
       const nodes = [
-        {node_id: 'node-1', cpu_usage_percent: 10},
-        {node_id: 'node-2', cpu_usage_percent: 20},
-        {node_id: 'node-3', cpu_usage_percent: 30},
+        {node_id: 'node-1', host_cpu_utilization_percent: 10},
+        {node_id: 'node-2', host_cpu_utilization_percent: 20},
+        {node_id: 'node-3', host_cpu_utilization_percent: 30},
       ];
 
       const planner = new MovePlanner({
@@ -118,7 +118,7 @@ test('Bug: placement wrapping generates duplicate ADDs', async (t) => {
 
   t.test('1 node with targetCount=3 must cap at 1 replica', async (t) => {
     const nodes = [
-      {node_id: 'node-1', cpu_usage_percent: 10},
+      {node_id: 'node-1', host_cpu_utilization_percent: 10},
     ];
 
     const planner = new MovePlanner({

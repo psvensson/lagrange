@@ -190,3 +190,46 @@ test('RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true defers transition retry
     'RUNTIME_SERVICE_CREATE_FAILED with deferRetry=false must resolve to fail_operation',
   );
 });
+
+test('system and priority partition ADD in SYNCING wakes remote source owner on REPLICA_CREATE_ACTIVE or REPLICA_CREATE_FAILED', async (t) => {
+  const systemSyncingOp = {
+    operationId: 'op-sys-syncing',
+    type: OperationType.ADD,
+    entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+    partitionId: 'tables-p1',
+    sourceNodeId: 'node-1',
+    targetNodeId: 'node-2',
+    workflowStep: WORKFLOW_STEP.SYNCING,
+  };
+  const owner = {isDispatchRetryableWorkflowStep: () => false};
+  const activeMode = resolveExecutorOutcomeRemoteOwnerHandoffMode(
+    owner,
+    systemSyncingOp,
+    {
+      [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: systemSyncingOp.operationId,
+      [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+      [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.ACTIVE,
+    },
+  );
+  const failedMode = resolveExecutorOutcomeRemoteOwnerHandoffMode(
+    owner,
+    systemSyncingOp,
+    {
+      [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: systemSyncingOp.operationId,
+      [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+      [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.FAILED,
+    },
+  );
+  t.equal(
+    activeMode,
+    COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+    'target executor wakes remote source owner for system partition ADD in SYNCING on REPLICA_CREATE_ACTIVE',
+  );
+  t.equal(
+    failedMode,
+    COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+    'target executor wakes remote source owner for system partition ADD in SYNCING on REPLICA_CREATE_FAILED',
+  );
+});

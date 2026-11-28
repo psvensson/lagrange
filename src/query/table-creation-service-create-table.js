@@ -27,7 +27,6 @@ const CREATE_TABLE_ACTION = Object.freeze({
   RECONCILE_EXISTING: 'reconcile_existing',
   THROW_TABLE_EXISTS: 'throw_table_exists',
   CREATE_PERSISTED: 'create_persisted',
-  CREATE_EPHEMERAL: 'create_ephemeral',
 });
 
 /**
@@ -36,15 +35,12 @@ const CREATE_TABLE_ACTION = Object.freeze({
  * @param {Object} input.ast - Parsed CREATE TABLE AST.
  * @param {Object} [input.options] - Provisioning options.
  * @param {Object|null} [input.existingTable] - Canonical existing table row.
- * @param {boolean} [input.hasPersistenceAuthority] - Whether control-plane
- *   metadata persistence is wired.
  * @return {{action: string}}
  */
 function decideCreateTableAction({
   ast,
   options = {},
   existingTable = null,
-  hasPersistenceAuthority = false,
 } = {}) {
   if (existingTable) {
     if (ast?.ifNotExists) {
@@ -55,10 +51,7 @@ function decideCreateTableAction({
     }
     return {action: CREATE_TABLE_ACTION.THROW_TABLE_EXISTS};
   }
-  if (hasPersistenceAuthority) {
-    return {action: CREATE_TABLE_ACTION.CREATE_PERSISTED};
-  }
-  return {action: CREATE_TABLE_ACTION.CREATE_EPHEMERAL};
+  return {action: CREATE_TABLE_ACTION.CREATE_PERSISTED};
 }
 
 function sortObject(value) {
@@ -458,13 +451,6 @@ async function executePersistedCreateTable(service, context, options, gateway) {
   return buildCreatedTableResult(service, context, provisioningSummary);
 }
 
-async function executeUnpersistedCreateTable(service, context, options) {
-  const provisioningSummary = await service.provisionInitialPartition(
-    buildBaseProvisioningInput(context, options),
-  );
-  return buildCreatedTableResult(service, context, provisioningSummary);
-}
-
 async function executeCreateTableProvisioning(service, ast, options = {}) {
   validateUserTableCreateIntent(ast);
   service.logger.info(QUERY_LOG_MSG.TABLE_CREATE_START, {
@@ -478,14 +464,10 @@ async function executeCreateTableProvisioning(service, ast, options = {}) {
   const durableMetadataGateway = existingTable ?
     null :
     requireDurableMetadataGateway(service, options);
-  const hasPersistenceAuthority = Boolean(
-    service.cdcIntegrationService || durableMetadataGateway,
-  );
   const decision = decideCreateTableAction({
     ast,
     options,
     existingTable,
-    hasPersistenceAuthority,
   });
 
   switch (decision.action) {
@@ -504,10 +486,6 @@ async function executeCreateTableProvisioning(service, ast, options = {}) {
       options,
       metadataGateway,
     );
-  }
-  case CREATE_TABLE_ACTION.CREATE_EPHEMERAL: {
-    const context = buildCreateTableMetadataContext(service, ast, options);
-    return executeUnpersistedCreateTable(service, context, options);
   }
   default:
     throw new Error(`Unsupported CREATE TABLE action: ${decision.action}`);

@@ -199,6 +199,8 @@ const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
     'delivered_index = @index, delivered_term = @term ' +
     'WHERE event_key = @eventKey AND delivered = 0 ' +
     'RETURNING log_index, octet_length(event_json) AS event_bytes',
+  COUNT_OWED:
+    `SELECT COUNT(*) AS count FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 0`,
   COUNT_BY_FLAG:
     'SELECT delivered, COUNT(*) AS count ' +
     `FROM ${PARTITION_CDC_OBLIGATION_TABLE} GROUP BY delivered`,

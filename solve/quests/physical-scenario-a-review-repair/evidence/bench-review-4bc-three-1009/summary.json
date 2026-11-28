@@ -1,0 +1,36 @@
+{
+  "schema": "lagrange-comparative-campaign-summary/v1",
+  "executionTarget": "lab",
+  "rawObservationsPath": "/tmp/bench-review-4bc-three-1009-raw.ndjson",
+  "campaignId": "bench-review-4bc-three-1009",
+  "manifestDigest": "sha256:73e43d1d906d722072d5d3e525e54a5075cacbd418bfb14d79bbc6a3f489a99d",
+  "attempted": [
+    {
+      "runId": "bench-review-4bc-three-1009-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "interrupted",
+      "failureCode": "watchdog_stopped",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admission": {
+    "outcome": "failed",
+    "cells": [
+      {
+        "claimKey": "lagrange/scenarioA/smoke",
+        "status": "product-failure",
+        "reasons": [
+          "watchdog-stopped"
+        ]
+      }
+    ]
+  },
+  "closure": {
+    "loadGeneratorWorktree": {
+      "status": "complete",
+      "error": null
+    }
+  }
+}

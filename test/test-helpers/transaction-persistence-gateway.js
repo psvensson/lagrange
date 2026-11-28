@@ -17,8 +17,10 @@
  */
 import Database from 'better-sqlite3';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
-import {buildSystemTableMutationSqlParts} from
-  '../../src/cdc/cdc-system-table-mutation-sql-helpers.js';
+import {
+  buildSystemTableBatchUpsert,
+  buildSystemTableMutationSqlParts,
+} from '../../src/cdc/cdc-system-table-mutation-sql-helpers.js';
 import {
   generateCreateTableSQL,
   getSchemaByTableName,
@@ -35,6 +37,7 @@ const COORDINATOR_TABLES = Object.freeze([
 const MUTATION = Object.freeze({
   INSERT: 'insert',
   UPSERT: 'upsert',
+  UPSERT_BATCH: 'upsert_batch',
   UPDATE: 'update',
   DELETE: 'delete',
 });
@@ -52,6 +55,14 @@ function filteredRow(tableName, values) {
 
 function executeMutation(db, mutation) {
   const {operation, tableName} = mutation;
+  if (operation === MUTATION.UPSERT_BATCH) {
+    const rows = Array.isArray(mutation.rows) ?
+      mutation.rows.map((row) => filteredRow(tableName, row)) :
+      [];
+    if (rows.length === 0) return 0;
+    const batch = buildSystemTableBatchUpsert(tableName, rows);
+    return db.prepare(batch.sql).run(...batch.params).changes;
+  }
   if (operation === MUTATION.INSERT || operation === MUTATION.UPSERT) {
     const parts = buildSystemTableMutationSqlParts(CDC_OPERATION.INSERT,
       filteredRow(tableName, mutation.row));
@@ -96,6 +107,7 @@ function createTransactionPersistenceGateway(options = {}) {
         operation: mutation.operation,
         tableName: mutation.tableName,
         row: mutation.row ?? null,
+        rows: Array.isArray(mutation.rows) ? mutation.rows : null,
         whereClause: mutation.whereClause ?? null,
         data: mutation.data ?? null,
         coalescingKey: mutationOptions.coalescingKey ?? null,

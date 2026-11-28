@@ -1,12 +1,51 @@
 import {createHash} from 'node:crypto';
+import {QUERY_LOG_MSG} from '../query-constants.js';
 import {
   mintTransactionId,
   participantIdOf,
 } from './distributed-transaction-identity.js';
+import {
+  TRANSACTION_METADATA_PERSIST_PURPOSE,
+} from './distributed-transaction-telemetry.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
 const LOCAL_STR_HEX = 'hex';
 const LOCAL_STR_STRING = 'string';
+const MAX_BUFFERED_WRITE_OPERATION_ROWS = 32;
+const MAX_BUFFERED_WRITE_OPERATION_BYTES = 65536;
+const BASE_WRITE_OPERATION_ROW_BYTES = 160;
+const PER_PARTITION_ID_ESTIMATE_BYTES = 32;
+
+function estimateWriteOperationRowBytes(operation) {
+  const opIdBytes = typeof operation?.operationId === LOCAL_STR_STRING ?
+    operation.operationId.length : 0;
+  const idemBytes = typeof operation?.idempotencyKey === LOCAL_STR_STRING ?
+    operation.idempotencyKey.length : 0;
+  const hashBytes = typeof operation?.payloadHash === LOCAL_STR_STRING ?
+    operation.payloadHash.length : 0;
+  const errBytes = typeof operation?.lastError === LOCAL_STR_STRING ?
+    operation.lastError.length : 0;
+  const partitionBytes = Array.isArray(operation?.partitionIds) ?
+    operation.partitionIds.length * PER_PARTITION_ID_ESTIMATE_BYTES : 0;
+  return BASE_WRITE_OPERATION_ROW_BYTES +
+    opIdBytes + idemBytes + hashBytes + errBytes + partitionBytes;
+}
+
+function buildWriteOperationPersistenceRecord(tx, operation) {
+  return {
+    operationId: operation.operationId,
+    transactionId: tx.transactionId,
+    statementType: operation.statementType,
+    status: operation.status,
+    idempotencyKey: operation.idempotencyKey,
+    payloadHash: operation.payloadHash,
+    partitionIds: operation.partitionIds,
+    retryCount: operation.retryCount,
+    lastError: operation.lastError,
+    createdAt: operation.createdAt,
+    updatedAt: operation.updatedAt,
+  };
+}
 
 const distributedTransactionRecordMethods = {
   async persistTransactionRecord(tx) {
@@ -22,13 +61,17 @@ const distributedTransactionRecordMethods = {
    */
 
   async persistParticipants(tx, partitionIds) {
+    const participants = [];
     for (const partitionId of partitionIds) {
       const participant = tx.participants.get(partitionId);
-      if (!participant) {
-        continue;
+      if (participant) {
+        participants.push(participant);
       }
-      await this.persistParticipantRecord(tx, participant);
     }
+    await Promise.all(
+      participants.map((participant) =>
+        this.persistParticipantRecord(tx, participant)),
+    );
   },
 
   /**
@@ -55,18 +98,82 @@ const distributedTransactionRecordMethods = {
    */
 
   async persistWriteOperationRecord(tx, operation) {
-    await this.persistWriteOperation({
-      operationId: operation.operationId,
-      transactionId: tx.transactionId,
-      statementType: operation.statementType,
-      status: operation.status,
-      idempotencyKey: operation.idempotencyKey,
-      payloadHash: operation.payloadHash,
-      partitionIds: operation.partitionIds,
-      retryCount: operation.retryCount,
-      lastError: operation.lastError,
-      createdAt: operation.createdAt,
-      updatedAt: operation.updatedAt,
+    await this.persistWriteOperation(
+      buildWriteOperationPersistenceRecord(tx, operation),
+    );
+  },
+
+  /**
+   * Persist a batch of write-operation records through batch callback when
+   * wired, or fall back to individual persistence callbacks.
+   * @param {Object} tx - Transaction state.
+   * @param {Object[]} operations - Write operation metadata list.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistWriteOperationRecordsBatch(tx, operations) {
+    if (!Array.isArray(operations) || operations.length === 0) {
+      return;
+    }
+    if (operations.length === 1) {
+      await this.persistWriteOperationRecord(tx, operations[0]);
+      return;
+    }
+    const payloads = operations.map((operation) =>
+      buildWriteOperationPersistenceRecord(tx, operation));
+    await this.persistWriteOperationsBatch(payloads);
+  },
+
+  enqueueBufferedWriteOperationRecord(tx, operation) {
+    if (!Array.isArray(tx.pendingWriteOperationRecords)) {
+      tx.pendingWriteOperationRecords = [];
+      tx.pendingWriteOperationBytes = 0;
+    }
+    const existingIndex = tx.pendingWriteOperationRecords.findIndex(
+      (entry) => entry.operationId === operation.operationId,
+    );
+    const estimatedBytes = estimateWriteOperationRowBytes(operation);
+    if (existingIndex >= 0) {
+      const priorBytes = estimateWriteOperationRowBytes(
+        tx.pendingWriteOperationRecords[existingIndex],
+      );
+      tx.pendingWriteOperationRecords[existingIndex] = operation;
+      tx.pendingWriteOperationBytes = Math.max(
+        0,
+        (tx.pendingWriteOperationBytes || 0) - priorBytes + estimatedBytes,
+      );
+    } else {
+      tx.pendingWriteOperationRecords.push(operation);
+      tx.pendingWriteOperationBytes =
+        (tx.pendingWriteOperationBytes || 0) + estimatedBytes;
+    }
+    return (
+      tx.pendingWriteOperationRecords.length >=
+        MAX_BUFFERED_WRITE_OPERATION_ROWS ||
+      tx.pendingWriteOperationBytes >= MAX_BUFFERED_WRITE_OPERATION_BYTES
+    );
+  },
+
+  flushPendingWriteOperationRecords(tx) {
+    if (!tx || !Array.isArray(tx.pendingWriteOperationRecords) ||
+        tx.pendingWriteOperationRecords.length === 0) {
+      return Promise.resolve();
+    }
+    const batch = tx.pendingWriteOperationRecords.splice(0);
+    tx.pendingWriteOperationBytes = 0;
+    this.noteMetadataMutation?.(
+      tx,
+      TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME,
+    );
+    return Promise.resolve(
+      this.persistWriteOperationRecordsBatch(tx, batch),
+    ).catch((persistErr) => {
+      this.logger?.warn?.(QUERY_LOG_MSG.DISTRIBUTED_TX_METADATA_PERSIST_WARN, {
+        transactionId: tx.transactionId,
+        operationId: batch[batch.length - 1]?.operationId ?? null,
+        batchSize: batch.length,
+        error: persistErr?.message || String(persistErr),
+      });
     });
   },
 
@@ -90,6 +197,9 @@ const {
   persistParticipants,
   persistParticipantRecord,
   persistWriteOperationRecord,
+  persistWriteOperationRecordsBatch,
+  enqueueBufferedWriteOperationRecord,
+  flushPendingWriteOperationRecords,
   createTransactionId,
 } = distributedTransactionRecordMethods;
 
@@ -192,6 +302,9 @@ export {
   persistParticipants,
   persistParticipantRecord,
   persistWriteOperationRecord,
+  persistWriteOperationRecordsBatch,
+  enqueueBufferedWriteOperationRecord,
+  flushPendingWriteOperationRecords,
   createTransactionId,
   createParticipantId,
   createWritePayloadHash,

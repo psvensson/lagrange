@@ -1,0 +1,139 @@
+{
+  "id": "diag-formed-f8d-20261126195859308",
+  "revision": "f8d8396627f548f45320dfb88f67503ab6e6d302",
+  "image": "lagrange@sha256:f9483efb391430b15ad041968c535e5860bce4f7449c5eeac588902a4967bd43",
+  "runClass": "formed-cluster-diagnostic",
+  "publishable": false,
+  "coldStartScored": false,
+  "launcherSha256": "6b8952651480643e2a91aa4cf38b28bc6e6e26349c242c7fad5f6fa980f78231",
+  "adminScriptSha256": "c16bd60c74c84f974f65fc083e520b240c246d5c0c0e1a9fc7d8d666b2f1fb4c",
+  "status": "stopped by user during workload runner",
+  "initialSetupBoundMs": 900000,
+  "sourceImageVerifiedOn": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "campaignExecutionStartedAt": "2026-11-26T19:59:18.997Z",
+  "systemStableAt": "2026-11-26T20:03:36.195Z",
+  "publicReadbackAt": "2026-11-26T20:03:46.984Z",
+  "readyAt": "2026-11-26T20:03:47.689Z",
+  "cases": [
+    {
+      "file": "scenario-a-delivery-lagrange.json",
+      "sha256": "e484ca4efbae0dd1ccfbb6e0a31404a07fe2a753f7973bdab6bf43fe60e28e1d",
+      "caseId": "delivery",
+      "status": "errored",
+      "sqlStates": [
+        "08007"
+      ],
+      "stage": "dataset reset",
+      "table": "customer"
+    },
+    {
+      "file": "scenario-a-durability-lagrange.json",
+      "sha256": "f849c503d6f0cbb4574af01174fcc86df2247e7b4a870a34d92dbf93b0a1a102",
+      "caseId": "durability",
+      "status": "errored",
+      "sqlStates": [],
+      "stage": "post-restart system readiness",
+      "reason": "lagrange-system-tables did not report ready before 240000ms formation deadline after 67 attempts"
+    },
+    {
+      "file": "scenario-a-failure-atomicity-lagrange.json",
+      "sha256": "3ec7f7b165c418e7ff7ade85c7014e9efb90a5ef7f6c88783554b3efb37cf0ca",
+      "caseId": "failure-atomicity",
+      "status": "errored",
+      "sqlStates": [
+        "08007"
+      ],
+      "stage": "dataset reset",
+      "table": "orders"
+    },
+    {
+      "file": "scenario-a-new-order-contention-lagrange.json",
+      "sha256": "1bd170d0ffd3ba6d8a6808802ff583fb6e78c8d72fdb5394f881e34217d7198a",
+      "caseId": "scenario-a-new-order-district-contention-v1",
+      "status": "passed"
+    },
+    {
+      "file": "scenario-a-order-status-lagrange.json",
+      "sha256": "f04b075fecf936406d46f6b884b8a7de6037912d070d9bb90d2b68dd878e6109",
+      "caseId": "scenario-a-order-status-v1",
+      "status": "passed"
+    },
+    {
+      "file": "scenario-a-payment-lagrange.json",
+      "sha256": "c583fa4f28bf1df57dfe6572de18fbfbd31abc95f46832549542aa0dfb02f66c",
+      "caseId": "payment",
+      "status": "errored",
+      "sqlStates": [
+        "25P04"
+      ],
+      "stage": "transaction",
+      "reason": "Message timeout"
+    },
+    {
+      "file": "scenario-a-retryable-conflict-lagrange.json",
+      "sha256": "686b0420e291ff45baea47e8992354924e77473fd6af83b08107db04286790d4",
+      "caseId": "scenario-a-retryable-conflict-v1",
+      "status": "passed"
+    },
+    {
+      "file": "scenario-a-stock-level-lagrange.json",
+      "sha256": "a447c463c2527fdc556192048499bfb5dd0f31e2a44cbd28827d3b2f702f8b51",
+      "caseId": "stock-level",
+      "status": "errored",
+      "sqlStates": [
+        "08007"
+      ],
+      "stage": "dataset reset",
+      "table": "new_order"
+    },
+    {
+      "file": "scenario-a-visibility-lagrange.json",
+      "sha256": "865623cf547d2ad8fe1c758e679442f6fb3cc66ea79c12ebd6d1ebc707a1617b",
+      "caseId": "scenario-a-visibility-v1",
+      "status": "passed"
+    }
+  ],
+  "measuredTransactionAccounting": null,
+  "finalDatabaseAudit": null,
+  "runnerCloseStatus": "failed",
+  "runnerCloseCode": "workload_failed",
+  "admission": {
+    "outcome": "failed",
+    "cells": [
+      {
+        "claimKey": "lagrange/scenarioA/smoke",
+        "status": "invalid-measurement",
+        "reasons": [
+          "record-rejected:missing-field"
+        ]
+      }
+    ]
+  },
+  "closedAt": "2026-11-26T20:16:59.489Z",
+  "cleanup": "complete",
+  "loadGeneratorClosure": "complete",
+  "fileHashes": {
+    "delivery-keyed-outcome-32.json": "cc2ae3880bffe99e32dc2a7f8fad14a6d8f8f02536829d076a9c9180ec2abe29",
+    "delivery-keyed-outcome-34.json": "7d3956ccb1b6e21fb3e88c3284f2ab6859180945039bd307934cae53edc31612",
+    "delivery-keyed-outcome-41.json": "1f1b39cf3c5335709fa4e654aa1e88290a56faf29bca229c401d5e9e64840fc7",
+    "diag-formed-f8d-20261126195859308-deadline-census.ndjson": "2d12a36fe7490250940f720d93592d9874c90eea2ae570fc1bad925c7e576daf",
+    "diag-formed-f8d-20261126195859308-decision-samples.ndjson": "24464b91d0aba108cb71b54b1ac583be216cf575d37525cc216938334f2a140a",
+    "diag-formed-f8d-20261126195859308-formation.ndjson": "9100e47014dbf75c3a1e9737f40743074f2ff0b3d6f82834f9cc85e88d5ce90b",
+    "diagnostic-launcher.mjs": "c16bd60c74c84f974f65fc083e520b240c246d5c0c0e1a9fc7d8d666b2f1fb4c",
+    "diagnostic.json": "a0c9af3994cbbe4ed43c3ea1c295c1236253805923c2b320eab1e220329687ee",
+    "during-first-semantic-case.json": "fa5b6afa1be80e9843f1e03d82d5fb8b19909e32bd0f7c6014795153caa6aef3",
+    "node-1-tcp.ndjson.gz": "b5ad0491f005a3650b46c4bff54af74f6fee008b78e2cdb6ae4a14dc8f4f75b4",
+    "node-1.log.gz": "46348edbd91bd94a34ea077699ca2c081f18d792d9f3fbd06a182e9a32ac53c7",
+    "node-2-tcp.ndjson.gz": "5143ee40765ada2a9bf55feac1a331dc3da8300d3d23d3b209f6684b393b5ace",
+    "node-2.log.gz": "c61d60b566f1645fec8ca8d3002277981c4f1eeba87ed4e2236b0128426a267f",
+    "node-3-tcp.ndjson.gz": "8d27747bb7187d5e3b005a587b332bd2b6ad2db0f70bc623a17e1e08e7f642ba",
+    "node-3.log.gz": "819c2590925dec213beaa67ffc7e0e1729284391dc90d69a1814116b2cce9924",
+    "queued-never-launched.sh": "3308388c4d7fbbd8f2d115629ec8ce7d737e54c97b41fcb7e1449e76321f462c",
+    "raw.ndjson": "09f6be071ebdbb39ecff2bf5bb8cc19b65f800941b4735efe2a83d420584b66d",
+    "summary.json": "0d189f57be680041371543350a9415eaf68171797163fd5e3f7155d3153c48c0"
+  }
+}

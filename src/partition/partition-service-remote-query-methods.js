@@ -1,3 +1,6 @@
+import {SPLIT_DESCRIPTOR_ERROR, descriptorRefusal, usesSplitDescriptorIdentity}
+  from './partition-split-descriptor-command.js';
+import {splitDescriptorCommitFields, splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 // Remote QUERY routing preserves the partition's ordinary read/write gates and
 // delegates current transaction identity and staging to the participant owner.
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
@@ -68,10 +71,13 @@ const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
 });
 
 const DDL_STATEMENT_HEADS = new Set(['CREATE', 'ALTER', 'DROP']);
+const SPLIT_DESCRIPTOR_INTENT_FIELD = 'splitDescriptorIntent';
 const DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS = 15000; // ends-on: conflicting row-key holder settlement
+const DEFAULT_INITIAL_CONFLICT_WAIT_MS = 3000; // ends-on: conflicting row-key holder settlement
+const DEFAULT_HELD_WRITE_CONFLICT_WAIT_MS = 600; // ends-on: conflicting row-key holder settlement
 const MAX_PARTICIPANT_CONFLICT_REEVAL_ATTEMPTS = 16;
 
-function resolveParticipantConflictWaitBudgetMs(service) {
+function resolveParticipantConflictWaitBudgetMs(service, session = null) {
   if (Number.isFinite(service?.conflictSettleWaitMs) &&
       service.conflictSettleWaitMs > 0) {
     return Math.min(
@@ -79,7 +85,11 @@ function resolveParticipantConflictWaitBudgetMs(service) {
       DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS,
     );
   }
-  return DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS;
+  const holdsStagedWrites =
+    Array.isArray(session?.operations) && session.operations.length > 0;
+  return holdsStagedWrites ?
+    DEFAULT_HELD_WRITE_CONFLICT_WAIT_MS :
+    DEFAULT_INITIAL_CONFLICT_WAIT_MS;
 }
 
 function decorateSessionAnswer(service, payload, answer) {
@@ -155,8 +165,10 @@ async function resolveParticipantRemoteQueryAnswer(service, payload) {
       return decorateSessionAnswer(service, payload, participantAnswer);
     }
     if (originalDeadlineMs === null) {
+      const currentSession = findParticipantSession(service, payload);
       originalDeadlineMs =
-        service.timeSource.now() + resolveParticipantConflictWaitBudgetMs(service);
+        service.timeSource.now() +
+        resolveParticipantConflictWaitBudgetMs(service, currentSession);
     }
     const step = await runOneConflictWaitStep(
       service, payload, participantAnswer, originalDeadlineMs);
@@ -263,6 +275,7 @@ async function executeRemoteQuery(service, payload, appliedPositionRead) {
   }
   const nowFn = () => service.timeSource.now();
   return service.executeQuery(sql, params, {
+    ...splitDescriptorIntentFields(payload),
     entryId: payload[QUERY_PAYLOAD_FIELD_ENTRY_ID] || null,
     operationId: payload[QUERY_PAYLOAD_FIELD_OPERATION_ID] || null,
     idempotencyKey: payload[QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY] || null,
@@ -288,6 +301,7 @@ function remoteQueryAnswer(service, result, readAuthorityWitness) {
     result?.partial !== true &&
     result?.rowSetComplete === true;
   const answer = {
+    ...splitDescriptorCommitFields(result),
     success,
     ...(hasRowSet ? {rowSet: result.rowSet} : {rows: result.rows}),
     ...(result?.executionEnvelope ? {executionEnvelope: result.executionEnvelope} : {}),
@@ -620,6 +634,12 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       };
     }
     const isWriteOperation = this.isWriteQuery(sql);
+    if (usesSplitDescriptorIdentity(payload) &&
+        (!Object.hasOwn(payload, SPLIT_DESCRIPTOR_INTENT_FIELD) || !isWriteOperation ||
+         payload.transactionId != null ||
+         payload[QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION] != null)) {
+      return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+    }
     const requiresLeaderRouting =
       isWriteOperation || Boolean(payload?.transactionId);
     const routingRefusal = writeRoutingRefusal(

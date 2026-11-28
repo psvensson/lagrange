@@ -366,17 +366,17 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       const seedConfirmation = seedConfirmationTracker.awaitConfirmation(
         TABLES.NODES,
         joiningNodeId,
-        {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: 42}},
+        {expectedFields: {[COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 42}},
       );
       const joiningConfirmation = joiningConfirmationTracker ?
         joiningConfirmationTracker.awaitConfirmation(
           TABLES.NODES,
           joiningNodeId,
-          {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: 42}},
+          {expectedFields: {[COLUMN.HOST_CPU_UTILIZATION_PERCENT]: 42}},
         ) :
         Promise.resolve();
       const updateResult = await seedSqlEngine.executeQuery(
-        'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
+        'UPDATE nodes SET host_cpu_utilization_percent = ? WHERE node_id = ?',
         [42, joiningNodeId],
       );
 
@@ -389,7 +389,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       // =========================================================================
       const verifyResult = await waitForQueryRows(
         seedSqlEngine,
-        'SELECT cpu_usage_percent FROM nodes WHERE node_id = ?',
+        'SELECT host_cpu_utilization_percent FROM nodes WHERE node_id = ?',
         [joiningNodeId],
         1,
         3000,
@@ -397,14 +397,14 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
 
       t.equal(verifyResult.success !== false, true, 'verify query should succeed');
       t.equal(
-        verifyResult.rows?.[0]?.cpu_usage_percent,
+        verifyResult.rows?.[0]?.host_cpu_utilization_percent,
         42,
         'updated value should be replicated',
       );
       if (joiningCache) {
         const cachedJoiningNode = joiningCache.get(TABLES.NODES, joiningNodeId);
         t.equal(
-          cachedJoiningNode?.[COLUMN.CPU_USAGE_PERCENT],
+          cachedJoiningNode?.[COLUMN.HOST_CPU_UTILIZATION_PERCENT],
           42,
           'joining node cache should observe replicated update',
         );
@@ -596,11 +596,11 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
         const confirmation = cdcConfirmationTracker.awaitConfirmation(
           TABLES.NODES,
           seedNodeId,
-          {expectedFields: {[COLUMN.CPU_USAGE_PERCENT]: nextCpuPercent}},
+          {expectedFields: {[COLUMN.HOST_CPU_UTILIZATION_PERCENT]: nextCpuPercent}},
         );
         const updateResult = await executeWriteWithRetry(
           seedSqlEngine,
-          'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
+          'UPDATE nodes SET host_cpu_utilization_percent = ? WHERE node_id = ?',
           [nextCpuPercent, seedNodeId],
         );
         t.equal(updateResult.success, true, `append-ack write ${i + 1} should succeed`);

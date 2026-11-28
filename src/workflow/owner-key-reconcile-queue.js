@@ -44,6 +44,7 @@ import {
   enqueueAndWaitForOwner,
   mergeWorkItemCompletionWaiters,
   rejectAllQueueCompletionWaiters,
+  rejectExhaustedCompletionWaiter,
   rejectStaleFenceCompletionWaiter,
   rejectStoppedCompletionWaiter,
   rejectWorkItemCompletionWaiters,
@@ -209,6 +210,8 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @param {*} [context] - Optional context payload.
    * @param {Object} [options] - Enqueue options.
    * @param {number} [options.fenceToken] - Owner epoch / lease token.
+   * @param {boolean} [options.preserveOwnedContext] - Join exact-key work using
+   *   its retained inputs when the new producer has only discovery evidence.
    * @return {boolean} True if a new entry was created, false if merged
    *   or rejected.
    */
@@ -223,6 +226,11 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     }
     const {completionWaiter, fenceToken} = admission;
     const existing = mapGet(this.pending, ownerKey);
+    if (options?.preserveOwnedContext === true) {
+      const owned = existing || mapGet(this.retryWorkItems, ownerKey) ||
+        mapGet(this.inFlightItems, ownerKey) || mapGet(this.exhaustedWorkItems, ownerKey);
+      if (owned) context = owned.context;
+    }
     if (existing) {
       this._mergeEnqueuedWork(
         existing,
@@ -344,13 +352,8 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     )) {
       return false;
     }
-    this._mergeEnqueuedWork(
-      exhausted,
-      reason,
-      context,
-      fenceToken,
-      completionWaiter,
-    );
+    this._mergeEnqueuedWork(exhausted, reason, context, fenceToken);
+    rejectExhaustedCompletionWaiter(completionWaiter, exhausted.retryState);
     return true;
   }
 

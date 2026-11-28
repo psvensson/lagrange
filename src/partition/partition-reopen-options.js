@@ -1,12 +1,14 @@
 // A replacement of an existing local replica opens its durable membership
 // record. Both snapshot install and release reopen use this lifecycle shape;
 // neither can accidentally supply a fresh-create/genesis stamp.
+import {TABLES} from '../constants/tables.js';
 import {durableRecordBootstrap} from '../raft/raft-committed-membership-stamp.js';
 
 function buildReplacementServiceOptions(service) {
   return Object.freeze({partitionId: service.partitionId, tableId: service.tableId,
     tableName: service.tableName, replicaId: service.replicaId, replicaIds: service.replicaIds,
-    bootstrapMembership: durableRecordBootstrap(), nodeId: service.nodeId, dbPath: service.dbPath});
+    bootstrapMembership: durableRecordBootstrap(), nodeId: service.nodeId, dbPath: service.dbPath,
+    ...([TABLES.NODES, TABLES.PARTITIONS].includes(service.tableName) ? {schema: service.schema} : {})});
 }
 
 export {buildReplacementServiceOptions};

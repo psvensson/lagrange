@@ -53,7 +53,8 @@ afterEach(clearFixtureSingletons);
 const idsOfWaves = (model, from = 0) => model.waves.slice(from).map((wave) => wave.ids);
 const leafWaves = (model, from = 0) =>
   model.waves.slice(from).map((wave) => [wave.index, wave.ids]);
-const rawOf = (model, id) => model.raw.find((row) => JSON.parse(row.eventJson).data?.id === id);
+const rawOf = (model, id) =>
+  model.raw.find((row) => JSON.parse(row.eventJson).data?.group_id === id);
 
 // The lane's outstanding acknowledgements, `short` rows short of the
 // retained-delivered bound (its own record of delivered rows whose

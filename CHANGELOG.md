@@ -10,6 +10,10 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+### Storage compatibility
+
+Partition stores created with the 0.4.2 committed-statement outcome table cannot be opened in place by this candidate. The new table records which committed mutations require retained effects for split and merge replay. Opening a store with the earlier table definition returns `partition_statement_outcome_format_unsupported`. Use a separate, fresh data directory to evaluate this build and preserve the original directory for use with 0.4.2.
+
 ## [0.4.2] — 2026-11-24
 
 ### Fixed

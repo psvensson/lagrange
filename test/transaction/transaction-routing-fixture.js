@@ -1,7 +1,13 @@
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
+import {clearMemoryReservations} from '../../src/partition/partition-locking-read-reservation.js';
+import {
+  buildSchemaDefinition,
+  derivePartitionKey,
+} from '../../src/query/table-creation-service-schema-derivation.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
-import {clearMemoryReservations} from '../../src/partition/partition-locking-read-reservation.js';
 
 function createMockMessageRouter(mockPartitionData) {
   return {
@@ -28,62 +34,104 @@ function createMockMessageRouter(mockPartitionData) {
   };
 }
 
-/**
- * Create a mock system cache with services for routing.
- */
-function createMockSystemCache(tables, partitions) {
-  clearMemoryReservations();
-  const normalizedTables = tables.map((t) => ({
-    primary_key: 'id',
-    primaryKey: 'id',
-    partition_key: 'id',
-    partition_key_type: 'TEXT',
-    active_partition_version: 1,
-    ...t,
+function resolveFixtureTableColumns(table, primaryKeyList, partitionKeyType) {
+  if (Array.isArray(table.columns) && table.columns.length > 0) return table.columns;
+  return primaryKeyList.map((name) => ({
+    name,
+    type: partitionKeyType,
+    primaryKey: true,
+    notNull: true,
   }));
-  const normalizedPartitions = partitions.map((partition) => ({
-    partition_key_type: 'TEXT',
+}
+
+function resolveFixtureSchemaDefinition(table, tableName, primaryKeyList, partitionKeyType) {
+  if (table.schema_definition) return table.schema_definition;
+  if (table.schema) return JSON.stringify(table.schema);
+  const canonicalSchema = buildSchemaDefinition(
+    resolveFixtureTableColumns(table, primaryKeyList, partitionKeyType),
+    table.tableConstraints || [],
+    primaryKeyList,
+  );
+  return JSON.stringify({...canonicalSchema, tableName});
+}
+
+function buildCanonicalFixtureTableRow(table) {
+  const tableName = table.table_name || table.tableName || table.table_id;
+  const tableId = table.table_id || table.tableId || tableName;
+  const rawPrimaryKey = table.primaryKey || table.primary_key || table.partition_key || 'id';
+  const primaryKeyList = Array.isArray(rawPrimaryKey) ? rawPrimaryKey : [rawPrimaryKey];
+  const partitionKey = table.partition_key || derivePartitionKey(primaryKeyList);
+  const partitionKeyType = table.partition_key_type || table.partitionKeyType || 'TEXT';
+  return {
+    table_id: tableId,
+    table_name: tableName,
+    primary_key: partitionKey,
+    primaryKey: rawPrimaryKey,
+    partition_key: partitionKey,
+    partition_key_type: partitionKeyType,
+    active_partition_version: 1,
+    schema_definition: resolveFixtureSchemaDefinition(
+      table, tableName, primaryKeyList, partitionKeyType,
+    ),
+    ...table,
+  };
+}
+
+function findOwnerTableForPartition(normalizedTables, partition) {
+  const targetName = partition.table_name || partition.tableName;
+  const targetId = partition.table_id || partition.tableId;
+  return normalizedTables.find(
+    (t) => t.table_name === targetName || t.table_id === targetId,
+  );
+}
+
+function resolvePartitionTableIdentity(partition, ownerTable) {
+  const tableName = partition.table_name || partition.tableName || ownerTable?.table_name || null;
+  const tableId = partition.table_id || partition.tableId || ownerTable?.table_id || tableName;
+  return {tableName, tableId};
+}
+
+function buildCanonicalFixturePartitionRow(partition, ownerTable) {
+  const {tableName, tableId} = resolvePartitionTableIdentity(partition, ownerTable);
+  const leaderNodeId = partition.leader_node_id || partition.leaderNodeId || 'test-node';
+  return {
+    partition_key_type: ownerTable?.partition_key_type || 'TEXT',
     partition_version: 1,
     state: 'NORMAL',
     ...partition,
-    leader_node_id: partition.leader_node_id || partition.leaderNodeId || 'test-node',
-  }));
-  const services = normalizedPartitions.map((p) => ({
-    service_id: p.partition_id,
-    service_type: 'partition',
-    partition_id: p.partition_id,
-    node_id: 'test-node',
-    address: `test-node/partition/${p.partition_id}`,
-    status: 'active',
-    raft_role: 'leader',
-  }));
-
-  return {
-    tables: normalizedTables,
-    partitions: normalizedPartitions,
-    services,
-    get: function(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      return [];
-    },
-    getAll: function(type) {
-      if (type === 'partitions') return this.partitions;
-      if (type === 'tables') return this.tables;
-      if (type === 'services') return this.services;
-      return [];
-    },
+    table_id: tableId,
+    table_name: tableName,
+    leader_node_id: leaderNodeId,
   };
+}
+
+/**
+ * Create a canonical SystemTableCache populated with tables, partitions, and
+ * active partition leader service rows for transaction routing tests.
+ */
+function createMockSystemCache(tables = [], partitions = []) {
+  clearMemoryReservations();
+  const cache = new SystemTableCache();
+  const normalizedTables = tables.map(buildCanonicalFixtureTableRow);
+  for (const tableRow of normalizedTables) {
+    cache.applySystemTableChange(TABLES.TABLES, CDC_OPERATION.INSERT, tableRow);
+  }
+  for (const partition of partitions) {
+    const ownerTable = findOwnerTableForPartition(normalizedTables, partition);
+    const partitionRow = buildCanonicalFixturePartitionRow(partition, ownerTable);
+    const leaderNodeId = partitionRow.leader_node_id;
+    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, partitionRow);
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      service_id: partitionRow.partition_id,
+      service_type: 'partition',
+      partition_id: partitionRow.partition_id,
+      node_id: leaderNodeId,
+      address: `${leaderNodeId}/partition/${partitionRow.partition_id}`,
+      status: 'active',
+      raft_role: 'leader',
+    });
+  }
+  return cache;
 }
 
 export {createMockMessageRouter, createMockSystemCache};

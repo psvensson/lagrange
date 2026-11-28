@@ -42,7 +42,7 @@ Citus with client-side SQL and with colocated tables plus a distributed function
 - `unsupported`: the configuration cannot express this claim
 - `not-measured`: no observation exists
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 32 entries; 10 of them name the defect ids behind the withdrawal and 11 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 78 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 33 entries; 10 of them name the defect ids behind the withdrawal and 12 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 78 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ## Related pages
 
@@ -53,6 +53,6 @@ Every comparative result published before 2026-11-01 was withdrawn; the records 
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:da4fcfeaf2bad9e542f5218beaf2c2101a9094da9a92896c9287b7ce915bcad3
+- `data/tidb-comparison/raw-observations.ndjson` sha256:27f99c3b692a92d8a9a2ecb32df7083f861b87ff05b05a096d4f620cc857dd9f
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
-- `data/tidb-comparison/invalidations.ndjson` sha256:688afc8c2a4b8ded5191d95d3c9965bf245c5659d2f0db1c58420d2563229ed7
+- `data/tidb-comparison/invalidations.ndjson` sha256:8bd6b392804ec19017fa6aebe0b77fc70592c52b9a44566a447578c5d4b8c6bc

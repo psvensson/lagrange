@@ -180,6 +180,10 @@ function commitSuccessResult(coordinator, tx) {
 function endTransaction(coordinator, tx) {
   finalizeTransactionTelemetry(coordinator, tx, tx.status);
   if (coordinator.transactionsBySession.get(tx.sessionId) === tx) {
+    if (tx.recoveryDiscovered === true &&
+        tx.status === TRANSACTION_STATUS.ROLLED_BACK) {
+      coordinator.recordSettledRecoveryRollback?.(tx);
+    }
     coordinator.transactionsBySession.delete(tx.sessionId);
     coordinator.endedTransactions?.record(tx);
   }

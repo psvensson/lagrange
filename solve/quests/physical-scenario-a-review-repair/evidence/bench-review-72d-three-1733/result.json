@@ -1,0 +1,50 @@
+{
+  "campaignId": "bench-review-72d-three-1733",
+  "sourceCommit": "72d1cf9d5f8b23bb8eca9e4c26519dc17d0ad549",
+  "imageRepoDigest": "lagrange@sha256:0876ed3173cda81c946fa4210f182c9d1b1885f4ca094ef0ee9a3ab2aad50c34",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T17:42:02.490Z",
+  "lastCompleteCensusAt": "2026-11-26T17:41:57.600Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 8,
+  "attempted": [
+    {
+      "runId": "bench-review-72d-three-1733-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 85,
+    "medianMs": 1352,
+    "p95Ms": 4956,
+    "maxMs": 8439
+  },
+  "evidenceSha256": {
+    "bench-review-72d-three-1733-deadline-census.ndjson": "678397451e23d0ea1b56873fe16458a637a3a132e75e1252f296e7911b5f8b0e",
+    "bench-review-72d-three-1733-decision-samples.ndjson": "7a9a14625e4ed1e9464d512198c5ec1ab6d03dd025fd38f074b4b01c95d027e5",
+    "bench-review-72d-three-1733-formation.ndjson": "9242a1c5cb3e928a610e15e56a2a1bedeadfa69ec9bbebed3871fdb24030d174",
+    "bench-review-72d-three-1733-node1-tcp.ndjson.gz": "433a1a535174b1cb8406d5f515f02c37b1ba45dcc130b499768d0e27a35254af",
+    "bench-review-72d-three-1733-node1.log.gz": "4128d5a19c6b1698bba9adf5e64a2c343958c51fbadefdef34f0f3774cb802e7",
+    "bench-review-72d-three-1733-node2-tcp.ndjson.gz": "bf5aefd7a4ab1ff2c46e3e3f811886bda2fe5caec16615134b5db6eeb5cc752d",
+    "bench-review-72d-three-1733-node2.log.gz": "68c0a56421378ec37ed1fd4a09f050ecbb126a8611d5334db48b2c00f934e65b",
+    "bench-review-72d-three-1733-node3-tcp.ndjson.gz": "78fc278346799693e4f35f9d6dff1e50fcceb011e034917547665187110e2874",
+    "bench-review-72d-three-1733-node3.log.gz": "dd90b95728a2655e241c43145afec24277225f99acc8659e095038898595dd86",
+    "bench-review-72d-three-1733-raw.ndjson": "fe4dd5580f1ea87facf1480e472bc5df3a51d29467095dc20a98f49538192028",
+    "comparative-campaign-bench-review-72d-three-1733.json": "e752b01bc0a7daba71f84d8108be55759cc096d5d7b041cdd51fdb36720dc386",
+    "partition-admission.md": "096b0c5b3cddf9b52d338dde5efb30d71c66901b7357a76e49640b2e8abbd692",
+    "partition-waits.json": "eb5e7e9b9c1fafb9c4ce8344dc40c1f421352fc9c3c5b52f2eee1859a34d840c",
+    "partition-waits.md": "e8e3c308e5ef0912af8aef62833915deccc427f5fbe70ca92377bc5fcf31c5a3",
+    "stage-results.txt": "037aca9d05f570c519a23bc4a2135657c9e072a78a6d01e6d0b1f7315fd7db48"
+  }
+}

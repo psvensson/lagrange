@@ -399,6 +399,28 @@ function extractColumnNames(col) {
   return {colName, targetKey: col.alias || colName};
 }
 
+const MIN_SAFE_LIVE_QUERY_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_LIVE_QUERY_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+function normalizeLiveQueryCellValue(value) {
+  if (typeof value !== 'bigint') return value;
+  return value >= MIN_SAFE_LIVE_QUERY_BIGINT && value <= MAX_SAFE_LIVE_QUERY_BIGINT ?
+    Number(value) :
+    value.toString();
+}
+
+function normalizeLiveQueryRowForPresentation(row) {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+  let mutated = null;
+  for (const [key, value] of Object.entries(row)) {
+    if (typeof value === 'bigint') {
+      if (!mutated) mutated = {...row};
+      mutated[key] = normalizeLiveQueryCellValue(value);
+    }
+  }
+  return mutated ?? row;
+}
+
 /**
  * Project a single column into the projected row container.
  */
@@ -408,8 +430,9 @@ function projectSingleColumn(projected, row, col) {
   }
   const {colName, targetKey} = extractColumnNames(col);
   if (targetKey) {
-    projected[targetKey] = (colName && row[colName] !== undefined) ?
+    const rawValue = (colName && row[colName] !== undefined) ?
       row[colName] : (row[targetKey] ?? null);
+    projected[targetKey] = normalizeLiveQueryCellValue(rawValue);
   }
   return true;
 }
@@ -598,15 +621,26 @@ function collectExpiredClientIds(clients) {
   return expired;
 }
 
+function serializeLiveQueryPayload(payload) {
+  return JSON.stringify(
+    payload,
+    (_key, value) => (typeof value === 'bigint' ? normalizeLiveQueryCellValue(value) : value),
+  );
+}
+
 /**
  * Send payload to all subscribed clients.
  */
 function fanOutToClients(clients, payload, options = {}) {
   const {hlcTimestamp, logger, queryId} = options;
+  let serialized = null;
   for (const [, subscription] of clients) {
     try {
       if (subscription.client && typeof subscription.client.send === 'function') {
-        subscription.client.send(JSON.stringify(payload));
+        if (serialized === null) {
+          serialized = serializeLiveQueryPayload(payload);
+        }
+        subscription.client.send(serialized);
       }
       if (hlcTimestamp) {
         subscription.lastSeenHLC = hlcTimestamp;
@@ -719,6 +753,7 @@ export {
   fanOutToClients,
   isComplexQuery,
   isPartitionVisibleForRouting,
+  normalizeLiveQueryRowForPresentation,
   normalizeSelectAstForRenderer,
   projectSingleColumn,
   recordInitialFrontiers,

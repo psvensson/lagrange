@@ -62,6 +62,13 @@ import {
   readPartitionCommittedMembership,
   reservePartitionRaftPeerIdentity,
 } from './partition-service-raft-membership-administration.js';
+import {PARTITION_MEMBERSHIP_RECOVERY_ERROR} from
+  './partition-membership-recovery-constants.js';
+import {
+  isLocalReplicaExcludedFenced,
+  isPeerExcludedInGroup,
+  markLocalReplicaExcludedFence,
+} from './partition-membership-recovery.js';
 
 const ADMIT_REPLICA_MESSAGE_TYPE = PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA;
 const REQUEST_TRANSPORT_LOST = 'Replica admission request no longer owns this transport';
@@ -587,11 +594,21 @@ async function handleReplicaAdmissionRequest(service, payload) {
     replicaIdentity: payload?.replicaIdentity ?? null,
     operationId: payload?.operationId ?? null};
   const refusal = requestRefusal(payload, service);
-  const admission = refusal !== null ?
-    answer(REPLICA_ADMISSION_OUTCOME.REQUEST_INVALID, {reason: refusal}) :
-    await admitFromCommittedOperation(service, {
+  const excluded = refusal === null ?
+    isPeerExcludedInGroup(service, {replicaId: payload.replicaIdentity}) : null;
+  let admission;
+  if (refusal !== null) {
+    admission = answer(REPLICA_ADMISSION_OUTCOME.REQUEST_INVALID, {reason: refusal});
+  } else if (isLocalReplicaExcludedFenced(service) || excluded !== null) {
+    admission = answer(REPLICA_ADMISSION_OUTCOME.REFUSED, {
+      reason: PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED,
+      failureCode: PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED,
+    });
+  } else {
+    admission = await admitFromCommittedOperation(service, {
       replicaIdentity: payload.replicaIdentity,
       operationId: payload.operationId});
+  }
   service.logger.info(REPLICA_ADMISSION_LOG_MSG.DECIDED, {
     ...envelope, replicaId: service.replicaId, outcome: admission.outcome,
     reason: admission.reason ?? null,
@@ -606,6 +623,15 @@ async function handleReplicaAdmissionRequest(service, payload) {
  * @return {Promise<Object>} The request record.
  */
 async function requestReplicaAdmission(service, operationId) {
+  if (isLocalReplicaExcludedFenced(service)) {
+    return Object.freeze({
+      operationId,
+      state: REPLICA_ADMISSION_REQUEST_STATE.REFUSED,
+      lastOutcome: REPLICA_ADMISSION_OUTCOME.REFUSED,
+      reason: PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED,
+      failureCode: PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED,
+    });
+  }
   const previous = service.replicaAdmissionRequest;
   if (service.isShutdown) return previous ?? null;
   if (previous?.operationId !== operationId ||
@@ -679,6 +705,13 @@ async function runReplicaAdmissionDelivery(service, request, signal) {
   admission ??= await service.sendReplicaAdmissionRequest(request);
   if (!isCurrentAdmissionRequest(service, request, signal)) return request;
   request.lastOutcome = admission.outcome;
+  if (admission.reason === PARTITION_MEMBERSHIP_RECOVERY_ERROR.RETIRED_MEMBER_FENCED) {
+    markLocalReplicaExcludedFence(service, {
+      partitionId: service.partitionId,
+      sourceReplicaId: service.replicaId,
+      sourceNodeId: service.nodeId,
+    });
+  }
   request.state = requestStateAfter(admission.outcome);
   if (request.state === REPLICA_ADMISSION_REQUEST_STATE.PENDING) {
     // A usable hint is followed; anything else (no hint, an unaddressed

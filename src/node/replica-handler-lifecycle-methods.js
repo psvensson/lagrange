@@ -1,3 +1,4 @@
+import {observeReleaseReceiver} from './participant-release-diagnostic-observation.js';
 /**
  * ReplicaHandler lifecycle + message dispatch methods.
  *
@@ -62,6 +63,10 @@ const DIRECT_REPLICA_MESSAGE_HANDLERS = Object.freeze({
   [ReplicaOperationMessageType.PROPOSE_GROWTH_PROMOTE]: 'handleProposeGrowthPromote',
   [ReplicaOperationMessageType.WITHDRAW_PROMOTION]: 'handleWithdrawPromotion',
   [ReplicaOperationMessageType.REMOVE_LEARNER]: 'handleRemoveLearner',
+  [ReplicaOperationMessageType.MATERIALIZE_RECOVERY_LEARNER]:
+    'handleMaterializeRecoveryLearner',
+  [ReplicaOperationMessageType.OBSERVE_RECOVERY_LEARNER]:
+    'handleObserveRecoveryLearner',
 });
 
 async function dispatchReplicaMessage(handler, type, payload) {
@@ -174,10 +179,11 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
       if (type === PARTICIPANT_RELEASE_TYPE) {
         const {request, refusal, observationValidated} = captured;
         const response = refusal ??
-          (request.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
-            await runParticipantCutover(this, request) :
-            await receiveParticipantRelease(this, request,
-              observationValidated));
+          await observeReleaseReceiver(this, envelope, request, () =>
+            request.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
+              runParticipantCutover(this, request) :
+              receiveParticipantRelease(this, request,
+                observationValidated));
         return {[PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
       }
       await this.awaitRemovedReplicaCleanupAdmissionBarrier();

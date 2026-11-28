@@ -5,7 +5,6 @@
  */
 
 import {CDC_OPERATION, COLUMN, SQL} from '../constants/index.js';
-import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {
   hasSystemCacheKeyDescriptor,
   resolveSystemCacheRowKey,
@@ -67,20 +66,6 @@ function isPlainRecordObject(value) {
   return proto === Object.prototype || proto === null;
 }
 
-const SYNTHETIC_FIXTURE_ID_KEY = 'id';
-
-function hasDeclaredSystemTableColumn(tableName, data) {
-  const columns = getSchemaByTableName(tableName)?.columns;
-  return Array.isArray(columns) &&
-    columns.some((col) => Object.prototype.hasOwnProperty.call(data, col.name));
-}
-
-function hasSyntheticFixturePrimaryKey(tableName, data) {
-  const value = data?.[SYNTHETIC_FIXTURE_ID_KEY];
-  return value !== undefined && value !== null && value !== '' &&
-    !hasDeclaredSystemTableColumn(tableName, data);
-}
-
 /**
  * Validate that extracted CDC row data carries the table's primary key (when
  * the table has a system-cache key descriptor) or a non-HLC row column.
@@ -91,8 +76,7 @@ function hasSyntheticFixturePrimaryKey(tableName, data) {
 function hasValidPartitionCdcRowPayload(tableName, data) {
   if (!isPlainRecordObject(data)) return false;
   if (typeof tableName === 'string' && hasSystemCacheKeyDescriptor(tableName)) {
-    return resolveSystemCacheRowKey(tableName, data) !== undefined ||
-      hasSyntheticFixturePrimaryKey(tableName, data);
+    return resolveSystemCacheRowKey(tableName, data) !== undefined;
   }
   return Object.keys(data).some(
     (key) => key !== COLUMN.UPDATED_AT_HLC && data[key] !== undefined && data[key] !== null,
@@ -119,11 +103,6 @@ function canExtractQueryInsertRows(entry, entryType) {
     typeof entry?.sql === 'string' &&
     !hasPopulatedEntryData(entry) &&
     isInsertOrUpsertOperation(entryType);
-}
-
-function firstAffectedRowOf(entry) {
-  return Array.isArray(entry?.affectedRows) && entry.affectedRows.length > 0 ?
-    entry.affectedRows[0] : null;
 }
 
 // Shared by normal committed capture and read-only correspondence. The row
@@ -277,21 +256,6 @@ class PartitionCDCGenerator {
         ...(Number.isFinite(entry.term) ? {term: entry.term} : {}),
       }),
     });
-  }
-
-  /**
-   * Build a full CDC event from a previously-resolved envelope snapshot.
-   * @param {Object} entry - Write entry.
-   * @param {Object} envelopeResult - Result from resolveEventEnvelope().
-   * @param {Object} options - Event build options.
-   * @param {number} options.sequenceNumber - Optional monotonic sequence number.
-   * @return {Object} Built CDC event.
-   */
-  hydrateEventEnvelope(entry, envelopeResult, options = {}) {
-    const row = firstAffectedRowOf(entry) ??
-      this.extractCDCData(entry, envelopeResult.entryType,
-        envelopeResult.cdcEventEnvelope.tableName);
-    return hydratePartitionCdcEvent(envelopeResult.cdcEventEnvelope, row, options);
   }
 
   /**

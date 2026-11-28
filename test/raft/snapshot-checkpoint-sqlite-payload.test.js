@@ -18,11 +18,13 @@ import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
   RAFT_CHECKPOINT_PAYLOAD_KIND,
+  RAFT_CHECKPOINT_VALIDATION_OUTCOME,
   RAFT_RS_CHECKPOINT_REASON,
 } from '../../src/raft/snapshot-checkpoint-constants.js';
 import {
   createSqliteStateMachineCheckpoint,
   listCheckpointGenerations,
+  readCheckpoint,
 } from '../../src/raft/snapshot-checkpoint-store.js';
 
 // raft-snapshot-checkpoint-format S1 (R1) SQLite evidence bar on the canonical
@@ -173,6 +175,34 @@ test('a sealed raft-rs payload excludes consensus tables and keeps the committed
       fixture.close();
     }
   });
+
+test('creator validates staged bytes before publishing or replacing a generation', async (t) => {
+  const fixture = createFixture();
+  try {
+    const index = seedCommittedFixture(fixture);
+    const create = (identity) => createSqliteStateMachineCheckpoint({db: fixture.db,
+      checkpointsRoot: fixture.checkpointsRoot, raftRsGroupId: PARTITION_ID, identity});
+    const foreign = await create({...IDENTITY, raftGroupId: 'other-group'});
+    t.equal(foreign.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.IMAGE_REJECTED);
+    t.equal(foreign.validation?.outcome, RAFT_CHECKPOINT_VALIDATION_OUTCOME.CORRUPT_DESCRIPTOR);
+    t.same(foreign.reasons, [RAFT_RS_CHECKPOINT_REASON.DESCRIPTOR]);
+    t.same(fs.readdirSync(fixture.checkpointsRoot), [], 'no directory for rejected bytes');
+
+    const original = await create(IDENTITY);
+    t.equal(original.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED);
+    fixture.db.exec('CREATE TABLE _partition_statement_outcomes (entry_key TEXT)');
+    const rejected = await create(IDENTITY);
+    t.equal(rejected.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.IMAGE_REJECTED);
+    t.equal(rejected.validation?.outcome, RAFT_CHECKPOINT_VALIDATION_OUTCOME.CORRUPT_PAYLOAD);
+    t.same(rejected.reasons, [RAFT_RS_CHECKPOINT_REASON.PAYLOAD_TABLES]);
+    t.same(fs.readdirSync(fixture.checkpointsRoot), [String(index)]);
+    const retained = readCheckpoint({checkpointDir: original.checkpointDir, expectedIdentity: IDENTITY});
+    t.equal(retained.outcome, RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID);
+    t.same(retained.descriptor, original.descriptor, 'same-index refusal preserves the original manifest and payload');
+  } finally {
+    fixture.close();
+  }
+});
 
 test('creation fails closed on raft-rs watermark divergence and pending prepared tx',
   async (t) => {

@@ -1,3 +1,4 @@
+import {PLACEMENT_RESOURCE_COLUMNS} from '../diagnostics/placement-resource-sample.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   COLUMN,
@@ -113,7 +114,6 @@ const NODE_TELEMETRY_COLUMNS = Object.freeze([
   COLUMN.CPU_CORES,
   COLUMN.MEMORY_MB,
   COLUMN.DISK_GB,
-  COLUMN.CPU_USAGE_PERCENT,
   COLUMN.MEMORY_USAGE_PERCENT,
   COLUMN.DISK_USAGE_PERCENT,
 ]);
@@ -230,7 +230,27 @@ function resolveTelemetryColumns(telemetry, source) {
       columns[column] = telemetry[column];
     }
   }
-  return {...columns, ...resolveStorageBudgetColumns(telemetry, source)};
+  return {
+    ...columns,
+    ...resolveStorageBudgetColumns(telemetry, source),
+    ...extractTelemetrySampleMeta(telemetry),
+  };
+}
+
+function extractTelemetrySampleMeta(telemetry) {
+  if (!telemetry || typeof telemetry !== 'object') return {};
+  const meta = {};
+  for (const column of Object.values(PLACEMENT_RESOURCE_COLUMNS)) {
+    if (Object.hasOwn(telemetry, column)) {
+      meta[column] = numberIsFinite(telemetry[column]) ? telemetry[column] : null;
+    }
+  }
+  for (const key of ['telemetry_sampled_at', 'telemetry_sample_id']) {
+    if (Object.hasOwn(telemetry, key)) {
+      meta[key] = Number.isSafeInteger(telemetry[key]) ? telemetry[key] : null;
+    }
+  }
+  return meta;
 }
 
 // Only forward liveness progress is written: a request that does not advance
@@ -515,7 +535,7 @@ class NodeLifecyclePublication {
       heartbeatAt,
       bootIncarnation,
       update,
-      expectedRow: {...source, ...update},
+      expectedRow: {...source, ...update, ...extractTelemetrySampleMeta(request.telemetry)},
     };
     if (!isLifecycleWatermarkNewer(
       getNodeHeartbeatWatermark(source),

@@ -1,0 +1,50 @@
+{
+  "campaignId": "bench-review-composed-three-1812",
+  "sourceCommit": "c53f7d44578d12412bcc26e9185b42b42c5c2db1",
+  "imageRepoDigest": "lagrange@sha256:690e732722b1c3dec18772309a7d61938a2f67d77d5d682f4f2c88574a311a49",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T18:21:28.393Z",
+  "lastCompleteCensusAt": "2026-11-26T18:21:23.394Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 21,
+  "attempted": [
+    {
+      "runId": "bench-review-composed-three-1812-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 54,
+    "medianMs": 708,
+    "p95Ms": 2134,
+    "maxMs": 4346
+  },
+  "evidenceSha256": {
+    "bench-review-composed-three-1812-deadline-census.ndjson": "caca6e9d3341e5c12bef48135ad381e3cc1be79687fe4e12aebc0ab2cf0c676a",
+    "bench-review-composed-three-1812-decision-samples.ndjson": "9e14c16ebd2f9333998f901c599231145c9ebfafa5af0edb9a5d821457d554f0",
+    "bench-review-composed-three-1812-formation.ndjson": "b8090649ddfd933b3405eb15cf288f2cd742751eabdd0f7c2448bc7c39c33ee4",
+    "bench-review-composed-three-1812-node1-tcp.ndjson.gz": "d95b8f67caff1627f0a3bc7e3f8eb22ed354aaad4d062e50fbdfb4e81f122bbe",
+    "bench-review-composed-three-1812-node1.log.gz": "a2b675416399d654c13ca5d5e5e9ac6ace45af98b58208eaf7872c8f2609b9de",
+    "bench-review-composed-three-1812-node2-tcp.ndjson.gz": "deef24d97a39e22c62c7a59aa0c5936e8e9da3addd9335e3e9e4d15f9aed62f3",
+    "bench-review-composed-three-1812-node2.log.gz": "91d61829b25d2b23412c4bd4f88e586e3ed8762f19db6deea363803e51acaea1",
+    "bench-review-composed-three-1812-node3-tcp.ndjson.gz": "6360336f52e1824ebb1616f4e2e8cb97d4c7aa23d413246a0bd5ac5777e17a49",
+    "bench-review-composed-three-1812-node3.log.gz": "88a98f123fa5c2397842487bd6229dab3786d5b5c4b8fd23ab0aecdb5131b937",
+    "bench-review-composed-three-1812-raw.ndjson": "edfa6584458e5ee25c1494474f1ed2b4c6e6f99dbcad6550152343f33f53a567",
+    "comparative-campaign-bench-review-composed-three-1812.json": "0bb5432695b49c0cb3e670e4004ac0a32bf5a0fef414fbd03e0997b55322ca73",
+    "partition-admission.md": "c3c650dd7846039eb4aaa8ef06aac3071b8561906a561e4341cc8f3d8e112ef1",
+    "partition-waits.json": "da62de77ab9317761fc927f6082f7d1677dc096aff11cbeb0931514fa606e078",
+    "partition-waits.md": "fef2e2ae27746f368baab0dbe7ec87c60db34957d96bef28a32b07e88d2d1615",
+    "stage-results.txt": "4d0c42f9f2877d46638b1ab7abd6bffaa7f9ec8cf7029d067c6eb5eb5693b78e"
+  }
+}

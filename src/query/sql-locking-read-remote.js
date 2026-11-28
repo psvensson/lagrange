@@ -30,6 +30,8 @@ import {
   LOCKING_READ_RESERVATION_OUTCOME,
   LOCKING_READ_RESERVATION_TYPE,
 } from './sql-locking-read-constants.js';
+import {normalizePkScalar} from
+  '../partition/partition-locking-read-command-constants.js';
 
 const RESERVATION_RESULT_MODE = Object.freeze({
   LOCAL: 'local',
@@ -259,7 +261,9 @@ export async function acquireAuthoritativePartitionReservation(engine, params) {
   const {service} = resolvePartitionServiceEntry(engine, partitionId);
   const rpcPayload = {
     tableName: params.tableName,
-    pkValues: params.pkValues,
+    pkValues: Array.isArray(params.pkValues) ?
+      params.pkValues.map(normalizePkScalar) :
+      params.pkValues,
     transactionId: params.transactionId,
     sessionId: params.sessionId,
     participantId: `${params.transactionId}:${partitionId}`,

@@ -55,6 +55,15 @@ import {
   attachReplicaPlacementOwner,
 } from '../../rebalancer/replica-placement-owner.js';
 import {
+  createAdaptivePlacementBudgetController,
+} from '../../rebalancer/replica-placement-adaptive-budget.js';
+import {
+  createControlPlanePlacementNodeObservationReader,
+} from '../../rebalancer/replica-placement-owner-capacity.js';
+import {
+  ResourceDiagnosticsSampler,
+} from '../../diagnostics/resource-diagnostics-sampler.js';
+import {
   requireResyncTimerCollaborators,
 } from '../../rebalancer/replica-placement-owner-collaborators.js';
 import {
@@ -415,36 +424,40 @@ class ControlPlaneSetup {
     if (!rebalanceCoordinator.transactionCoordinator) {
       rebalanceCoordinator.transactionCoordinator = transactionCoordinator;
     }
+    const placementDiagnosticsSampler = new ResourceDiagnosticsSampler({
+      nodeId,
+      owner: rebalanceCoordinator,
+    });
+    const readNodeObservation = createControlPlanePlacementNodeObservationReader({
+      localNodeId: nodeId,
+      resourceDiagnosticsSampler: placementDiagnosticsSampler,
+      systemTableCache,
+    });
+    const adaptiveBudgetOptions = {
+      readNodeObservation,
+    };
+    const adaptiveBudgetController =
+      createAdaptivePlacementBudgetController(adaptiveBudgetOptions);
     rebalanceCoordinator.bindReplicaPlacementOwnerFactory(
       ControlPlaneSetup.createReplicaPlacementOwnerFactory({
-        nodeId,
-        controlPlaneReadinessService,
-        rebalanceCoordinator,
-        systemTableCache,
-        storageAccountingService,
+        nodeId, controlPlaneReadinessService, rebalanceCoordinator,
+        systemTableCache, storageAccountingService,
+        adaptiveBudgetController, adaptiveBudgetOptions,
       }),
     );
 
     const systemMetadataOwners = createSystemMetadataOwners({
-      controlPlaneSystemTableGateway,
-      systemTableCache,
+      controlPlaneSystemTableGateway, systemTableCache,
     });
     const serviceLifecycleCommandOwner =
       createAndWireServiceLifecycleCommandOwner(
-        options,
-        controlPlaneRuntimeBundle,
-        systemMetadataOwners,
+        options, controlPlaneRuntimeBundle, systemMetadataOwners,
       );
     const membershipPublicationRuntimeOwner =
       new MembershipPublicationRuntimeOwner({
-        nodeId,
-        cdcIntegrationService,
-        systemTableCache,
-        messageRouter,
-        controlPlaneSystemTableGateway,
-        systemMetadataOwners,
-        controlPlaneWriteRetryTimeoutMs,
-        controlPlaneWriteRetryBaseDelayMs,
+        nodeId, cdcIntegrationService, systemTableCache, messageRouter,
+        controlPlaneSystemTableGateway, systemMetadataOwners,
+        controlPlaneWriteRetryTimeoutMs, controlPlaneWriteRetryBaseDelayMs,
         controlPlaneWriteRetryMaxDelayMs,
       });
     // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime, built
@@ -521,6 +534,7 @@ class ControlPlaneSetup {
 
     // Create decomposed control plane services
     const heartbeatService = assembleHeartbeatService({
+      resourceDiagnosticsSampler: placementDiagnosticsSampler,
       nodeId,
       nodeAddress,
       advertisedNodeWsAddress,
@@ -635,7 +649,8 @@ class ControlPlaneSetup {
    */
   static createReplicaPlacementOwnerFactory(options) {
     const {nodeId, controlPlaneReadinessService, rebalanceCoordinator,
-      systemTableCache, storageAccountingService} = options;
+      systemTableCache, storageAccountingService,
+      adaptiveBudgetController, adaptiveBudgetOptions} = options;
     return (ledgerPartitionService) => ControlPlaneSetup.attachReplicaPlacementOwner({
       nodeId,
       ledgerPartitionService,
@@ -647,6 +662,8 @@ class ControlPlaneSetup {
       logger: ledgerPartitionService.logger,
       setIntervalFn: (fn, ms) => ledgerPartitionService.timeSource.setInterval(fn, ms),
       clearIntervalFn: (handle) => ledgerPartitionService.timeSource.clearInterval(handle),
+      adaptiveBudgetController,
+      adaptiveBudgetOptions,
     });
   }
 
@@ -675,6 +692,8 @@ class ControlPlaneSetup {
       resyncIntervalMs: options.resyncIntervalMs,
       setIntervalFn: options.setIntervalFn,
       clearIntervalFn: options.clearIntervalFn,
+      adaptiveBudgetController: options.adaptiveBudgetController,
+      adaptiveBudgetOptions: options.adaptiveBudgetOptions,
     });
   }
 
@@ -714,9 +733,10 @@ class ControlPlaneSetup {
       const stats = await nodeService.getNodeStats();
       await heartbeatService.sendHeartbeat(
         {
+          sampledAtMs: stats.sampledAtMs ?? stats.timestamp,
+          sampleId: stats.sampleId,
           cpu: {
             count: stats.cpu?.count,
-            usagePercent: stats.cpu?.usagePercent,
           },
           memory: {
             totalBytes: stats.memory?.totalBytes,

@@ -1,3 +1,5 @@
+import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from
+  '../../src/rebalancer/replica-create-admission-token.js';
 import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {buildOperationUpdateOutcome} from
   '../../src/rebalancer/replica-operation-update-outcome.js';
@@ -337,12 +339,13 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
     entityId: 'user-lost-response-p1',
     stepsHistory: [],
   };
+  const firstToken = buildReplicaCreateAdmissionToken(operation);
   const admitted = {
     ...operation,
     createAdmissionState: 'ADMITTED',
-    createAdmissionToken: 'lost-response-admission',
+    createAdmissionToken: firstToken,
     createAdmissionReplicaCreatedAt: 303,
-    createAdmissionAttemptToken: 'lost-response-admission:attempt:1',
+    createAdmissionAttemptToken: buildReplicaCreateAttemptToken(firstToken, 1),
     createAdmissionAttemptSeq: 1,
     createAdmissionWorkflowUpdatedAt: 101,
     createAdmissionOwnerIncarnation: 7,
@@ -384,6 +387,17 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
   };
 
   try {
+    const originalRetry = owner.scheduleObservedProgressRetry;
+    const retryIds = [];
+    owner.scheduleObservedProgressRetry = (id) => retryIds.push(id);
+    owner.repository.getOperationByIdVisibilityObservation = async () => ({
+      operation: {...admitted, createAdmissionAttemptToken: 'unrelated:attempt:1'},
+    });
+    await owner.executeOperationInternal({...operation}, {});
+    t.same(retryIds, [operation.operationId], 'same sequence and timestamp with wrong token retains observation');
+    t.equal(stepUpdates.length, 0, 'another attempt cannot authorize CREATING');
+    t.equal(failCalls, 0, 'another attempt cannot authorize failure');
+    owner.scheduleObservedProgressRetry = originalRetry;
     owner.repository.getOperationByIdVisibilityObservation = async () => ({
       operation: admitted,
       deferredOutcome: null,

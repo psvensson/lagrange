@@ -284,10 +284,11 @@ const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
 const CANDIDATE_ALLOWED_KEYS = Object.freeze(new Set([
   ...CANDIDATE_REQUIRED_FIELDS, 'deficitKind', 'distinctHostCount', 'voterCount',
 ]));
-const CONTEXT_FIELDS = Object.freeze([
+const CONTEXT_REQUIRED_FIELDS = Object.freeze([
   'sourceNodeId', 'repairWaitingSourceNodeIds', 'formationLatchEpoch',
-  'membershipPublicationEpoch', 'positions',
+  'membershipPublicationEpoch', 'positions', 'kSrc', 'kTgt',
 ]);
+const CONTEXT_ALLOWED_KEYS = Object.freeze(new Set(CONTEXT_REQUIRED_FIELDS));
 const FOUNDING_FIELDS = Object.freeze([
   'partitionId', 'placementClass', 'foundingIntentId', 'targetNodeIds',
   'sourceNodeId', 'formationLatchEpoch', 'positions',
@@ -352,19 +353,25 @@ function isValidCandidateRecord(record) {
     Object.keys(record).every((field) => CANDIDATE_ALLOWED_KEYS.has(field));
 }
 
+function isValidContextRecord(record) {
+  return record !== null &&
+    CONTEXT_REQUIRED_FIELDS.every((field) => Object.hasOwn(record, field)) &&
+    Object.keys(record).every((field) => CONTEXT_ALLOWED_KEYS.has(field));
+}
+
 function buildPlacementAdmissionStatement(candidate, context) {
   const candidateRecord = copyStrictOwnDataRecord(candidate);
   const contextRecord = copyStrictOwnDataRecord(context);
   const move = moveOf(candidateRecord?.move);
   if (!isValidCandidateRecord(candidateRecord) ||
-      !hasExactFields(contextRecord, CONTEXT_FIELDS) ||
+      !isValidContextRecord(contextRecord) ||
       move === null ||
       (move.type === OperationType.REMOVE && move[LEARNER_RETIREMENT] === undefined &&
         move[VOTER_RETIREMENT] === undefined) ||
       !(contextRecord.repairWaitingSourceNodeIds instanceof Set)) {
     return requireStatement(null);
   }
-  const kSrc = PLACEMENT_COPY_CAPACITY.K_SRC;
+  const {kSrc, kTgt} = contextRecord;
   const ledger = candidateRecord.placementClass === PLACEMENT_CLASS.LEDGER;
   return requireStatement({
     transitionKind: KIND.PLACEMENT,
@@ -374,7 +381,7 @@ function buildPlacementAdmissionStatement(candidate, context) {
     placementClass: candidateRecord.placementClass,
     repair: candidateRecord.repair,
     kSrc,
-    kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
+    kTgt,
     kSrcForClass: resolveSourceCapacityForClass({
       placementClass: candidateRecord.placementClass,
       repair: candidateRecord.repair,

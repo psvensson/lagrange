@@ -1,0 +1,50 @@
+{
+  "campaignId": "bench-review-c94-three-1629",
+  "sourceCommit": "c94a0c837ef01f45698a0efc4d2d48e7e2e1be27",
+  "imageRepoDigest": "lagrange@sha256:b9d1ca9d4d0d9d493456bff1f5a72fd5b92b7d05fdff254f33dab50c3f65d77e",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T16:38:05.569Z",
+  "lastCompleteCensusAt": "2026-11-26T16:38:01.224Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 12,
+  "attempted": [
+    {
+      "runId": "bench-review-c94-three-1629-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 70,
+    "medianMs": 1999,
+    "p95Ms": 15788,
+    "maxMs": 25322
+  },
+  "evidenceSha256": {
+    "bench-review-c94-three-1629-deadline-census.ndjson": "6c17411db813760064cfdc3cc1010a5b703efea2cb12cb6f9428177f93aabf3d",
+    "bench-review-c94-three-1629-decision-samples.ndjson": "7baf530f4fe90d7a880842719a2cf6854a611b9ecbc016804e11e4128fc90227",
+    "bench-review-c94-three-1629-formation.ndjson": "87af1c1a232aa06273f3ac0d83f10f8bed23139e33bd00acd7e6c3a9519b9927",
+    "bench-review-c94-three-1629-node1-tcp.ndjson.gz": "7c2e1cd24b6525f72fa1b3f256c9587e9d7518c2809d0b3d1ada581a591d1882",
+    "bench-review-c94-three-1629-node1.log.gz": "da70831936e796546406fcb7369c826fb1570f40ad926bf40cd9aa68b28266c7",
+    "bench-review-c94-three-1629-node2-tcp.ndjson.gz": "f1e760d5539dfdf7056974c0ee1b181afd30ece835f99151fa3f4f1a16754afd",
+    "bench-review-c94-three-1629-node2.log.gz": "c31bc0dcaf516a8bc8eec63278dbecddc6dbaf909ad50a226d2094bc5c76bfbf",
+    "bench-review-c94-three-1629-node3-tcp.ndjson.gz": "a2efec494314f14aa0cb9187997ca5129c1d7e7c7af225faaf921dd881034d4d",
+    "bench-review-c94-three-1629-node3.log.gz": "bdae6044a2afdd89ffe11534c8855dfc96ed07edd5228fd091da7757199349a5",
+    "bench-review-c94-three-1629-raw.ndjson": "4dcb5247c3fed0a17c260ab5e716b5c6ac329fbf41828b850a289a22ae2519e2",
+    "comparative-campaign-bench-review-c94-three-1629.json": "f7d04eea5da0afeac185229c23f32438f114a18dd5a05af6333509cfcd621450",
+    "partition-admission.md": "0c8c6e5aee75efffc1a0ede03afc7ca276b123c16191ac9e20f72c4b41d522e8",
+    "partition-waits.json": "0111d9b1f626fca368cd45dfbd9d2308793f20f3e0427ca0353e2e630cc76e4c",
+    "partition-waits.md": "aed92f35dfb9930b926df07539a63b18023b59b2af9e5d0378f0c757a7217356",
+    "stage-results.txt": "513f86984d32af41809d37e1f1bf927c3c9d22d1b98b931056094f690e4ecd24"
+  }
+}

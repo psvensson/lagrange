@@ -1,0 +1,50 @@
+{
+  "campaignId": "bench-control-grant-three-1836",
+  "sourceCommit": "35fb423572bb84313f7348e173d4d7ac6e3dd5a3",
+  "imageRepoDigest": "lagrange@sha256:550e920a397b211d1db17c7713a5d7dc2fa71d3e80f6641166cabaa690334570",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T18:43:13.363Z",
+  "lastCompleteCensusAt": "2026-11-26T18:43:08.642Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 4,
+  "attempted": [
+    {
+      "runId": "bench-control-grant-three-1836-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 91,
+    "medianMs": 912,
+    "p95Ms": 2586,
+    "maxMs": 5331
+  },
+  "evidenceSha256": {
+    "bench-control-grant-three-1836-deadline-census.ndjson": "868eeb2ae5aa36fe2a9b65885e644e9062c5b132b3aa087bcb3193fd36a3abdc",
+    "bench-control-grant-three-1836-decision-samples.ndjson": "7a7e83c0cdbee31c5e76ec67b57560734e9956ab676a59d56c6fd273fd188ae8",
+    "bench-control-grant-three-1836-formation.ndjson": "e73b966d76f696152a73456cb1f408b4f532cf950e025ba012ad4e9197e97792",
+    "bench-control-grant-three-1836-node1-tcp.ndjson.gz": "8215627969302c9b137e66403eda66f98f43f5062be63b1d87d73a4e369671e5",
+    "bench-control-grant-three-1836-node1.log.gz": "88b4493a96910e9dc7180fdbbce1551143f96565ea90ffb32e3cd009b412943e",
+    "bench-control-grant-three-1836-node2-tcp.ndjson.gz": "2f6424a1e11077b8761c9471a40eeabe2a953426a5dc1c65c7c1ec3da547ec45",
+    "bench-control-grant-three-1836-node2.log.gz": "6ddf5812892db8819c1690ce83dc5fd2653208ce2e293b3ecb5ee32630640b99",
+    "bench-control-grant-three-1836-node3-tcp.ndjson.gz": "ead411649e9cc122d3c595beea0f87625cd933d7dddebcd29cd1cc9197d0f13f",
+    "bench-control-grant-three-1836-node3.log.gz": "e9aca141bc52fcd2c709a939dcb769a0d09e8901e5391dcae0025546ab1cb97f",
+    "bench-control-grant-three-1836-raw.ndjson": "270e128b74aadf6eca7b01395b7e6066893610b43e3eebaa0e0abcb77117cf32",
+    "comparative-campaign-bench-control-grant-three-1836.json": "35636c98f11b22ddca0b95d85b2532f7a5ddb106d490bf3160ac942c9c2c3300",
+    "partition-admission.md": "af9e4c4a5e68217acfb4dd315011140f0a79e1aba9a55c3c062059b56e56f98c",
+    "partition-waits.json": "decf342f3d9f860b394ae9e5028e255e6fede92bc394fe06306e390f4579b30d",
+    "partition-waits.md": "a5685b798411bf916550762f77837e5afc959eb0ed3335a1edde00987653602b",
+    "stage-results.txt": "4a4b29d9fe333a6658fac03714eae3b85584cc58b66171bd1b98d6ad50c111da"
+  }
+}

@@ -1,0 +1,31 @@
+TAP version 13
+# Subtest: lagrange-server npm distribution
+    # Subtest: packs one commit-bound artifact and proves installed public start/stop, API and CLIs
+    ok 1 - packs one commit-bound artifact and proves installed public start/stop, API and CLIs
+      ---
+      duration_ms: 92476.021081
+      type: 'test'
+      ...
+    # npm tarball a723f28f16ac39c760da5d48cdd0706a931a3246 sha512-YvBDZkXTl+j5Weu/OC1aXV2hgHlM8HrxAGyUBI4L8WRL+rWoej2hL8S8gSXj8ugXVpxHdQstnQPvPNd8KPFJmQ== contains 2094 entries, 5403842 packed bytes and 24788681 unpacked bytes
+    # Subtest: resolves the harness playback-viewer copy source to the packaged runtime asset (single owner, no checked-in twin)
+    ok 2 - resolves the harness playback-viewer copy source to the packaged runtime asset (single owner, no checked-in twin)
+      ---
+      duration_ms: 25.99445
+      type: 'test'
+      ...
+    1..2
+ok 1 - lagrange-server npm distribution
+  ---
+  duration_ms: 92503.331297
+  type: 'suite'
+  ...
+1..1
+# tests 2
+# suites 1
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 92508.742529
+# time=92799ms

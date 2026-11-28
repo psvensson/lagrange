@@ -52,6 +52,7 @@ const GROUP_TABLE = CDC_TABLE;
 const GROUP_SCHEMA = Object.freeze({columns: [
   {name: 'id', type: 'TEXT', primaryKey: true},
   {name: 'value', type: 'TEXT'},
+  {name: 'group_id', type: 'TEXT GENERATED ALWAYS AS (id) VIRTUAL'},
 ]});
 const GROUP_BUDGET_MS = 20000;
 const COORDINATOR_NODE_ID = 'tx1-coordinator-node';

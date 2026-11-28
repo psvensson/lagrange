@@ -10,6 +10,7 @@
  */
 
 import {CDC_OPERATION} from '../constants/index.js';
+import {decodeRemoteCdcEnvelopePayload} from '../partition/partition-live-query-cdc-remote.js';
 import {PARTITION_SERVICE_MESSAGE_TYPE} from '../partition/partition-service-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {normalizePositiveRetryAfterMs} from '../transport/transport-semantic-outcome.js';
@@ -266,7 +267,7 @@ function createRemoteLiveQueryCdcCoordinator({
 
   const dispatchInboundCdcEvent = async (envelope) => {
     if (!isCoordinatorActive()) return {success: false, noHandler: true};
-    const payload = envelope?.payload !== undefined ? envelope.payload : envelope;
+    const payload = decodeRemoteCdcEnvelopePayload(envelope);
     if (payload?.type !== PARTITION_SERVICE_MESSAGE_TYPE.LIVE_QUERY_CDC_EVENT ||
         !Array.isArray(payload?.events)) {
       return {success: false};

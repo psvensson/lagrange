@@ -115,12 +115,75 @@ function rolledBackError(failure, message, state) {
   };
 }
 
+function outcomeUnknownParticipantOf(failure) {
+  if (Array.isArray(failure?.participantFailures)) {
+    const match = failure.participantFailures.find(
+      isStatementWriteOutcomeUnknown,
+    );
+    if (match) return match;
+  }
+  if (
+    failure?.firstFailedParticipant &&
+    isStatementWriteOutcomeUnknown(failure.firstFailedParticipant)
+  ) {
+    return failure.firstFailedParticipant;
+  }
+  return failure;
+}
+
+function outcomeUnknownOperationIdentityOf(failure, source) {
+  const entryId = source?.entryId;
+  const writePlan = failure?.distributedWritePlan;
+  const operationId = writePlan?.operationId;
+  const idempotencyKey = writePlan?.idempotencyKey;
+  return {
+    ...(entryId ? {entry_id: entryId} : {}),
+    ...(operationId ? {operation_id: operationId} : {}),
+    ...(idempotencyKey ? {idempotency_key: idempotencyKey} : {}),
+  };
+}
+
+function outcomeUnknownParticipantRoutingDetailOf(source) {
+  const partitionId = source?.partitionId;
+  const participantNodeId = source?.participantNodeId;
+  const participantAddress = source?.participantAddress;
+  return {
+    ...(partitionId ? {partition_id: partitionId} : {}),
+    ...(participantNodeId ? {participant_node_id: participantNodeId} : {}),
+    ...(participantAddress ? {participant_address: participantAddress} : {}),
+  };
+}
+
+function outcomeUnknownParticipantSettlementDetailOf(source) {
+  const failureCode = source?.failureCode;
+  const consensus = source?.consensus;
+  const spentWait = source?.spentWait;
+  return {
+    ...(failureCode ? {failure_code: failureCode} : {}),
+    ...(consensus ? {consensus} : {}),
+    ...(spentWait ? {spent_wait: spentWait} : {}),
+  };
+}
+
+function outcomeUnknownParticipantDetailOf(failure) {
+  const source = outcomeUnknownParticipantOf(failure);
+  return {
+    ...outcomeUnknownOperationIdentityOf(failure, source),
+    ...outcomeUnknownParticipantRoutingDetailOf(source),
+    ...outcomeUnknownParticipantSettlementDetailOf(source),
+  };
+}
+
 function outcomeUnknownError(failure, state) {
   return {
     kind: PGWIRE_TRANSACTION_OUTCOME_KIND.ERROR,
     sqlState: PG_ERROR_CODE.TRANSACTION_RESOLUTION_UNKNOWN,
     message: OUTCOME_UNKNOWN_MESSAGE,
-    detail: {...engineDetail(failure), engine_stage: failure.stage ?? null},
+    detail: {
+      ...engineDetail(failure),
+      engine_stage: failure.stage ?? null,
+      ...outcomeUnknownParticipantDetailOf(failure),
+    },
     state,
     outcomeUnknown: true,
   };

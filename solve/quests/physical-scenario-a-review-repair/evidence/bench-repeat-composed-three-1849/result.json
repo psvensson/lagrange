@@ -1,0 +1,50 @@
+{
+  "campaignId": "bench-repeat-composed-three-1849",
+  "sourceCommit": "c53f7d44578d12412bcc26e9185b42b42c5c2db1",
+  "imageRepoDigest": "lagrange@sha256:690e732722b1c3dec18772309a7d61938a2f67d77d5d682f4f2c88574a311a49",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T18:53:37.492Z",
+  "lastCompleteCensusAt": "2026-11-26T18:53:32.583Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 8,
+  "attempted": [
+    {
+      "runId": "bench-repeat-composed-three-1849-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 89,
+    "medianMs": 844,
+    "p95Ms": 2144,
+    "maxMs": 3761
+  },
+  "evidenceSha256": {
+    "bench-repeat-composed-three-1849-deadline-census.ndjson": "3ecf006d3e81aefe21490624708d953b846b21a16a7642efc8d3c0c48feb2e13",
+    "bench-repeat-composed-three-1849-decision-samples.ndjson": "fdb2cf7f7736ffd17a4bf4512aebefbecfee224532dc2798d524a202966c19b4",
+    "bench-repeat-composed-three-1849-formation.ndjson": "5d5d0ecc55929ab23446682a6d65e1f5d4e79877a95e6a887408ded5421c9823",
+    "bench-repeat-composed-three-1849-node1-tcp.ndjson.gz": "1fd291d58327033ccaa875f6576e805031f73e18e18a4358e395c6ad3eaa9b2d",
+    "bench-repeat-composed-three-1849-node1.log.gz": "13f1cb4318b8de17706d6073ee5d91fb0a07f9c7355a4df79bc609318ef351e9",
+    "bench-repeat-composed-three-1849-node2-tcp.ndjson.gz": "3ee9ca53ae7094fe6ac7f7902bf4f31b0156f78fe9badf19a88e462fe2195983",
+    "bench-repeat-composed-three-1849-node2.log.gz": "0caeb34d807fc41af2e75f80a85c56187d2a3c6337d2ba96a4af2bdedbc1df88",
+    "bench-repeat-composed-three-1849-node3-tcp.ndjson.gz": "ee6fe62afc67baeb461cd5ffacecb54b582151115527c5f04c10968a46b68dd7",
+    "bench-repeat-composed-three-1849-node3.log.gz": "023dcca95dd44c612f007510cd77aa62a1cff779936466f55c2730a693da3d15",
+    "bench-repeat-composed-three-1849-raw.ndjson": "bc1d4fd5124ba0793c8bc2774e284dc67829181d6bf22beedcba227771807093",
+    "comparative-campaign-bench-repeat-composed-three-1849.json": "cb4a7cb3d2a3a48796587db95315b7d49f0b7ccb1df555afafbc3930d1ad93a4",
+    "partition-admission.md": "545d7897afc78fcc985e655970f271cf6d1d8c6e4a0d3ec20a8d69abb36f809c",
+    "partition-waits.json": "e53b93815393a990e756c519e03025e9a0631015ac51742c79080d549dd95a1e",
+    "partition-waits.md": "0d121e63ec99db8c7cb833403143ae07f5a3ee5bef20c331fdb298e2afac1ab1",
+    "stage-results.txt": "2cea4d2b16737866c5e1499b6475bb53815be4a026fdbb685f4df41c0ca75de8"
+  }
+}

@@ -991,8 +991,8 @@ test('PartitionService - deleteData removes records', async (t) => {
 test('PartitionService - generates CDC events on insert', async (t) => {
   const schema = {
     columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'INTEGER'},
+      {name: 'group_id', type: 'TEXT', primaryKey: true},
+      {name: 'updated_at', type: 'INTEGER'},
     ],
   };
 
@@ -1018,7 +1018,7 @@ test('PartitionService - generates CDC events on insert', async (t) => {
   await partition.subscribeToCDCWithHandshake(subscriber);
   await settlePendingCdcDeliveries(partition);
 
-  await partition.insertData(CDC_TABLE, {id: 'cdc-1', value: 100});
+  await partition.insertData(CDC_TABLE, {group_id: 'cdc-1', updated_at: 100});
   await settlePendingCdcDeliveries(partition);
 
   t.equal(cdcEvents.length, 1);
@@ -1087,8 +1087,8 @@ test('PartitionService - a non-propagated control table write records no CDC obl
 test('PartitionService - generates CDC events on update', async (t) => {
   const schema = {
     columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'INTEGER'},
+      {name: 'group_id', type: 'TEXT', primaryKey: true},
+      {name: 'updated_at', type: 'INTEGER'},
     ],
   };
 
@@ -1108,7 +1108,7 @@ test('PartitionService - generates CDC events on update', async (t) => {
   // Single replica becomes leader immediately
   await Promise.resolve();
 
-  await partition.insertData(CDC_TABLE, {id: 'cdc-1', value: 100});
+  await partition.insertData(CDC_TABLE, {group_id: 'cdc-1', updated_at: 100});
 
   // A durable CDC event is delivered only on the owner's committed receipt;
   // the setup write's owed event reaches the new subscriber first.
@@ -1118,7 +1118,7 @@ test('PartitionService - generates CDC events on update', async (t) => {
   await settlePendingCdcDeliveries(partition);
   cdcEvents.length = 0;
 
-  await partition.updateData(CDC_TABLE, {id: 'cdc-1'}, {value: 200});
+  await partition.updateData(CDC_TABLE, {group_id: 'cdc-1'}, {updated_at: 200});
   await settlePendingCdcDeliveries(partition);
 
   t.equal(cdcEvents.length, 1);
@@ -1130,8 +1130,8 @@ test('PartitionService - generates CDC events on update', async (t) => {
 test('PartitionService - suppresses CDC for no-op updates', async (t) => {
   const schema = {
     columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'INTEGER'},
+      {name: 'group_id', type: 'TEXT', primaryKey: true},
+      {name: 'updated_at', type: 'INTEGER'},
     ],
   };
 
@@ -1157,8 +1157,8 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
 
   const updateResult = await partition.updateData(
     CDC_TABLE,
-    {id: 'missing-row'},
-    {value: 999},
+    {group_id: 'missing-row'},
+    {updated_at: 999},
   );
 
   t.equal(updateResult.success, true);
@@ -1171,8 +1171,8 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
 test('PartitionService - generates CDC events on delete', async (t) => {
   const schema = {
     columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'INTEGER'},
+      {name: 'group_id', type: 'TEXT', primaryKey: true},
+      {name: 'updated_at', type: 'INTEGER'},
     ],
   };
 
@@ -1192,7 +1192,7 @@ test('PartitionService - generates CDC events on delete', async (t) => {
   // Single replica becomes leader immediately
   await Promise.resolve();
 
-  await partition.insertData(CDC_TABLE, {id: 'cdc-1', value: 100});
+  await partition.insertData(CDC_TABLE, {group_id: 'cdc-1', updated_at: 100});
 
   // A durable CDC event is delivered only on the owner's committed receipt;
   // the setup write's owed event reaches the new subscriber first.
@@ -1202,13 +1202,13 @@ test('PartitionService - generates CDC events on delete', async (t) => {
   await settlePendingCdcDeliveries(partition);
   cdcEvents.length = 0;
 
-  await partition.deleteData(CDC_TABLE, {id: 'cdc-1'});
+  await partition.deleteData(CDC_TABLE, {group_id: 'cdc-1'});
   await settlePendingCdcDeliveries(partition);
 
   t.equal(cdcEvents.length, 1);
   t.equal(cdcEvents[0].operation, CDCOperation.DELETE);
   // Verify DELETE CDC event contains the primary key from whereClause
-  t.equal(cdcEvents[0].data.id, 'cdc-1', 'DELETE CDC event should contain primary key');
+  t.equal(cdcEvents[0].data.group_id, 'cdc-1', 'DELETE CDC event should contain primary key');
 
   await partition.shutdown();
 });
@@ -1220,8 +1220,8 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
   // cache uses its UPSERT handler (insert-or-merge) without warnings.
   const schema = {
     columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'INTEGER'},
+      {name: 'group_id', type: 'TEXT', primaryKey: true},
+      {name: 'updated_at', type: 'INTEGER'},
     ],
   };
 
@@ -1241,7 +1241,7 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
   await Promise.resolve();
 
   // Insert initial row
-  await partition.upsertData(CDC_TABLE, {id: 'u1', value: 10});
+  await partition.upsertData(CDC_TABLE, {group_id: 'u1', updated_at: 10});
 
   // A durable CDC event is delivered only on the owner's committed receipt;
   // the setup write's owed event reaches the new subscriber first.
@@ -1252,7 +1252,7 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
   cdcEvents.length = 0;
 
   // Upsert same key — should produce UPSERT, not INSERT
-  await partition.upsertData(CDC_TABLE, {id: 'u1', value: 20});
+  await partition.upsertData(CDC_TABLE, {group_id: 'u1', updated_at: 20});
   await settlePendingCdcDeliveries(partition);
 
   t.equal(cdcEvents.length, 1);
@@ -1261,8 +1261,8 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
     CDCOperation.UPSERT,
     'UPSERT operation must produce CDCOperation.UPSERT, not INSERT',
   );
-  t.equal(cdcEvents[0].data.id, 'u1');
-  t.equal(cdcEvents[0].data.value, 20, 'the event is the measured upsert, not the setup write');
+  t.equal(cdcEvents[0].data.group_id, 'u1');
+  t.equal(cdcEvents[0].data.updated_at, 20, 'the event is the measured upsert, not the setup write');
 
   await partition.shutdown();
 });
@@ -1273,8 +1273,8 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
   // producing CDCOperation.INSERT instead of UPSERT.
   const schema = {
     columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'INTEGER'},
+      {name: 'group_id', type: 'TEXT', primaryKey: true},
+      {name: 'updated_at', type: 'INTEGER'},
     ],
   };
 
@@ -1295,7 +1295,7 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
 
   // Insert initial row via raw SQL
   await partition.executeQuery(
-    `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
+    `INSERT OR REPLACE INTO ${CDC_TABLE} (group_id, updated_at) VALUES (?, ?)`,
     ['s1', 10],
   );
 
@@ -1309,7 +1309,7 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
 
   // Upsert same key via raw SQL — should produce UPSERT, not INSERT
   await partition.executeQuery(
-    `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
+    `INSERT OR REPLACE INTO ${CDC_TABLE} (group_id, updated_at) VALUES (?, ?)`,
     ['s1', 20],
   );
   await settlePendingCdcDeliveries(partition);
@@ -1320,7 +1320,7 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
     CDCOperation.UPSERT,
     'INSERT OR REPLACE SQL must produce CDCOperation.UPSERT',
   );
-  t.equal(cdcEvents[0].data.value, 20, 'the event is the measured upsert, not the setup write');
+  t.equal(cdcEvents[0].data.updated_at, 20, 'the event is the measured upsert, not the setup write');
 
   await partition.shutdown();
 });
@@ -1394,8 +1394,8 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
   // cause duplicate cache updates and "INSERT on existing key" warnings.
   const schema = {
     columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'INTEGER'},
+      {name: 'group_id', type: 'TEXT', primaryKey: true},
+      {name: 'updated_at', type: 'INTEGER'},
     ],
   };
 
@@ -1426,7 +1426,7 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
   // entry is built by the write-entry owner, as every proposer builds it.
   const proposed = await turnChainValue(partition.raft.propose(buildPartitionWriteEntry({
     type: PARTITION_SERVICE_OPERATION.INSERT,
-    sql: `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
+    sql: `INSERT INTO ${CDC_TABLE} (group_id, updated_at) VALUES (?, ?)`,
     params: ['f1', 42],
   }, {timestamp: Date.now(), proposedBy: 'other-replica'})));
 
@@ -1435,8 +1435,8 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
 
   t.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'the committed entry is applied on this replica');
-  t.same(partition.db.prepare(`SELECT id, value FROM ${CDC_TABLE}`).all(),
-    [{id: 'f1', value: 42}], 'its statement ran');
+  t.same(partition.db.prepare(`SELECT group_id, updated_at FROM ${CDC_TABLE}`).all(),
+    [{group_id: 'f1', updated_at: 42}], 'its statement ran');
   t.equal(
     cdcEvents.length,
     0,
@@ -1445,3 +1445,51 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
 
   await partition.shutdown();
 });
+
+test('PartitionService - transient CDC subscriber receives full multi-row affectedRows vector with monotonic sequenceNumbers',
+  async (t) => {
+    const schema = {
+      columns: [
+        {name: 'id', type: 'TEXT', primaryKey: true},
+        {name: 'value', type: 'INTEGER'},
+      ],
+    };
+
+    const partition = new PartitionService(withFoundingStamp({
+      partitionId: 'test-transient-multirow-cdc',
+      tableId: 'tbl-items',
+      tableName: 'items',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema,
+      systemTableCache: new SystemTableCache(),
+      dbPath: ':memory:',
+    }));
+
+    await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
+    await Promise.resolve();
+
+    await partition.insertData('items', {id: 'item-1', value: 10});
+    await partition.insertData('items', {id: 'item-2', value: 20});
+
+    const deliveredVectors = [];
+    partition.subscribeToCDC((events) => deliveredVectors.push(events));
+
+    await partition.executeQuery('UPDATE items SET value = value + 100 WHERE value >= ?', [10]);
+    await settlePendingCdcDeliveries(partition);
+
+    t.equal(deliveredVectors.length, 1, 'multi-row mutation delivers one complete vector');
+    t.equal(deliveredVectors[0].length, 2, 'vector contains both affected rows');
+    t.same(
+      deliveredVectors[0].map((event) => ({id: event.data.id, value: event.data.value})),
+      [{id: 'item-1', value: 110}, {id: 'item-2', value: 120}],
+    );
+    t.ok(
+      Number.isSafeInteger(deliveredVectors[0][0].sequenceNumber) &&
+      deliveredVectors[0][1].sequenceNumber === deliveredVectors[0][0].sequenceNumber + 1,
+      'each event in the transient vector carries a strictly monotonic sequenceNumber',
+    );
+
+    await partition.shutdown();
+  });

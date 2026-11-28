@@ -684,7 +684,7 @@ class MovePlanner {
       diagnostics: diag,
       transitionSnapshot,
       currentReplicas,
-      includeGlobalSystemDeferral: this.isSystemPartitionEntity(),
+      includeGlobalSystemDeferral: this.includesGlobalSystemPlacementDeferral(),
       placementPolicy:
         this.entityType === EntityType.RUNTIME_SERVICE ?
           PLACEMENT_OWNER_POLICY.RUNTIME_SERVICE_SPREAD :

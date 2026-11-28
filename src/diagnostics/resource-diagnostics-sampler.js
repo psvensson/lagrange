@@ -5,15 +5,20 @@
  * subsystem counters to help isolate leak and hot-loop behavior.
  */
 
+import {isMainThread} from 'node:worker_threads';
+import {effectiveCpuCores, hostBusyPercent, hostTicks} from './resource-cpu-capacity.js';
+import {resourceSampleFields} from './placement-resource-sample.js';
 import fs from 'node:fs';
 import os from 'node:os';
-import {performance} from 'node:perf_hooks';
+import {monitorEventLoopDelay, performance} from 'node:perf_hooks';
 import {NUM, SUBSYSTEM} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {LogsTableService} from '../logging/logs-table-service.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
+const EVENT_LOOP_DELAY_RESOLUTION_MS = 10;
+const NANOS_PER_MILLISECOND = 1_000_000;
 
 const RESOURCE_DIAGNOSTICS_DEFAULT = Object.freeze({
   HISTORY_LIMIT: 180,
@@ -75,6 +80,27 @@ function roundToTwo(value) {
     RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR;
 }
 
+function readIntervalEventLoopDelayMs(histogram) {
+  const meanNs = histogram.mean;
+  histogram.reset();
+  if (!Number.isFinite(meanNs) || meanNs <= 0) return null;
+  const delayMs = Math.max(
+    0,
+    (meanNs / NANOS_PER_MILLISECOND) - EVENT_LOOP_DELAY_RESOLUTION_MS,
+  );
+  return roundToTwo(delayMs);
+}
+
+function defaultNowMs() {
+  return Date.now();
+}
+
+function defaultEluSample(prev) {
+  return prev ?
+    performance.eventLoopUtilization(prev) :
+    performance.eventLoopUtilization();
+}
+
 function getNestedPath(parentPath, childKey) {
   if (!parentPath) {
     return String(childKey);
@@ -106,13 +132,32 @@ class ResourceDiagnosticsSampler {
       options.topSignalLimit,
       RESOURCE_DIAGNOSTICS_DEFAULT.TOP_SIGNAL_LIMIT,
     );
+    this.nowFn = options.nowFn ?? defaultNowMs;
+    this.intervalClock = options.nowFn ?? (() => performance.now());
+    this.cpuUsageFn = options.cpuUsageFn ?? (() => process.cpuUsage());
+    this.cpusFn = options.cpusFn ?? (() => os.cpus());
+    this.threadCpuUsageFn = options.threadCpuUsageFn ??
+      (() => isMainThread ? process.threadCpuUsage?.() : null);
+    this.lastThreadUsage = this.threadCpuUsageFn();
+    this.lastHostTicks = hostTicks(this.cpusFn());
+    this.eluFn = options.eluFn ?? defaultEluSample;
+    this.eventLoopDelayHistogram = options.eventLoopDelayProvider ?
+      null :
+      monitorEventLoopDelay({resolution: EVENT_LOOP_DELAY_RESOLUTION_MS});
+    this.eventLoopDelayHistogram?.enable();
+    this.eventLoopDelayProvider = options.eventLoopDelayProvider ??
+      (() => readIntervalEventLoopDelayMs(this.eventLoopDelayHistogram));
 
+    this.nextSampleId = 0;
     this.samples = [];
-    this.lastCpuUsage = process.cpuUsage();
-    this.lastCpuTimestampMs = Date.now();
+    this.lastReport = null;
+    this.lastReportTimestampMs = null;
+    const initialNowMs = this.nowFn();
+    this.lastCpuUsage = this.cpuUsageFn();
+    this.lastCpuTimestampMs = this.intervalClock();
     this.lastWriteBytes = this.readProcessWriteBytes();
-    this.lastWriteTimestampMs = Date.now();
-    this.lastEluSample = performance.eventLoopUtilization();
+    this.lastWriteTimestampMs = initialNowMs;
+    this.lastEluSample = this.eluFn();
     this.signalLimitWarningLogged = false;
 
     const loggingService = LoggingService.getInstance();
@@ -129,8 +174,9 @@ class ResourceDiagnosticsSampler {
     const latestSample = this.collect();
     const latest = this.buildPublicSample(latestSample);
     const trend = this.buildTrendReport();
-    return {
+    const report = {
       nodeId: this.nodeId,
+      sampleId: latestSample.sampleId,
       sampleCount: this.samples.length,
       historyLimit: this.historyLimit,
       trendWindowSamples: this.trendWindowSamples,
@@ -138,6 +184,31 @@ class ResourceDiagnosticsSampler {
       trend,
       compact: this.buildCompactReport(latest, trend),
     };
+    this.lastReport = report;
+    this.lastReportTimestampMs = latestSample.timestamp;
+    return report;
+  }
+
+  /**
+   * Return a cached diagnostics report when sampled within maxAgeMs, or
+   * collect a fresh one once per observation interval.
+   * @param {number} [maxAgeMs=1000]
+   * @return {Object}
+   */
+  getSharedReport(maxAgeMs = RESOURCE_DIAGNOSTICS_DEFAULT.MILLIS_PER_SECOND) {
+    const nowMs = this.nowFn();
+    const normalizedMaxAgeMs = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ?
+      maxAgeMs :
+      0;
+    if (
+      this.lastReport !== null &&
+      Number.isFinite(this.lastReportTimestampMs) &&
+      nowMs >= this.lastReportTimestampMs &&
+      nowMs - this.lastReportTimestampMs < normalizedMaxAgeMs
+    ) {
+      return this.lastReport;
+    }
+    return this.getReport();
   }
 
   /**
@@ -148,19 +219,30 @@ class ResourceDiagnosticsSampler {
    * @private
    */
   buildCompactReport(latest, trend) {
+    const proc = latest?.process || {};
+    const tr = trend || {};
+    const signals = Array.isArray(tr.topGrowingSignals) ?
+      tr.topGrowingSignals.slice(0, RESOURCE_DIAGNOSTICS_DEFAULT.COMPACT_TOP_SIGNAL_LIMIT) :
+      [];
     return {
-      cpuPercent: latest?.process?.cpuPercent ?? null,
-      eventLoopUtilizationPercent:
-        latest?.process?.eventLoopUtilizationPercent ?? null,
-      rssGrowthPerMinBytes: trend?.rssGrowthPerMinBytes ?? null,
-      writeRateBytesPerSec: trend?.writeRateBytesPerSec ?? null,
-      topGrowingSignals: Array.isArray(trend?.topGrowingSignals) ?
-        trend.topGrowingSignals.slice(
-          0,
-          RESOURCE_DIAGNOSTICS_DEFAULT.COMPACT_TOP_SIGNAL_LIMIT,
-        ) :
-        [],
+      processCpuPercentOfHostCores: proc.processCpuPercentOfHostCores ?? null,
+      cpuCount: proc.cpuCount ?? null,
+      ...resourceSampleFields(proc),
+      rssGrowthPerMinBytes: tr.rssGrowthPerMinBytes ?? null,
+      writeRateBytesPerSec: tr.writeRateBytesPerSec ?? null,
+      topGrowingSignals: signals,
     };
+  }
+
+  /**
+   * Read the latest event-loop delay in milliseconds from the canonical
+   * delay provider.
+   * @return {number|null}
+   * @private
+   */
+  readEventLoopDelayMs() {
+    const value = this.eventLoopDelayProvider();
+    return Number.isFinite(value) && value >= 0 ? roundToTwo(value) : null;
   }
 
   /**
@@ -168,17 +250,22 @@ class ResourceDiagnosticsSampler {
    * @return {Object}
    */
   collect() {
-    const nowMs = Date.now();
+    const nowMs = this.nowFn();
     const memory = process.memoryUsage();
     const processUsage = process.resourceUsage();
-    const cpuUsage = process.cpuUsage();
-    const cpuDeltaUserUs = cpuUsage.user - this.lastCpuUsage.user;
-    const cpuDeltaSystemUs = cpuUsage.system - this.lastCpuUsage.system;
+    const intervalEndMs = this.intervalClock();
+    const cpuUsage = this.cpuUsageFn();
+    const cpuDeltaUserUs = Math.max(0, cpuUsage.user - this.lastCpuUsage.user);
+    const cpuDeltaSystemUs = Math.max(0, cpuUsage.system - this.lastCpuUsage.system);
     const cpuDeltaTotalUs = cpuDeltaUserUs + cpuDeltaSystemUs;
-    const elapsedCpuMs = Math.max(
-      RESOURCE_DIAGNOSTICS_DEFAULT.MIN_ELAPSED_MS,
-      nowMs - this.lastCpuTimestampMs,
-    );
+    const cpus = this.cpusFn();
+    const cpuCount = cpus.length;
+    const currentHostTicks = hostTicks(cpus);
+    const thread = this.threadCpuUsageFn();
+    const sampleIntervalMs = intervalEndMs - this.lastCpuTimestampMs;
+    const intervalUs = sampleIntervalMs * RESOURCE_DIAGNOSTICS_DEFAULT.MICROS_PER_MILLISECOND;
+    const threadDeltaUs = thread && this.lastThreadUsage ?
+      thread.user - this.lastThreadUsage.user + thread.system - this.lastThreadUsage.system : null;
 
     const writeBytesTotal = this.readProcessWriteBytes();
     const elapsedIoMs = Math.max(
@@ -194,13 +281,15 @@ class ResourceDiagnosticsSampler {
         (elapsedIoMs / RESOURCE_DIAGNOSTICS_DEFAULT.MILLIS_PER_SECOND) :
       null;
 
-    const eluDelta = performance.eventLoopUtilization(this.lastEluSample);
-    this.lastEluSample = performance.eventLoopUtilization();
+    const eluDelta = this.eluFn(this.lastEluSample);
+    this.lastEluSample = this.eluFn();
 
     const componentStats = this.collectComponentStats();
     const componentSignals = this.flattenComponentSignals(componentStats);
+    this.nextSampleId += 1;
 
     const sample = {
+      sampleId: this.nextSampleId,
       timestamp: nowMs,
       uptimeSec: process.uptime(),
       process: {
@@ -211,9 +300,18 @@ class ResourceDiagnosticsSampler {
         arrayBuffersBytes: memory.arrayBuffers,
         cpuUserDeltaUs: cpuDeltaUserUs,
         cpuSystemDeltaUs: cpuDeltaSystemUs,
-        cpuPercent: this.calculateCpuPercent(cpuDeltaTotalUs, elapsedCpuMs),
-        eventLoopUtilizationPercent:
-          roundToTwo(eluDelta.utilization * RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR),
+        cpuCount,
+        processCpuPercentOfHostCores: this.calculateProcessCpuPercentOfHostCores(cpuDeltaTotalUs, sampleIntervalMs, cpuCount),
+        sampleIntervalMs: sampleIntervalMs > 0 ? sampleIntervalMs : null,
+        mainThreadCpuPercent: intervalUs > 0 && threadDeltaUs !== null && threadDeltaUs >= 0 ?
+          roundToTwo(100 * threadDeltaUs / intervalUs) : null,
+        processCpuCores: intervalUs > 0 ? cpuDeltaTotalUs / intervalUs : null,
+        effectiveCpuCores: effectiveCpuCores(),
+        hostCpuUtilizationPercent: intervalUs > 0 ?
+          hostBusyPercent(this.lastHostTicks, currentHostTicks) : null,
+        eventLoopUtilizationPercent: intervalUs > 0 && Number.isFinite(eluDelta.utilization) ?
+          roundToTwo(eluDelta.utilization * RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR) : null,
+        eventLoopDelayMs: this.readEventLoopDelayMs(),
         maxRssBytes:
           processUsage.maxRSS * NUM.BYTES_PER_KIB,
         fsReadOps: processUsage.fsRead,
@@ -230,8 +328,10 @@ class ResourceDiagnosticsSampler {
       componentSignals,
     };
 
+    this.lastHostTicks = currentHostTicks;
+    this.lastThreadUsage = thread;
     this.lastCpuUsage = cpuUsage;
-    this.lastCpuTimestampMs = nowMs;
+    this.lastCpuTimestampMs = intervalEndMs;
     this.lastWriteBytes = writeBytesTotal;
     this.lastWriteTimestampMs = nowMs;
 
@@ -251,6 +351,7 @@ class ResourceDiagnosticsSampler {
    */
   buildPublicSample(sample) {
     return {
+      sampleId: sample.sampleId,
       timestamp: sample.timestamp,
       uptimeSec: roundToTwo(sample.uptimeSec),
       process: {
@@ -259,9 +360,9 @@ class ResourceDiagnosticsSampler {
         heapTotalBytes: sample.process.heapTotalBytes,
         externalBytes: sample.process.externalBytes,
         arrayBuffersBytes: sample.process.arrayBuffersBytes,
-        cpuPercent: sample.process.cpuPercent,
-        eventLoopUtilizationPercent:
-          sample.process.eventLoopUtilizationPercent,
+        cpuCount: sample.process.cpuCount,
+        processCpuPercentOfHostCores: sample.process.processCpuPercentOfHostCores,
+        ...resourceSampleFields(sample.process),
         fsReadOps: sample.process.fsReadOps,
         fsWriteOps: sample.process.fsWriteOps,
       },
@@ -367,42 +468,28 @@ class ResourceDiagnosticsSampler {
       typeof loggingService.getDiagnosticsStats === LOCAL_STR_FUNCTION) {
       stats.logging = loggingService.getDiagnosticsStats();
     }
-
     const logsTableService = LogsTableService.instance;
-    if (logsTableService &&
-      typeof logsTableService.getStats === LOCAL_STR_FUNCTION) {
+    if (typeof logsTableService?.getStats === LOCAL_STR_FUNCTION) {
       stats.logsTable = logsTableService.getStats();
     }
-
-    const owner = this.owner;
-    if (!owner || typeof owner !== LOCAL_STR_OBJECT) {
-      return stats;
-    }
-
-    for (const component of RESOURCE_DIAGNOSTICS_OWNER_COMPONENT) {
-      const componentRef = owner[component.field];
-      if (!componentRef || typeof componentRef.getStats !== LOCAL_STR_FUNCTION) {
-        continue;
+    if (this.owner && typeof this.owner === LOCAL_STR_OBJECT) {
+      for (const component of RESOURCE_DIAGNOSTICS_OWNER_COMPONENT) {
+        const componentRef = this.owner[component.field];
+        if (!componentRef || typeof componentRef.getStats !== LOCAL_STR_FUNCTION) {
+          continue;
+        }
+        const componentStats = componentRef.getStats();
+        if (componentStats && typeof componentStats === LOCAL_STR_OBJECT) {
+          stats[component.name] = componentStats;
+        }
       }
-      // A component's stats are a synchronous snapshot on every owner that
-      // carries getStats.
-      const componentStats = componentRef.getStats();
-      if (!componentStats || typeof componentStats !== LOCAL_STR_OBJECT) {
-        continue;
+      if (typeof this.owner.serviceLifecycleManager?.getMetrics === LOCAL_STR_FUNCTION) {
+        stats.serviceLifecycleManager = this.owner.serviceLifecycleManager.getMetrics();
       }
-      stats[component.name] = componentStats;
+      if (typeof this.owner.serviceReconciler?.getStats === LOCAL_STR_FUNCTION) {
+        stats.serviceReconciler = this.owner.serviceReconciler.getStats();
+      }
     }
-
-    if (owner.serviceLifecycleManager &&
-      typeof owner.serviceLifecycleManager.getMetrics === LOCAL_STR_FUNCTION) {
-      stats.serviceLifecycleManager = owner.serviceLifecycleManager.getMetrics();
-    }
-
-    if (owner.serviceReconciler &&
-      typeof owner.serviceReconciler.getStats === LOCAL_STR_FUNCTION) {
-      stats.serviceReconciler = owner.serviceReconciler.getStats();
-    }
-
     return stats;
   }
 
@@ -414,22 +501,30 @@ class ResourceDiagnosticsSampler {
    */
   flattenComponentSignals(componentStats) {
     const result = {};
+    let signalCount = 0;
     let truncated = false;
 
     const walk = (value, path, depth) => {
-      if (Object.keys(result).length >=
+      if (signalCount >=
         RESOURCE_DIAGNOSTICS_DEFAULT.MAX_SIGNAL_COUNT) {
         truncated = true;
         return;
       }
 
       if (Number.isFinite(value)) {
+        if (!Object.hasOwn(result, path)) {
+          signalCount += 1;
+        }
         result[path] = value;
         return;
       }
 
       if (Array.isArray(value)) {
-        result[`${path}${SIGNAL_PATH.LENGTH_SUFFIX}`] = value.length;
+        const lengthPath = `${path}${SIGNAL_PATH.LENGTH_SUFFIX}`;
+        if (!Object.hasOwn(result, lengthPath)) {
+          signalCount += 1;
+        }
+        result[lengthPath] = value.length;
         return;
       }
 
@@ -465,11 +560,12 @@ class ResourceDiagnosticsSampler {
    * Calculate process CPU percent across all cores.
    * @param {number} cpuDeltaUs
    * @param {number} elapsedMs
-   * @return {number}
+   * @param {number} cpuCount
+   * @return {number|null}
    * @private
    */
-  calculateCpuPercent(cpuDeltaUs, elapsedMs) {
-    const cpuCount = Math.max(1, os.cpus().length);
+  calculateProcessCpuPercentOfHostCores(cpuDeltaUs, elapsedMs, cpuCount) {
+    if (!(elapsedMs > 0 && cpuCount > 0)) return null;
     const elapsedUs =
       elapsedMs * RESOURCE_DIAGNOSTICS_DEFAULT.MICROS_PER_MILLISECOND;
     const normalized = cpuDeltaUs / (elapsedUs * cpuCount);

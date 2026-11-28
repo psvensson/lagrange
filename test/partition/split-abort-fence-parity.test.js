@@ -1,3 +1,5 @@
+import {openDescriptorRecordStore, openRecordStore, parsePartitionTransition, readAuthoritativelyFrom, turns} from
+  './workflow-record-sqlite-world.js';
 import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -53,8 +55,9 @@ async function registerClaimedWorkflow(workflow) {
   return ownershipClaim.workflow.fenceToken;
 }
 
-async function driveSourceFailureAck(workflow, fenceToken) {
-  await workflow.acknowledgeSourceParticipant(WORKFLOW_ID, {
+async function driveSourceFailureAck(workflow, workflowId, fenceToken) {
+  const result = await workflow.acknowledgeSourceParticipant(workflowId, {
+    [PARTICIPANT_ACK_FIELD.ATTEMPT]: workflow.resolveWorkflowState(workflowId).metadata.workflowAttempt,
     [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
       SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
     [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.SNAPSHOT_FAILED,
@@ -67,16 +70,24 @@ async function driveSourceFailureAck(workflow, fenceToken) {
     SOURCE_PARTITION_ID,
     async () => null,
   );
+  return result;
 }
 
 test('abort-transition-fenced: the split abort persists FAILED through ' +
 'the fenced transition path — the durable row carries the renewed ' +
 'fence/owner triple, not fenceToken: null', async (t) => {
-  const {workflow, durableRow} = buildWorkflow({});
+  const removals = [];
+  const {workflow, durableRow} = buildWorkflow({
+    listPartitionServiceRows: (id) => [{replica_id: id + '-r1', node_id: 'node-a'}],
+    deliverReplicaRemoval: async ({message}) => {
+      removals.push(message);
+      return {status: 'completed'};
+    },
+  });
   await registerClaimedWorkflow(workflow);
 
   await driveSourceFailureAck(
-    workflow,
+    workflow, WORKFLOW_ID,
     workflow.workflowCoordinator.getWorkflowById(WORKFLOW_ID).fenceToken,
   );
 
@@ -98,6 +109,10 @@ test('abort-transition-fenced: the split abort persists FAILED through ' +
     'the abort withdraws the pending epoch in the same mutation',
   );
   const persisted = JSON.parse(durableRow.partition_transition_metadata);
+  t.same(persisted.targetPartitionIds, ['users-p-left', 'users-p-right']);
+  t.same(persisted.splitIssuedChildren, [], 'registering planned IDs alone issued no descriptors');
+  t.same(removals, [], 'planned IDs alone authorize no REMOVE');
+  t.same(persisted.splitDescriptorCleanup.receipts, [], 'no destination receipt for unissued work');
   t.equal(
     persisted[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN],
     abortedWorkflow.fenceToken,
@@ -123,8 +138,15 @@ test('abort-transition-fenced: the split abort persists FAILED through ' +
 test('abort-dissolution-acks-fenced: the post-abort owner-recorded ' +
 'teardown path runs under the same claim fence (abort children torn ' +
 'down fence-stamped through F14 dissolution acks)', async (t) => {
+  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE_PARTITION_ID}]});
   const removedReplicas = [];
-  const {workflow} = buildWorkflow({
+  const {workflow, provisionCalls} = buildWorkflow({
+    cdcIntegrationService: store.cdcFor('A'),
+    getTableInfo: () => store.tablesRow(),
+    listTableInfos: () => [store.tablesRow()],
+    getPartitionInfo: (id) => store.partitionRow(id),
+    listTablePartitionRows: () => store.partitionIds().map(store.partitionRow),
+    parsePartitionTransition,
     listPartitionServiceRows: (partitionId) => ([
       {replica_id: `${partitionId}-r1`, node_id: 'node-a'},
     ]),
@@ -133,17 +155,38 @@ test('abort-dissolution-acks-fenced: the post-abort owner-recorded ' +
       return {status: 'completed'};
     },
   });
-  const fenceToken = await registerClaimedWorkflow(workflow);
-
-  await driveSourceFailureAck(workflow, fenceToken);
+  readAuthoritativelyFrom(workflow, store);
+  const started = await workflow.execute(SOURCE_PARTITION_ID);
+  t.equal(started.success, true);
+  const {workflowId} = started;
+  const {workflowAttempt: attempt, splitIssuedChildren: issued} = store.metadata();
+  t.same(issued, ['users-p-left', 'users-p-right']);
+  t.same(provisionCalls.map(({partitionId}) => partitionId), issued);
+  t.same(issued.map((id) => store.partitionRow(id).split_descriptor_attempt), [attempt, attempt]);
+  workflow.resolveWorkflowState(workflowId);
+  const claim = await workflow.claimSplitWorkflowOwnership(workflowId);
+  t.equal(claim.accepted, true);
+  const fenceToken = claim.workflow.fenceToken;
+  const failure = await driveSourceFailureAck(workflow, workflowId, fenceToken);
+  t.equal(failure.result, 'accepted');
 
   t.equal(
     removedReplicas.length,
     2,
     'the abort tears down both never-authoritative children',
   );
-  const abortedWorkflow =
-    workflow.workflowCoordinator.getWorkflowById(WORKFLOW_ID);
+  t.same(removedReplicas.map(({partitionId, replicaId, groupRetirement}) =>
+    [partitionId, replicaId, groupRetirement.workflowId, groupRetirement.attempt, groupRetirement.fenceToken]),
+  issued.map((id) => [id, id + '-r1', workflowId, attempt, fenceToken]));
+  const terminal = store.metadata();
+  t.equal(terminal.splitDescriptorCleanup.decisionFence, fenceToken);
+  t.same(terminal.splitDescriptorCleanup.pendingChildren, []);
+  t.same(terminal.splitDescriptorCleanup.receipts, issued.map((partitionId) => ({
+    action: 'finalizeChild', tableId: store.tableId, partitionId, workflowId, workflowAttempt: attempt,
+    disposition: 'deleted',
+  })));
+  t.same(issued.map((id) => store.partitionRow(id)), [null, null]);
+  const abortedWorkflow = workflow.resolveWorkflowState(workflowId);
   t.equal(
     abortedWorkflow.fenceToken,
     fenceToken,
@@ -277,4 +320,77 @@ async (t) => {
     PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
     'the rejected abort never landed',
   );
+});
+
+test('an accepted split failure survives a lost ACK and a new owner fence', async (t) => {
+  const store = openRecordStore();
+  t.teardown(() => store.db.close());
+  let now = 1000;
+  function build(holder) {
+    const {workflow} = buildWorkflow({workflowOwnerId: holder, now: () => now,
+      cdcIntegrationService: store.cdcFor(holder), parsePartitionTransition,
+      listTableInfos: () => [store.tablesRow()], getTableInfo: () => store.tablesRow()});
+    readAuthoritativelyFrom(workflow, store);
+    return workflow;
+  }
+  const original = build('first-holder');
+  const fenceToken = await registerClaimedWorkflow(original);
+  const attempt = store.metadata().workflowAttempt;
+  const ack = {participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+    status: SPLIT_ACK_STATUS.SNAPSHOT_FAILED, fenceToken, attempt};
+  const coordinator = original.workflowCoordinator;
+  const acknowledge = coordinator.acknowledgeParticipant.bind(coordinator);
+  coordinator.acknowledgeParticipant = async (...args) => {
+    const accepted = await acknowledge(...args);
+    t.equal(accepted.result, 'accepted');
+    throw new Error('reply lost after participant ACK committed');
+  };
+  await t.rejects(original.acknowledgeSourceParticipant(WORKFLOW_ID, ack),
+    /reply lost after participant ACK committed/);
+  const authorization = store.metadata().splitSourceFailure;
+  t.same(authorization, {workflowId: WORKFLOW_ID, workflowAttempt: attempt,
+    participantKey: ack.participantKey, status: ack.status, fenceToken});
+  t.equal(store.tablesRow().partition_transition_state, PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING);
+  t.equal(await original.reserveSourceMirrorCustody('split', SOURCE_PARTITION_ID, store.metadata(), store.tableId, 'users'),
+    false, 'a pending accepted failure cannot admit new physical source custody');
+  t.same(store.metadata().mirrorCustodyGrants ?? [], []);
+  const denied = await coordinator.registerWorkflowFromRead(buildAbortingRecord(), store.tablesRow());
+  t.equal(denied.reason, 'split-source-failure-pending');
+  now = store.metadata().workflowLeaseExpiresAt + 1;
+  const restarted = build('next-holder');
+  for (let i = 0; i < 500 && store.tablesRow().partition_transition_state !== PARTITION_TRANSITION_STATE.FAILED; i++) {
+    await turns(1);
+  }
+  await restarted.settleSplitOwnerLaneForWorkflow(WORKFLOW_ID);
+  t.equal(store.tablesRow().partition_transition_state, PARTITION_TRANSITION_STATE.FAILED);
+  const terminal = store.metadata();
+  t.ok(terminal.workflowFenceToken > fenceToken);
+  t.equal(terminal.splitDescriptorCleanup.decisionFence, terminal.workflowFenceToken);
+  t.same(terminal.failure.sourceFailure, authorization);
+  t.same(terminal.splitSourceFailure, authorization);
+  t.equal(terminal.workflowAttempt, attempt);
+  t.equal(await restarted.abortSplitOnSourceFailure(WORKFLOW_ID, {...authorization, workflowAttempt: attempt + 1}),
+    false, 'a different attempt cannot claim this decision');
+});
+
+test('lost CATCHUP_READY reply cannot authorize an earlier backfill failure', async (t) => {
+  const {workflow, durableRow} = buildWorkflow({});
+  const fenceToken = await registerClaimedWorkflow(workflow);
+  const coordinator = workflow.workflowCoordinator;
+  const send = (status) => workflow.acknowledgeSourceParticipant(WORKFLOW_ID, {
+    participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION, status, fenceToken});
+  t.equal((await send(SPLIT_ACK_STATUS.SNAPSHOT_STARTED)).result, 'accepted');
+  const acknowledge = coordinator.acknowledgeParticipant.bind(coordinator);
+  coordinator.acknowledgeParticipant = async (...args) => {
+    const result = await acknowledge(...args);
+    t.equal(result.result, 'accepted');
+    throw new Error('lost accepted checkpoint reply');
+  };
+  await t.rejects(send(SPLIT_ACK_STATUS.CATCHUP_READY), /lost accepted checkpoint reply/);
+  coordinator.acknowledgeParticipant = acknowledge;
+  const committed = durableRow.partition_transition_metadata;
+  t.equal((await send(SPLIT_ACK_STATUS.BACKFILL_FAILED)).result, 'invalid_transition');
+  t.equal(durableRow.partition_transition_metadata, committed);
+  t.equal(JSON.parse(committed).participants[SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION].status,
+    SPLIT_ACK_STATUS.CATCHUP_READY);
 });

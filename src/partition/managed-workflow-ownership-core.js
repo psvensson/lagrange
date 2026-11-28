@@ -91,7 +91,7 @@ function durableOwnershipClaimOf(metadata) {
  */
 function claimWorkflowOwnershipCore(owner, workflowId, options = {}) {
   return owner.workflowCoordinator.claimWorkflow(workflowId,
-    {renew: options.renew === true});
+    {renew: options.renew === true, attempt: options.attempt});
 }
 
 /**
@@ -108,9 +108,10 @@ async function renewWorkflowOwnershipCore(
   owner,
   workflowId,
   ownershipLostMessage,
+  attempt,
 ) {
   const claim = await claimWorkflowOwnershipCore(owner, workflowId, {
-    renew: true,
+    renew: true, attempt,
   });
   if (claim.accepted !== true) {
     throw new Error(
@@ -157,12 +158,12 @@ function registerWorkflowWithClaim(owner, record, tableInfo) {
  *   needs (null: any).
  * @return {Promise<void>} Throws {superseded: true} on refusal.
  */
-async function assertWorkflowRecordHeld(owner, workflowId, states = null) {
+async function assertWorkflowRecordHeld(owner, workflowId, states = null, attempt) {
   const workflow = owner.workflowCoordinator.getWorkflowById(workflowId);
   const held = workflow &&
     workflow.workflowOwnerId === owner.workflowOwnerId &&
     (await owner.workflowCoordinator.claimWorkflow(workflowId,
-      {renew: true, requireStates: states})).accepted === true;
+      {renew: true, requireStates: states, attempt})).accepted === true;
   if (!held) {
     throw Object.assign(new Error(WORKFLOW_RECORD_NOT_HELD + workflowId), {
       superseded: true, unacknowledged: [], acknowledgedReplicaIds: []});

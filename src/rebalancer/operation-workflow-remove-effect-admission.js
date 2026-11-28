@@ -1,3 +1,4 @@
+import {deliverCreateWithReceipt} from './operation-workflow-create-ack-state.js';
 import {captureReplaceOwnerLevel, resolveReplaceOwnerEntryLevel} from
   './operation-workflow-replace-owner-wake.js';
 import {
@@ -79,16 +80,18 @@ function waitForSourceRemovalReceipt(owner, operation, entryLevel) {
 }
 
 async function deliverAdmittedOperationEffect(
-  owner, operation, target, request, dispatchNodeId, turn, entryLevel, onSend) {
+  owner, operation, target, request, dispatchNodeId, turn, entryLevel, routineCreateWake, onSend) {
   const claim = turn ? claimReplaceRemovalEffect(owner, operation, turn) : null;
   if (turn && !claim) return waitForSourceRemovalReceipt(owner, operation, entryLevel);
 
   const {operationId} = operation;
   let receipt = false;
   try {
-    onSend();
-    const delivery = await owner.deliverReplicaOperationRequest(
-      operation, target, request, dispatchNodeId);
+    const delivery = await deliverCreateWithReceipt(
+      owner, operation, dispatchNodeId, request, routineCreateWake, (createReceipt) => {
+        onSend(createReceipt);
+        return owner.deliverReplicaOperationRequest(operation, target, request, dispatchNodeId);
+      });
     if (claim && isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery))) {
       const reply = deliveryAnswerOf(delivery);
       if (isRemoveDispatchReceipt(reply) && !(reply.success === false &&

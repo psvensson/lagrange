@@ -76,12 +76,13 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       const matches = (row, where) => Object.entries(where).every(
         ([field, value]) => row?.[field] === value,
       );
+      let currentBoot = 101;
       const gateway = {
         async readAuthoritativeRows(tableName, sql, params) {
           if (tableName === SYSTEM_TABLE_NAME.NODES) {
             return {success: true, rows: [{
               node_id: 'test-node',
-              boot_incarnation: 101,
+              boot_incarnation: currentBoot,
             }]};
           }
           if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
@@ -203,6 +204,27 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         ].sort(),
         'duplicate handler joins the admitted in-progress work',
       );
+      const expectedReceipt = {
+        operationId: operationRow.operation_id, operationType: operationRow.type,
+        entityType: operationRow.entity_type, entityId: operationRow.entity_id,
+        partitionId: operationRow.partition_id, replicaId: operationRow.replica_id,
+        targetNodeId: operationRow.target_node_id, admissionToken,
+        attemptToken: operationRow.create_admission_attempt_token,
+        attemptSeq: 1, workflowUpdatedAt, ownerIncarnation: 101,
+        replicaCreatedAt: operationRow.create_admission_replica_created_at,
+      };
+      for (const response of responses) {
+        t.same(response.createWorkerReceipt, expectedReceipt,
+          'reply identifies the one held physical worker and its target boot');
+      }
+      currentBoot = 102;
+      try {
+        const staleReply = await second.handleCreateReplica(request);
+        t.notOk(Object.hasOwn(staleReply, 'createWorkerReceipt'),
+          'a still-held worker on a superseded boot cannot attest live work');
+      } finally {
+        currentBoot = 101;
+      }
       Object.assign(operationRow, {
         completed_at: workflowUpdatedAt + 1,
         status: ReplicaStatus.ACTIVE,

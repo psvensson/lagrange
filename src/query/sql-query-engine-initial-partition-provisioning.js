@@ -1,6 +1,10 @@
 import {provePlacementFounders} from '../partition/partition-placement-founder-proof.js';
-import {readOriginalCreateBootstrapMembership, readOriginalCreatePlacementAdmission} from
-  '../rebalancer/replica-status.js';
+import {
+  isBootstrapTopologyDispatchDeferred,
+  readOriginalCreateBootstrapMembership,
+  readOriginalCreatePlacementAdmission,
+} from '../rebalancer/replica-status.js';
+import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {isServeEligibilityAnswerEligible} from '../control-plane/serve-eligibility-owner.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineStatementExecution} from './sql-query-engine-statement-execution.js';
@@ -102,6 +106,55 @@ const {
   SERVICE_TYPE,
   getRemainingBudgetMs,
 } = SQL_QUERY_ENGINE_SHARED;
+
+function isDispatchableFoundingRelease(release, foundedProvisioned) {
+  if (release?.released === true) return true;
+  if (!foundedProvisioned || release?.reason) return false;
+  const op = release?.operation;
+  return op?.workflowStep === WORKFLOW_STEP.PENDING &&
+    op.completedAt === null &&
+    !isBootstrapTopologyDispatchDeferred(op);
+}
+
+async function releaseAndDispatchProvisioningOperations(
+  coordinator, plannedOperations, bootstrapStamp, options,
+) {
+  const {cancellationToken, foundedProvisioned, enforceEveryProvisioningOperation} = options;
+  const holdReleases = await Promise.all(plannedOperations.map((operation) => {
+    throwIfCancellationRequested(cancellationToken);
+    return coordinator.releaseBootstrapTopologyDispatchHold(operation.operationId, bootstrapStamp);
+  }));
+  const releasedOperations = plannedOperations.map((_op, idx) =>
+    (isDispatchableFoundingRelease(holdReleases[idx], foundedProvisioned) ?
+      holdReleases[idx].operation : null));
+  const executionResults = await Promise.all(releasedOperations.map((releasedOperation) => {
+    throwIfCancellationRequested(cancellationToken);
+    return releasedOperation ? coordinator.executeOperation(releasedOperation, {
+      ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,
+    }) : null;
+  }));
+  throwIfCancellationRequested(cancellationToken);
+  const metadataWaitReplicaIds = [];
+  for (let idx = 0; idx < plannedOperations.length; idx += 1) {
+    const releasedOperation = releasedOperations[idx];
+    const executionResult = executionResults[idx];
+    if (releasedOperation && executionResult &&
+        executionResult.success === false && executionResult.skipped !== true) {
+      if (enforceEveryProvisioningOperation) {
+        const message = typeof executionResult.error === LOCAL_STR_STRING ?
+          executionResult.error :
+          QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED;
+        throw new Error(message);
+      }
+      continue;
+    }
+    const {replicaId} = plannedOperations[idx];
+    if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
+      metadataWaitReplicaIds.push(replicaId);
+    }
+  }
+  return metadataWaitReplicaIds;
+}
 
 class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatementExecution {
   async provisionInitialTablePartition(context) {
@@ -355,6 +408,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       });
     }
 
+    let foundedProvisioned = false;
     if (this.rebalanceCoordinator?.placementAdmissionEnabled === true &&
         routableNodeIdSet.size === 0 &&
         admittedTargetNodeIds.length > 0 &&
@@ -380,6 +434,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         context,
         prepareFreshTargets,
       });
+      foundedProvisioned = Boolean(founded.provisioned);
       if (founded.provisioned && founded.operations.length < targetReplicaCount) {
         targetReplicaCount = founded.operations.length;
         minimumRoutableReplicaCount = Math.min(
@@ -551,16 +606,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }),
     });
 
-    // The provisioner stamps and executes only the rows whose bootstrap
-    // dispatch hold it releases itself. The release is the coordinator's
-    // compare-and-set on the DURABLE held row (PENDING, hold present), never
-    // a write of this attempt's in-memory copy: a deterministic-intent retry
-    // can hand back a row a dispatch lane already claimed or a prior attempt
-    // already released, and writing that copy back would rewind the claim.
-    // A row whose release is refused belongs to another owner: it stays in
-    // the plan for counting and its outcome is awaited through its
-    // routability like any other create, but it is never stamped or
-    // executed here.
+    // Release bootstrap dispatch holds via CAS on the durable row and execute
+    // the released cohort concurrently so a 3-node Raft group can form quorum.
     const bootstrapStamp = Object.freeze({
       [ReplicaOperationField.REPLICA_IDS]: bootstrapTopology.replicaIds,
       [ReplicaOperationField.PEER_ADDRESSES]: bootstrapTopology.peerAddresses,
@@ -569,60 +616,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       [ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA]:
         bootstrapPartitionMetadata,
     });
-    const releasedOperationsById = new Map();
-    for (const operation of plannedOperations) {
-      throwIfCancellationRequested(cancellationToken);
-      const release =
-        await this.rebalanceCoordinator.releaseBootstrapTopologyDispatchHold(
-          operation.operationId,
-          bootstrapStamp,
-        );
-      if (release.released === true) {
-        releasedOperationsById.set(operation.operationId, release.operation);
-      }
-    }
-
-    const metadataWaitReplicaIds = [];
-    for (const operation of plannedOperations) {
-      throwIfCancellationRequested(cancellationToken);
-      const releasedOperation =
-        releasedOperationsById.get(operation.operationId);
-      if (!releasedOperation) {
-        if (
-          typeof operation.replicaId === LOCAL_STR_STRING &&
-          operation.replicaId.length > 0
-        ) {
-          metadataWaitReplicaIds.push(operation.replicaId);
-        }
-        continue;
-      }
-      const executionResult =
-        await this.rebalanceCoordinator.executeOperation(releasedOperation, {
-          ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,
-        });
-      throwIfCancellationRequested(cancellationToken);
-
-      if (
-        executionResult &&
-        executionResult.success === false &&
-        executionResult.skipped !== true
-      ) {
-        if (enforceEveryProvisioningOperation) {
-          throw new Error(
-            executionResult.error ||
-              QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED,
-          );
-        }
-        continue;
-      }
-
-      if (
-        typeof releasedOperation.replicaId === LOCAL_STR_STRING &&
-        releasedOperation.replicaId.length > 0
-      ) {
-        metadataWaitReplicaIds.push(releasedOperation.replicaId);
-      }
-    }
+    const metadataWaitReplicaIds = await releaseAndDispatchProvisioningOperations(
+      this.rebalanceCoordinator,
+      plannedOperations,
+      bootstrapStamp,
+      {cancellationToken, foundedProvisioned, enforceEveryProvisioningOperation},
+    );
 
     const uniqueMetadataWaitReplicaIds = [...new Set(metadataWaitReplicaIds)];
     if (uniqueMetadataWaitReplicaIds.length > 0) {

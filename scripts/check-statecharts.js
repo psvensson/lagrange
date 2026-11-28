@@ -7,15 +7,15 @@ import {fileURLToPath} from 'node:url';
 import Ajv from 'ajv';
 
 import {
+  CONCRETE_TEXT_SCHEMA,
   hasConcreteText,
   isObjectRecord,
   listFiles,
   mainResultToExitCode,
   readJsonFile,
+  registerConcreteTextKeyword,
   relativeToCwd,
   renderValidationResult,
-  requireConcreteArray,
-  requireConcreteField,
   uniqueValues,
 } from './system-contract-utils.js';
 
@@ -32,10 +32,7 @@ const ADDITIONAL_PROPERTIES_KEYWORD = 'additionalProperties';
 const ROOT_FIELD_LABEL = 'statechart';
 const SLASH_SEPARATOR = '/';
 const DOT_SEPARATOR = '.';
-const NON_EMPTY_STRING_SCHEMA = Object.freeze({
-  type: JSON_SCHEMA_STRING_TYPE,
-  minLength: 1,
-});
+const NON_EMPTY_STRING_SCHEMA = CONCRETE_TEXT_SCHEMA;
 const STATE_RECORD_SCHEMA = Object.freeze({
   type: JSON_SCHEMA_OBJECT_TYPE,
   additionalProperties: false,
@@ -122,7 +119,7 @@ const STATECHART_JSON_SCHEMA = Object.freeze({
     }),
   }),
 });
-const ajv = new Ajv({allErrors: true, strict: true});
+const ajv = registerConcreteTextKeyword(new Ajv({allErrors: true, strict: true}));
 const validateStatechartSchema = ajv.compile(STATECHART_JSON_SCHEMA);
 const HELP_TEXT = [
   'Usage: npm run model:statecharts -- [--json] [statechart.json ...]',
@@ -156,19 +153,14 @@ function statechartFilesFromArgs(files) {
 }
 
 function validateStates(errors, filePath, statechart) {
-  if (!Array.isArray(statechart.states) || statechart.states.length === 0) {
-    errors.push(`${filePath}: states must contain at least one state.`);
+  if (!Array.isArray(statechart.states)) {
     return [];
   }
   const stateIds = [];
-  for (const [index, state] of statechart.states.entries()) {
-    const statePath = `states[${index}]`;
+  for (const state of statechart.states) {
     if (!isObjectRecord(state)) {
-      errors.push(`${filePath}: ${statePath} must be an object.`);
       continue;
     }
-    requireConcreteField(errors, filePath, `${statePath}.id`, state.id);
-    requireConcreteField(errors, filePath, `${statePath}.description`, state.description);
     if (hasConcreteText(state.id)) {
       stateIds.push(state.id);
     }
@@ -180,24 +172,14 @@ function validateStates(errors, filePath, statechart) {
 }
 
 function validateInvariants(errors, filePath, invariants) {
-  if (!Array.isArray(invariants) || invariants.length === 0) {
-    errors.push(`${filePath}: invariants must contain at least one invariant.`);
+  if (!Array.isArray(invariants)) {
     return;
   }
   const invariantIds = [];
-  for (const [index, invariant] of invariants.entries()) {
-    const invariantPath = `invariants[${index}]`;
+  for (const invariant of invariants) {
     if (!isObjectRecord(invariant)) {
-      errors.push(`${filePath}: ${invariantPath} must be an object.`);
       continue;
     }
-    requireConcreteField(errors, filePath, `${invariantPath}.id`, invariant.id);
-    requireConcreteField(
-      errors,
-      filePath,
-      `${invariantPath}.statement`,
-      invariant.statement,
-    );
     if (hasConcreteText(invariant.id)) {
       invariantIds.push(invariant.id);
     }
@@ -208,19 +190,14 @@ function validateInvariants(errors, filePath, invariants) {
 }
 
 function validateTransitionShape(errors, filePath, statechart, stateIds) {
-  if (!Array.isArray(statechart.transitions) || statechart.transitions.length === 0) {
-    errors.push(`${filePath}: transitions must contain at least one transition.`);
+  if (!Array.isArray(statechart.transitions)) {
     return;
   }
   const transitionKeys = [];
   for (const [index, transition] of statechart.transitions.entries()) {
     const transitionPath = `transitions[${index}]`;
     if (!isObjectRecord(transition)) {
-      errors.push(`${filePath}: ${transitionPath} must be an object.`);
       continue;
-    }
-    for (const field of ['from', 'event', 'to', 'evidence']) {
-      requireConcreteField(errors, filePath, `${transitionPath}.${field}`, transition[field]);
     }
     if (hasConcreteText(transition.from) && !stateIds.includes(transition.from)) {
       errors.push(`${filePath}: ${transitionPath}.from is not a declared state.`);
@@ -256,60 +233,100 @@ function reachableStates(statechart) {
   return seen;
 }
 
-function validateGraph(errors, filePath, statechart, stateIds) {
-  if (!stateIds.includes(statechart.initial)) {
-    errors.push(`${filePath}: initial must name a declared state.`);
-  }
-  const terminalStates = Array.isArray(statechart.terminalStates) ?
-    statechart.terminalStates :
-    [];
-  requireConcreteArray(errors, filePath, 'terminalStates', terminalStates);
+function hasOutgoingTransitions(transitions, fromStateId) {
+  return transitions.some(
+    (transition) => isObjectRecord(transition) && transition.from === fromStateId,
+  );
+}
+
+function validateTerminalStates(
+  errors,
+  filePath,
+  transitions,
+  stateIds,
+  terminalStates,
+) {
   for (const terminalState of terminalStates) {
+    if (!hasConcreteText(terminalState)) {
+      continue;
+    }
     if (!stateIds.includes(terminalState)) {
       errors.push(`${filePath}: terminal state is not declared: ${terminalState}`);
     }
-    const outgoing = (statechart.transitions || []).filter((transition) =>
-      isObjectRecord(transition) && transition.from === terminalState,
-    );
-    if (outgoing.length > 0) {
-      errors.push(`${filePath}: terminal state has outgoing transitions: ${terminalState}`);
+    if (hasOutgoingTransitions(transitions, terminalState)) {
+      errors.push(
+        `${filePath}: terminal state has outgoing transitions: ${terminalState}`,
+      );
     }
   }
+}
+
+function validateReachableAndOutgoing(
+  errors,
+  filePath,
+  statechart,
+  transitions,
+  stateIds,
+  terminalStates,
+) {
   const reachable = reachableStates(statechart);
   for (const stateId of stateIds) {
     if (!reachable.has(stateId)) {
       errors.push(`${filePath}: state is unreachable from initial: ${stateId}`);
     }
-  }
-  for (const stateId of stateIds) {
-    if (terminalStates.includes(stateId)) {
-      continue;
-    }
-    const outgoing = (statechart.transitions || []).filter((transition) =>
-      isObjectRecord(transition) && transition.from === stateId,
-    );
-    if (outgoing.length === 0) {
-      errors.push(`${filePath}: non-terminal state has no outgoing transition: ${stateId}`);
+    if (!terminalStates.includes(stateId) &&
+        !hasOutgoingTransitions(transitions, stateId)) {
+      errors.push(
+        `${filePath}: non-terminal state has no outgoing transition: ${stateId}`,
+      );
     }
   }
 }
 
+function validateGraph(errors, filePath, statechart, stateIds) {
+  if (hasConcreteText(statechart.initial) && !stateIds.includes(statechart.initial)) {
+    errors.push(`${filePath}: initial must name a declared state.`);
+  }
+  const terminalStates = Array.isArray(statechart.terminalStates) ?
+    statechart.terminalStates :
+    [];
+  const transitions = Array.isArray(statechart.transitions) ?
+    statechart.transitions :
+    [];
+  validateTerminalStates(
+    errors,
+    filePath,
+    transitions,
+    stateIds,
+    terminalStates,
+  );
+  validateReachableAndOutgoing(
+    errors,
+    filePath,
+    statechart,
+    transitions,
+    stateIds,
+    terminalStates,
+  );
+}
+
 function validateForbiddenTransitions(errors, filePath, statechart) {
-  const transitions = statechart.transitions || [];
+  const transitions = Array.isArray(statechart.transitions) ?
+    statechart.transitions :
+    [];
   const stateIds = new Set(
     (statechart.states || [])
       .filter(isObjectRecord)
       .map((state) => state.id)
       .filter(hasConcreteText),
   );
-  for (const [index, forbidden] of (statechart.forbiddenTransitions || []).entries()) {
+  const forbiddenList = Array.isArray(statechart.forbiddenTransitions) ?
+    statechart.forbiddenTransitions :
+    [];
+  for (const [index, forbidden] of forbiddenList.entries()) {
     const forbiddenPath = `forbiddenTransitions[${index}]`;
     if (!isObjectRecord(forbidden)) {
-      errors.push(`${filePath}: ${forbiddenPath} must be an object.`);
       continue;
-    }
-    for (const field of ['from', 'event', 'to', 'reason']) {
-      requireConcreteField(errors, filePath, `${forbiddenPath}.${field}`, forbidden[field]);
     }
     if (hasConcreteText(forbidden.from) && !stateIds.has(forbidden.from)) {
       errors.push(`${filePath}: ${forbiddenPath}.from is not a declared state.`);
@@ -324,7 +341,10 @@ function validateForbiddenTransitions(errors, filePath, statechart) {
       transition.to === forbidden.to,
     );
     if (exists) {
-      errors.push(`${filePath}: forbidden transition is present: ${forbidden.from}/${forbidden.event}/${forbidden.to}`);
+      errors.push(
+        `${filePath}: forbidden transition is present: ` +
+        `${forbidden.from}/${forbidden.event}/${forbidden.to}`,
+      );
     }
   }
 }
@@ -345,20 +365,16 @@ function formatSchemaInstancePath(instancePath) {
   return formatted || ROOT_FIELD_LABEL;
 }
 
-function appendSchemaValidationErrors(errors, filePath, schemaErrors, beforeCount) {
+function appendSchemaValidationErrors(errors, filePath, schemaErrors) {
   const entries = Array.isArray(schemaErrors) ? schemaErrors : [];
   for (const error of entries) {
+    const targetPath = formatSchemaInstancePath(error.instancePath);
     if (error.keyword === ADDITIONAL_PROPERTIES_KEYWORD) {
-      const targetPath = formatSchemaInstancePath(error.instancePath);
       errors.push(
         `${filePath}: ${targetPath} contains unsupported property ` +
         `${error.params.additionalProperty}.`,
       );
-    }
-  }
-  if (errors.length === beforeCount) {
-    for (const error of entries) {
-      const targetPath = formatSchemaInstancePath(error.instancePath);
+    } else {
       errors.push(`${filePath}: ${targetPath} ${error.message}.`);
     }
   }
@@ -378,27 +394,19 @@ function validateStatechart(filePath) {
     errors.push(`${relativeFilePath}: statechart must be a JSON object.`);
     return {statechart: null, errors};
   }
-  const beforeCount = errors.length;
   const schemaValid = validateStatechartSchema(statechart);
-  requireConcreteField(errors, relativeFilePath, 'schema', statechart.schema);
-  if (statechart.schema !== STATECHART_SCHEMA) {
-    errors.push(`${relativeFilePath}: schema must be ${STATECHART_SCHEMA}.`);
-  }
-  requireConcreteField(errors, relativeFilePath, 'id', statechart.id);
-  requireConcreteField(errors, relativeFilePath, 'initial', statechart.initial);
-  validateInvariants(errors, relativeFilePath, statechart.invariants);
-  const stateIds = validateStates(errors, relativeFilePath, statechart);
-  validateTransitionShape(errors, relativeFilePath, statechart, stateIds);
-  validateGraph(errors, relativeFilePath, statechart, stateIds);
-  validateForbiddenTransitions(errors, relativeFilePath, statechart);
   if (!schemaValid) {
     appendSchemaValidationErrors(
       errors,
       relativeFilePath,
       validateStatechartSchema.errors,
-      beforeCount,
     );
   }
+  validateInvariants(errors, relativeFilePath, statechart.invariants);
+  const stateIds = validateStates(errors, relativeFilePath, statechart);
+  validateTransitionShape(errors, relativeFilePath, statechart, stateIds);
+  validateGraph(errors, relativeFilePath, statechart, stateIds);
+  validateForbiddenTransitions(errors, relativeFilePath, statechart);
   return {statechart, errors};
 }
 

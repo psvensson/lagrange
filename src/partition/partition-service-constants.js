@@ -16,6 +16,10 @@ import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-co
 import {PLACEMENT_REPAIR_PREPARE_TYPE, PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES} from
   './partition-placement-admission-constants.js';
 import {LOCKING_READ_RESERVATION_TYPE} from './partition-locking-read-command-constants.js';
+import {
+  PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE_TYPE,
+  PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+} from './partition-membership-recovery-constants.js';
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -124,6 +128,9 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   PLACEMENT_REPAIR_PREPARE: PLACEMENT_REPAIR_PREPARE_TYPE,
   FORMATION_TRANSITION: FORMATION_TRANSITION_TYPE,
   LOCKING_READ_RESERVATION: LOCKING_READ_RESERVATION_TYPE,
+  PARTITION_MEMBERSHIP_RECOVERY: PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+  PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE:
+    PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE_TYPE,
   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
   START_MERGE_REPLICATION: 'START_MERGE_REPLICATION',
   LEARNER_PROMOTION_PROOF: 'LEARNER_PROMOTION_PROOF',
@@ -149,6 +156,7 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   ROLLBACK: 'ROLLBACK',
   TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
   FORMATION_TRANSITION: FORMATION_TRANSITION_TYPE,
+  MIRROR_RETENTION_CUSTODY: 'MIRROR_RETENTION_CUSTODY',
 });
 
 // The committed command types the application executes as SQL, the participant
@@ -173,6 +181,8 @@ const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
   ...PLACEMENT_COMMAND_TYPES,
   FORMATION_TRANSITION_TYPE,
   LOCKING_READ_RESERVATION_TYPE,
+  PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+  PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY,
 ]);
 
 // The reason a group's host failure names when a committed entry carries a
@@ -200,6 +210,7 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   STATEMENT_ENVIRONMENT_FAILED: 'statement_environment_failed',
   UNRECOGNISED: 'unrecognised',
   ENTRY_ID_MISSING_REFUSED: 'entry_id_missing_refused',
+  CUSTODY_BYTES_REFUSED: 'custody_bytes_refused',
   RESERVED_REFUSED: 'reserved_refused',
 });
 
@@ -724,8 +735,25 @@ const PARTITION_LEADER_ADDRESS_REFUSAL = Object.freeze({
   STATUS_UNAVAILABLE: 'leader_address_status_unavailable',
 });
 
+const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
+  NOT_LEADER: 'partition_write_not_leader',
+  CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
+  CONSENSUS_SESSION_OPEN: 'partition_write_consensus_session_open',
+  CONSENSUS_HOST_FAILURE: 'partition_write_consensus_host_failure',
+  OUTCOME_UNKNOWN: 'partition_write_outcome_unknown',
+  CONSENSUS_REFUSED: 'partition_write_consensus_refused',
+  BACKPRESSURE: 'partition_write_backpressure',
+  SERVICE_SHUTDOWN: 'partition_write_service_shutdown',
+  COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
+  RESERVED: 'partition_write_reserved',
+  CUTOVER_PAUSED: 'partition_write_cutover_paused',
+  CDC_CAPACITY: 'partition_write_cdc_capacity',
+  CDC_DEMAND_EXCEEDS_CAPACITY: 'partition_write_cdc_demand_exceeds_capacity',
+});
+
 export {
   PARTITION_LEADER_ADDRESS_REFUSAL,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,

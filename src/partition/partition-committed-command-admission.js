@@ -1,3 +1,4 @@
+import {hasObsoleteMirrorCustodyField} from './partition-mirror-custody-codec.js';
 // The one owner of "may this committed command enter consensus": every path
 // in the partition that proposes a committed command asks it first, and a
 // refusal answers the caller at once and proposes nothing.
@@ -58,13 +59,26 @@ import {
   LOCKING_READ_RESERVATION_COMMAND_ERROR,
   LOCKING_READ_RESERVATION_TYPE,
 } from './partition-locking-read-command-constants.js';
+import {
+  MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
+  isPinnedMirrorRetentionCustodyCommand,
+} from './partition-mirror-effect-retention.js';
+import {
+  PARTITION_MEMBERSHIP_RECOVERY_ERROR,
+  PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+} from './partition-membership-recovery-constants.js';
 
 const FORMATION_ORIGIN_REFUSED_CODE = 'formation_transition_origin_refused';
 const FORMATION_INVALID_COMMAND_CODE = 'formation_transition_command_invalid';
 let registeredFormationCommandValidator = null;
+let registeredMembershipRecoveryCommandValidator = null;
 
 function registerFormationCommandValidator(validator) {
   registeredFormationCommandValidator = validator;
+}
+
+function registerMembershipRecoveryCommandValidator(validator) {
+  registeredMembershipRecoveryCommandValidator = validator;
 }
 
 // Who asks to propose a committed command. Participant commands enter only
@@ -78,6 +92,8 @@ const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   PLACEMENT_OWNER: 'placement-owner',
   FORMATION_OWNER: 'formation-owner',
   LOCKING_READ_OWNER: 'locking-read-owner',
+  MIRROR_RETENTION_OWNER: 'mirror-retention-owner',
+  MEMBERSHIP_RECOVERY_OWNER: 'membership-recovery-owner',
 });
 
 // What a refused write is answered with.
@@ -118,6 +134,10 @@ function refused(code, reason) {
 }
 
 function sqlCommandRefusal(command) {
+  if (hasObsoleteMirrorCustodyField(command)) {
+    return refused(MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES,
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES);
+  }
   if (!isNonEmptyString(command.sql)) {
     return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
       PARTITION_SERVICE_ERROR_MSG.WRITE_STATEMENT_MISSING);
@@ -182,7 +202,44 @@ function lockingReadCommandRefusal(command, origin) {
     );
 }
 
+function mirrorRetentionCustodyCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.MIRROR_RETENTION_OWNER) {
+    return refused(
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.ORIGIN,
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.ORIGIN,
+    );
+  }
+  return isPinnedMirrorRetentionCustodyCommand(command) ?
+    ADMITTED :
+    refused(
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES,
+      MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES,
+    );
+}
+
+function membershipRecoveryCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.MEMBERSHIP_RECOVERY_OWNER) {
+    return refused(
+      PARTITION_MEMBERSHIP_RECOVERY_ERROR.ORIGIN,
+      PARTITION_MEMBERSHIP_RECOVERY_ERROR.ORIGIN,
+    );
+  }
+  return registeredMembershipRecoveryCommandValidator !== null &&
+      registeredMembershipRecoveryCommandValidator(command) ?
+    ADMITTED :
+    refused(
+      PARTITION_MEMBERSHIP_RECOVERY_ERROR.BYTES,
+      PARTITION_MEMBERSHIP_RECOVERY_ERROR.BYTES,
+    );
+}
+
 function commandRefusalByKind(command, origin) {
+  if (command.type === PARTITION_MEMBERSHIP_RECOVERY_TYPE) {
+    return membershipRecoveryCommandRefusal(command, origin);
+  }
+  if (command.type === PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY) {
+    return mirrorRetentionCustodyCommandRefusal(command, origin);
+  }
   if (command.type === LOCKING_READ_RESERVATION_TYPE) {
     return lockingReadCommandRefusal(command, origin);
   }
@@ -257,4 +314,5 @@ export {
   isCommittedCommandType,
   isCommittedSqlCommandType,
   registerFormationCommandValidator,
+  registerMembershipRecoveryCommandValidator,
 };

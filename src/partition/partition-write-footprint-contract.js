@@ -8,6 +8,10 @@
  */
 
 import {SQLParser} from '../query/sql-parser.js';
+import {decodeTypedParams} from '../query/sql-value-codec.js';
+import {
+  normalizePkScalar,
+} from './partition-locking-read-command-constants.js';
 
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
@@ -85,24 +89,30 @@ function isNonEmptyString(value) {
   return typeof value === TYPE_STRING && value.length > NUM_ZERO;
 }
 
+const MIN_SAFE_PK_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_PK_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const TYPE_BIGINT = 'bigint';
+const SQLITE_INT64_BITS = 64;
+
 function isScalarPkValue(value) {
   return typeof value === TYPE_STRING ||
-    (typeof value === TYPE_NUMBER && Number.isFinite(value));
+    (typeof value === TYPE_NUMBER && Number.isFinite(value)) ||
+    (typeof value === TYPE_BIGINT && BigInt.asIntN(SQLITE_INT64_BITS, value) === value);
 }
+
+const CANONICAL_INT64_TEXT_RE = /^-?[1-9]\d{15,18}$/u;
 
 function isCanonicalPkScalar(value) {
   if (typeof value === TYPE_NUMBER) return Number.isSafeInteger(value);
+  if (typeof value === TYPE_BIGINT) return BigInt.asIntN(SQLITE_INT64_BITS, value) === value;
   if (typeof value !== TYPE_STRING || value.length === NUM_ZERO) return false;
   if (!SQLITE_NUMERIC_TEXT_RE.test(value)) return true;
   const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && String(parsed) === value;
-}
-
-function normalizePkScalar(value) {
-  if (typeof value === TYPE_NUMBER) {
-    return Object.is(value, -0) ? NUM_ZERO : value;
-  }
-  return value;
+  if (Number.isSafeInteger(parsed) && String(parsed) === value) return true;
+  if (!CANONICAL_INT64_TEXT_RE.test(value)) return false;
+  const bigVal = BigInt(value);
+  return BigInt.asIntN(SQLITE_INT64_BITS, bigVal) === bigVal &&
+    (bigVal < MIN_SAFE_PK_BIGINT || bigVal > MAX_SAFE_PK_BIGINT);
 }
 
 function encodeCanonicalPkTupleKey(tuple) {
@@ -214,19 +224,13 @@ const UNSCOPED_WHERE_EVAL = objectFreeze({
 });
 
 function normalizeColumnList(cols) {
-  if (!Array.isArray(cols)) {
-    return [];
-  }
+  if (!Array.isArray(cols)) return [];
   const normalized = [];
   for (let i = NUM_ZERO; i < cols.length; i += NUM_ONE) {
     const item = cols[i];
-    const raw = typeof item === TYPE_STRING ?
-      item :
-      String(item?.name ?? item?.column ?? '');
+    const raw = typeof item === TYPE_STRING ? item : String(item?.name ?? item?.column ?? '');
     const cleaned = raw.trim().replace(/^["'`]|["'`]$/gu, '').toLowerCase();
-    if (cleaned.length > NUM_ZERO) {
-      normalized.push(cleaned);
-    }
+    if (cleaned.length > NUM_ZERO) normalized.push(cleaned);
   }
   return normalized;
 }
@@ -767,7 +771,9 @@ function extractStatementWriteFootprint(options) {
   if (normalizedPkCols.length !== pkCols.length) return UNSCOPED_WRITE_FOOTPRINT;
   const resolvedAst = options.ast || parseSqlAstSafely(options.sql);
   if (!resolvedAst || typeof resolvedAst !== TYPE_OBJECT) return UNSCOPED_WRITE_FOOTPRINT;
-  const safeParams = Array.isArray(options.params) ? options.params : [];
+  const safeParams = options.typedParams ?
+    decodeTypedParams(options.typedParams) :
+    (Array.isArray(options.params) ? options.params : []);
   return dispatchFootprintByStatementKind(
     resolvedAst,
     safeParams,
@@ -785,4 +791,5 @@ export {
   encodeCanonicalPkTupleKey,
   extractStatementWriteFootprint,
   isStatementWriteFootprintRecord,
+  normalizePkScalar,
 };

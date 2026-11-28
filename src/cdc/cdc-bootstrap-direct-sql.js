@@ -1,3 +1,4 @@
+import {splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 /**
  * The bootstrap-mode path of the CDC integration service (the seed's
  * registration window): reads on the local partition replica, writes through
@@ -5,6 +6,7 @@
  * terminal gate (submitRoutedMutationHop).
  */
 
+import {deriveParticipantEntryId} from '../query/distributed/distributed-write-coordinator.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {
@@ -47,7 +49,7 @@ function selectDirectSqlCandidates(services, tableName, targetPartitionId) {
   return candidates;
 }
 
-async function executeBootstrapDirectSql(service, sql, params = []) {
+async function executeBootstrapDirectSql(service, sql, params = [], options = {}) {
   if (!service.bootstrapMode || !service.localPartitionServices) {
     throw new Error(CDC_LOG_MSG.BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL);
   }
@@ -131,7 +133,11 @@ async function executeBootstrapDirectSql(service, sql, params = []) {
   // twice (R11: no fallback).
   return normalizeLocalSystemTableWriteResult(
     await submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
-      () => partitionService.executeQuery(sql, params)));
+      () => Object.hasOwn(options, 'splitDescriptorIntent') ?
+        partitionService.executeQuery(sql, params, {
+          ...splitDescriptorIntentFields(options), idempotencyKey: options.idempotencyKey,
+          entryId: deriveParticipantEntryId(options.idempotencyKey, partitionService.partitionId),
+        }) : partitionService.executeQuery(sql, params)));
 }
 
 export {executeBootstrapDirectSql};

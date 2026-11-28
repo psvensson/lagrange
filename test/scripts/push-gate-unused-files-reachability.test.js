@@ -307,13 +307,21 @@ test('--unreachable-src --added flags existing src modules that lose their last 
       'existing src module losing its last production import must fail the range check');
     assert.equal(orphanedRangeResult.count, 1);
 
-    // Also verify uncommitted working-tree removal against HEAD (no --base).
+    // Also verify uncommitted working-tree removal against HEAD (no --base)
+    // and ensure a foreign LAGRANGE_CHECK_BASE from the outer repo is ignored.
     write(root, 'src/index.js', 'import \'./existing-live.js\';\nexport const live = 1;\n');
     commitAll('restore production import');
     assert.equal(probeSrc(root, ADDED_FLAG, LIST_FLAG).count, 0);
     write(root, 'src/index.js', 'export const live = 1;\n');
-    const uncommittedResult = probeSrc(root, ADDED_FLAG, LIST_FLAG);
-    assert.deepEqual(uncommittedResult.listed, ['src/existing-live.js'],
-      'uncommitted removal of last production import must fail against HEAD');
-    assert.equal(uncommittedResult.count, 1);
+    const foreignBaseEnv = {
+      ...process.env,
+      LAGRANGE_CHECK_BASE: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+    };
+    const uncommittedRun = spawnSync('node', [PROBE, UNREACHABLE_SRC_FLAG, ADDED_FLAG, LIST_FLAG],
+      {cwd: root, encoding: 'utf8', env: foreignBaseEnv});
+    assert.equal(uncommittedRun.stderr, '');
+    const uncommittedLines = uncommittedRun.stdout.trim().split('\n');
+    assert.deepEqual(uncommittedLines.slice(0, -1), ['src/existing-live.js'],
+      'uncommitted removal of last production import must fail against HEAD even with foreign LAGRANGE_CHECK_BASE');
+    assert.equal(Number(uncommittedLines[uncommittedLines.length - 1]), 1);
   });

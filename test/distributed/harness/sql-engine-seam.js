@@ -11,6 +11,9 @@
 // the engine as seamed-here, real-there and goes red if either pointer dangles.
 
 import {
+  SYSTEM_TABLE_SCHEMAS,
+} from '../../../src/bootstrap/system-table-schemas-constants.js';
+import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
 } from '../../../src/cache/system-cache-key-descriptor.js';
 import {CDC_OPERATION} from '../../../src/constants/index.js';
@@ -26,6 +29,15 @@ const stringSplit = Function.call.bind(String.prototype.split);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+
+const SCHEMA_COLUMNS_BY_TABLE = Object.freeze(
+  Object.fromEntries(
+    arrayMap(SYSTEM_TABLE_SCHEMAS, (schema) => [
+      schema.tableName,
+      Object.freeze(arrayMap(schema.columns, (column) => column.name)),
+    ]),
+  ),
+);
 
 const SEAM_ID = 'sql-engine-cache-membership';
 const STATEMENT = /^\s*(select|insert|update|delete)\s+/iu;
@@ -124,13 +136,22 @@ function resolveValueToken(token, state) {
   return trimmed;
 }
 
+function normalizeSqlScalar(value) {
+  if (value === undefined) return null;
+  return value !== null && typeof value === 'object' ?
+    JSON.stringify(value) :
+    value;
+}
+
 function compareValues(left, operator, right) {
-  if (operator === '=') return left === right;
-  if (operator === '!=' || operator === '<>') return left !== right;
-  if (operator === '<=') return left <= right;
-  if (operator === '>=') return left >= right;
-  if (operator === '<') return left < right;
-  return left > right;
+  const normalizedLeft = normalizeSqlScalar(left);
+  const normalizedRight = normalizeSqlScalar(right);
+  if (operator === '=') return normalizedLeft === normalizedRight;
+  if (operator === '!=' || operator === '<>') return normalizedLeft !== normalizedRight;
+  if (operator === '<=') return normalizedLeft <= normalizedRight;
+  if (operator === '>=') return normalizedLeft >= normalizedRight;
+  if (operator === '<') return normalizedLeft < normalizedRight;
+  return normalizedLeft > normalizedRight;
 }
 
 function compileAtomicPredicate(clause, state) {
@@ -206,8 +227,20 @@ function selectRows(cache, sql, params) {
   const countMatch = COUNT_PROJECTION.exec(match[1]);
   if (countMatch) {
     rows = [{[stringToLowerCase(countMatch[1])]: rows.length}];
-  } else if (match[4]) {
-    rows = rows.slice(0, Number(match[4]));
+  } else {
+    if (match[4]) {
+      rows = rows.slice(0, Number(match[4]));
+    }
+    const schemaColumns = SCHEMA_COLUMNS_BY_TABLE[table];
+    if (schemaColumns) {
+      rows = arrayMap(rows, (row) => {
+        const completeRow = {};
+        for (const col of schemaColumns) {
+          completeRow[col] = normalizeSqlScalar(row[col]);
+        }
+        return {...row, ...completeRow};
+      });
+    }
   }
   return {success: true, rows, rowSetComplete: true};
 }
@@ -223,6 +256,9 @@ function insertRow(cache, sql, params) {
     Boolean,
   );
   const row = {};
+  for (const columnName of SCHEMA_COLUMNS_BY_TABLE[table] || []) {
+    row[columnName] = null;
+  }
   columns.forEach((column, index) => {
     row[stringToLowerCase(column)] = params[index];
   });

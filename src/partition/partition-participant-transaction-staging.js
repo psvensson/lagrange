@@ -53,6 +53,7 @@ import {
 import {
   canAdvanceRowKeySessionGeneration,
   canRebaseEmptyWaitingSession,
+  sessionReadDependenciesCurrent,
   checkAndRecordSessionRowKey,
   findParticipantSession,
   isRowKeyConcurrencyEnabled,
@@ -497,9 +498,18 @@ function computeIncrementalStagedBytes(session, operationBytes) {
 }
 
 function appendValidatedOperationToSession(
-  service, session, operation, operationText, nextBytes, classifiedStmt, validationState,
+  service, session, operation, operationText, nextBytes, classifiedStmt, validationState, ranOutcome,
 ) {
   session.operations.push(operation);
+  if (session.stagedResultsByEntryId instanceof Map &&
+      typeof operation.entryId === 'string' && operation.entryId.length > ZERO) {
+    session.stagedResultsByEntryId.set(operation.entryId, Object.freeze({
+      sql: operation.sql,
+      params: operation.params,
+      changes: ranOutcome.changes,
+      lastInsertRowid: ranOutcome.lastInsertRowid,
+    }));
+  }
   if (Array.isArray(session.encodedOperations)) {
     session.encodedOperations.push(operationText);
   }
@@ -512,11 +522,82 @@ function appendValidatedOperationToSession(
   session.bytes = nextBytes;
 }
 
-function stageWrite(service, session, request, params) {
-  const admitted = admittedEntry(service, session, request, params);
-  if (admitted.refusal !== undefined) {
-    return admitted.refusal;
+function sameStagedParams(left, right) {
+  return Array.isArray(left) && Array.isArray(right) &&
+    left.length === right.length &&
+    left.every((value, index) => Object.is(value, right[index]));
+}
+
+function findIdempotentStagedWriteAnswer(session, request, params) {
+  const suppliedEntryId = request[QUERY_PAYLOAD_FIELD_ENTRY_ID];
+  if (typeof suppliedEntryId !== 'string' || suppliedEntryId.length === ZERO ||
+      !(session.stagedResultsByEntryId instanceof Map)) {
+    return null;
   }
+  const prior = session.stagedResultsByEntryId.get(suppliedEntryId);
+  if (prior === undefined || prior.sql !== request.sql ||
+      !sameStagedParams(prior.params, params)) {
+    return null;
+  }
+  return {
+    success: true,
+    provisional: true,
+    idempotent: true,
+    changes: prior.changes,
+    lastInsertRowid: prior.lastInsertRowid,
+  };
+}
+
+function createSequentialLockCheckRunner(service, session, operation) {
+  return () => {
+    if (session.operations.length > ZERO) {
+      const lockRefusal = checkPartitionWriteLockingReadConflict(service, {
+        sql: operation.sql,
+        params: operation.params,
+        transactionId: session.identity.transactionId,
+      });
+      if (lockRefusal !== null) {
+        throw Object.freeze({stagingLockConflict: true, lockRefusal});
+      }
+    }
+    return runStaged(service, operation);
+  };
+}
+
+function validateAndCommitStagedOperation(
+  service, session, operation, operationText, nextBytes, classifiedStmt, rowKeyCheck,
+) {
+  const validationState = readValidationState(service.db);
+  if (!sessionReadDependenciesCurrent(service, session, validationState.generation)) {
+    session.phase = PHASE.DOOMED;
+    session.doomCode = CODE.STALE_READ;
+    revertSessionRowKeyCheck(service, session, rowKeyCheck);
+    notifyRowKeySettlementWaiters(service);
+    return refused(CODE.STALE_READ);
+  }
+  const runWithSequentialLockCheck =
+    createSequentialLockCheckRunner(service, session, operation);
+  const outcome = canDirectValidateDisjoint(session, rowKeyCheck, validationState) ?
+    validateDirectDisjointWrite(service, session, runWithSequentialLockCheck) :
+    validateOverReplay(service, session, runWithSequentialLockCheck, validationState);
+  if (outcome.failure !== undefined) {
+    revertSessionRowKeyCheck(service, session, rowKeyCheck);
+    return outcome.failure?.stagingLockConflict === true ?
+      outcome.failure.lockRefusal :
+      failedValidation(service, session, outcome.failure);
+  }
+  appendValidatedOperationToSession(
+    service, session, operation, operationText, nextBytes,
+    classifiedStmt, validationState, outcome.ran);
+  return {success: true, provisional: true, changes: outcome.ran.changes,
+    lastInsertRowid: outcome.ran.lastInsertRowid};
+}
+
+function stageWrite(service, session, request, params) {
+  const idempotentAnswer = findIdempotentStagedWriteAnswer(session, request, params);
+  if (idempotentAnswer !== null) return idempotentAnswer;
+  const admitted = admittedEntry(service, session, request, params);
+  if (admitted.refusal !== undefined) return admitted.refusal;
   if (!params.every(isJsonScalar)) {
     return refused(CODE.SESSION_WRITE_PARAM_UNSUPPORTED);
   }
@@ -532,46 +613,19 @@ function stageWrite(service, session, request, params) {
     revertSessionRowKeyCheck(service, session, rowKeyCheck);
     return classifierRefusal(classified);
   }
-  // Encode each immutable staged operation once and account bytes incrementally.
   const operation = buildImmutableStagedOperation(admitted.entry.entryId, request.sql, params);
   const operationText = JSON.stringify(operation);
-  const operationBytes = Buffer.byteLength(operationText, TEXT_ENCODING);
   const nextOperationCount = session.operations.length + ONE;
-  const nextBytes = computeIncrementalStagedBytes(session, operationBytes);
+  const nextBytes = computeIncrementalStagedBytes(
+    session, Buffer.byteLength(operationText, TEXT_ENCODING));
   if (nextOperationCount > BOUND.MAX_OPERATIONS || nextBytes > BOUND.MAX_BYTES) {
     revertSessionRowKeyCheck(service, session, rowKeyCheck);
     return refused(CODE.REPLAY_BUDGET_EXCEEDED,
       {operations: nextOperationCount, bytes: nextBytes});
   }
-  const runWithSequentialLockCheck = () => {
-    if (session.operations.length > ZERO) {
-      const lockRefusal = checkPartitionWriteLockingReadConflict(service, {
-        sql: operation.sql,
-        params: operation.params,
-        transactionId: session.identity.transactionId,
-      });
-      if (lockRefusal !== null) {
-        throw Object.freeze({stagingLockConflict: true, lockRefusal});
-      }
-    }
-    return runStaged(service, operation);
-  };
-  const validationState = readValidationState(service.db);
-  const outcome = canDirectValidateDisjoint(session, rowKeyCheck, validationState) ?
-    validateDirectDisjointWrite(service, session, runWithSequentialLockCheck) :
-    validateOverReplay(service, session, runWithSequentialLockCheck, validationState);
-  if (outcome.failure !== undefined) {
-    revertSessionRowKeyCheck(service, session, rowKeyCheck);
-    if (outcome.failure?.stagingLockConflict === true) {
-      return outcome.failure.lockRefusal;
-    }
-    return failedValidation(service, session, outcome.failure);
-  }
-  appendValidatedOperationToSession(
+  return validateAndCommitStagedOperation(
     service, session, operation, operationText, nextBytes,
-    classified.statement, validationState);
-  return {success: true, provisional: true, changes: outcome.ran.changes,
-    lastInsertRowid: outcome.ran.lastInsertRowid};
+    classified.statement, rowKeyCheck);
 }
 
 function buildSessionReadAnswer(service, collected) {

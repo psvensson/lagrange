@@ -5,6 +5,10 @@ import {createPartitionServiceLearnerPromotionProofMethods} from './partition-se
 import {createPartitionServiceLearnerPromotionWakeMethods} from './partition-service-learner-promotion-wake-methods.js';
 import * as replicaAdmission from './partition-replica-admission.js';
 import {
+  recordPartitionMemberBinding,
+  stagePartitionMembershipRecoveryIntent,
+} from './partition-membership-recovery.js';
+import {
   admitPartitionRaftLearner,
   evaluatePartitionLearnerCatchUp,
   proposePartitionGrowthPromote,
@@ -82,6 +86,12 @@ class PartitionService extends PartitionServiceSplitAccessorBase {
   }
   removeRaftLearner(request) {
     return removePartitionRaftLearner(this, request);
+  }
+  stageMembershipRecoveryIntent(payload) {
+    return stagePartitionMembershipRecoveryIntent(this, payload);
+  }
+  recordMemberBinding(binding) {
+    return recordPartitionMemberBinding(this, binding);
   }
 }
 

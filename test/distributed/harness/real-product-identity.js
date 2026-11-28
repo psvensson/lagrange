@@ -43,6 +43,7 @@ import {
   classifyRemoteCommandError,
   errorText,
   inspectContainerCommand,
+  settleConcurrentBatch,
   shellWord,
 } from './real-product-remote-shell.js';
 
@@ -280,19 +281,19 @@ async function inspectedAtIdentityTime({sshRun, opts, role, signal, deadlineAtMs
 
 /** Inspect every role's container, in role order. */
 async function inspectProducts({sshRun, opts, roles, signal, deadlineAtMs, now}) {
-  const products = [];
-  const stores = new Map();
+  const uniqueHosts = [];
   for (const role of roles) {
-    if (!stores.has(role.host)) {
-      stores.set(role.host, await readImageStore({
-        sshRun, opts, host: role.host, signal, deadlineAtMs, now,
-      }));
-    }
-    products.push({...await inspectedAtIdentityTime({
-      sshRun, opts, role, signal, deadlineAtMs, now,
-    }), imageStore: stores.get(role.host)});
+    if (!arrayIncludes(uniqueHosts, role.host)) uniqueHosts.push(role.host);
   }
-  return products;
+  const storeEntries = await settleConcurrentBatch(uniqueHosts, async (host) => [
+    host,
+    await readImageStore({sshRun, opts, host, signal, deadlineAtMs, now}),
+  ]);
+  const stores = new Map(storeEntries);
+  return settleConcurrentBatch(roles, async (role) => ({
+    ...await inspectedAtIdentityTime({sshRun, opts, role, signal, deadlineAtMs, now}),
+    imageStore: stores.get(role.host),
+  }));
 }
 
 /**
@@ -303,23 +304,23 @@ async function inspectProducts({sshRun, opts, roles, signal, deadlineAtMs, now})
  * harness's identity_unverified and propagates: it is never read as absence.
  */
 async function observeProductsAfterWindow({sshRun, opts, products, signal, deadlineAtMs, now}) {
-  const observed = [];
-  for (const product of products) {
+  const results = await settleConcurrentBatch(products, async (product) => {
     try {
       const nowState = await inspectRunningContainer({sshRun, opts, host: product.host,
         containerId: product.containerId, role: product.role, signal, deadlineAtMs, now});
       // The window does not change what the product answered: its version and,
       // where it answered none, the reason travel together (D33).
-      observed.push({...nowState, reportedVersion: product.reportedVersion,
+      return {...nowState, reportedVersion: product.reportedVersion,
         ...(product.reportedVersion === null ?
           {reportedVersionError: product.reportedVersionError ?? null} : {}),
         ...(product.bootProvenance !== undefined ?
-          {bootProvenance: product.bootProvenance} : {})});
+          {bootProvenance: product.bootProvenance} : {})};
     } catch (error) {
       if (error?.code !== DEPLOYMENT_FAILURE.CONTAINER_ABSENT) throw error;
+      return null;
     }
-  }
-  return observed;
+  });
+  return arrayFilter(results, (entry) => entry !== null);
 }
 
 /**

@@ -1,0 +1,858 @@
+{
+  "scope": "Last complete seed census and per-process timestamps. Counted only logs emitted on or before the controller deadline. Cross-host timestamps have no clock-offset correction. Dispatch is the receiver response to a transfer request. The leader role and term are reported separately.",
+  "campaigns": [
+    {
+      "campaign": "bench-review-cdc-three-1918",
+      "sourceCommit": "ecaa827ac16459edb00f4221ad588870ea4bb02c",
+      "deadline": "2026-11-26T19:25:05.846Z",
+      "targetRequestAnswersAllNodes": 98,
+      "partitionsWithTargetRequestAnswers": 22,
+      "topGroups": {
+        "debug_breakpoints-p1": 25,
+        "indices-p1": 20,
+        "services-p1": 10,
+        "package_registry_mappings-p1": 8
+      },
+      "selectedPartition": "indices-p1",
+      "observedLeaderTerms": [
+        {
+          "term": 1,
+          "node": 1
+        },
+        {
+          "term": 2,
+          "node": 3
+        },
+        {
+          "term": 3,
+          "node": 1
+        },
+        {
+          "term": 4,
+          "node": 2
+        },
+        {
+          "term": 5,
+          "node": 1
+        },
+        {
+          "term": 6,
+          "node": 2
+        },
+        {
+          "term": 7,
+          "node": 1
+        },
+        {
+          "term": 8,
+          "node": 2
+        },
+        {
+          "term": 9,
+          "node": 1
+        },
+        {
+          "term": 10,
+          "node": 2
+        },
+        {
+          "term": 11,
+          "node": 1
+        },
+        {
+          "term": 12,
+          "node": 2
+        },
+        {
+          "term": 13,
+          "node": 1
+        },
+        {
+          "term": 14,
+          "node": 2
+        },
+        {
+          "term": 15,
+          "node": 1
+        },
+        {
+          "term": 16,
+          "node": 2
+        },
+        {
+          "term": 17,
+          "node": 1
+        },
+        {
+          "term": 18,
+          "node": 2
+        },
+        {
+          "term": 19,
+          "node": 1
+        },
+        {
+          "term": 20,
+          "node": 2
+        },
+        {
+          "term": 21,
+          "node": 1
+        },
+        {
+          "term": 22,
+          "node": 2
+        },
+        {
+          "term": 23,
+          "node": 1
+        }
+      ],
+      "timeline": [
+        {
+          "at": "2026-11-26T19:21:12.227Z",
+          "source": 1,
+          "line": 102,
+          "action": "becameLeader",
+          "term": 1
+        },
+        {
+          "at": "2026-11-26T19:23:06.354Z",
+          "source": 1,
+          "line": 3364,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:23:06.556Z",
+          "source": 1,
+          "line": 3370,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:23:07.072Z",
+          "source": 3,
+          "line": 3074,
+          "action": "becameLeader",
+          "term": 2
+        },
+        {
+          "at": "2026-11-26T19:23:50.983Z",
+          "source": 1,
+          "line": 4118,
+          "action": "becameLeader",
+          "term": 3
+        },
+        {
+          "at": "2026-11-26T19:24:04.195Z",
+          "source": 1,
+          "line": 4425,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:04.505Z",
+          "source": 1,
+          "line": 4434,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:04.633Z",
+          "source": 2,
+          "line": 4657,
+          "action": "becameLeader",
+          "term": 4
+        },
+        {
+          "at": "2026-11-26T19:24:06.361Z",
+          "source": 2,
+          "line": 4690,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:06.681Z",
+          "source": 1,
+          "line": 4467,
+          "action": "becameLeader",
+          "term": 5
+        },
+        {
+          "at": "2026-11-26T19:24:06.743Z",
+          "source": 2,
+          "line": 4705,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:14.264Z",
+          "source": 1,
+          "line": 4523,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:14.609Z",
+          "source": 2,
+          "line": 4929,
+          "action": "becameLeader",
+          "term": 6
+        },
+        {
+          "at": "2026-11-26T19:24:14.661Z",
+          "source": 1,
+          "line": 4530,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_refused"
+        },
+        {
+          "at": "2026-11-26T19:24:16.412Z",
+          "source": 2,
+          "line": 4958,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:16.739Z",
+          "source": 1,
+          "line": 4557,
+          "action": "becameLeader",
+          "term": 7
+        },
+        {
+          "at": "2026-11-26T19:24:16.960Z",
+          "source": 2,
+          "line": 4966,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:22.601Z",
+          "source": 1,
+          "line": 4613,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:22.986Z",
+          "source": 2,
+          "line": 5019,
+          "action": "becameLeader",
+          "term": 8
+        },
+        {
+          "at": "2026-11-26T19:24:23.894Z",
+          "source": 1,
+          "line": 4669,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:24.261Z",
+          "source": 2,
+          "line": 5053,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:24.584Z",
+          "source": 2,
+          "line": 5069,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:24.996Z",
+          "source": 1,
+          "line": 4710,
+          "action": "becameLeader",
+          "term": 9
+        },
+        {
+          "at": "2026-11-26T19:24:28.021Z",
+          "source": 1,
+          "line": 4735,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:28.106Z",
+          "source": 1,
+          "line": 4740,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:28.356Z",
+          "source": 2,
+          "line": 5145,
+          "action": "becameLeader",
+          "term": 10
+        },
+        {
+          "at": "2026-11-26T19:24:29.320Z",
+          "source": 2,
+          "line": 5151,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:29.627Z",
+          "source": 1,
+          "line": 4759,
+          "action": "becameLeader",
+          "term": 11
+        },
+        {
+          "at": "2026-11-26T19:24:29.922Z",
+          "source": 2,
+          "line": 5160,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:33.169Z",
+          "source": 1,
+          "line": 4818,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:33.283Z",
+          "source": 1,
+          "line": 4824,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:33.520Z",
+          "source": 2,
+          "line": 5285,
+          "action": "becameLeader",
+          "term": 12
+        },
+        {
+          "at": "2026-11-26T19:24:34.373Z",
+          "source": 2,
+          "line": 5295,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:34.642Z",
+          "source": 2,
+          "line": 5302,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:34.781Z",
+          "source": 1,
+          "line": 4854,
+          "action": "becameLeader",
+          "term": 13
+        },
+        {
+          "at": "2026-11-26T19:24:40.640Z",
+          "source": 1,
+          "line": 4982,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:40.792Z",
+          "source": 1,
+          "line": 4989,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:41.277Z",
+          "source": 2,
+          "line": 5451,
+          "action": "becameLeader",
+          "term": 14
+        },
+        {
+          "at": "2026-11-26T19:24:42.485Z",
+          "source": 2,
+          "line": 5462,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:42.849Z",
+          "source": 2,
+          "line": 5472,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_refused"
+        },
+        {
+          "at": "2026-11-26T19:24:42.871Z",
+          "source": 1,
+          "line": 5018,
+          "action": "becameLeader",
+          "term": 15
+        },
+        {
+          "at": "2026-11-26T19:24:47.458Z",
+          "source": 1,
+          "line": 5121,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:47.870Z",
+          "source": 2,
+          "line": 5558,
+          "action": "becameLeader",
+          "term": 16
+        },
+        {
+          "at": "2026-11-26T19:24:48.127Z",
+          "source": 1,
+          "line": 5142,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_refused"
+        },
+        {
+          "at": "2026-11-26T19:24:49.505Z",
+          "source": 2,
+          "line": 5605,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:49.898Z",
+          "source": 2,
+          "line": 5622,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:50.277Z",
+          "source": 1,
+          "line": 5204,
+          "action": "becameLeader",
+          "term": 17
+        },
+        {
+          "at": "2026-11-26T19:24:53.259Z",
+          "source": 1,
+          "line": 5290,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:53.542Z",
+          "source": 1,
+          "line": 5299,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:53.709Z",
+          "source": 2,
+          "line": 5789,
+          "action": "becameLeader",
+          "term": 18
+        },
+        {
+          "at": "2026-11-26T19:24:54.568Z",
+          "source": 2,
+          "line": 5798,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:55.076Z",
+          "source": 1,
+          "line": 5336,
+          "action": "becameLeader",
+          "term": 19
+        },
+        {
+          "at": "2026-11-26T19:24:55.797Z",
+          "source": 2,
+          "line": 5830,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:56.269Z",
+          "source": 1,
+          "line": 5355,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:56.464Z",
+          "source": 1,
+          "line": 5361,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:24:56.598Z",
+          "source": 2,
+          "line": 5850,
+          "action": "becameLeader",
+          "term": 20
+        },
+        {
+          "at": "2026-11-26T19:24:59.595Z",
+          "source": 2,
+          "line": 5909,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:24:59.875Z",
+          "source": 1,
+          "line": 5417,
+          "action": "becameLeader",
+          "term": 21
+        },
+        {
+          "at": "2026-11-26T19:25:00.600Z",
+          "source": 2,
+          "line": 6056,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_refused"
+        },
+        {
+          "at": "2026-11-26T19:25:02.838Z",
+          "source": 1,
+          "line": 5470,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:25:03.146Z",
+          "source": 2,
+          "line": 6084,
+          "action": "becameLeader",
+          "term": 22
+        },
+        {
+          "at": "2026-11-26T19:25:03.969Z",
+          "source": 1,
+          "line": 5489,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000003",
+          "targetReplicaId": "replace-replica-737f1e124d98377dbd5ea89b86956dd6",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:25:04.676Z",
+          "source": 2,
+          "line": 6106,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:25:04.986Z",
+          "source": 1,
+          "line": 5508,
+          "action": "becameLeader",
+          "term": 23
+        }
+      ],
+      "inputHashes": {
+        "bench-review-cdc-three-1918-node1.log.gz": "d9c535391165d22fde776a8c8e8b68430cc4ed5f9c3d1e49eac30e14497262b2",
+        "bench-review-cdc-three-1918-node2.log.gz": "7ddf454c8c5c0fadd47497df48e456c9a70fd960e46326273c12705b6161ef74",
+        "bench-review-cdc-three-1918-node3.log.gz": "38227c1fbf41e9b781796ef4d8cc0795ade144db7c6aaa84964d3164518de86d"
+      }
+    },
+    {
+      "campaign": "bench-review-owed-three-1929",
+      "sourceCommit": "a723f28f16ac39c760da5d48cdd0706a931a3246",
+      "deadline": "2026-11-26T19:36:42.014Z",
+      "targetRequestAnswersAllNodes": 55,
+      "partitionsWithTargetRequestAnswers": 23,
+      "topGroups": {
+        "call_cell_reduce_slots-p1": 8,
+        "indices-p1": 8,
+        "tables-p1": 6,
+        "code-p1": 4
+      },
+      "selectedPartition": "call_cell_reduce_slots-p1",
+      "observedLeaderTerms": [
+        {
+          "term": 1,
+          "node": 1
+        },
+        {
+          "term": 2,
+          "node": 3
+        },
+        {
+          "term": 3,
+          "node": 1
+        },
+        {
+          "term": 4,
+          "node": 3
+        },
+        {
+          "term": 5,
+          "node": 1
+        },
+        {
+          "term": 6,
+          "node": 3
+        },
+        {
+          "term": 7,
+          "node": 1
+        },
+        {
+          "term": 8,
+          "node": 3
+        },
+        {
+          "term": 9,
+          "node": 2
+        }
+      ],
+      "timeline": [
+        {
+          "at": "2026-11-26T19:32:48.110Z",
+          "source": 1,
+          "line": 78,
+          "action": "becameLeader",
+          "term": 1
+        },
+        {
+          "at": "2026-11-26T19:34:11.323Z",
+          "source": 1,
+          "line": 2960,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:34:11.397Z",
+          "source": 1,
+          "line": 2962,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000002",
+          "targetReplicaId": "replace-replica-32e476cbd513c88177bd8b3979944614",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:34:11.642Z",
+          "source": 3,
+          "line": 2272,
+          "action": "becameLeader",
+          "term": 2
+        },
+        {
+          "at": "2026-11-26T19:34:13.117Z",
+          "source": 3,
+          "line": 2310,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:34:13.253Z",
+          "source": 3,
+          "line": 2315,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000002",
+          "targetReplicaId": "replace-replica-32e476cbd513c88177bd8b3979944614",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:34:13.889Z",
+          "source": 1,
+          "line": 3015,
+          "action": "becameLeader",
+          "term": 3
+        },
+        {
+          "at": "2026-11-26T19:34:14.605Z",
+          "source": 1,
+          "line": 3032,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:34:14.661Z",
+          "source": 1,
+          "line": 3034,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000002",
+          "targetReplicaId": "replace-replica-32e476cbd513c88177bd8b3979944614",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:34:15.032Z",
+          "source": 3,
+          "line": 2367,
+          "action": "becameLeader",
+          "term": 4
+        },
+        {
+          "at": "2026-11-26T19:34:16.118Z",
+          "source": 3,
+          "line": 2398,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:34:16.244Z",
+          "source": 3,
+          "line": 2402,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000002",
+          "targetReplicaId": "replace-replica-32e476cbd513c88177bd8b3979944614",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:34:16.587Z",
+          "source": 1,
+          "line": 3067,
+          "action": "becameLeader",
+          "term": 5
+        },
+        {
+          "at": "2026-11-26T19:34:18.754Z",
+          "source": 1,
+          "line": 3256,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:34:18.778Z",
+          "source": 1,
+          "line": 3258,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000002",
+          "targetReplicaId": "replace-replica-32e476cbd513c88177bd8b3979944614",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:34:19.070Z",
+          "source": 3,
+          "line": 2469,
+          "action": "becameLeader",
+          "term": 6
+        },
+        {
+          "at": "2026-11-26T19:34:20.121Z",
+          "source": 3,
+          "line": 2492,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:34:20.216Z",
+          "source": 3,
+          "line": 2497,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000002",
+          "targetReplicaId": "replace-replica-32e476cbd513c88177bd8b3979944614",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:34:20.494Z",
+          "source": 1,
+          "line": 3298,
+          "action": "becameLeader",
+          "term": 7
+        },
+        {
+          "at": "2026-11-26T19:34:24.304Z",
+          "source": 1,
+          "line": 3379,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:34:24.346Z",
+          "source": 1,
+          "line": 3382,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000002",
+          "targetReplicaId": "replace-replica-32e476cbd513c88177bd8b3979944614",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:34:24.673Z",
+          "source": 3,
+          "line": 2600,
+          "action": "becameLeader",
+          "term": 8
+        },
+        {
+          "at": "2026-11-26T19:34:26.136Z",
+          "source": 3,
+          "line": 2667,
+          "action": "sourceDemotionAnswered",
+          "outcome": "transfer_requested"
+        },
+        {
+          "at": "2026-11-26T19:34:26.180Z",
+          "source": 3,
+          "line": 2669,
+          "action": "targetRequestAnswered",
+          "target": "00000000-0000-4000-8000-000000000002",
+          "targetReplicaId": "replace-replica-32e476cbd513c88177bd8b3979944614",
+          "outcome": "transfer_forwarded"
+        },
+        {
+          "at": "2026-11-26T19:34:26.512Z",
+          "source": 2,
+          "line": 2777,
+          "action": "becameLeader",
+          "term": 9
+        }
+      ],
+      "inputHashes": {
+        "bench-review-owed-three-1929-node1.log.gz": "ecdeecbb4adf6526f8e4951c3f151d7b9b85f2d36cc09420cd364dc04731438f",
+        "bench-review-owed-three-1929-node2.log.gz": "b5336e8b75519af8808c49f612e3a0326a0d3ffb3349544bd4890c444ff33574",
+        "bench-review-owed-three-1929-node3.log.gz": "bad8430afb3bcc1af87fa2ffe7a7f3594f60505a8592174dbee149c8d37141cb"
+      }
+    }
+  ]
+}

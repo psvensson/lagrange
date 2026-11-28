@@ -449,8 +449,10 @@ test('a competing terminal settlement after MATERIALIZED defeats the install; th
     assert.equal((await send(createPayload(f))).status, STATUS.INITIATED);
     const error = await assertRefusedJoin(world, outcomes, REFUSAL.INSTALL_REFUSED,
       'terminal after MATERIALIZED');
-    assert.equal(error.detail, GENERATION_MISMATCH);
+    assert.equal(error.detail, ADMISSION_REQUIRED);
     assertNotInstalled(world, 'terminal after MATERIALIZED');
+    assert.equal(fs.existsSync(path.join(path.dirname(world.dbPath), 'checkpoints', TARGET,
+      'install', 'install-state.json')), false, 'no staging obligation written before staging');
     assert.notEqual(f.row().completed_at, null);
     assertDebtRetained(f);
   });

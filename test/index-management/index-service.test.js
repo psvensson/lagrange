@@ -987,9 +987,16 @@ test('IndexService - getTableIdForTableName propagates gateway errors and metada
     'getTableIdForTableName must propagate gateway read errors instead of swallowing them',
   );
 
+  let partitionWriteAttempted = false;
   const unwritableService = new IndexService({
     systemTableCache: {},
-    sqlQueryEngine: createMockSqlEngine(),
+    sqlQueryEngine: createMockSqlEngine([], [{partition_id: 'p1', table_id: 'users-table'}]),
+    partitionExecutor: {
+      async executeOnPartition() {
+        partitionWriteAttempted = true;
+        return {success: true};
+      },
+    },
   });
   await t.rejects(
     unwritableService.createIndex({
@@ -1002,9 +1009,57 @@ test('IndexService - getTableIdForTableName propagates gateway errors and metada
     'createIndex must fail closed when system-table write authority is absent',
   );
   t.equal(
+    partitionWriteAttempted,
+    false,
+    'createIndex must validate write authority before executing partition DDL',
+  );
+  t.equal(
     unwritableService.indexExists('users-table', 'idx_unpersisted'),
     false,
     'unpersisted index must not be recorded in memory',
+  );
+
+  await t.rejects(
+    unwritableService.createIndex('CREATE GLOBAL INDEX idx_global_unpersisted ON users (email)'),
+    {code: 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE'},
+    'global createIndex must fail closed when system-table write authority is absent',
+  );
+  const coordinator = unwritableService.getGlobalIndexCoordinator();
+  t.equal(
+    coordinator.getCatalogRecord('idx_global_unpersisted'),
+    null,
+    'unpersisted global index must not remain in coordinator catalog',
+  );
+  await t.rejects(
+    coordinator.onCatalogInsert({
+      index_id: 'idx-g1',
+      table_id: 'users-table',
+      table_name: 'users',
+      index_name: 'idx_hook_unpersisted',
+      column_names: '["email"]',
+    }),
+    {code: 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE'},
+    'onCatalogInsert hook must fail closed when persistence authority is absent',
+  );
+  await t.rejects(
+    coordinator.onCatalogUpdate('idx-g1', {state: 'READ_WRITE'}, {
+      index_id: 'idx-g1',
+      table_id: 'users-table',
+      table_name: 'users',
+      index_name: 'idx_hook_unpersisted',
+      column_names: '["email"]',
+    }),
+    {code: 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE'},
+    'onCatalogUpdate hook must fail closed when persistence authority is absent',
+  );
+  await t.rejects(
+    coordinator.onCatalogDelete({
+      index_id: 'idx-g1',
+      table_id: 'users-table',
+      index_name: 'idx_hook_unpersisted',
+    }),
+    {code: 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE'},
+    'onCatalogDelete hook must fail closed when persistence authority is absent',
   );
 
   unwritableService.indexCache.set(
@@ -1025,5 +1080,36 @@ test('IndexService - getTableIdForTableName propagates gateway errors and metada
     unwritableService.dropIndex('users-table', 'idx_seeded'),
     {code: 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE'},
     'dropIndex must fail closed when system-table write authority is absent',
+  );
+  t.equal(
+    unwritableService.indexExists('users-table', 'idx_seeded'),
+    true,
+    'failed local dropIndex must preserve cached metadata without mutating local state',
+  );
+
+  const globalSeedRecord = {
+    index_id: 'idx-global-seeded-gen1',
+    table_id: 'users-table',
+    table_name: 'users',
+    index_name: 'idx_global_seeded',
+    column_names: '["email"]',
+    state: 'READ_WRITE',
+    index_generation: 1,
+  };
+  coordinator.catalog.set('idx_global_seeded', globalSeedRecord);
+  unwritableService._cacheIndexMetadata(unwritableService._catalogToMetadata(globalSeedRecord));
+  await t.rejects(
+    unwritableService.dropIndex('users-table', 'idx_global_seeded'),
+    {code: 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE'},
+    'global dropIndex must fail closed before mutating coordinator or service cache state',
+  );
+  t.ok(
+    coordinator.getCatalogRecord('idx_global_seeded'),
+    'failed global dropIndex must preserve coordinator catalog record',
+  );
+  t.equal(
+    unwritableService.indexExists('users-table', 'idx_global_seeded'),
+    true,
+    'failed global dropIndex must preserve service cache record',
   );
 });

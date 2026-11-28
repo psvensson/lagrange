@@ -1,3 +1,4 @@
+import {splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {committedWritePosition} from './cdc-committed-write-answer.js';
 import {
@@ -263,6 +264,7 @@ class CDCIntegrationServiceMutationOperations {
           coalescingKey: options?.coalescingKey,
           recoveryCandidateSelectionKey:
             options?.recoveryCandidateSelectionKey,
+          ...splitDescriptorIntentFields(options),
           idempotencyKey: options?.idempotencyKey,
         });
         const sqlDurationMs = this.timeSource.now() - sqlStartMs;
@@ -420,6 +422,7 @@ class CDCIntegrationServiceMutationOperations {
             coalescingKey: options?.coalescingKey,
             recoveryCandidateSelectionKey:
               options?.recoveryCandidateSelectionKey,
+            ...splitDescriptorIntentFields(options),
             idempotencyKey: options?.idempotencyKey,
             routingReadinessDimension: options?.routingReadinessDimension,
             workloadClass: options?.workloadClass,

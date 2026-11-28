@@ -75,14 +75,13 @@ function operationRow(overrides = {}) {
 }
 
 function createCache(targetRows = [], {partitionId = 'partition-1',
-  tableId = 'table-1', tableName = 'test_table'} = {}) {
+  tableId = 'table-1', tableName = 'test_table',
+  schema = {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]}} = {}) {
   const cache = new SystemTableCache();
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
     table_id: tableId,
     table_name: tableName,
-    schema_definition: JSON.stringify({
-      columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
-    }),
+    schema_definition: JSON.stringify(schema),
   });
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
     partition_id: partitionId,
@@ -231,9 +230,9 @@ function routedCreateRequest(row) {
 }
 
 async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
-  gatewayOptions, authorityFor, timeSource, executorOutcomeEmitter, tableId, tableName} = {}) {
+  gatewayOptions, authorityFor, timeSource, executorOutcomeEmitter, tableId, tableName, schema} = {}) {
   const cache = createCache([targetRow, ...additionalTargetRows],
-    {partitionId: row.partition_id, tableId, tableName});
+    {partitionId: row.partition_id, tableId, tableName, schema});
   const authority = authorityFor ? authorityFor(cache) :
     gatewayFixture(cache, row, gatewayOptions);
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'create-recovery-'));

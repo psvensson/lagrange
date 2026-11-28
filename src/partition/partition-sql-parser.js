@@ -581,30 +581,6 @@ function isEvaluatableScalarTokens(tokens) {
   });
 }
 
-const UNARY_CALL_TOKEN_LENGTH = 4;
-const UNARY_CALL_CLOSE_PAREN_INDEX = 3;
-const UNARY_STRING_EVALUATORS = Object.freeze({
-  lower: (s) => s.toLowerCase(), upper: (s) => s.toUpperCase(),
-  trim: (s) => s.trim(), ltrim: (s) => s.trimStart(), rtrim: (s) => s.trimEnd(),
-});
-
-function evaluateSimpleUnaryStringFunction(tokens, rhsParams) {
-  if (tokens.length !== UNARY_CALL_TOKEN_LENGTH ||
-      tokens[0].type !== PARTITION_STATEMENT_TOKEN.WORD ||
-      tokens[1].text !== PARTITION_SERVICE_SQL_FRAGMENT.OPEN_PAREN ||
-      tokens[UNARY_CALL_CLOSE_PAREN_INDEX].text !== PARTITION_SERVICE_SQL_FRAGMENT.CLOSE_PAREN) {
-    return {evaluated: false, value: undefined};
-  }
-  const argToken = tokens[2];
-  const rawArg = isPositionalQuestionParamToken(argToken) ?
-    rhsParams[0] :
-    (isSqlLiteralToken(argToken.text) ? parseValue(argToken.text) : undefined);
-  const evaluator = typeof rawArg === 'string' ?
-    UNARY_STRING_EVALUATORS[asciiLower(tokens[0].text)] : null;
-  return evaluator ? {evaluated: true, value: evaluator(rawArg)} :
-    {evaluated: false, value: undefined};
-}
-
 function unresolvedSlot(paramCount) {
   return {hasValue: false, value: undefined, paramCount};
 }
@@ -622,15 +598,12 @@ function resolveBoundOrLiteralSlot(rhsRaw, rhsMasked, params, paramIndex, db) {
       return {hasValue: true, value: parseValue(literalToken), paramCount};
     }
   }
+  if (!db) return unresolvedSlot(paramCount);
   const {tokens} = lexPartitionStatement(rhsRaw);
   if (!isEvaluatableScalarTokens(tokens)) return unresolvedSlot(paramCount);
   const rhsParams = params.slice(paramIndex, paramIndex + paramCount);
-  if (db) {
-    const row = db.prepare(`SELECT (${rhsRaw}) AS val`).get(...rhsParams);
-    return {hasValue: row !== undefined, value: row?.val, paramCount};
-  }
-  const unary = evaluateSimpleUnaryStringFunction(tokens, rhsParams);
-  return {hasValue: unary.evaluated, value: unary.value, paramCount};
+  const row = db.prepare(`SELECT (${rhsRaw}) AS val`).get(...rhsParams);
+  return {hasValue: row !== undefined, value: row?.val, paramCount};
 }
 
 function applyWhereConjunctsFromParams({

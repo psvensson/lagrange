@@ -12,7 +12,7 @@ Wall-clock seconds taken by each system to complete the entire Scenario A journe
 
 | System / Configuration | Total Scenario (s) | 1. Cluster Startup & Readiness (s) | 2. Dataset & 9-Part Semantic Gate (s) | 3. Warmup (10 txns) (s) | 4. Measured Workload (100 txns) (s) | 5. Final Verify & Teardown (s) | Max Single-Txn Execution (excl. queue, incl. retries) (s) | Max End-to-End Request Latency (incl. open-loop queue & retries) (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.4.0 (3 nodes) | 721.37 s | 236.86 s | 185.66 s | 21.00 s | 241.96 s | 35.88 s | 14.496 s | 222.242 s |
+| Lagrange 0.4.0 (3 nodes) | 692.26 s | 212.06 s | 245.28 s | 15.48 s | 183.76 s | 35.67 s | 13.291 s | 164.114 s |
 | TiDB + TiKV v8.5.8 | 101.55 s | 24.40 s | 43.58 s | 1.82 s | 19.81 s | 11.93 s | 0.109 s | 0.110 s |
 | PostgreSQL 17 (single primary) | 56.75 s | 9.10 s | 20.47 s | 1.81 s | 19.81 s | 5.58 s | 0.044 s | 0.045 s |
 | PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | 81.77 s | 18.34 s | 30.36 s | 1.81 s | 19.81 s | 11.46 s | 0.051 s | 0.052 s |
@@ -23,7 +23,7 @@ Observed seconds taken by each system on each individual part of Scenario A (Par
 
 | System / Configuration | Part 1: Load + Cases 1-2 (New-Order & Visibility + Reset) (s) | Part 2: Case 3 (Payment + Reset) (s) | Part 3: Case 4 (Order-Status + Reset) (s) | Part 4: Case 5 (Delivery + Reset) (s) | Part 5: Case 6 (Stock-Level + Reset) (s) | Part 6: Case 7 (Failure-Atomicity + Reset) (s) | Part 7: Case 8 (Retryable-Conflict + Reset) (s) | Part 8: Case 9a (Durability Pre-Restart Setup & Reset) (s) | Part 9: Case 9b (Durability Restart, Recovery & Workload Reload) (s) | Part 10: Warmup (10 txns) (s) | Part 11: Measured Workload (100 txns) (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.4.0 (3 nodes) | 69.54 s | 3.04 s | 5.64 s | 10.37 s | 6.39 s | 4.74 s | 4.93 s | 4.23 s | 76.78 s | 21.00 s | 241.96 s |
+| Lagrange 0.4.0 (3 nodes) | 75.97 s | 6.63 s | 8.05 s | 17.99 s | 19.37 s | 11.07 s | 7.88 s | 7.45 s | 90.87 s | 15.48 s | 183.76 s |
 | TiDB + TiKV v8.5.8 | 5.35 s | 2.50 s | 2.59 s | 2.65 s | 2.58 s | 2.46 s | 2.42 s | 2.24 s | 20.80 s | 1.82 s | 19.81 s |
 | PostgreSQL 17 (single primary) | 4.22 s | 1.34 s | 1.40 s | 1.43 s | 1.36 s | 1.37 s | 1.37 s | 1.35 s | 6.63 s | 1.81 s | 19.81 s |
 | PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | 4.74 s | 1.38 s | 1.42 s | 1.42 s | 1.45 s | 1.41 s | 1.38 s | 1.46 s | 15.70 s | 1.81 s | 19.81 s |
@@ -34,7 +34,7 @@ The named smoke profile scenario-a-smoke-v1: the canonical workload executed end
 
 | Configuration | Scenario A smoke |
 | --- | --- |
-| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 97, conflict-exhausted 3, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 98, conflict-exhausted 2, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 | TiDB + TiKV v8.5.8 | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 | PostgreSQL 17 (single primary) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 | PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
@@ -90,7 +90,7 @@ Phase timings are admitted only from observed spans.
 - `unsupported`: the configuration cannot express this claim
 - `not-measured`: no observation exists
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 32 entries; 10 of them name the defect ids behind the withdrawal and 11 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 78 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 33 entries; 10 of them name the defect ids behind the withdrawal and 12 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 78 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ## Related pages
 
@@ -112,6 +112,6 @@ Every comparative result published before 2026-11-01 was withdrawn; the records 
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:da4fcfeaf2bad9e542f5218beaf2c2101a9094da9a92896c9287b7ce915bcad3
+- `data/tidb-comparison/raw-observations.ndjson` sha256:27f99c3b692a92d8a9a2ecb32df7083f861b87ff05b05a096d4f620cc857dd9f
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
-- `data/tidb-comparison/invalidations.ndjson` sha256:688afc8c2a4b8ded5191d95d3c9965bf245c5659d2f0db1c58420d2563229ed7
+- `data/tidb-comparison/invalidations.ndjson` sha256:8bd6b392804ec19017fa6aebe0b77fc70592c52b9a44566a447578c5d4b8c6bc

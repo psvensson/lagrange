@@ -56,61 +56,72 @@ test('F6: admissions and refusals are committed outcomes and each emits ENTRY_CO
       placementStatement({partitionId: 'tables-p1', target: NODE.B}));
     const second = await admitOnLeader(leader, proposed, 'f6-2',
       placementStatement({partitionId: 'indices-p1', target: NODE.B}));
-    const full = await admitOnLeader(leader, proposed, 'f6-3',
+    const third = await admitOnLeader(leader, proposed, 'f6-3',
+      placementStatement({partitionId: 'services-p1', target: NODE.B}));
+    const full = await admitOnLeader(leader, proposed, 'f6-4',
       placementStatement({partitionId: 'config-p1', target: NODE.B}));
-    const busy = await admitOnLeader(leader, proposed, 'f6-4', placementStatement({
+    const busy = await admitOnLeader(leader, proposed, 'f6-5', placementStatement({
       partitionId: 'tables-p1', type: OperationType.REPLACE, target: NODE.C,
       sourceReplicaId: 'tables-p1-r1'}));
-    assert.deepEqual([first, second, full, busy].map(({apply}) => apply),
-      [null, null, null, null]);
+    assert.deepEqual([first, second, third, full, busy].map(({apply}) => apply),
+      [null, null, null, null, null]);
     assert.deepEqual(resultOf(first.answer), {outcome: PLACEMENT_OUTCOME.ADMITTED,
       operationIds: [`pl-tables-p1-${first.answer.logIndex}-0`]});
     assert.equal(resultOf(second.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
+    assert.equal(resultOf(third.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
     assert.equal(resultOf(full.answer).reason, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
     assert.deepEqual(resultOf(full.answer).occupancy, {copySourceNodeId: NODE.A,
-      sourceOccupancy: 2, sourceLimit: 3, targetNodeId: NODE.B, targetOccupancy: 2,
-      targetLimit: 2});
+      sourceOccupancy: 3, sourceLimit: 6, targetNodeId: NODE.B, targetOccupancy: 3,
+      targetLimit: 3});
     assert.equal(resultOf(busy.answer).reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
     assert.equal(full.answer.committed, true);
     // A refusal leaves no row and is settled under its entryId.
-    assert.equal(ledgerRows(leader).length, 2);
+    assert.equal(ledgerRows(leader).length, 3);
     assert.equal(outcomeRecordOf(leader, full.command).state, 'settled');
     assert.deepEqual(committed.commands.map((command) => command.entryId),
-      ['f6-1', 'f6-2', 'f6-3', 'f6-4']);
+      ['f6-1', 'f6-2', 'f6-3', 'f6-4', 'f6-5']);
     committed.stop();
   }));
 
 test('F6: source capacity counts every copy-phase row of the source, and a row ' +
   'without copy_source_node_id counts against every source', () =>
   onLedgerLeader(async (leader, proposed) => {
-    for (const [index, partitionId] of ['tables-p1', 'indices-p1', 'config-p1'].entries()) {
+    const sourcePartitions = [
+      ['tables-p1', NODE.B],
+      ['indices-p1', NODE.C],
+      ['config-p1', NODE.D],
+      ['services-p1', NODE.B],
+      ['partitions-p1', NODE.C],
+      ['nodes-p1', NODE.D],
+    ];
+    for (const [index, [partitionId, target]] of sourcePartitions.entries()) {
       const admitted = await admitOnLeader(leader, proposed, `src-${index}`,
-        placementStatement({partitionId, target: [NODE.B, NODE.C, NODE.D][index]}));
+        placementStatement({partitionId, target}));
       assert.equal(resultOf(admitted.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
     }
-    const fourth = await admitOnLeader(leader, proposed, 'src-3',
-      placementStatement({partitionId: 'services-p1', target: NODE.D}));
-    assert.equal(resultOf(fourth.answer).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
+    const seventh = await admitOnLeader(leader, proposed, 'src-6',
+      placementStatement({partitionId: 'logs-p1', target: NODE.D}));
+    assert.equal(resultOf(seventh.answer).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
     // Level-triggered repair reservation: with a repair waiting on node-a a
     // non-repair class-3-5 move gets K_src - 1; a repair still gets K_src.
     const [firstRow] = ledgerRows(leader);
     assert.equal(stepLedgerRow(leader, firstRow.operation_id, WORKFLOW_STEP.ACTIVE), null);
-    const reserved = await admitOnLeader(leader, proposed, 'src-4', placementStatement({
-      partitionId: 'services-p1', target: NODE.D, repairWaitingOn: [NODE.A]}));
+    const reserved = await admitOnLeader(leader, proposed, 'src-7', placementStatement({
+      partitionId: 'logs-p1', target: NODE.D, repairWaitingOn: [NODE.A]}));
     assert.equal(resultOf(reserved.answer).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
-    assert.equal(resultOf(reserved.answer).occupancy.sourceLimit, 2);
-    const repair = await admitOnLeader(leader, proposed, 'src-5', placementStatement({
-      partitionId: 'services-p1', target: NODE.D, repair: true, repairWaitingOn: [NODE.A]}));
+    assert.equal(resultOf(reserved.answer).occupancy.sourceLimit, 5);
+    const repair = await admitOnLeader(leader, proposed, 'src-8', placementStatement({
+      partitionId: 'logs-p1', target: NODE.D, repair: true, repairWaitingOn: [NODE.A]}));
     assert.equal(resultOf(repair.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
     // Rows without a copy source (written before the cutover) occupy every
     // source: node-d, named by none of them, is full.
     assert.equal(commitLedgerStatement(leader, 'null-source',
       'UPDATE replica_operations SET copy_source_node_id = NULL ' +
       'WHERE workflow_step = ?', [WORKFLOW_STEP.PENDING]), null);
-    const otherSource = await admitOnLeader(leader, proposed, 'src-6', placementStatement({
-      partitionId: 'partitions-p1', target: NODE.B, source: NODE.D}));
+    const otherSource = await admitOnLeader(leader, proposed, 'src-9', placementStatement({
+      partitionId: 'metrics-p1', target: NODE.B, source: NODE.D}));
     assert.equal(resultOf(otherSource.answer).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
-    assert.equal(resultOf(otherSource.answer).occupancy.sourceOccupancy, 3);
+    assert.equal(resultOf(otherSource.answer).occupancy.sourceOccupancy, 6);
   }));
 
 test('F6: an unresolved ledger transition refuses every other admission until terminal',

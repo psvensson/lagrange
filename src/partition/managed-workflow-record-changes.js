@@ -1,3 +1,7 @@
+import {sameSourceFailure, sourceFailureAuthorization, splitCleanupRefusal,
+  SPLIT_FAILURE_PENDING, withSplitCleanupDecision} from './managed-split-descriptor-cleanup.js';
+import {buildMergeSourceParticipantKey, MERGE_ACK_FAILURE_STATUSES, MERGE_ACK_STATUS} from './merge-ack-constants.js';
+import {SPLIT_PARTICIPANT_PREFIX, SPLIT_ACK_FAILURE_STATUSES, SPLIT_ACK_STATUS} from './split-ack-constants.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 /**
@@ -14,6 +18,8 @@ import {
   WORKFLOW_CLAIM_RESULT,
   WORKFLOW_ERROR_MSG,
   WORKFLOW_TRANSITION_FIELD,
+  hasAdvancedParticipantCheckpoint,
+  mergeParticipantCheckpoint,
 } from '../workflow/workflow-constants.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
@@ -109,9 +115,15 @@ function isPhaseRegression(from, to) {
 function phaseMonotonicChange(change) {
   return (workflow, stored) => {
     const next = change(workflow, stored);
-    if (isSentinelAnswer(next) ||
-        !isCutoverRegression(stored?.state ?? null, next.status)) {
-      return next;
+    if (isSentinelAnswer(next)) return next;
+    const failure = workflow?.metadata?.splitSourceFailure;
+    if (failure && workflow.status !== STATE.FAILED &&
+        (next.status !== workflow.status || next.metadata.splitIssuedChildren !== workflow.metadata.splitIssuedChildren) &&
+        !(next.status === STATE.FAILED && sameSourceFailure(failure, next.metadata.failure?.sourceFailure))) {
+      return refuseRecordChange(SPLIT_FAILURE_PENDING);
+    }
+    if (!isCutoverRegression(stored?.state ?? null, next.status)) {
+      return withSplitCleanupDecision(workflow, next);
     }
     return refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED,
       {from: stored.state, to: next.status});
@@ -220,6 +232,11 @@ function isRecordAsRead(stored, read) {
  */
 function registrationChange(owner, registration, read, revalidate) {
   return (_workflow, stored) => {
+    if (stored.metadata?.mirrorCustodyGrants?.length) {
+      return refuseRecordChange('source-mirror-release-pending');
+    }
+    const pendingCleanup = splitCleanupRefusal(stored.state, stored.metadata, stored.row?.table_id);
+    if (pendingCleanup) return refuseRecordChange(pendingCleanup);
     if (!isRecordAsRead(stored, read)) {
       return refuseRecordChange(RECORD_CHANGE_REFUSAL.RECORD_MOVED_SINCE_READ,
         {superseded: stored.claim.workflowOwnerId !== owner.workflowOwnerId});
@@ -238,6 +255,8 @@ function registrationChange(owner, registration, read, revalidate) {
     const attempt = stored.generation + 1;
     return {...registration,
       metadata: {...(registration.metadata || {}),
+        ...(registration.metadata?.sourcePartitionId ? {splitIssuedChildren: [], splitIssuedSiblings: [],
+          splitDescriptorBaseVersion: stored.row?.active_partition_version} : {}),
         [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: attempt},
       fenceToken: Math.max((stored.claim.fenceToken ?? 0) + 1, attempt),
       workflowOwnerId: owner.workflowOwnerId,
@@ -383,7 +402,8 @@ function acknowledgementChange(owner, ack, isAllowed) {
     }
     const participant = workflow.participants.get(key);
     const rejection = attemptRejectionOf(workflow, ack) ??
-      acknowledgementRejectionOf(participant, key, status, fence, isAllowed);
+      acknowledgementRejectionOf(
+        participant, key, status, fence, isAllowed, checkpoint, workflow.fenceToken);
     if (rejection) {
       return refuseRecordChange(rejection,
         {participant: participant ? {...participant} : null, key, status,
@@ -395,10 +415,22 @@ function acknowledgementChange(owner, ack, isAllowed) {
       updatedAt: now,
       ...(fence !== undefined && fence !== null ? {fenceToken: fence} : {}),
       ...(checkpoint !== undefined && checkpoint !== null ?
-        {checkpoint} : {})};
+        {checkpoint: mergeParticipantCheckpoint(participant.checkpoint, checkpoint)} : {})};
     const participants = new Map(workflow.participants);
     participants.set(key, acknowledged);
+    const metadata = workflow.metadata;
+    const splitDone = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED &&
+      workflow.status === STATE.SPLIT_CUTOVER_ACTIVE && key === SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION;
+    const mergeDone = status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED &&
+      workflow.status === STATE.MERGE_CUTOVER_ACTIVE;
+    const grants = metadata.mirrorCustodyGrants;
+    const nextMetadata = grants && (splitDone || mergeDone) ? {...metadata,
+      mirrorCustodyGrants: grants.map((item) => (splitDone ?
+        metadata.sourcePartitionId === item.partitionId : buildMergeSourceParticipantKey(item.partitionId) === key) ?
+        {...item, release: true} : item)} : metadata;
+    const failure = sourceFailureAuthorization(workflow, key, status, fence);
     return renewLeaseRidingWrite(owner, {...workflow, participants,
+      metadata: failure ? {...nextMetadata, splitSourceFailure: metadata.splitSourceFailure ?? failure} : nextMetadata,
       updatedAt: now});
   };
 }
@@ -494,8 +526,37 @@ function sourceStartAuthorizationChange(owner, ack, isAllowed, authorization) {
   const key = String(ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]);
   const status = String(ack[PARTICIPANT_ACK_FIELD.STATUS]);
   const fence = ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN];
-  return (workflow) => applySourceStartAuthorization(
-    owner, ack, authorization, ordinary, key, status, fence, workflow);
+  return (workflow) => {
+    const grants = workflow?.metadata?.mirrorCustodyGrants ?? [];
+    const partitionId = authorization.sourcePartitionId;
+    const grant = grants.find((item) => item.partitionId === partitionId && item.fence === fence);
+    if (authorization.reservationOnly) {
+      const validation = validateSourceStartAuthorization(workflow, ack, authorization, key, status, fence);
+      if (validation.refusal) return validation.refusal;
+      if (!partitionId || workflow.metadata.splitSourceFailure || workflow.metadata.mirrorExecutionEnded ||
+          [SPLIT_ACK_STATUS.CLEANUP_COMPLETED, MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+            SPLIT_ACK_STATUS.SOURCE_DISSOLVED].includes(validation.participant.status) ||
+          !authorization.executableStates.has(workflow.status) ||
+          !(authorization.initialStates.has(workflow.status) ||
+            authorization.startedStatuses.has(validation.participant.status)) || grant?.release) {
+        return refuseSourceStart(validation.participant, key, status, fence);
+      }
+      return {...workflow, metadata: {...workflow.metadata, mirrorCustodyGrants: grant ? grants :
+        [...grants, {partitionId, fence, acquired: false}]}};
+    }
+    const historicalConfirmation = authorization.confirmationOnly && !authorization.requireExecutable;
+    if (!grant || (authorization.confirmationOnly && !grant.acquired) ||
+        (!historicalConfirmation && (workflow.metadata.splitSourceFailure || workflow.metadata.mirrorExecutionEnded || grant.release ||
+          (authorization.requireExecutable && !authorization.executableStates.has(workflow.status))))) {
+      return refuseRecordChange(PARTICIPANT_ACK_RESULT.INVALID_TRANSITION, {key, status, fence});
+    }
+    const next = applySourceStartAuthorization(
+      owner, ack, authorization, ordinary, key, status, fence, workflow);
+    if (!next.metadata || authorization.confirmationOnly) return next;
+    return {...next, metadata: {...next.metadata, mirrorCustodyGrants: grants.map(
+      (item) => item === grant ? {...item, acquired: true} : item)}};
+
+  };
 }
 
 /**
@@ -519,19 +580,31 @@ function attemptRejectionOf(workflow, ack) {
     RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH : null;
 }
 
+function isStaleParticipantFence(participant, fence) {
+  return fence !== undefined && fence !== null &&
+    participant.fenceToken !== undefined && participant.fenceToken !== null &&
+    fence < participant.fenceToken;
+}
+
 function acknowledgementRejectionOf(participant, key, status, fence,
-  isAllowed) {
+  isAllowed, checkpoint, workflowFence) {
   if (!participant) {
     return PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND;
   }
-  if (fence !== undefined && fence !== null &&
-      participant.fenceToken !== undefined && participant.fenceToken !== null &&
-      fence < participant.fenceToken) {
+  const mayEndSource = status === SPLIT_ACK_STATUS.CLEANUP_COMPLETED ||
+    status === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED ||
+    SPLIT_ACK_FAILURE_STATUSES.has(status) || MERGE_ACK_FAILURE_STATUSES.has(status);
+  if (mayEndSource && (!Number.isSafeInteger(fence) || fence <= 0 ||
+      fence !== workflowFence || fence !== participant.fenceToken)) {
     return PARTICIPANT_ACK_RESULT.STALE_FENCE;
   }
-  if (participant.status === status &&
-      participant.acknowledgedAt !== undefined) {
-    return PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (isStaleParticipantFence(participant, fence)) {
+    return PARTICIPANT_ACK_RESULT.STALE_FENCE;
+  }
+  if (participant.status === status && participant.acknowledgedAt !== undefined) {
+    return hasAdvancedParticipantCheckpoint(participant.checkpoint, checkpoint) ?
+      null :
+      PARTICIPANT_ACK_RESULT.DUPLICATE;
   }
   if (typeof isAllowed === 'function' &&
       !isAllowed(key, participant.status, status)) {
@@ -548,10 +621,20 @@ function acknowledgementRejectionOf(participant, key, status, fence,
  * @param {ReadonlySet<string>} states
  * @return {Function}
  */
-function clearChange(owner, fence, states) {
-  return ownedChange(owner, fence, (workflow) =>
-    states.has(String(workflow.status)) ? RECORD_CLEARED :
-      refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED));
+function clearChange(owner, fence, attempt, states) {
+  return ownedChange(owner, fence, (workflow) => {
+    const grants = workflow.metadata.mirrorCustodyGrants ?? [];
+    if (grants.length) {
+      return refuseRecordChange('source-mirror-release-pending');
+    }
+    const pendingCleanup = splitCleanupRefusal(workflow.status, workflow.metadata, workflow.tableId);
+    if (pendingCleanup) return refuseRecordChange(pendingCleanup);
+    if (workflowAttemptOf(workflow.metadata) !== attempt) {
+      return refuseRecordChange(RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH);
+    }
+    return states.has(String(workflow.status)) ? RECORD_CLEARED :
+      refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED);
+  });
 }
 
 /**

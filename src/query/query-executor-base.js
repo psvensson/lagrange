@@ -107,7 +107,6 @@ class QueryExecutorBase {
     this.parallelQueryCoordinator =
       options.parallelQueryCoordinator ||
       new ParallelQueryCoordinator({
-        systemCache: this.systemCache,
         nodeId: this.nodeId,
         partitionQueryExecutor: (
           sql,
@@ -188,9 +187,6 @@ class QueryExecutorBase {
    */
   setSystemCache(cache) {
     this.systemCache = cache;
-    if (this.parallelQueryCoordinator) {
-      this.parallelQueryCoordinator.setSystemCache(cache);
-    }
   }
 
   /**

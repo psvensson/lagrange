@@ -27,7 +27,8 @@ import {createHash} from 'node:crypto';
 // `command_digest` (committedCommandDigest): the CHECK makes an owner result
 // without its identity, or an identity without a result, impossible to write.
 // `last_insert_rowid` is only ever the inserted-row identity of an SQL
-// statement (the nullable insert-result contract).
+// statement (the nullable insert-result contract). mirror_effect_required marks
+// captured changes whose replay bytes must survive above a protected cursor.
 const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
   TABLE: '_partition_statement_outcomes',
   CREATE_TABLE: `
@@ -42,22 +43,23 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
         last_insert_rowid INTEGER,
         owner_result_text TEXT,
         command_digest TEXT,
+        mirror_effect_required INTEGER NOT NULL CHECK (mirror_effect_required IN (0, 1)),
         CHECK ((owner_result_text IS NULL) = (command_digest IS NULL))
       )
     `,
   SELECT_BY_ENTRY_KEY:
     'SELECT outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text, command_digest ' +
+    'changes, last_insert_rowid, owner_result_text, command_digest, mirror_effect_required ' +
     'FROM _partition_statement_outcomes WHERE entry_key = ?',
   SELECT_ALL:
     'SELECT entry_key, outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text, command_digest ' +
+    'changes, last_insert_rowid, owner_result_text, command_digest, mirror_effect_required ' +
     'FROM _partition_statement_outcomes ORDER BY log_index, entry_key',
   INSERT:
     'INSERT INTO _partition_statement_outcomes ' +
     '(entry_key, outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text, command_digest) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'changes, last_insert_rowid, owner_result_text, command_digest, mirror_effect_required) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   TABLE_COLUMNS: 'PRAGMA table_info(_partition_statement_outcomes)',
   // The store-open format probe: proves the table is readable without
   // reading a row; the decision is the table's definition (CREATE_TABLE).
@@ -74,7 +76,7 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
 // Such a data directory is re-founded (docs/operations-readiness.md).
 const PARTITION_COMMITTED_STATEMENT_COLUMNS = Object.freeze([
   'entry_key', 'outcome', 'log_index', 'term', 'failure_code', 'failure_message',
-  'changes', 'last_insert_rowid', 'owner_result_text', 'command_digest',
+  'changes', 'last_insert_rowid', 'owner_result_text', 'command_digest', 'mirror_effect_required',
 ]);
 
 // The format decision at store open (detectCommittedStatementOutcomeFormat).
@@ -232,9 +234,27 @@ function committedStatementResult(info, {retainsInsertRowid}) {
   };
 }
 
+// Mirror-effect retention constants owned by the committed-statement outcome
+// vocabulary (partition-mirror-effect-retention.js).
+const MIRROR_RETENTION_BARRIER_ENTRY_KEY = '__mirror_retention_barrier__';
+const MIRROR_RETENTION_BARRIER_KIND = 'PINNED';
+const STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW = 256;
+const MIRROR_RETENTION_CUSTODY_ACTION = Object.freeze({
+  PIN: 'PIN',
+  RELEASE: 'RELEASE',
+});
+const MIRROR_RETENTION_CUSTODY_COMMAND_ERROR = Object.freeze({
+  ORIGIN: 'mirror_retention_custody_origin_refused',
+  BYTES: 'mirror_retention_custody_bytes_invalid',
+});
+
 export {
   committedCommandDigest,
   committedStatementResult,
+  MIRROR_RETENTION_BARRIER_ENTRY_KEY,
+  MIRROR_RETENTION_BARRIER_KIND,
+  MIRROR_RETENTION_CUSTODY_ACTION,
+  MIRROR_RETENTION_CUSTODY_COMMAND_ERROR,
   PARTITION_COMMITTED_STATEMENT_COLUMNS,
   PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
   PARTITION_COMMITTED_STATEMENT_FORMAT,
@@ -247,4 +267,5 @@ export {
   PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
   PARTITION_SETTLED_REPLAY,
   PARTITION_SQLITE_RESULT_CODE,
+  STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
 };

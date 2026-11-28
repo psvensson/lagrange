@@ -26,8 +26,8 @@ import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
 
 const TEST_TABLE_SCHEMA = Object.freeze({
   columns: [
-    {name: 'id', type: 'TEXT', primaryKey: true},
-    {name: 'value', type: 'INTEGER'},
+    {name: 'group_id', type: 'TEXT', primaryKey: true},
+    {name: 'updated_at', type: 'INTEGER'},
   ],
 });
 
@@ -105,16 +105,16 @@ test('CDC subscription handshake + catch-up integration',
 
           await partition.insertData(
             TEST_IDS.TABLE_ID,
-            {id: 'row-1', value: ROW_VALUE_ONE},
+            {group_id: 'row-1', updated_at: ROW_VALUE_ONE},
           );
           await partition.updateData(
             TEST_IDS.TABLE_ID,
-            {id: 'row-1'},
-            {value: ROW_VALUE_TWO},
+            {group_id: 'row-1'},
+            {updated_at: ROW_VALUE_TWO},
           );
           await partition.insertData(
             TEST_IDS.TABLE_ID,
-            {id: 'row-2', value: ROW_VALUE_THREE},
+            {group_id: 'row-2', updated_at: ROW_VALUE_THREE},
           );
 
           // The writes above are owed obligations in the durable ledger;
@@ -140,7 +140,7 @@ test('CDC subscription handshake + catch-up integration',
             'late subscriber observes every write made before it subscribed',
           );
           t.same(
-            delivered.map((e) => [e.operation, e.data?.id]),
+            delivered.map((e) => [e.operation, e.data?.group_id]),
             [[CDC_OPERATION.INSERT, 'row-1'], [CDC_OPERATION.UPDATE, 'row-1'],
               [CDC_OPERATION.INSERT, 'row-2']],
             'catch-up delivers the pre-subscription writes',
@@ -158,15 +158,15 @@ test('CDC subscription handshake + catch-up integration',
 
           await partition.updateData(
             TEST_IDS.TABLE_ID,
-            {id: 'row-2'},
-            {value: ROW_VALUE_FOUR},
+            {group_id: 'row-2'},
+            {updated_at: ROW_VALUE_FOUR},
           );
           await settlePendingCdcDeliveries(partition);
 
           t.ok(
             delivered.some(
-              (e) => e.data?.id === 'row-2' &&
-                e.data?.value === ROW_VALUE_FOUR,
+              (e) => e.data?.group_id === 'row-2' &&
+                e.data?.updated_at === ROW_VALUE_FOUR,
             ),
             'steady stream includes post-catch-up update',
           );
@@ -224,11 +224,11 @@ test('CDC subscribe-before-hydrate handoff integration',
           );
           await partition.insertData(
             TEST_IDS.TABLE_ID,
-            {id: 'hand-row-1', value: ROW_VALUE_ONE},
+            {group_id: 'hand-row-1', updated_at: ROW_VALUE_ONE},
           );
           await partition.insertData(
             TEST_IDS.TABLE_ID,
-            {id: 'hand-row-2', value: ROW_VALUE_TWO},
+            {group_id: 'hand-row-2', updated_at: ROW_VALUE_TWO},
           );
           await settlePendingCdcDeliveries(partition);
 
@@ -244,12 +244,12 @@ test('CDC subscribe-before-hydrate handoff integration',
 
           await partition.updateData(
             TEST_IDS.TABLE_ID,
-            {id: 'hand-row-1'},
-            {value: ROW_VALUE_THREE},
+            {group_id: 'hand-row-1'},
+            {updated_at: ROW_VALUE_THREE},
           );
           await partition.deleteData(
             TEST_IDS.TABLE_ID,
-            {id: 'hand-row-2'},
+            {group_id: 'hand-row-2'},
           );
           // The lane's retry runs on the partition's real clock and
           // settlePendingCdcDeliveries does not wait for an armed timer: wait
@@ -266,7 +266,7 @@ test('CDC subscribe-before-hydrate handoff integration',
             'the handshake carries no catch-up of its own',
           );
           t.same(
-            image.rows.map((row) => row.id).sort(),
+            image.rows.map((row) => row.group_id).sort(),
             ['hand-row-1', 'hand-row-2'],
             'the image holds the rows at P',
           );
@@ -275,7 +275,7 @@ test('CDC subscribe-before-hydrate handoff integration',
           // row-version merge absorbs them. Above P, B gets every write.
           t.same(
             subscriberB.events.filter((event) => event.sourceLogIndex > position)
-              .map((event) => [event.operation, event.data?.id ?? event.oldData?.id]),
+              .map((event) => [event.operation, event.data?.group_id ?? event.oldData?.group_id]),
             [[CDC_OPERATION.UPDATE, 'hand-row-1'],
               [CDC_OPERATION.DELETE, 'hand-row-2']],
             'B receives every write after P, in log order',

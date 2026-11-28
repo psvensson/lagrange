@@ -2552,12 +2552,12 @@
     }
   ],
   "withdrawal": {
-    "ledgerEntries": 32,
+    "ledgerEntries": 33,
     "entriesWithDefectIds": 10,
-    "entriesWithRecordIds": 11,
+    "entriesWithRecordIds": 12,
     "historyRecords": 78,
     "historyRecordsWithoutEntry": 33,
     "admissionRule": "forensic-record-not-admissible"
   },
-  "summarySha256": "5bb113c02dd1c0dd9af2d564a2d9d50de5ef3aed6bb4b934012a5ba966c2ec74"
+  "summarySha256": "bb51d262e43f979e8790a04d6875a621ef0004e935187a343fe94fc68cadec34"
 }

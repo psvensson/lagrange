@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-stock-level-v1",
+  "system": "lagrange",
+  "caseId": "scenario-a-stock-level-v1",
+  "caseSha256": "4ab83e1d1a71e48c3c41b66a054b5274933835dad1ed024d30381e0ac3e9e5fd",
+  "datasetSha256": "189d1414490bd89b53a049a9567835bf68cc40d85b02e18d005ac562d7bda505",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "snapshot-write-conflict",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-review-4bc-three-1009",
+    "containerId": "444a1345676d1701acace95a43bc738180298ce89e1f4731070e7547f3535f95",
+    "imageId": "sha256:e94e5f313502c2b992f1992c3890c8b858c9b3d399d3a281fa8ad852d64bda44",
+    "endpoint": "192.168.86.34:5432"
+  },
+  "setupOperation": {
+    "kind": "new_order",
+    "phase": "setup",
+    "workerId": 1,
+    "sequence": 1,
+    "warehouseId": 1,
+    "districtId": 1,
+    "customerId": 1,
+    "lines": [
+      {
+        "itemId": 9,
+        "quantity": 10,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 23,
+        "quantity": 10,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 52,
+        "quantity": 10,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 54,
+        "quantity": 10,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 67,
+        "quantity": 10,
+        "supplyWarehouseId": 1
+      }
+    ]
+  },
+  "operation": {
+    "kind": "stock_level",
+    "phase": "measurement",
+    "workerId": 1,
+    "sequence": 24,
+    "warehouseId": 1,
+    "districtId": 1,
+    "threshold": 19
+  },
+  "setupRetryEvidence": {
+    "policyId": "scenario-a-retry-v2",
+    "attempts": 1,
+    "retries": 0,
+    "retryDelayMs": 0,
+    "failures": [],
+    "intendedIssueTimeMs": 1795774481254,
+    "completedAtMs": 1795774485459,
+    "requestClockElapsedMs": 4205
+  },
+  "retryEvidence": {
+    "policyId": "scenario-a-retry-v2",
+    "attempts": 1,
+    "retries": 0,
+    "retryDelayMs": 0,
+    "failures": [],
+    "intendedIssueTimeMs": 1795774486292,
+    "completedAtMs": 1795774487024,
+    "requestClockElapsedMs": 732
+  },
+  "observation": {
+    "lowStock": 5,
+    "stateBeforeSha256": "82edad3afa2c28107636b0f494fec4d75a9be7b911129216b0d97d97aaa9f9e6",
+    "stateAfterSha256": "82edad3afa2c28107636b0f494fec4d75a9be7b911129216b0d97d97aaa9f9e6"
+  },
+  "evaluation": {
+    "passed": true,
+    "failures": [],
+    "actual": {
+      "lowStock": 5,
+      "stateBeforeSha256": "82edad3afa2c28107636b0f494fec4d75a9be7b911129216b0d97d97aaa9f9e6",
+      "stateAfterSha256": "82edad3afa2c28107636b0f494fec4d75a9be7b911129216b0d97d97aaa9f9e6"
+    },
+    "expected": {
+      "setupOrderId": 1,
+      "lowStock": 5
+    },
+    "proofIds": [
+      "transaction:stock_level:database_state_is_unchanged",
+      "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
+    ]
+  },
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-stock-level-v1",
+    "system": "lagrange",
+    "status": "passed",
+    "artifactSha256": "cea925bd25a653e0c9e0f804d359b3fff423653572e5ed5a46c9d96f8752094b",
+    "proofIds": [
+      "transaction:stock_level:database_state_is_unchanged",
+      "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
+    ]
+  },
+  "artifactSha256": "cea925bd25a653e0c9e0f804d359b3fff423653572e5ed5a46c9d96f8752094b"
+}

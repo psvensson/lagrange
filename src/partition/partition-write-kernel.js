@@ -5,12 +5,22 @@ import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
-import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
-  './partition-service-constants.js';
+import {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+} from './partition-service-constants.js';
+import {
+  decodeTypedParams,
+  encodeTypedParams,
+  materializeTypedRowSetObjects,
+} from '../query/sql-value-codec.js';
 import {PARTITION_CDC_COMMAND_TYPES} from
   './partition-cdc-obligation-constants.js';
 import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
   './partition-participant-transaction-constants.js';
+import {PARTITION_MEMBERSHIP_RECOVERY_TYPE} from
+  './partition-membership-recovery-constants.js';
 import {PARTITION_SETTLED_REPLAY} from
   './partition-committed-statement-outcome-constants.js';
 import {
@@ -46,21 +56,6 @@ const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
 // transaction cutover paused new mutation admission on this partition (TX1
 // design 0.0.15), so the write was not proposed and is retried once the
 // pause lifts.
-const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
-  NOT_LEADER: 'partition_write_not_leader',
-  CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
-  CONSENSUS_SESSION_OPEN: 'partition_write_consensus_session_open',
-  CONSENSUS_HOST_FAILURE: 'partition_write_consensus_host_failure',
-  OUTCOME_UNKNOWN: 'partition_write_outcome_unknown',
-  CONSENSUS_REFUSED: 'partition_write_consensus_refused',
-  BACKPRESSURE: 'partition_write_backpressure',
-  SERVICE_SHUTDOWN: 'partition_write_service_shutdown',
-  COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
-  RESERVED: 'partition_write_reserved',
-  CUTOVER_PAUSED: 'partition_write_cutover_paused',
-  CDC_CAPACITY: 'partition_write_cdc_capacity',
-  CDC_DEMAND_EXCEEDS_CAPACITY: 'partition_write_cdc_demand_exceeds_capacity',
-});
 const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
 // The answers of a write that did not fail for good: a caller may retry it -
@@ -252,11 +247,49 @@ function resolveEntryId(entryId) {
   return entryId === undefined || entryId === null ? randomUUID() : entryId;
 }
 
+const EXPLICIT_DML_OPERATION_TYPES = Object.freeze(new Set([
+  PARTITION_SERVICE_OPERATION.INSERT,
+  PARTITION_SERVICE_OPERATION.UPSERT,
+  PARTITION_SERVICE_OPERATION.UPDATE,
+  PARTITION_SERVICE_OPERATION.DELETE,
+]));
+
+function extractWriteEntryMutationOperation(operation) {
+  if (
+    typeof operation?.mutationKind === 'string' &&
+    EXPLICIT_DML_OPERATION_TYPES.has(operation.mutationKind)
+  ) {
+    return operation.mutationKind;
+  }
+  if (EXPLICIT_DML_OPERATION_TYPES.has(operation?.type)) {
+    return operation.type;
+  }
+  return null;
+}
+
+function requiresTypedParamsEncoding(operation) {
+  return (
+    !operation?.typedParams &&
+    Array.isArray(operation?.params) &&
+    operation.params.some(
+      (value) => typeof value === 'bigint' || ArrayBuffer.isView(value),
+    )
+  );
+}
+
 function buildPartitionWriteEntry(operation, options = {}) {
   const timestamp = options.timestamp;
+  const mutationKind = extractWriteEntryMutationOperation(operation);
+  const typedParams = requiresTypedParamsEncoding(operation) ?
+    encodeTypedParams(operation.params) :
+    null;
 
   return {
     ...operation,
+    ...(mutationKind !== null ? {mutationKind} : {}),
+    ...(typedParams !== null ?
+      {params: typedParams.cells, typedParams} :
+      {}),
     entryId: resolveEntryId(operation?.entryId),
     timestamp: timestamp === undefined ? '' : String(timestamp),
     proposedBy:
@@ -536,36 +569,59 @@ function buildPartitionWriteFailureResult(error, partitionId, logIndex = null) {
 // are mirrored and evaluated for size, but their CDC event is now the durable
 // obligation recorded by committed application; the old volatile emission
 // would create a second retry owner for the same mutation.
-function buildPartitionWriteSideEffectPlan(entry, executionResult) {
-  if (executionResult?.success !== true ||
-      PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(entry?.type) ||
-      PARTITION_CDC_COMMAND_TYPES.includes(entry?.type)) {
-    return Object.freeze({
-      emitCdcEntry: null,
-      splitReplicationEntry: null,
-      scheduleSizeUpdate: false,
-      requestManagedSplitEvaluation: false,
-    });
-  }
+const NO_WRITE_SIDE_EFFECT_PLAN = Object.freeze({
+  emitCdcEntry: null,
+  splitReplicationEntry: null,
+  scheduleSizeUpdate: false,
+  requestManagedSplitEvaluation: false,
+});
 
+function hasWriteSideEffects(entry, executionResult) {
+  return (
+    executionResult?.success === true &&
+    entry?.type !== PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY &&
+    entry?.type !== PARTITION_MEMBERSHIP_RECOVERY_TYPE &&
+    !PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(entry?.type) &&
+    !PARTITION_CDC_COMMAND_TYPES.includes(entry?.type)
+  );
+}
+
+function buildExecutedMirrorEntry(entry, executionResult) {
+  const mutationKind =
+    typeof executionResult.mutationKind === 'string' ?
+      executionResult.mutationKind :
+      extractWriteEntryMutationOperation(entry);
   const executedEntry = {
     ...entry,
+    ...(entry?.typedParams ?
+      {params: decodeTypedParams(entry.typedParams)} :
+      {}),
+    ...(mutationKind !== null ? {mutationKind} : {}),
     changes: executionResult.changes,
   };
-  // The durable Raft log index this write committed at: the split/merge
-  // mirror replay cursor advances its persisted watermark from this, so
-  // a restarted source replays deltas from the log rather than the
-  // volatile in-memory queue.
+  if (executionResult.typedEffects) {
+    executedEntry.affectedRows = materializeTypedRowSetObjects(
+      executionResult.typedEffects,
+    );
+  } else if (Array.isArray(executionResult.affectedRows)) {
+    executedEntry.affectedRows = executionResult.affectedRows;
+  }
   const committedLogIndex = Number(
     executionResult?.durableCommitWitness?.logIndex,
   );
   if (Number.isSafeInteger(committedLogIndex) && committedLogIndex > 0) {
     executedEntry.logIndex = committedLogIndex;
   }
+  return executedEntry;
+}
 
+function buildPartitionWriteSideEffectPlan(entry, executionResult) {
+  if (!hasWriteSideEffects(entry, executionResult)) {
+    return NO_WRITE_SIDE_EFFECT_PLAN;
+  }
   return Object.freeze({
     emitCdcEntry: null,
-    splitReplicationEntry: executedEntry,
+    splitReplicationEntry: buildExecutedMirrorEntry(entry, executionResult),
     scheduleSizeUpdate: true,
     requestManagedSplitEvaluation: true,
   });

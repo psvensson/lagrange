@@ -230,7 +230,11 @@ test('current actual deficit policy preserves same-ID copies and native capacity
     attachCurrentCopyOwner(world);
     const retained = await retainMissing(world, OperationType.ADD);
     const holders = [];
-    for (const partitionId of ['copy-holder-one-p1', 'copy-holder-two-p1']) {
+    for (const partitionId of [
+      'copy-holder-one-p1',
+      'copy-holder-two-p1',
+      'copy-holder-three-p1',
+    ]) {
       const answer = await placementAdmission.requestPlacementAdmission(world.leader, {
         entryId: partitionId, body: placementStatement({partitionId, target: NODE.B})});
       assert.equal(answer.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
@@ -439,7 +443,9 @@ test('a retained ordinary copy consumes source capacity and resumes on its actua
   withRepairLedger(async (world) => {
     const retained = await retainMissing(world, OperationType.ADD);
     const holders = [];
-    for (const [index, target] of [NODE.B, NODE.C, NODE.D].entries()) {
+    for (const [index, target] of [
+      NODE.B, NODE.C, NODE.D, NODE.B, NODE.C, NODE.D,
+    ].entries()) {
       const answer = await placementAdmission.requestPlacementAdmission(world.leader,
         {entryId: `source-holder-${index}`, body: placementStatement({
           partitionId: `source-holder-${index}-p1`, target})});
@@ -453,7 +459,7 @@ test('a retained ordinary copy consumes source capacity and resumes on its actua
     const outcome = readCommittedStatementOutcome(world.leader, `entry:${command.entryId}`);
     assert.equal(JSON.parse(outcome.ownerResultText).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
     assert.equal(command.body.copyPolicy.statement.repair, false);
-    await stepRetainedLedgerRow(world, holders[2], WORKFLOW_STEP.FAILED);
+    await stepRetainedLedgerRow(world, holders.at(-1), WORKFLOW_STEP.FAILED);
     await settleRepair(world);
     assert.ok(ledgerRows(world.leader)
       .find((row) => row.operation_id === retained.operationId));
@@ -469,12 +475,15 @@ test('retained-copy-first occupies the ordinary target lane until its own commit
     const second = await placementAdmission.requestPlacementAdmission(world.leader,
       {entryId: 'second-copy', body: body('second-copy-p1')});
     assert.equal(second.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+    const third = await placementAdmission.requestPlacementAdmission(world.leader,
+      {entryId: 'third-copy', body: body('third-copy-p1')});
+    assert.equal(third.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
     const full = await placementAdmission.requestPlacementAdmission(world.leader,
-      {entryId: 'third-copy-full', body: body('third-copy-p1')});
+      {entryId: 'fourth-copy-full', body: body('fourth-copy-p1')});
     assert.equal(full.placementResult.reason, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
     await stepRetainedLedgerRow(world, retained.operationId, WORKFLOW_STEP.ACTIVE);
     const cleared = await placementAdmission.requestPlacementAdmission(world.leader,
-      {entryId: 'third-copy-cleared', body: body('third-copy-p1')});
+      {entryId: 'fourth-copy-cleared', body: body('fourth-copy-p1')});
     assert.equal(cleared.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
     assert.equal(ledgerRows(world.leader).filter((row) =>
       row.operation_id === retained.operationId).length, 1);
@@ -861,7 +870,9 @@ for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
 }
 
 async function occupyCopyLane(world, lane) {
-  const targets = lane === 'source' ? [NODE.B, NODE.C, NODE.D] : [NODE.B, NODE.B];
+  const targets = lane === 'source' ?
+    [NODE.B, NODE.C, NODE.D, NODE.B, NODE.C, NODE.D] :
+    [NODE.B, NODE.B, NODE.B];
   const holders = [];
   for (const [index, target] of targets.entries()) {
     const answer = await placementAdmission.requestPlacementAdmission(world.leader, {

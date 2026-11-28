@@ -1,3 +1,4 @@
+import {reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {ERRORS, SQL} from '../constants/index.js';
 import {forwardSourceReplicationStart} from './managed-source-replication-start-delivery.js';
 import {
@@ -65,17 +66,6 @@ const MERGE_FAILURE_ACK_STATUS_BY_PHASE = Object.freeze(new Map([
   ],
 ]));
 
-async function authorizeMergeSnapshotStart(owner, metadata, options) {
-  if (options.startAuthorized === true) return;
-  const start = await owner.emitMergeSourceAck(
-    metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED);
-  const accepted = start?.result === PARTICIPANT_ACK_RESULT.ACCEPTED;
-  const duplicate = start?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
-  if (!accepted && !duplicate) {
-    throw new Error(
-      PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
-  }
-}
 
 function mergeHandleAcceptsAfterWrite(owner, mergeReplication) {
   const metadata = mergeReplication?.metadata;
@@ -101,13 +91,15 @@ async function runMergeBackfillPhase(owner, handle, metadata) {
 async function runMergeCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_CATCHUP) return;
   await owner.flushMergeReplicationQueue();
+  const settledWatermark = handle.replayWatermarkIndex;
+
   const catchupAck = await owner.emitMergeSourceAck(
     metadata,
     MERGE_ACK_STATUS.CATCHUP_READY,
     buildReplayCursorCheckpoint(
       MERGE_ACK_CHECKPOINT_FIELD,
       handle.snapshotBarrierIndex,
-      handle.replayWatermarkIndex,
+      settledWatermark,
     ),
   );
   if (catchupAck?.mergeCutoverApplied !== true) {
@@ -120,6 +112,7 @@ async function runMergeCutoverPhase(owner, handle, metadata) {
   if (handle.phase !==
       PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE) return;
   await owner.flushMergeReplicationQueue();
+  const settledWatermark = handle.replayWatermarkIndex;
   await owner.emitMergeSourceAck(metadata, MERGE_ACK_STATUS.CUTOVER_APPLIED);
   const mirrorRemoved = await owner.emitMergeSourceAck(
     metadata,
@@ -129,13 +122,15 @@ async function runMergeCutoverPhase(owner, handle, metadata) {
       ...buildReplayCursorCheckpoint(
         MERGE_ACK_CHECKPOINT_FIELD,
         handle.snapshotBarrierIndex,
-        handle.replayWatermarkIndex,
+        settledWatermark,
       ),
     },
   );
-  handle.terminal =
-    mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
+  // This source can quiesce while the other source is still draining.
+  // Only terminal dissolution can discharge the retained group obligation.
+  handle.terminal = mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
     mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (handle.terminal) await reconcileFailedMirrorCustody(owner);
 }
 
 class PartitionServiceMergeReplicationMethods {
@@ -185,6 +180,7 @@ class PartitionServiceMergeReplicationMethods {
         },
       );
     }
+    await reconcileFailedMirrorCustody(this);
   }
 
   /**
@@ -239,10 +235,10 @@ class PartitionServiceMergeReplicationMethods {
    * @return {Promise<void>}
    * @private
    */
-  async runMergeReplicationWorkflow(options = {}) {
+  async runMergeReplicationWorkflow() {
     const mergeReplication = this.mergeReplication;
     const metadata = mergeReplication?.metadata || null;
-    if (!metadata) {
+    if (!metadata || !mergeReplication.authorized) {
       throw new Error(
         PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED,
       );
@@ -252,7 +248,7 @@ class PartitionServiceMergeReplicationMethods {
       targetPartitionId: metadata.targetPartitionId,
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
-    await authorizeMergeSnapshotStart(this, metadata, options);
+
     await runMergeBackfillPhase(this, mergeReplication, metadata);
     await runMergeCatchupPhase(this, mergeReplication, metadata);
     await runMergeCutoverPhase(this, mergeReplication, metadata);

@@ -1,4 +1,4 @@
-import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
+import {hasDurableCreateDispatchTuple} from './replica-operation-create-admission-fields.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {
@@ -37,7 +37,6 @@ import {
   completeOwnedLearnerRetirement, evaluatePlacementLearnerRetirement,
   reconcileUnscopedPlacementRemoval, settleSupersededRemoval,
 } from './operation-workflow-placement-learner-retirement.js';
-import {recordAcknowledgedCreateInFlight} from './operation-workflow-create-ack-state.js';
 import {
   deliverAdmittedOperationEffect, holdReplaceSourceRemovalEffect, prepareReplaceRemovalEffectTurn,
 } from './operation-workflow-remove-effect-admission.js';
@@ -82,8 +81,7 @@ function pickDispatchFields(operation, fieldNames) {
   return picked;
 }
 
-// Bounded memory for the first-attempt dispatch log discrimination; clearing
-// on overflow only means one extra info line per live operation step.
+// Bounded diagnostic state only. Evict the oldest operation when admitting a new ID.
 const SEND_OPERATION_LOG_KEY_CAP = 2048;
 const CREATE_DISPATCH_IDENTITY_FIELDS = Object.freeze([
   'operationId', 'type', 'entityType', 'entityId', 'partitionId', 'replicaId', 'targetNodeId',
@@ -93,20 +91,45 @@ const REFUSED_CREATE_DISPATCH_AUTHORITY = Object.freeze({
   action: CREATE_DISPATCH_AUTHORITY_ACTION.REFUSE, operation: null,
 });
 
-// First dispatch attempt per (operation, step) logs at info; retries stay at debug.
+// Preserve first-send visibility for each workflow step. Also surface the first
+// actual CREATE resend, even when it happens before the durable step changes.
 function logSendOperationAttempt(owner, operation, payload) {
-  const sendOperationLogKey = `${operation.operationId}:${operation.workflowStep}`;
-  if (!owner.sendOperationInfoLoggedKeys) {
-    owner.sendOperationInfoLoggedKeys = new Set();
+  const records = owner.sendOperationLogById ??= new Map();
+  let record = records.get(operation.operationId);
+  if (!record) {
+    if (records.size >= SEND_OPERATION_LOG_KEY_CAP) records.delete(records.keys().next().value);
+    record = {seenSteps: new Set(), createSends: 0};
+    records.set(operation.operationId, record);
   }
-  if (owner.sendOperationInfoLoggedKeys.size > SEND_OPERATION_LOG_KEY_CAP) {
-    owner.sendOperationInfoLoggedKeys.clear();
+  const workflowStep = operation.workflowStep;
+  const firstAttemptForStep = !record.seenSteps.has(workflowStep);
+  record.seenSteps.add(workflowStep);
+  const isCreate = payload.type === ReplicaOperationMessageType.CREATE_REPLICA;
+  const firstRepeatCreate = isCreate && record.createSends === 1;
+  if (isCreate && record.createSends < 2) record.createSends += 1;
+  const level = firstAttemptForStep || firstRepeatCreate ? 'info' : 'debug';
+  owner.logger[level](REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
+    ...payload, workflowStep, firstAttemptForStep, firstRepeatCreate,
+  });
+  return isCreate && (firstAttemptForStep || firstRepeatCreate);
+}
+
+function logCreateDispatchOutcome(owner, identity, transport, answer, error) {
+  if (!identity) return;
+  try {
+    owner.logger.info(REBALANCE_COORDINATOR_LOG_MSG.CREATE_DISPATCH_OUTCOME, {
+      ...identity,
+      deliveryState: transport?.deliveryState ?? null,
+      transportReason: transport?.reasonCode ?? null,
+      thrown: error !== null,
+      errorCode: error?.errorCode ?? error?.code ?? answer?.errorCode ?? null,
+      answerStatus: answer?.status ?? null,
+      answerReason: answer?.reason ?? null,
+      answerSuccess: answer?.success ?? null,
+    });
+  } catch {
+    // A diagnostic sink cannot settle delivery or displace the original error.
   }
-  const firstAttemptForStep = !owner.sendOperationInfoLoggedKeys.has(sendOperationLogKey);
-  owner.sendOperationInfoLoggedKeys.add(sendOperationLogKey);
-  const sendOperationLog = firstAttemptForStep ?
-    owner.logger.info.bind(owner.logger) : owner.logger.debug.bind(owner.logger);
-  sendOperationLog(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {...payload, firstAttemptForStep});
 }
 
 function isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) {
@@ -125,22 +148,6 @@ function buildCreateDispatchRefreshDeferred(operation, observation) {
   error.deferRetry = true;
   error.retryAfterMs = observation?.deferredOutcome?.retryAfterMs;
   return error;
-}
-
-function hasDurableCreateDispatchTuple(operation) {
-  return [
-    Object.values(CREATE_ADMISSION_STATE).includes(operation?.createAdmissionState),
-    typeof operation?.createAdmissionToken === 'string' &&
-      operation.createAdmissionToken.length > 0,
-    Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt),
-    typeof operation?.createAdmissionAttemptToken === 'string' &&
-      operation.createAdmissionAttemptToken.length > 0,
-    Number.isSafeInteger(operation?.createAdmissionAttemptSeq) &&
-      operation.createAdmissionAttemptSeq > 0,
-    Number.isSafeInteger(operation?.createAdmissionWorkflowUpdatedAt),
-    Number.isSafeInteger(operation?.createAdmissionOwnerIncarnation) &&
-      operation.createAdmissionOwnerIncarnation > 0,
-  ].every(Boolean);
 }
 
 function allowCreateDispatchAuthority(operation) {
@@ -229,7 +236,6 @@ function isReplaceStoppingOwnerEntry(operation, options) {
 async function reconcileRetainedCreateDeliveryStep(
   owner, operation, response, replaceRemoveDispatchPhase,
 ) {
-  recordAcknowledgedCreateInFlight(owner, operation, replaceRemoveDispatchPhase);
   if (replaceRemoveDispatchPhase === true || operation?.workflowStep !== WORKFLOW_STEP.SENDING) {
     return;
   }
@@ -702,18 +708,33 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     let response;
     let transport = null;
     let retainedCreateDeliveryResolution = null;
+    let createSendIdentity = null;
     const strandedRemovePreimage = captureStrandedRemovePreimage(operation);
     try {
       const {delivery, wait} = await deliverAdmittedOperationEffect(
         this, operation, target, request, dispatchNodeId, removalEffectTurn,
-        readinessEntryLevel, () => logSendOperationAttempt(this, operation, {
-          operationId: operation.operationId, target, type: messageType, entityType,
-          entityId, replaceRemovePhase: replaceRemoveDispatchPhase,
-        }));
+        readinessEntryLevel, options?.routineCreateRearmWake === true,
+        (createReceipt) => {
+          const observe = logSendOperationAttempt(this, operation, {
+            operationId: operation.operationId, target, type: messageType, entityType,
+            entityId, replaceRemovePhase: replaceRemoveDispatchPhase,
+            ...(createReceipt ? {
+              createReceipt,
+              boundary: options?.boundary ?? null,
+              cause: options?.cause ?? null,
+              dispatchWake: options?.dispatchWake ?? null,
+            } : {}),
+          });
+          if (observe) createSendIdentity = {
+            operationId: operation.operationId, workflowStep: operation.workflowStep,
+            targetNodeId: dispatchNodeId, attemptToken: createReceipt.attemptToken,
+          };
+        });
       if (wait) return wait;
       transport = deliveryTransportOf(delivery);
       response = deliveryAnswerOf(delivery) ?? {};
     } catch (error) {
+      logCreateDispatchOutcome(this, createSendIdentity, null, null, error);
       if (strandedRemovePreimage) {
         return resolveStrandedRemoveReply(this, operation, null, strandedRemovePreimage);
       }
@@ -750,6 +771,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         return settleDispatchFailure(this, operation, errorMsg);
       }
     }
+    if (transport) logCreateDispatchOutcome(this, createSendIdentity, transport, response, null);
     if (
       !retainedCreateDeliveryResolution &&
       response?.success === false &&
@@ -844,7 +866,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (response.status === ReplicaOperationResponseStatus.INITIATED ||
         response.status === ReplicaOperationResponseStatus.IN_PROGRESS) {
-      recordAcknowledgedCreateInFlight(this, operation, replaceRemovePhase);
       if (response.status === ReplicaOperationResponseStatus.IN_PROGRESS &&
           await this.reconcileCreateInProgressDispatchResponse(
             operation, response, replaceRemovePhase)) {

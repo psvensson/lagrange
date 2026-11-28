@@ -261,7 +261,10 @@ class MembershipPublicationCoordinatorPlanning extends
     });
   }
 
-  readPublicationPlanningSnapshotSync(options = {}) {
+  resolvePlanningPublicationRowsSync(options) {
+    if (!options.latestPublicationRow && !options.latestPublishedPublicationRow) {
+      return this.readPlanningPublicationPairSync(options);
+    }
     const latestPublicationRow =
       options.latestPublicationRow || this.getLatestPublicationRowSync(options);
     const latestPublishedPublicationRow =
@@ -270,6 +273,12 @@ class MembershipPublicationCoordinatorPlanning extends
       MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
         latestPublicationRow :
         this.getLatestPublishedPublicationRowSync(options));
+    return {latestPublicationRow, latestPublishedPublicationRow};
+  }
+
+  readPublicationPlanningSnapshotSync(options = {}) {
+    const {latestPublicationRow, latestPublishedPublicationRow} =
+      this.resolvePlanningPublicationRowsSync(options);
     const nodeRows = Array.isArray(options.nodeRows) ?
       options.nodeRows :
       typeof this.systemTableCache?.getAll === 'function' ?

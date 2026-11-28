@@ -307,7 +307,7 @@ async function currentnessFixture(t, {targets = [TARGET_GROUP], routerLate = fal
   f.subscriber = buildSubscriber(f);
   await leader.subscribeToCDCWithHandshake(f.subscriber, {subscriberId: 'currentness-stamp-0'});
   const command = committedQueryOf('currentness-stamp-row',
-    `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`);
+    `INSERT INTO ${CDC_TABLE} (group_id, representative_node_id) VALUES (?, ?)`);
   command.params = ['A', 'currentness-stamp-body'];
   command.timestamp = new HLCTimestamp(1000, 0, 'currentness-stamp').toString();
   assert.equal(applyCommitted(leader, command), null);
@@ -966,7 +966,7 @@ function targetOrder(f, from = 0) {
 async function commitAnotherRow(f, id) {
   f.ready = false;
   const command = committedQueryOf(`currentness-stamp-row-${id}`,
-    `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`);
+    `INSERT INTO ${CDC_TABLE} (group_id, representative_node_id) VALUES (?, ?)`);
   command.params = [id, `currentness-stamp-body-${id}`];
   command.timestamp = new HLCTimestamp(1001, 0, 'currentness-stamp').toString();
   assert.equal(applyCommitted(f.leader, command), null);

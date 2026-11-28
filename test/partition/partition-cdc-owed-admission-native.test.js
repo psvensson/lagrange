@@ -18,7 +18,7 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {acknowledgingCdcSubscriber} from '../test-helpers/acknowledging-cdc-subscriber.js';
-import {CDC_TABLE} from '../test-helpers/participant-transaction-fixture.js';
+import {CDC_SCHEMA, CDC_TABLE} from '../test-helpers/participant-transaction-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'cdc-admission-native';
@@ -27,7 +27,8 @@ const MEMBERS = [1, 2, 3].map((index) => [`${PARTITION_ID}-r${index}`, NODE_ID])
 const CAPACITY = PARTITION_CDC_OBLIGATION_BOUND.OWED_MAX_EVENTS;
 const PROPOSAL_BATCH = 64;
 const WAIT_MS = 10000;
-const WRITE_SQL = `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`;
+const WRITE_SQL =
+  `INSERT OR REPLACE INTO ${CDC_TABLE} (group_id, representative_node_id) VALUES (?, ?)`;
 
 function appliedIndex(service) {
   const store = Object.create(RaftRsDurableStore.prototype);
@@ -64,8 +65,7 @@ test('native RF3 bounds owed admission and commits drain markers on every replic
     partitionId: PARTITION_ID, members: MEMBERS,
     tempPrefix: 'cdc-owed-native-', budgetMs: WAIT_MS,
     serviceOptions: {tableName: CDC_TABLE, tableId: CDC_TABLE,
-      schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true},
-        {name: 'value', type: 'TEXT'}]}}});
+      schema: CDC_SCHEMA}});
   const owners = custody.owners = await attachPartitionReleaseOwners(group.services,
     {directory: path.dirname(group.dbFileOf(MEMBERS[0])), budgetMs: WAIT_MS});
   await owners.release(PARTITION_ID);
@@ -94,7 +94,7 @@ test('native RF3 bounds owed admission and commits drain markers on every replic
   const refused = await leader.executeQuery(WRITE_SQL, ['extra', 'refused'], {entryId: 'native-extra'});
   assert.equal(refused.failureCode, PARTITION_WRITE_LEADERSHIP_REFUSAL.CDC_CAPACITY);
   assert.ok(group.services.every((service) =>
-    service.db.prepare(`SELECT * FROM ${CDC_TABLE} WHERE id = ?`).get('extra') === undefined));
+    service.db.prepare(`SELECT * FROM ${CDC_TABLE} WHERE group_id = ?`).get('extra') === undefined));
   const successor = group.services.find((service) => service !== leader);
   const termBefore = leader.raft.readStatus().term;
   const transfer = await turnChainValue(leader.raft.transferLeadership({

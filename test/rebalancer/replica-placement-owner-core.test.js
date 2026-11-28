@@ -10,52 +10,30 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
+import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
+import {REPLICA_OPERATIONS_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  ControlPlaneSetup,
-} from '../../src/bootstrap/shared/control-plane-setup.js';
-import {
-  REPLICA_OPERATIONS_SCHEMA,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
+  generateCreateIndexSQL, generateCreateTableSQL,
 } from '../../src/bootstrap/system-table-schema-sql.js';
 import {COLUMN} from '../../src/constants/columns.js';
 import {
-  CDC_OPERATION,
-  SERVICE_STATUS,
-  TABLES,
-  WORKFLOW_STEP,
+  CDC_OPERATION, SERVICE_STATUS, TABLES, WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {ServeEligibilityOwner} from '../../src/control-plane/serve-eligibility-owner.js';
+import {PARTITION_CDC_EVENT_BUILD_STATE} from '../../src/partition/partition-cdc-generator.js';
+import {ensureCdcObligationLedger} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {
-  ServeEligibilityOwner,
-} from '../../src/control-plane/serve-eligibility-owner.js';
-import {
-  PARTITION_CDC_EVENT_BUILD_STATE,
-} from '../../src/partition/partition-cdc-generator.js';
-import {
-  ensureCdcObligationLedger,
-} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {
-  committedStatementEntryKey,
-  createCommittedStatementOutcomeTable,
+  committedStatementEntryKey, createCommittedStatementOutcomeTable,
 } from '../../src/partition/partition-committed-statement-outcome.js';
 import {
   openParticipantTransactionStore,
 } from '../../src/partition/partition-participant-transaction-store.js';
+import {buildPlacementCommand} from '../../src/partition/partition-placement-admission-command.js';
 import {
-  buildPlacementCommand,
-} from '../../src/partition/partition-placement-admission-command.js';
-import {
-  PLACEMENT_ADMIT_TYPE,
-  PLACEMENT_RELEASE_HOLD_TYPE,
+  PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE,
 } from '../../src/partition/partition-placement-admission-constants.js';
-import {
-  LEDGER_PARTITION_ID,
-} from '../../src/partition/partition-placement-admission-decision.js';
-import {
-  applyPlacementCommand,
-} from '../../src/partition/partition-placement-admission.js';
+import {LEDGER_PARTITION_ID} from '../../src/partition/partition-placement-admission-decision.js';
+import {applyPlacementCommand} from '../../src/partition/partition-placement-admission.js';
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
@@ -81,6 +59,12 @@ import {
   REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID,
   createReplicaPlacementOwner,
 } from '../../src/rebalancer/replica-placement-owner.js';
+import {
+  PLACEMENT_ADAPTIVE_BUDGET_REASON as BUDGET_REASON,
+  PLACEMENT_ADAPTIVE_WINDOW_ACTION as WINDOW_ACTION,
+  createAdaptivePlacementBudgetController,
+  decideAdaptiveResourceWindow, normalizeWindowConfig,
+} from '../../src/rebalancer/replica-placement-adaptive-budget.js';
 import {
   applyCommitted,
   clearFixtureSingletons,
@@ -140,6 +124,30 @@ function deficit(partitionId, placements, nodeRows = FIVE_ON_FOUR, replicationFa
     replicaRows: replicas(partitionId, placements),
     eligibility: buildPlacementNodeEligibility({nodeRows, nowMs: NOW_MS})});
 }
+
+test('copy target search scans eligible nodes once on success and preserves refusal attribution', () => {
+  const partitionId = 'tbl-target-p1';
+  const nodes = FIVE_ON_FOUR.slice(0, 3);
+  const base = buildPlacementNodeEligibility({nodeRows: nodes, nowMs: NOW_MS});
+  let scans = 0;
+  const eligibility = {...base, get eligibleNodeIds() {
+    scans++;
+    return base.eligibleNodeIds;
+  }};
+  const evaluate = (storageExcludedTargets, saturatedTargetNodeIds = new Set()) =>
+    evaluatePartitionDeficit({partitionId, replicationFactor: 3,
+      replicaRows: replicas(partitionId, [['n1', true]]), eligibility,
+      storageExcludedTargets, saturatedTargetNodeIds,
+      targetCapacityRanker: (id) => id === 'n3' ? 5 : 1});
+  assert.equal(evaluate(new Map()).candidate.move.targetNodeId, 'n3');
+  assert.equal(scans, 1);
+  const unknown = PLACEMENT_WAITING_REASON.TARGET_STORAGE_UNKNOWN;
+  const constrained = PLACEMENT_WAITING_REASON.TARGET_STORAGE_CONSTRAINED;
+  assert.equal(evaluate(new Map([['n3', constrained]])).candidate.move.targetNodeId, 'n2');
+  assert.equal(evaluate(new Map(), new Set(['n3'])).candidate.move.targetNodeId, 'n2');
+  assert.equal(evaluate(new Map(), new Set(['n2', 'n3'])).candidate.move.targetNodeId, 'n3');
+  assert.equal(evaluate(new Map([['n3', constrained], ['n2', unknown]])).waiting.reason, unknown);
+});
 
 test('class order: the ledger, the priority control plane, nodes-p1, system, user', () => {
   assert.deepEqual(['replica_operations-p1', 'sql_transactions-p1', 'nodes-p1',
@@ -316,7 +324,8 @@ test('the repair reservation is level-triggered and travels in the statement as 
     placementClass: PLACEMENT_CLASS.SYSTEM, repair: false,
     move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'}},
   {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(['n1']), formationLatchEpoch: 3,
-    membershipPublicationEpoch: null, positions: {nodesEpoch: 9}});
+    membershipPublicationEpoch: null, positions: {nodesEpoch: 9},
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC, kTgt: PLACEMENT_COPY_CAPACITY.K_TGT});
   assert.equal(statement.kSrcForClass, kSrc - 1);
   assert.equal(statement.kTgt, PLACEMENT_COPY_CAPACITY.K_TGT);
 });
@@ -326,7 +335,8 @@ test('the canonical statement refuses what its kind cannot carry', () => {
     placementClass: PLACEMENT_CLASS.SYSTEM, repair: false,
     move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'}},
   {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(), formationLatchEpoch: 3,
-    membershipPublicationEpoch: 5, positions: {}});
+    membershipPublicationEpoch: 5, positions: {},
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC, kTgt: PLACEMENT_COPY_CAPACITY.K_TGT});
   assert.deepEqual(canonicalPlacementStatement(JSON.parse(JSON.stringify(valid))),
     {validity: PLACEMENT_STATEMENT_VALIDITY.VALID, statement: valid});
   const invalid = {validity: PLACEMENT_STATEMENT_VALIDITY.INVALID};
@@ -345,6 +355,12 @@ test('the canonical statement refuses what its kind cannot carry', () => {
     placementClass: PLACEMENT_CLASS.SYSTEM, repair: false,
     move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'}},
   {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(), formationLatchEpoch: null,
+    membershipPublicationEpoch: null, positions: {},
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC, kTgt: PLACEMENT_COPY_CAPACITY.K_TGT}), /statement_invalid/u);
+  assert.throws(() => buildPlacementAdmissionStatement({partitionId: 'config-p1',
+    placementClass: PLACEMENT_CLASS.SYSTEM, repair: false,
+    move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'}},
+  {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(), formationLatchEpoch: 3,
     membershipPublicationEpoch: null, positions: {}}), /statement_invalid/u);
   const founding = buildFoundingAdmissionStatement({partitionId: 'tbl-x-p1',
     placementClass: PLACEMENT_CLASS.USER, foundingIntentId: 'job:tbl-x-p1',
@@ -906,6 +922,8 @@ test('P3 & P5: createReplicaPlacementOwner validates required and optional colla
       formationLatchEpoch: 3,
       membershipPublicationEpoch: null,
       positions: {nodesEpoch: 9},
+      kSrc: PLACEMENT_COPY_CAPACITY.K_SRC,
+      kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
     };
     const built = buildPlacementAdmissionStatement(mutableCandidate, mutableContext);
     const mutableBody = structuredClone(built);
@@ -1374,23 +1392,16 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
 test('Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold', async () => {
   resetFixtureSingletons();
   try {
-    await runGrowthPromoteProductionWitness({
-      createSimpleSystemCache,
-      nodeRow,
-      seededPartitionRow,
-    });
+    await runGrowthPromoteProductionWitness({createSimpleSystemCache, nodeRow, seededPartitionRow});
   } finally {
     clearFixtureSingletons();
   }
 });
-
 test('Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly', async () => {
   resetFixtureSingletons();
   try {
     await runCorrectionBProductionAssemblyWitness({
-      createSimpleSystemCache,
-      seededPartitionRow,
-      seededServiceRows,
+      createSimpleSystemCache, seededPartitionRow, seededServiceRows,
     });
   } finally {
     clearFixtureSingletons();
@@ -1401,11 +1412,77 @@ test('Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new lea
   resetFixtureSingletons();
   try {
     await runGrowthPromoteLeaderRedirectAndTimeoutWitness({
-      createSimpleSystemCache,
-      nodeRow,
-      seededPartitionRow,
+      createSimpleSystemCache, nodeRow, seededPartitionRow,
     });
   } finally {
     clearFixtureSingletons();
   }
+});
+
+test('decreased minLimit floor recovers to 2 within healthyEventLoopDelayMs under production defaults then holds in 25/40ms deadband or backs off above 40ms congestion', () => {
+  const floorConfig = normalizeWindowConfig({initialLimit: 2, minLimit: 1, maxLimit: 6});
+  const baseObs = {
+    sampledAtMs: NOW_MS, sampleId: 601, congestionEpochId: 601, bootIncarnation: 1,
+    processCpuCores: 1.08, mainThreadCpuPercent: 25, eventLoopDelayMs: 120,
+    eventLoopUtilizationPercent: 45, availableMemoryBytes: 4096 * 1024 * 1024,
+  };
+  const demand = (occ, nowMs) => ({
+    occupancy: occ, waitingDemandCount: 4, nowMs, expectedBootIncarnation: 1,
+  });
+  const obsAt = (id, nowMs, overrides = {}) => ({
+    ...baseObs, sampleId: id, congestionEpochId: id, sampledAtMs: nowMs,
+    eventLoopDelayMs: 15, eventLoopUtilizationPercent: 84, mainThreadCpuPercent: 82, ...overrides,
+  });
+  const decreased = decideAdaptiveResourceWindow(null, baseObs, demand(2, NOW_MS), floorConfig);
+  assert.equal(decreased.action, WINDOW_ACTION.DECREASE);
+  assert.equal(decreased.limit, 1);
+  const recovered = decideAdaptiveResourceWindow(
+    decreased.nextState, obsAt(602, NOW_MS + 1_100), demand(1, NOW_MS + 1_100), floorConfig,
+  );
+  assert.equal(recovered.action, WINDOW_ACTION.INCREASE);
+  assert.equal(recovered.limit, 2);
+  const holdAboveFloor = decideAdaptiveResourceWindow(
+    recovered.nextState, obsAt(603, NOW_MS + 2_200), demand(2, NOW_MS + 2_200), floorConfig,
+  );
+  assert.equal(holdAboveFloor.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
+  assert.equal(holdAboveFloor.limit, 2);
+  const holdInDeadband = decideAdaptiveResourceWindow(
+    holdAboveFloor.nextState, obsAt(604, NOW_MS + 3_300, {
+      eventLoopDelayMs: 35, eventLoopUtilizationPercent: 95, mainThreadCpuPercent: 96,
+    }), demand(2, NOW_MS + 3_300), floorConfig,
+  );
+  assert.equal(holdInDeadband.action, WINDOW_ACTION.HOLD);
+  assert.equal(holdInDeadband.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
+  assert.equal(holdInDeadband.limit, 2);
+  const holdAbove40LowUtil = decideAdaptiveResourceWindow(
+    holdInDeadband.nextState, obsAt(605, NOW_MS + 4_400, {
+      eventLoopDelayMs: 55, eventLoopUtilizationPercent: 70, mainThreadCpuPercent: 72,
+    }), demand(2, NOW_MS + 4_400), floorConfig,
+  );
+  assert.equal(holdAbove40LowUtil.action, WINDOW_ACTION.HOLD);
+  assert.equal(holdAbove40LowUtil.reason, BUDGET_REASON.HYSTERESIS_BAND_HOLD);
+  assert.equal(holdAbove40LowUtil.limit, 2);
+  const decreaseOnEluCongestion = decideAdaptiveResourceWindow(
+    holdAbove40LowUtil.nextState, obsAt(606, NOW_MS + 5_500, {
+      eventLoopDelayMs: 45, eventLoopUtilizationPercent: 95,
+    }), demand(2, NOW_MS + 5_500), floorConfig,
+  );
+  assert.equal(decreaseOnEluCongestion.action, WINDOW_ACTION.DECREASE);
+  assert.equal(decreaseOnEluCongestion.limit, 1);
+  const controller = createAdaptivePlacementBudgetController();
+  let woke = 0;
+  controller.subscribe(() => {
+    woke += 1;
+  });
+  const evalTarget = (occ, nowMs) => controller.evaluatePassBudgets({
+    occupancy: {byTarget: new Map([['n1', occ]])}, waitingByTarget: new Map([['n1', 4]]), nowMs,
+  }).targetBudgetOf('n1');
+  controller.recordObservation('n1', baseObs, NOW_MS);
+  assert.equal(evalTarget(3, NOW_MS), 2);
+  controller.recordObservation('n1', {...baseObs, sampleId: 602, congestionEpochId: 602, sampledAtMs: NOW_MS + 1_100}, NOW_MS + 1_100);
+  assert.equal(evalTarget(2, NOW_MS + 1_100), 1);
+  const wBeforeRecovery = woke;
+  controller.recordObservation('n1', obsAt(603, NOW_MS + 2_200), NOW_MS + 2_200);
+  assert.equal(woke, wBeforeRecovery + 1);
+  assert.equal(evalTarget(1, NOW_MS + 2_200), 2);
 });

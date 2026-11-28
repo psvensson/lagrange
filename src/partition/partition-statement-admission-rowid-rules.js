@@ -346,7 +346,7 @@ function parseInsert(tokens, start) {
 function positionalParams(tokens, params) {
   const paramTokens = tokens.filter((token) => token.type === TOKEN.PARAM);
   const scalar = (value) => value === null || typeof value !== 'object' ||
-    Buffer.isBuffer(value);
+    Buffer.isBuffer(value) || ArrayBuffer.isView(value);
   if (!paramTokens.every((token) => token.text === CHAR.QUESTION) ||
       !params.every(scalar)) {
     return new Map();
@@ -358,8 +358,11 @@ function isInt64(value) {
   return value >= ROWID_LIMIT.INT64_MIN && value <= ROWID_LIMIT.INT64_MAX;
 }
 
-// An integer number, or canonical decimal text of an int64 (revision 10, AT).
+// An integer number, BigInt, or canonical decimal text of an int64 (revision 10, AT).
 function isExplicitIntegerValue(value) {
+  if (typeof value === 'bigint') {
+    return isInt64(value);
+  }
   if (typeof value === 'number') {
     return Number.isInteger(value);
   }
@@ -448,9 +451,12 @@ function refusesKeyAllocation(db, lexed, params, ownTableName) {
 
 const SESSION_KEY_MIN = -ROWID_LIMIT.CEILING;
 
-// The integer a bound value names exactly: an integer number, or canonical
-// decimal text (revision 10, AT); null otherwise.
+// The integer a bound value names exactly: an integer number, BigInt, or
+// canonical decimal text (revision 10, AT); null otherwise.
 function integerValueOf(value) {
+  if (typeof value === 'bigint') {
+    return isInt64(value) ? value : null;
+  }
   if (typeof value === 'number') {
     return Number.isInteger(value) ? BigInt(value) : null;
   }

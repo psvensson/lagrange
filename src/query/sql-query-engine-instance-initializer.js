@@ -1,3 +1,4 @@
+import {TABLES} from '../constants/index.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   ServicePartitionAccessMetrics,
@@ -62,7 +63,9 @@ function bindSchemaJobGsiCompletionHandler(engine) {
   }
   if (owner?.setSucceededGlobalIndexRecoveryHandler) {
     owner.setSucceededGlobalIndexRecoveryHandler(
-      (intents) => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.({intents}),
+      () => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.(
+        {ordinaryDiscovery: true},
+      ),
     );
   }
 }
@@ -375,6 +378,13 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
           ...record,
           workClass: PRESSURE_WORK_CLASS.CRITICAL,
         }),
+      persistWriteOperationsBatch: async (records) =>
+        engine.persistDistributedWriteOperationRowsBatch(
+          records.map((record) => ({
+            ...record,
+            workClass: PRESSURE_WORK_CLASS.CRITICAL,
+          })),
+        ),
       persistTransactionDecision: async (record) =>
         engine.persistDistributedTransactionDecision(record),
       persistTransactionParticipantSet: async (record, previousText) =>
@@ -407,6 +417,12 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     calculateQuorumReplicaCount: (replicaCount) =>
       engine.calculateQuorumReplicaCount(replicaCount),
     partitionProvisioner: tablePartitionProvisioner,
+    schemaRecoveryLeaders: () => {
+      const cdc = engine.cdcIntegrationService;
+      const ids = cdc?.resolveSystemTablePartitionIds?.(TABLES.SCHEMA_OPERATIONS) || [];
+      return ids.flatMap((id) => resolveEngineLocalPartitionReplicas(engine, id))
+        .filter((service) => service.isLeader && service.leadershipTenure && !service.isShutdown);
+    },
   });
   bindSchemaJobGsiCompletionHandler(engine);
 

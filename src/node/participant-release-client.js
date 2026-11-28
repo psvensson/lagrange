@@ -4,8 +4,8 @@ import {AddressManager} from '../address/address-manager.js';
 import {deliveryTransportOf, deliveryAnswerOf, classifyThrownDeliveryError, isDeliveredTransportDeliveryOutcome,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
-import {participantReleaseClockMeasured, participantReleaseSafeClockInteger,
-  readParticipantReleaseClock} from
+import {participantReleaseClockMeasured, participantReleaseSafeClockInteger, releaseDiagnosticText, captureReleaseInspectTarget,
+  readParticipantReleaseClock, recordReleaseHop} from
   './participant-release-diagnostic-observation.js';
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
@@ -85,6 +85,7 @@ function participantReleaseRequestBudget(owner, deadlineAtMs, ceilingAtMs) {
 function observationUnavailable(request, nodeId, reason = null) {
   return releaseAnswer(OUTCOME.UNAVAILABLE, request,
     {missingFact: MISSING_FACT.REPLICA_RELEASE_REPLY, owner: nodeId,
+      ...captureReleaseInspectTarget(request, nodeId),
       ...(reason === null ? {} : {reason}), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
 }
 
@@ -120,7 +121,7 @@ function participantReleaseDeliveryAnswer(delivery, prepared, nodeId) {
     observationUnavailable(prepared.request, nodeId);
 }
 
-async function askParticipantRelease(owner, nodeId, request) {
+async function askParticipantRelease(owner, nodeId, request, trace, phase = request.action) {
   const prepared = prepareParticipantReleaseRequest(owner, nodeId, request);
   if (prepared.answer !== undefined) {
     return prepared.answer;
@@ -129,31 +130,40 @@ async function askParticipantRelease(owner, nodeId, request) {
     return releaseAnswer(OUTCOME.UNAVAILABLE, request,
       {missingFact: MISSING_FACT.RELEASE_DEADLINE, owner: nodeId});
   }
+  const start = trace ? performance.now() : null;
   try {
     const delivery = await owner.messageRouter.deliver(
       `${nodeId}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`,
       {...prepared.request, type: PARTICIPANT_RELEASE_TYPE},
       {targetNodeId: nodeId, deliveryPriority: PARTICIPANT_RELEASE_PRIORITY,
         timeoutMs: prepared.timeoutMs});
-    return participantReleaseDeliveryAnswer(delivery, prepared, nodeId);
+    const answer = participantReleaseDeliveryAnswer(delivery, prepared, nodeId);
+    if (trace) {
+      const transport = deliveryTransportOf(delivery);
+      recordReleaseHop(trace, phase, {messageId: transport.messageId, nodeId,
+        elapsedMs: performance.now() - start, outcome: releaseDiagnosticText(answer, 'outcome'),
+        missingFact: releaseDiagnosticText(answer, 'missingFact'), deliveryState: transport.deliveryState});
+    }
+    return answer;
   } catch (error) {
     const delivery = classifyThrownDeliveryError(error);
-    return prepared.observation &&
+    if (trace) recordReleaseHop(trace, phase, {messageId: delivery.messageId ?? null, nodeId,
+      elapsedMs: performance.now() - start, deliveryState: delivery.deliveryState,
+      reasonCode: delivery.reasonCode});
+    const reason = prepared.observation &&
       delivery.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
-      observationUnavailable(prepared.request, nodeId, delivery.reasonCode) :
-      releaseAnswer(OUTCOME.UNAVAILABLE, prepared.request,
-        {missingFact: MISSING_FACT.REPLICA_RELEASE_REPLY, owner: nodeId,
-          reason: String(error?.message ?? error), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
+      delivery.reasonCode : String(error?.message ?? error);
+    return observationUnavailable(prepared.request, nodeId, reason);
   }
 }
 
-async function requestParticipantRelease(owner, request) {
+async function requestParticipantRelease(owner, request, trace, phase) {
   const payload = {...request, action: ACTION.RELEASE};
-  const first = await askParticipantRelease(owner, request.nodeId ?? owner.nodeId, payload);
+  const first = await askParticipantRelease(owner, request.nodeId ?? owner.nodeId, payload, trace, phase);
   if (first.outcome !== OUTCOME.NOT_LEADER) return first;
   const nodeId = releaseNodeOfAddress(first.leaderAddress);
   return nodeId === null ? first : askParticipantRelease(owner, nodeId,
-    {...payload, replicaId: first.leaderReplicaId});
+    {...payload, replicaId: first.leaderReplicaId}, trace, phase);
 }
 
 // Completion owns response interpretation; clocks only execute the caller's
@@ -173,7 +183,7 @@ async function completeParticipantRelease(owner, request, clock) {
   let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
   do {
     attemptCount += 1;
-    answer = await requestParticipantRelease(owner, intent);
+    answer = await requestParticipantRelease(owner, intent, clock.trace);
     if (seed) {
       firstBlockedDrain = retainFirstReleaseObservation(firstBlockedDrain, answer.blockedDrain);
       firstJoinedAttempt = retainFirstReleaseObservation(firstJoinedAttempt, answer.joinedAttempt);

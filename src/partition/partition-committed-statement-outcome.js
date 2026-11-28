@@ -1,87 +1,54 @@
+import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, retainedSplitDescriptorAnswer,
+  SPLIT_DESCRIPTOR_ERROR} from './partition-split-descriptor-command.js';
 // The terminal outcome of every committed statement: the one owner of what a
 // committed statement's result is, for the partition's committed-entry
-// application.
-//
-// A committed entry is applied inside the SQLite transaction that also
-// advances the rs-raft applied state. Its statement ends in exactly one of
-// these named outcomes (PARTITION_COMMITTED_COMMAND_OUTCOME):
-//
-// - APPLIED: the statement ran. Its outcome row is written in the same
-//   transaction.
-// - STATEMENT_FAILED: the statement failed deterministically (a constraint,
-//   schema or binding error every replica reproduces from the same command
-//   over the same state). The entry is consumed, its outcome row carries the
-//   failure's code and message, and the proposer's write is reported as that
-//   failure.
-// - STATEMENT_ENVIRONMENT_FAILED: the failure is the host's environment
-//   (busy, locked, I/O, full, out of memory...). It is not the statement's
-//   outcome and is never consumed: the application fails closed, the
-//   transaction rolls back (so no outcome row exists) and the committed entry
-//   is delivered again when the host recovers. Consuming it would let one
-//   replica skip an entry every other replica applies.
-//
-// The outcome row (PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL) is the
-// authority for an entry key the partition has already settled: a retry of
-// the same entry key - in process, on another replica, or after a restart -
-// is never executed again. It resolves from the row: an APPLIED row as the
-// applied statement's own result again (the affected-row count and last
-// insert rowid the row retained, named by PARTITION_SETTLED_REPLAY - a replay
-// never reports an applied write as zero rows), a STATEMENT_FAILED row as the
-// original failure, each with `replayOfLogIndex`. There is no in-memory replay state: a retry is
-// answered from the row before it is proposed, and one that was proposed
-// anyway (its original not yet applied here when it was proposed) is answered
-// from the row when it is applied - the same answer either way.
-//
-// The nullable insert-result contract (TX1 owner ruling 2026-10-11, design
-// revision 10, 0.0.14): an APPLIED statement's result carries
-// `lastInsertRowid` only when the inserted row's identity is established by
-// the statement itself - an INSERT or REPLACE with no DO UPDATE clause that
-// changed at least one row. It is null for every ON CONFLICT DO UPDATE (a
-// mixed batch of inserted and updated rows included), every statement that
-// changed no row, and every UPDATE, DELETE and DDL statement, because the
-// connection's last insert rowid is then connection state (a rolled-back c'
-// validation, the self-check's ceiling plant, an rs-raft log append) and
-// differs between replicas. The row and the answer are the same on every
-// replica; a consumer (the query owner) reads null as "no inserted-row
-// identity", never as a row id. committedStatementResult applies it.
+// application (APPLIED, STATEMENT_FAILED, or STATEMENT_ENVIRONMENT_FAILED).
+// The outcome row (PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL) is the authority
+// for a settled entry key: a retry resolves from the row without re-executing.
+// Nullable insert-result contract (TX1 0.0.14): lastInsertRowid is retained
+// only for INSERT/REPLACE without DO UPDATE that changed >= 1 row.
 
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schema-shared-constants.js';
+import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
+import {detectCommittedStatementOutcomeFormat} from './partition-retained-store-observation.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
-  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
-  PARTITION_COMMITTED_COMMAND_OUTCOME,
-  PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_VALUE,
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE, PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
 import {
-  PARTITION_COMMITTED_STATEMENT_COLUMNS,
-  PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
-  PARTITION_COMMITTED_STATEMENT_FORMAT,
-  PARTITION_COMMITTED_RECORD_CLASS,
-  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
-  PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
+  PARTITION_COMMITTED_STATEMENT_COLUMNS, PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
+  PARTITION_COMMITTED_STATEMENT_FORMAT, PARTITION_COMMITTED_RECORD_CLASS,
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL, PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
   PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
-  PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
-  PARTITION_OWNER_COMMAND_PRELUDE,
-  PARTITION_SETTLED_COMMAND_STATE,
-  PARTITION_SETTLED_REPLAY,
-  PARTITION_SQLITE_RESULT_CODE,
+  PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES, PARTITION_OWNER_COMMAND_PRELUDE,
+  PARTITION_SETTLED_COMMAND_STATE, PARTITION_SETTLED_REPLAY, PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
 import {admitCommittedCommand, committedCommandRefusalResult} from
   './partition-committed-command-admission.js';
 import {buildDurableCommitWitness} from './partition-write-kernel.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
-  retainedStoreTableExistsIn, isStoredInteger, isStoredNullableText,
+  isStoredInteger, isStoredNullableText,
   isStoredNullableInteger} from './partition-retained-store-observation.js';
 import {
-  PARTITION_STATEMENT_REFUSAL_CODE,
-  refusalLayerFieldOf,
+  PARTITION_STATEMENT_REFUSAL_CODE, refusalLayerFieldOf,
 } from './partition-statement-admission-constants.js';
+import {LOCKING_READ_ERROR_CODE, LOCKING_READ_SQL_STATE} from
+  '../query/sql-locking-read-constants.js';
 import {
-  LOCKING_READ_ERROR_CODE,
-  LOCKING_READ_SQL_STATE,
-} from '../query/sql-locking-read-constants.js';
+  MIRROR_RETENTION_CUSTODY_ACTION,
+  STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
+  applyMirrorRetentionCustodyCommand,
+  partitionOwesDurableMirrorEffects,
+  readCapturedRowEffectsIn,
+  readDurableMirrorRetentionCustodyIn,
+  reconcileCommittedStatementMirrorEffects,
+  registerMirrorRetentionRaftHooks,
+  releaseSourceMirrorRetentionCustody,
+  replicateSourceMirrorRetentionCustody,
+  resolveActiveMirrorRetentionBarrierIndex,
+} from './partition-mirror-effect-retention.js';
 
 const NO_COMMITTED_STATEMENT_KEY = null;
 const COLUMN_LIST_SEPARATOR = ', ';
@@ -117,6 +84,7 @@ function isCensusRowValid(row) {
     isStoredInteger(row.term, 1n) && isStoredNullableInteger(row.changes, 0n) &&
     isStoredNullableInteger(row.last_insert_rowid) &&
     isStoredNullableText(row.failure_code) && isStoredNullableText(row.failure_message) &&
+    (row.mirror_effect_required === 0n || row.mirror_effect_required === 1n) &&
     isCensusOwnerIdentityValid(row);
 }
 
@@ -137,45 +105,8 @@ function readCommittedStatementCensusIn(db) {
     lastInsertRowid: row.last_insert_rowid === null ? null : String(row.last_insert_rowid),
     ownerResultText: row.owner_result_text,
     commandDigest: row.command_digest,
+    mirrorEffectRequired: row.mirror_effect_required === 1n,
   }));
-}
-
-const RETAINED_STORE_FORMAT_REFUSALS = Object.freeze(new Set(
-  Object.values(RETAINED_STORE_ERROR)));
-
-function outcomeTableFormatIn(db) {
-  const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
-  if (!retainedStoreTableExistsIn(db, sql.TABLE)) {
-    return PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT;
-  }
-  try {
-    readRetainedStoreRowsIn(db, {table: sql.TABLE, select: sql.FORMAT_PROBE,
-      create: sql.CREATE_TABLE});
-    return PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT;
-  } catch (error) {
-    if (RETAINED_STORE_FORMAT_REFUSALS.has(error?.code)) {
-      return PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED;
-    }
-    throw error;
-  }
-}
-
-/**
- * The one table-format decision, read-only (no DDL): ABSENT when the store
- * holds no outcome table, CURRENT when the table is the owner's definition
- * (CREATE_TABLE, by the cold census's own rule), UNSUPPORTED for any other
- * definition (a store of another format).
- * @param {Object} db - The partition's opened database.
- * @return {{outcome: string, columns: Array<string>}} Frozen decision; the
- *   outcome is a PARTITION_COMMITTED_STATEMENT_FORMAT value, the columns what
- *   the table holds (for the refusal).
- */
-function detectCommittedStatementOutcomeFormat(db) {
-  const outcome = db.transaction(() => outcomeTableFormatIn(db))();
-  const columns = Object.freeze(db
-    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
-    .all().map((column) => column.name));
-  return Object.freeze({outcome, columns});
 }
 
 /**
@@ -206,13 +137,17 @@ function committedStatementOutcomeFormatError(decision, partitionId = null) {
  * decision of store open.
  * @param {Object} db - The partition's connection.
  * @param {string|null} [partitionId] - The partition opened, for the refusal.
+ * @param {string|null} [tableName] - PARTITIONS retains its terminal descriptor receipts here.
  */
-function createCommittedStatementOutcomeTable(db, partitionId = null) {
+function createCommittedStatementOutcomeTable(db, partitionId = null, tableName = null) {
   const format = detectCommittedStatementOutcomeFormat(db);
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
     throw committedStatementOutcomeFormatError(format, partitionId);
   }
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT) {
+    if (tableName === SYSTEM_TABLE_NAME.PARTITIONS && RaftRsDurableStore.hasDurableRecordIn(db, partitionId)) {
+      throw committedStatementOutcomeFormatError(format, partitionId);
+    }
     db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
   }
 }
@@ -228,6 +163,7 @@ function readCommittedStatementOutcomeIn(db, entryKey) {
   if (row === undefined) {
     return UNSETTLED_RECORD;
   }
+  const capturedEffects = readCapturedRowEffectsIn(db, entryKey);
   return Object.freeze({
     state: PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED,
     outcome: row.outcome,
@@ -237,6 +173,15 @@ function readCommittedStatementOutcomeIn(db, entryKey) {
     failureMessage: row.failure_message,
     changes: row.changes,
     lastInsertRowid: row.last_insert_rowid,
+    ...(capturedEffects === null ?
+      {} :
+      {
+        mirrorEffectRequired: row.mirror_effect_required,
+        affectedRows: capturedEffects.affectedRows,
+        ...(capturedEffects.mutationKind === null ?
+          {} :
+          {mutationKind: capturedEffects.mutationKind}),
+      }),
     ...(row.owner_result_text === null ? {} : {ownerResultText: row.owner_result_text,
       commandDigest: row.command_digest}),
   });
@@ -296,16 +241,13 @@ function readSettledOwnerCommandIn(db, {entryId, commandDigest}) {
       recordClass: committedRecordClassOf(recorded)});
 }
 
-const PENDING_OWNER_COMMAND_DIGESTS = 'pendingOwnerCommandDigests';
+// The promise identifies the exact pending registration, even if a later
+// leadership tenure registers the same entry before the old caller settles.
+const pendingOwnerCommandDigests = new WeakMap();
 const PROPOSE = Object.freeze({state: PARTITION_OWNER_COMMAND_PRELUDE.PROPOSE});
 
-function pendingOwnerCommandDigestsOf(service) {
-  let digests = service[PENDING_OWNER_COMMAND_DIGESTS];
-  if (digests === undefined) {
-    digests = new Map();
-    service[PENDING_OWNER_COMMAND_DIGESTS] = digests;
-  }
-  return digests;
+function pendingOwnerDigestOf(promise) {
+  return pendingOwnerCommandDigests.get(promise);
 }
 
 function answered(answer) {
@@ -313,18 +255,12 @@ function answered(answer) {
 }
 
 /**
- * The one request prelude of an owner command (placement, formation) on its
- * partition, in its one order: leadership; the committed-command admission;
- * the exact settled replay (a settled E0 answers its ORIGINAL receipt, also
- * under a cutover pause - reading an existing outcome is not a new write);
- * the cutover pause; the join of the same command already pending. A record
- * or a pending write of anything else under the entry key is the collision.
+ * Request prelude of an owner command (placement, formation) on its partition:
+ * leadership, committed-command admission, exact settled replay, cutover pause,
+ * and join of an identical pending command.
  * @param {Object} service - The partition.
- * @param {Object} request - {command, commandDigest, origin, kernel:
- *   {leadershipRefusalOf, pausedAnswerOf} (the write kernel's answers),
- *   answerSettled(recorded), answerCollision()}.
- * @return {Object} Frozen {state} (a PARTITION_OWNER_COMMAND_PRELUDE) and,
- *   when ANSWERED, {answer}.
+ * @param {Object} request - Prelude request context.
+ * @return {Object} Frozen {state} and, when ANSWERED, {answer}.
  */
 function ownerCommandPrelude(service, request) {
   const {command, commandDigest, origin, kernel} = request;
@@ -346,7 +282,7 @@ function ownerCommandPrelude(service, request) {
   if (paused !== null) return answered(paused);
   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
   if (pending === null) return PROPOSE;
-  return answered(pendingOwnerCommandDigestsOf(service).get(command.entryId) ===
+  return answered(pendingOwnerDigestOf(pending) ===
     commandDigest ? pending : request.answerCollision());
 }
 
@@ -358,12 +294,8 @@ function ownerCommandPrelude(service, request) {
  * @param {Promise<Object>} commitPromise - Its commit.
  * @return {Promise<Object>} The commit.
  */
-function trackPendingOwnerCommand(service, {command, commandDigest}, commitPromise) {
-  const digests = pendingOwnerCommandDigestsOf(service);
-  digests.set(command.entryId, commandDigest);
-  Promise.resolve(commitPromise).finally(() => {
-    if (digests.get(command.entryId) === commandDigest) digests.delete(command.entryId);
-  }).catch(() => {});
+function trackPendingOwnerCommand(service, {commandDigest}, commitPromise) {
+  pendingOwnerCommandDigests.set(commitPromise, commandDigest);
   return commitPromise;
 }
 
@@ -380,27 +312,28 @@ function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
 }
 
 /**
- * Record an entry key's terminal outcome, inside the application
- * transaction.
+ * Record an entry key's terminal outcome inside the application transaction.
  * @param {Object} service - The partition (its `db`).
- * @param {Object} outcome - {entryKey, outcome, index, term, error, result,
- *   ownerResultText, commandDigest}; `error` only for STATEMENT_FAILED,
- *   `result` (the statement's retained {changes, lastInsertRowid},
- *   committedStatementResult) only for APPLIED; an owner command records its
- *   typed result with its committedCommandDigest, both or neither.
+ * @param {Object} outcome - Outcome record fields.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
-  term, error = null, result = null, ownerResultText = null, commandDigest = null}) {
+  term, error = null, result = null, ownerResultText = null, commandDigest = null,
+  command = null}) {
   assertOwnerIdentity(entryKey, ownerResultText, commandDigest);
-  const insert = sqliteConnectionState(service.db)
-    .statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
+  const state = sqliteConnectionState(service.db);
+  const captureEffects = Boolean(result?.typedEffects) && partitionOwesDurableMirrorEffects(service);
+  const insert = state.statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
   insert.run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
     error === null ? null : String(error.message),
     result === null ? null : result.changes,
     result === null ? null : result.lastInsertRowid,
-    ownerResultText, commandDigest);
+    ownerResultText, commandDigest, Number(captureEffects && result.changes > 0));
+  if (!captureEffects) return;
+  reconcileCommittedStatementMirrorEffects(
+    service, state, entryKey, index, result, command,
+  );
 }
 
 /**
@@ -516,7 +449,17 @@ function lockingReadReplayFieldsOf(failureCode) {
 }
 
 function answerSettledStatement(service, {recorded, command}) {
+  let descriptorFields;
+  if (Object.hasOwn(command, 'splitDescriptorIntent')) {
+    const descriptor = decodeSplitDescriptorCommand(service, command);
+    if (!descriptor) return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
+    descriptorFields = retainedSplitDescriptorAnswer(descriptor, recorded);
+    if (descriptorFields.success === false) return descriptorFields;
+  } else if (isSplitDescriptorDigest(recorded.commandDigest)) {
+    return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.COLLISION);
+  }
   const settledAt = {
+    ...descriptorFields,
     partitionId: service.partitionId,
     logIndex: recorded.logIndex,
     replayOfLogIndex: recorded.logIndex,
@@ -561,8 +504,11 @@ function answerSettledStatement(service, {recorded, command}) {
  */
 function settleRecordedCommittedStatement(service, {recorded, command,
   afterCommit}) {
-  afterCommit(() => service.resolveCommittedWrite(command.entryId,
-    answerSettledStatement(service, {recorded, command})));
+  const answer = answerSettledStatement(service, {recorded, command});
+  afterCommit(() => service.resolveCommittedWrite(command.entryId, answer, recorded.commandDigest));
+  if (answer.failureCode === SPLIT_DESCRIPTOR_ERROR.COLLISION) {
+    return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
+  }
   if (recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
     return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
   }
@@ -638,48 +584,39 @@ function settleLockingReadRefusedCommittedStatement(service, {
   lockConflict, command, entryKey, index, term, identity, afterCommit,
 }) {
   recordCommittedStatementOutcome(service, {
-    entryKey,
-    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
-    index,
-    term,
-    error: {code: lockConflict.errorCode, message: lockConflict.error},
+    entryKey, outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    index, term, error: {code: lockConflict.errorCode, message: lockConflict.error},
   });
   afterCommit(() => service.resolveCommittedWrite(command.entryId, {
-    success: false,
-    error: lockConflict.error,
-    failureCode: lockConflict.errorCode,
-    errorCode: lockConflict.errorCode,
-    code: lockConflict.code,
-    sqlState: lockConflict.sqlState,
-    conflict: true,
-    retryable: true,
+    success: false, error: lockConflict.error,
+    failureCode: lockConflict.errorCode, errorCode: lockConflict.errorCode,
+    code: lockConflict.code, sqlState: lockConflict.sqlState,
+    conflict: true, retryable: true,
     ...(lockConflict.rowKey ? {rowKey: lockConflict.rowKey} : {}),
     ...(lockConflict.conflictingTransactionId ?
       {conflictingTransactionId: lockConflict.conflictingTransactionId} : {}),
-    committed: true,
-    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
-    entryId: command.entryId,
-    ...identity,
+    committed: true, outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    entryId: command.entryId, ...identity,
   }));
   return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
 }
 
 export {
-  committedStatementEntryKey,
-  committedStatementOutcomeFormatError,
-  detectCommittedStatementOutcomeFormat,
-  isCommittedStatementKeyed,
-  ownerCommandPrelude,
+  MIRROR_RETENTION_CUSTODY_ACTION,
+  STEADY_STATE_MIRROR_EFFECT_RETENTION_WINDOW,
+  applyMirrorRetentionCustodyCommand,
+  committedStatementEntryKey, committedStatementOutcomeFormatError,
+  detectCommittedStatementOutcomeFormat, isCommittedStatementKeyed,
+  ownerCommandPrelude, pendingOwnerDigestOf, partitionOwesDurableMirrorEffects,
   readCommittedStatementCensusIn,
-  readSettledOwnerCommandIn,
-  answerSettledStatement,
-  createCommittedStatementOutcomeTable,
-  isDeterministicStatementFailure,
-  readCommittedStatementOutcome,
-  recordCommittedStatementOutcome,
-  settleFailedCommittedStatement,
-  settleLockingReadRefusedCommittedStatement,
-  settleRecordedCommittedStatement,
-  statementEnvironmentFailure,
+  readDurableMirrorRetentionCustodyIn,
+  readSettledOwnerCommandIn, answerSettledStatement,
+  createCommittedStatementOutcomeTable, isDeterministicStatementFailure,
+  readCommittedStatementOutcome, reconcileCommittedStatementMirrorEffects,
+  recordCommittedStatementOutcome, registerMirrorRetentionRaftHooks,
+  releaseSourceMirrorRetentionCustody, replicateSourceMirrorRetentionCustody,
+  resolveActiveMirrorRetentionBarrierIndex,
+  settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
+  settleRecordedCommittedStatement, statementEnvironmentFailure,
   trackPendingOwnerCommand,
 };

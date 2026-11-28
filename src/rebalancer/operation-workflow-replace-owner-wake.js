@@ -71,6 +71,7 @@ import {
 } from './operation-workflow-dispatch-rearm-evidence.js';
 
 const {
+  OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
@@ -431,6 +432,40 @@ function wakeRemoteReplaceOwners(owner, partitionId, replicaId) {
   }
 }
 
+function isUnresolvedGrowthPromoteRow(row, partitionId) {
+  return row?.partition_id === partitionId &&
+    row.type === OperationType.GROWTH_PROMOTE &&
+    (row.completed_at === null || row.completed_at === undefined);
+}
+
+function wakeSingleGrowthPromoteOwner(owner, row) {
+  const operation = owner.repository.rowToOperation(row);
+  if (!operation) return;
+  if (owner.repository.isOperationLocallyOwned(operation)) {
+    owner.scheduleObservedProgressRetry?.(
+      operation.operationId,
+      TABLES.SERVICES,
+      OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+      1,
+    );
+    return;
+  }
+  void owner.wakeCoordinatorCreatedRemoteOwner(operation);
+}
+
+function wakeGrowthPromoteOwners(owner, partitionId, confState) {
+  const hasOutgoingVoters = Array.isArray(confState?.votersOutgoing) &&
+    confState.votersOutgoing.length > 0;
+  if (!confState || hasOutgoingVoters || !owner.repository) {
+    return;
+  }
+  const rows = owner.repository.filterReplicaOperationRowsFromCache((row) =>
+    isUnresolvedGrowthPromoteRow(row, partitionId));
+  for (const row of rows || []) {
+    wakeSingleGrowthPromoteOwner(owner, row);
+  }
+}
+
 function handleConsensusObservation(owner, event) {
   const partitionId = event?.partitionId;
   const state = WAKE_STATE_BY_OWNER.get(owner);
@@ -442,8 +477,10 @@ function handleConsensusObservation(owner, event) {
   state.consensusLevelByPartitionId.set(partitionId, JSON.stringify(next));
   wakeWaiters(owner, state,
     (waiter) => waiter.operation?.partitionId === partitionId);
-  Promise.resolve().then(() =>
-    wakeRemoteReplaceOwners(owner, partitionId, event?.replicaId));
+  Promise.resolve().then(() => {
+    wakeRemoteReplaceOwners(owner, partitionId, event?.replicaId);
+    wakeGrowthPromoteOwners(owner, partitionId, event?.confState);
+  });
 }
 
 function ensureWakeSubscriptions(owner, state) {

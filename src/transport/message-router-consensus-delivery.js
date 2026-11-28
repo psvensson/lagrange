@@ -3,8 +3,8 @@
 // WASM service alike).
 //
 // The sending router declares the class on the frame (CONSENSUS_ENVELOPE) and
-// batches envelopes for one directed peer pair over the current event-loop
-// turn (`queueMicrotaskFn`). Raft re-sends what a peer did not receive, so
+// batches envelopes for one directed peer pair. Plain heartbeats can share
+// one check-phase flush. Other messages expedite that same FIFO batch. Raft re-sends what a peer did not receive, so
 // nothing answers the frame: no ACK, no SERVICE_RESPONSE, no delivery
 // lifetime, no deadline timer, no pending waiter and no queued or
 // reconnecting fallback.
@@ -23,12 +23,14 @@ import {
   CONSENSUS_RECEIPT_REFUSAL,
   CONSENSUS_SEND_REFUSAL,
 } from '../constants/transport.js';
+import {RAFT_RS_MESSAGE_TYPE} from '../raft/raft-rs-ingress-constants.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
 } from './transport-error-codes.js';
+import {consensusItemFamily, observeConsensusSendReturned} from './message-router-socket-evidence.js';
 import {buildDeliveryEnvelope} from './transport-semantic-outcome.js';
 
 const {
@@ -48,6 +50,8 @@ const {
 const CONSENSUS_ENVELOPE_WRITTEN = buildDeliveryEnvelope({acknowledged: true});
 const NO_ERROR_CODE = null;
 const COMPUTED_REASON_CODE = null;
+// Bound the work of constructing and dispatching any one frame.
+const MAX_CONSENSUS_BATCH_ITEMS = 64;
 // A refusal is counted under its reason, or under reason:code when the
 // handler's throw named a code.
 const REFUSAL_KEY_SEPARATOR = ':';
@@ -83,11 +87,9 @@ function buildConsensusBatchFrame(sourceNodeId, envelopes) {
   };
 }
 
-function frameWrapperBytes(router) {
-  return Buffer.byteLength(
-    JSON.stringify(buildConsensusBatchFrame(router.nodeId, [])),
-  );
-}
+// The last field of the canonical frame is its envelopes array. Keep the
+// encoded wrapper and fill it with the same JSON fragments admitted below.
+const CONSENSUS_FRAME_END = ']}';
 
 function socketBufferedBytes(connection) {
   const amount = connection?.ws?.bufferedAmount;
@@ -130,6 +132,7 @@ function detachPendingBatch(router, batch) {
     return false;
   }
   batch.settled = true;
+  if (batch.checkFlush !== null) clearImmediate(batch.checkFlush);
   if (router.consensusDelivery.pendingBatches.get(batch.targetNodeId) === batch) {
     router.consensusDelivery.pendingBatches.delete(batch.targetNodeId);
   }
@@ -213,13 +216,11 @@ function flushPendingConsensusBatch(router, batch) {
   }
   detachPendingBatch(router, batch);
   const items = batch.items.splice(TRANSPORT_NUM.ZERO);
-  const frame = buildConsensusBatchFrame(
-    router.nodeId,
-    items.map((item) => item.entry),
-  );
+  const entries = items.map((item) => item.encodedEntry).join(',');
+  const frame = batch.framePrefix + entries + CONSENSUS_FRAME_END;
   let sendError = null;
   try {
-    batch.ws.send(JSON.stringify(frame));
+    batch.ws.send(frame);
   } catch (error) {
     sendError = error;
   }
@@ -233,6 +234,7 @@ function flushPendingConsensusBatch(router, batch) {
     }
     return;
   }
+  observeConsensusSendReturned(batch.ws, batch.byteLength, items);
   router.consensusDelivery.written += items.length;
   router.consensusDelivery.framesWritten += TRANSPORT_NUM.ONE;
   for (const item of items) {
@@ -280,12 +282,42 @@ function inspectBatchBufferBounds(router, targetNodeId, connection, batch, added
   return exceeded;
 }
 
+// JsMessageOut omits context for an empty native buffer. Context-bearing
+// heartbeats carry protocol work (including read-index) and stay urgent.
+function isOrdinaryHeartbeat(payload) {
+  try {
+    const message = Object.getOwnPropertyDescriptor(payload, 'message')?.value;
+    const type = message && Object.getOwnPropertyDescriptor(message, 'msgType')?.value;
+    return (type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT || type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE) &&
+      !('context' in message);
+  } catch {
+    return false;
+  }
+}
+
+function scheduleBatchFlush(router, batch, payload) {
+  if (batch.items.length === MAX_CONSENSUS_BATCH_ITEMS) {
+    flushPendingConsensusBatch(router, batch);
+    return;
+  }
+  const first = batch.items.length === 1;
+  if (!first && batch.checkFlush === null) return; // Urgent flush already queued.
+  if (isOrdinaryHeartbeat(payload)) {
+    if (first) batch.checkFlush = setImmediate(() => flushPendingConsensusBatch(router, batch));
+    return;
+  }
+  if (batch.checkFlush !== null) clearImmediate(batch.checkFlush);
+  batch.checkFlush = null;
+  queueMicrotaskFn(() => flushPendingConsensusBatch(router, batch));
+}
+
 function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry) {
-  const entryBytes = Buffer.byteLength(JSON.stringify(entry));
+  const encodedEntry = JSON.stringify(entry);
+  const entryBytes = Buffer.byteLength(encodedEntry);
   let batch = activeBatchForConnection(router, targetNodeId, connection);
-  const addedBytes = batch === null ?
-    frameWrapperBytes(router) + entryBytes :
-    TRANSPORT_NUM.ONE + entryBytes;
+  const {frameEncoding} = router.consensusDelivery;
+  const addedBytes = entryBytes + (batch === null ?
+    frameEncoding.emptyBytes : TRANSPORT_NUM.ONE);
   const bufferRefusal = inspectBatchBufferBounds(
     router, targetNodeId, connection, batch, addedBytes);
   if (bufferRefusal !== null) {
@@ -306,17 +338,19 @@ function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry)
       connection,
       connectionId: connection.connectionId ?? null,
       ws: connection.ws,
+      framePrefix: frameEncoding.prefix,
       byteLength: TRANSPORT_NUM.ZERO,
       settled: false,
+      checkFlush: null,
       items: [],
     };
     router.consensusDelivery.pendingBatches.set(targetNodeId, batch);
-    queueMicrotaskFn(() => flushPendingConsensusBatch(router, batch));
   }
   batch.byteLength += addedBytes;
   router.consensusDelivery.pendingBatchBytes += addedBytes;
   return new Promise((resolve) => {
-    batch.items.push({entry, resolve});
+    batch.items.push({encodedEntry, entryBytes, family: consensusItemFamily(entry.payload), resolve});
+    scheduleBatchFlush(router, batch, entry.payload);
   });
 }
 
@@ -497,8 +531,13 @@ function consensusDeliveryStats(router) {
   });
 }
 
-function createConsensusDeliveryRecord() {
+function createConsensusDeliveryRecord(sourceNodeId) {
+  const emptyFrame = JSON.stringify(buildConsensusBatchFrame(sourceNodeId, []));
   return {
+    frameEncoding: Object.freeze({
+      prefix: emptyFrame.slice(0, -CONSENSUS_FRAME_END.length),
+      emptyBytes: Buffer.byteLength(emptyFrame),
+    }),
     written: TRANSPORT_NUM.ZERO,
     notWritten: TRANSPORT_NUM.ZERO,
     framesWritten: TRANSPORT_NUM.ZERO,

@@ -19,9 +19,9 @@ import {isCurrentOriginRevalidatableQueryCensus, isReleaseDrained, releaseAnswer
 import {askParticipantRelease, participantReleaseAbsoluteClockValid, participantReleaseWaitRemainingMs,
   releaseNodeOfAddress, requestParticipantRelease} from
   './participant-release-client.js';
-import {captureParticipantControlRefusal, captureParticipantReleaseDiagnosticTrigger,
+import {bindReleaseTrace, captureParticipantControlRefusal, captureParticipantReleaseDiagnosticTrigger,
   participantReleaseAttemptAgeObservation, participantReleaseClockMeasured,
-  readParticipantReleaseClock} from
+  readParticipantReleaseClock, releaseTrace} from
   './participant-release-diagnostic-observation.js';
 import {settleTransactionReleaseRows, transactionReleaseProofOf} from
   '../query/distributed/distributed-transaction-release-settlement.js';
@@ -30,7 +30,8 @@ import {TRANSACTION_RELEASE_CENSUS_STATE} from
 import {TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
+  PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_PHASE as PHASE,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 
@@ -61,10 +62,10 @@ function cohortOf(handler, facts) {
   return routes.includes(null) ? null : routes;
 }
 
-async function readCohort(handler, partitionId, cohort, deadlineAtMs) {
+async function readCohort(handler, partitionId, cohort, deadlineAtMs, trace) {
   return Promise.all(cohort.map((member) => askParticipantRelease(handler, member.nodeId,
     {partitionId, replicaId: member.replicaId, action: ACTION.INSPECT,
-      deadlineAtMs})));
+      deadlineAtMs}, trace)));
 }
 
 function requestFor(release, attempt, action, facts, fields = {}) {
@@ -81,7 +82,7 @@ async function enableAndObserveCohort(handler, release, attempt, census, local,
   queryDrainProof) {
   const enabled = await askParticipantRelease(handler, handler.nodeId,
     requestFor(release, attempt, ACTION.ENABLE, local,
-      {census, queryDrainProof}));
+      {census, queryDrainProof}), releaseTrace(attempt));
   if (enabled.outcome !== OUTCOME.OBSERVED) return enabled;
   const applied = await actOnCohort(handler, release, attempt,
     ACTION.OBSERVE_APPLIED_POSITION, census, {origin: enabled.origin});
@@ -89,8 +90,12 @@ async function enableAndObserveCohort(handler, release, attempt, census, local,
 }
 
 async function actOnCohort(handler, release, attempt, action, census, fields = {}) {
-  return Promise.all(census.map((facts) => askParticipantRelease(handler,
-    facts.generation.nodeId, requestFor(release, attempt, action, facts, fields))));
+  return Promise.all(census.map((facts) => askParticipantRelease(
+    handler,
+    facts.generation.nodeId,
+    requestFor(release, attempt, action, facts, fields),
+    releaseTrace(attempt),
+  )));
 }
 
 function attemptRefusal(request, outcome, fields = {}) {
@@ -118,7 +123,12 @@ async function resumeCohort(handler, service, request, release, attempt, census,
   fields = {}) {
   // Both first-origin and current-origin releases must re-establish control
   // authority after their own paused census, before any member can reopen.
-  const currentControlOwner = await releaseControlOwnerFirst(handler, service, request);
+  const currentControlOwner = await releaseControlOwnerFirst(
+    handler,
+    service,
+    request,
+    PHASE.CONTROL_BEFORE_RESUME,
+  );
   if (currentControlOwner !== null) return currentControlOwner;
   const followers = census.filter((facts) =>
     facts.generation.replicaId !== service.replicaId);
@@ -184,7 +194,7 @@ async function settleQueryRelease(handler, service, release, attempt, cohort, ce
   });
   if (transactions === null) return null;
   const refreshed = await readCohort(handler, service.partitionId, cohort,
-    attempt.deadlineAtMs);
+    attempt.deadlineAtMs, releaseTrace(attempt));
   if (unavailableCensus(refreshed) !== null) return null;
   const current = refreshed.find((facts) =>
     facts.generation.replicaId === service.replicaId);
@@ -209,21 +219,43 @@ function controlReleaseAnswerValid(answer, targetBuildDigest) {
 }
 
 function currentControlNodeId(handler, service, partitionId) {
-  const localControlLeader = [...handler.localServices.values()].find((candidate) =>
-    candidate.initialized && !candidate.isShutdown &&
-    candidate.partitionId === partitionId &&
-    candidate.raft?.readStatus().role === RAFT_ROLE.LEADER);
-  const topologyOwner = releaseQueryEngine(handler, service)?.queryExecutor
-    ?.bootstrapTopologySnapshotOwner;
-  return localControlLeader ? handler.nodeId :
-    topologyOwner?.resolveCanonicalPartitionLeaderNodeId?.(partitionId) ?? null;
+  for (const candidate of handler.localServices.values()) {
+    if (!candidate.initialized || candidate.isShutdown ||
+        candidate.partitionId !== partitionId) {
+      continue;
+    }
+    const status = candidate.raft?.readStatus();
+    if (status?.role === RAFT_ROLE.LEADER) return handler.nodeId;
+    const leaderNodeId = releaseNodeOfAddress(status?.leaderAddress);
+    if (leaderNodeId !== null) return leaderNodeId;
+  }
+  return releaseQueryEngine(handler, service)?.queryExecutor?.bootstrapTopologySnapshotOwner
+    ?.resolveCanonicalPartitionLeaderNodeId?.(partitionId) ?? null;
 }
 
-async function releaseControlOwnerFirst(handler, service, request) {
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function alternateControlPeerNodeIds(handler, partitionId, excludedNodeId) {
+  const rows = handler.systemTableCache?.servicesForPartition?.(partitionId) ?? [];
+  const nodeIds = [];
+  for (const row of rows) {
+    const candidateNodeId = row?.node_id;
+    if (isNonEmptyString(candidateNodeId) &&
+        candidateNodeId !== excludedNodeId &&
+        !nodeIds.includes(candidateNodeId)) {
+      nodeIds.push(candidateNodeId);
+    }
+  }
+  return nodeIds;
+}
+
+async function releaseControlOwnerFirst(handler, service, request, phase) {
   if (service.tableName === TABLES.SQL_TRANSACTIONS) return null;
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
-  const nodeId = currentControlNodeId(handler, service, partitionId);
-  if (typeof nodeId !== 'string' || nodeId.length === 0) {
+  let nodeId = currentControlNodeId(handler, service, partitionId);
+  if (!isNonEmptyString(nodeId)) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.CURRENT_CONTROL_OWNER});
   }
@@ -232,9 +264,33 @@ async function releaseControlOwnerFirst(handler, service, request) {
       request.targetBuildDigest);
   const trigger = request.trigger === TRIGGER.FRESH_CREATE ?
     TRIGGER.EXISTING_ORIGIN : request.trigger;
-  const answer = await requestParticipantRelease(handler, {partitionId, nodeId,
+  let answer = await requestParticipantRelease(handler, {partitionId, nodeId,
     targetBuildDigest: request.targetBuildDigest, trigger,
-    deadlineAtMs: request.deadlineAtMs, authorization});
+    deadlineAtMs: request.deadlineAtMs, authorization}, releaseTrace(request), phase);
+  if (answer?.outcome === OUTCOME.UNAVAILABLE &&
+      answer?.missingFact === MISSING_FACT.REPLICA_RELEASE_REPLY &&
+      !isNonEmptyString(answer?.inspectNodeId)) {
+    for (const candidateNodeId of alternateControlPeerNodeIds(handler, partitionId, nodeId)) {
+      const redirected = await requestParticipantRelease(handler, {
+        partitionId,
+        nodeId: candidateNodeId,
+        targetBuildDigest: request.targetBuildDigest,
+        trigger,
+        deadlineAtMs: request.deadlineAtMs,
+        authorization,
+      }, releaseTrace(request), phase);
+      if (controlReleaseAnswerValid(redirected, request.targetBuildDigest)) {
+        answer = redirected;
+        nodeId = candidateNodeId;
+        break;
+      }
+      if (isNonEmptyString(redirected?.inspectNodeId)) {
+        answer = redirected;
+        nodeId = candidateNodeId;
+        break;
+      }
+    }
+  }
   if (answer?.outcome === OUTCOME.BUILD_MISMATCH) {
     return releaseAnswer(OUTCOME.BUILD_MISMATCH, request,
       {controlPartitionId: partitionId});
@@ -268,16 +324,99 @@ function cleanCurrentControlCohort(service, release, attempt, census) {
     releaseCensusDefect(release, census, local, {attempt}) === null;
 }
 
+function isRevalidatableSqlTransactionsCohort(service, census) {
+  return service.tableName === TABLES.SQL_TRANSACTIONS &&
+    service.partitionId === INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS] &&
+    census.every((facts) =>
+      isCurrentOriginRevalidatableQueryCensus(facts, {originRequired: true}));
+}
+
+async function refreshPausedControlCohort(
+  handler,
+  service,
+  release,
+  attempt,
+  pausedCensus,
+) {
+  const local = pausedCensus.find((facts) =>
+    facts?.generation?.replicaId === service.replicaId);
+  if (!(local?.work?.appliedIndex > 0) ||
+      !Number.isSafeInteger(local?.membership?.term)) {
+    return pausedCensus;
+  }
+  const observed = await actOnCohort(
+    handler,
+    release,
+    attempt,
+    ACTION.OBSERVE_APPLIED_POSITION,
+    pausedCensus,
+    {
+      origin: {
+        originIndex: local.work.appliedIndex,
+        originTerm: local.membership.term,
+      },
+    },
+  );
+  if (unavailableCensus(observed) !== null) return pausedCensus;
+  const refreshed = await actOnCohort(
+    handler,
+    release,
+    attempt,
+    ACTION.PAUSE,
+    pausedCensus,
+  );
+  return unavailableCensus(refreshed) === null ? refreshed : pausedCensus;
+}
+
+function refusedRevalidatableControlCohort(
+  service,
+  request,
+  release,
+  attempt,
+  census,
+) {
+  const local = census.find((facts) =>
+    facts?.generation?.replicaId === service.replicaId);
+  const defect = local ?
+    releaseCensusDefect(release, census, local, {attempt}) :
+    null;
+  return attemptRefusal(
+    {...request, release},
+    defect ?? OUTCOME.CENSUS_REFUSED,
+  );
+}
+
 async function proveCurrentControlCohort(handler, service, request,
   release, attempt, pausedCensus) {
-  if (!cleanCurrentControlCohort(service, release, attempt, pausedCensus)) return null;
+  let census = pausedCensus;
+  if (!cleanCurrentControlCohort(service, release, attempt, census)) {
+    if (!isRevalidatableSqlTransactionsCohort(service, census)) return null;
+    census = await refreshPausedControlCohort(
+      handler,
+      service,
+      release,
+      attempt,
+      census,
+    );
+    if (!cleanCurrentControlCohort(service, release, attempt, census)) {
+      return isRevalidatableSqlTransactionsCohort(service, census) ?
+        refusedRevalidatableControlCohort(
+          service,
+          request,
+          release,
+          attempt,
+          census,
+        ) :
+        null;
+    }
+  }
   // Each PAUSE recipient has already closed admission and supplied its fresh
   // membership, generation, origin, work and schema facts. RESUME itself
   // obtains newer local facts and fences OPEN on that complete census, so a
   // second caller-side INSPECT cannot authorize anything RESUME would refuse.
   // Any intervening change keeps the affected recipient closed.
-  return resumeCohort(handler, service, request, release, attempt, pausedCensus,
-    {census: pausedCensus});
+  return resumeCohort(handler, service, request, release, attempt, census,
+    {census});
 }
 
 // The founding facts include the committed configuration, read through the
@@ -339,7 +478,12 @@ async function runCutoverAttempt(handler, request) {
   const localRefusal = request.trigger === TRIGGER.FRESH_CREATE ? null :
     await localReleaseRefusal(handler, service, request);
   if (localRefusal !== null) return localRefusal;
-  const controlOwner = await releaseControlOwnerFirst(handler, service, request);
+  const controlOwner = await releaseControlOwnerFirst(
+    handler,
+    service,
+    request,
+    PHASE.CONTROL_BEFORE_PAUSE,
+  );
   if (controlOwner !== null) return controlOwner;
   // Close the current leader before any awaited remote observation. A
   // missing member cannot leave reachable members open on a failed release.
@@ -355,13 +499,14 @@ async function runCutoverAttempt(handler, request) {
   const attempt = Object.freeze({leaderReplicaId: service.replicaId,
     term: own.membership.term, leaderLifecycleIncarnation: own.generation.lifecycleIncarnation,
     deadlineAtMs: request.deadlineAtMs});
+  bindReleaseTrace(attempt, releaseTrace(request));
   const cohort = cohortOf(handler, own);
   if (cohort === null) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.COMMITTED_REPLICA_ROUTES});
   }
   let census = await readCohort(handler, service.partitionId, cohort,
-    request.deadlineAtMs);
+    request.deadlineAtMs, releaseTrace(request));
   let unavailable = unavailableCensus(census);
   if (unavailable !== null) {
     await actOnCohort(handler, release, attempt, ACTION.PAUSE,
@@ -409,7 +554,7 @@ async function runPausedCutover(handler, service, request, release, attempt, coh
 async function finishEnabledCutover(handler, service, request, release, attempt, cohort,
   queryRelease) {
   const census = await readCohort(handler, service.partitionId, cohort,
-    request.deadlineAtMs);
+    request.deadlineAtMs, releaseTrace(request));
   const unavailable = unavailableCensus(census);
   if (unavailable !== null) {
     return normalizeMemberRefusal({...request, release}, unavailable);
@@ -509,14 +654,24 @@ async function runParticipantCutover(handler, request) {
   }
   const current = runs.get(request.partitionId);
   if (current) {
-    return current.targetBuildDigest === request.targetBuildDigest ?
-      joinParticipantCutover(handler, current, request) : releaseAnswer(OUTCOME.INVALID, request);
+    if (current.targetBuildDigest !== request.targetBuildDigest) {
+      return releaseAnswer(OUTCOME.INVALID, request);
+    }
+    const trace = releaseTrace(request);
+    if (trace) {
+      trace.joinedMessageId = current.trace.messageId;
+      trace.joinedHops = current.trace.hops;
+    }
+    return joinParticipantCutover(handler, current, request);
   }
   const originalTrigger = captureParticipantReleaseDiagnosticTrigger(request);
   const startObservation = readParticipantReleaseClock(handler.timeSource);
+  // Lifecycle recovery can own the shared run before a routed CREATE joins.
+  const trace = releaseTrace(request) ?? {messageId: null, hops: {}};
+  bindReleaseTrace(request, trace);
   const running = runCutoverAttempt(handler, request).catch((error) =>
     attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
-  const record = {targetBuildDigest: request.targetBuildDigest, originalTrigger,
+  const record = {trace, targetBuildDigest: request.targetBuildDigest, originalTrigger,
     startObservation, waiters: new Set(), settled: false, answer: null, promise: null};
   record.promise = running.then((answer) => settleCutoverWaiters(record, answer));
   runs.set(request.partitionId, record);

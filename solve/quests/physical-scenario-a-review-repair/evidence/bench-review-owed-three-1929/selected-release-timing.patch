@@ -1,0 +1,19 @@
+--- a/src/node/participant-release-hop-observation.js
++++ b/src/node/participant-release-hop-observation.js
+@@ -33,8 +33,14 @@
+     return answer;
+   } finally {
+     const elapsedMs = performance.now() - start;
+-    if (elapsedMs >= PARTICIPANT_CUTOVER_BOUND.REQUEST_TIMEOUT_MS) {
+-      handler.logger?.info?.('Slow participant release response', {
++    // Matched diagnostic image only. The existing RELEASE trace owns these
++    // timings. Emit its bounded phase summaries for the two named subjects.
++    const selectedCreate = action === ACTION.RELEASE &&
++      (request.partitionId === 'service_partition_access-p1' ||
++        request.partitionId === 'service_revisions-p1') &&
++      releaseDiagnosticText(request.createAdmissionIdentity, 'operationId') !== null;
++    if (selectedCreate || elapsedMs >= PARTICIPANT_CUTOVER_BOUND.REQUEST_TIMEOUT_MS) {
++      handler.logger?.info?.(selectedCreate ? 'Selected CREATE release response' : 'Slow participant release response', {
+         partitionId: request.partitionId, sourceNodeId: envelope.sourceNodeId,
+         operationId: releaseDiagnosticText(request.createAdmissionIdentity, 'operationId'),
+         attemptToken: releaseDiagnosticText(request.createAdmissionIdentity, 'attemptToken'),

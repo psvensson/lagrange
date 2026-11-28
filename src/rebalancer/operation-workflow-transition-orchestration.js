@@ -1,3 +1,4 @@
+import {matchesRequestedCreateGrant, requiresPartitionCreateGrant} from './replica-operation-create-admission-fields.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
@@ -295,6 +296,8 @@ class OperationWorkflowTransitionOrchestration
   // {requireDurable}: counts only a committed durable write - the REPLACE
   // removal-intent boundary (quest replace-source-removal-owner).
   async updateStep(operation, step, reason, options) {
+    const createBasis = step === WORKFLOW_STEP.CREATING && requiresPartitionCreateGrant(operation) ?
+      {...operation} : null;
     const replay = await this.resolveOperationTransitionBeforeWrite(operation, step, options);
     if (replay) {
       if (isTerminalTransitionOutcomeSettled(replay)) {
@@ -303,6 +306,12 @@ class OperationWorkflowTransitionOrchestration
       return replay.reconcileOutcome;
     }
     const previousStep = operation.workflowStep;
+    if (createBasis && (previousStep !== WORKFLOW_STEP.SENDING ||
+        !matchesRequestedCreateGrant(createBasis, operation))) {
+      this.scheduleObservedProgressRetry(operation.operationId, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT);
+      return OPERATION_RECONCILE_OUTCOME.WAITING;
+    }
     // CREATE attempts re-enter from their committed phase. Dispatch itself
     // cannot reopen the initial SENDING edge after ADD or REPLACE progress.
     if (step === WORKFLOW_STEP.SENDING && previousStep !== WORKFLOW_STEP.PENDING &&
@@ -346,7 +355,7 @@ class OperationWorkflowTransitionOrchestration
       );
     } catch (error) {
       if (
-        !this.shouldUsePriorityDispatchDeferredLocalProgress(
+        createBasis || !this.shouldUsePriorityDispatchDeferredLocalProgress(
           operation,
           step,
           error,

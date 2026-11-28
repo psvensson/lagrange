@@ -14,6 +14,10 @@ import {
   isDeliveredTransportDeliveryOutcome,
   normalizePositiveRetryAfterMs,
 } from '../transport/transport-semantic-outcome.js';
+import {
+  encodeTypedRowSet,
+  materializeTypedRowSetObjects,
+} from '../query/sql-value-codec.js';
 import {PARTITION_SERVICE_MESSAGE_TYPE} from './partition-service-constants.js';
 
 const NO_HANDLER_REASON_CODE = 'no_handler';
@@ -238,12 +242,92 @@ function retireCoveredBatch(
   }
 }
 
+const PRIOR_ROW_DATA_FIELD = 'old_data';
+
+function encodeCdcRowObjectForWire(rowObj) {
+  if (!rowObj || typeof rowObj !== 'object' || Array.isArray(rowObj)) {
+    return null;
+  }
+  const columns = Object.keys(rowObj);
+  const values = columns.map((col) => rowObj[col]);
+  if (!values.some((val) => typeof val === 'bigint' || ArrayBuffer.isView(val))) {
+    return null;
+  }
+  const typedRowSet = encodeTypedRowSet(columns, [values]);
+  const wireRow = {};
+  const encodedRow = typedRowSet.rows[0] || [];
+  for (let i = 0; i < columns.length; i += 1) {
+    Object.defineProperty(wireRow, columns[i], {
+      value: encodedRow[i + 1],
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return {wireRow, typedRowSet};
+}
+
+function encodeRemoteCdcEventForWire(event) {
+  const encodedData = encodeCdcRowObjectForWire(event?.data);
+  const encodedPreviousRow = encodeCdcRowObjectForWire(event?.[PRIOR_ROW_DATA_FIELD]);
+  if (!encodedData && !encodedPreviousRow) {
+    return event;
+  }
+  return {
+    ...event,
+    ...(encodedData ? {data: encodedData.wireRow, typedData: encodedData.typedRowSet} : {}),
+    ...(encodedPreviousRow ?
+      {
+        [PRIOR_ROW_DATA_FIELD]: encodedPreviousRow.wireRow,
+        typedPreviousRow: encodedPreviousRow.typedRowSet,
+      } :
+      {}),
+  };
+}
+
+function encodeRemoteCdcEventsForWire(events) {
+  return Array.isArray(events) ? events.map(encodeRemoteCdcEventForWire) : events;
+}
+
+function decodeRemoteCdcEventsFromWire(events) {
+  if (!Array.isArray(events) ||
+      !events.some((event) => Boolean(event?.typedData || event?.typedPreviousRow))) {
+    return events;
+  }
+  return events.map((event) => {
+    if (!event?.typedData && !event?.typedPreviousRow) return event;
+    const {typedData, typedPreviousRow, ...rest} = event;
+    const decoded = {...rest};
+    if (typedData) {
+      const [decodedData] = materializeTypedRowSetObjects(typedData, {
+        coerceSafeBigIntToNumber: true,
+      });
+      decoded.data = decodedData;
+    }
+    if (typedPreviousRow) {
+      const [decodedPreviousRow] = materializeTypedRowSetObjects(typedPreviousRow, {
+        coerceSafeBigIntToNumber: true,
+      });
+      decoded[PRIOR_ROW_DATA_FIELD] = decodedPreviousRow;
+    }
+    return decoded;
+  });
+}
+
+function decodeRemoteCdcEnvelopePayload(envelope) {
+  const payload = envelope?.payload !== undefined ? envelope.payload : envelope;
+  if (!payload || !Array.isArray(payload.events)) return payload;
+  const decodedEvents = decodeRemoteCdcEventsFromWire(payload.events);
+  return decodedEvents === payload.events ? payload : {...payload, events: decodedEvents};
+}
+
 async function sendBatchToRemote(service, entry, events, resyncRequired) {
   const router = resolvePartitionRouter(service);
   if (!isSubscriberActive(service, entry) || !router) {
     return INACTIVE_SUBSCRIBER_ANSWER;
   }
   try {
+    const wireEvents = encodeRemoteCdcEventsForWire(events);
     const delivery = await router.deliver(entry.subscriberAddress, {
       type: PARTITION_SERVICE_MESSAGE_TYPE.LIVE_QUERY_CDC_EVENT,
       partitionId: service.partitionId,
@@ -251,7 +335,7 @@ async function sendBatchToRemote(service, entry, events, resyncRequired) {
       subscriberId: entry.subscriberId,
       previousDeliveredSeq: entry.lastDeliveredSeq,
       resyncRequired,
-      events,
+      events: wireEvents,
     });
     return normalizeRemoteDeliveryOutcome(service, entry, delivery);
   } catch (error) {
@@ -494,6 +578,9 @@ function clearRemoteLiveQueryCdcSubscribers(service) {
 
 export {
   clearRemoteLiveQueryCdcSubscribers,
+  decodeRemoteCdcEnvelopePayload,
+  decodeRemoteCdcEventsFromWire,
+  encodeRemoteCdcEventsForWire,
   handleRemoteLiveQueryCdcSubscribe,
   handleRemoteLiveQueryCdcUnsubscribe,
 };

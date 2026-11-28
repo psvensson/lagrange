@@ -1,0 +1,32 @@
+{
+  "status": "expected-baseline-failure",
+  "sourceCommit": "a723f28f16ac39c760da5d48cdd0706a931a3246",
+  "testCommit": "2a1aeeeb90a831b4c043032310294460a02bfd92",
+  "host": "adams-gamla",
+  "test": "test/raft/raft-rs-backend/placement-cure-source-transfer.test.js",
+  "testBlob": "7ba9b236e4e2932792ca583dc1a6794299fa3a82",
+  "conditions": "Native three-voter Raft driver. Placement chose an active voter with a shorter applied log. The fixture healed its connection before dispatch and delivered actual consensus traffic between the two requests.",
+  "observed": {
+    "transfers": [
+      {
+        "from": "orders-r1",
+        "successor": "most-caught-up"
+      },
+      {
+        "from": "orders-r2",
+        "successor": "named",
+        "to": "orders-r2"
+      }
+    ],
+    "routes": [
+      "node-1/service/replica-handler",
+      "node-2/service/replica-handler"
+    ],
+    "elapsed": 0,
+    "otherLeaderEvents": 1,
+    "term": 3
+  },
+  "reportSha256": "04e5010addcfb46ef5d5db59dd680a86421752fdc449b4d0063d8c97375c4043",
+  "priorQuest": "user-table-leader-handoff-demotion-pairing-v2",
+  "scope": "The other voter actually became leader before the intended target. The physical per-term trace does not expose each native cause."
+}

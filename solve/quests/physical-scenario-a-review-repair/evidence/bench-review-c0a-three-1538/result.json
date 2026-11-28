@@ -1,0 +1,209 @@
+{
+  "campaignId": "bench-review-c0a-three-1538",
+  "sourceCommit": "c0a6dcc12b5debf5b7fb3be6dfb06c80ca762a38",
+  "productImage": "sha256:58a0686fe872237146bf6ad8dc22c0695da4b724aa12346f8439260b01f91292",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "readiness": {
+    "state": "ready",
+    "observedAt": "2026-11-26T15:45:27.385Z",
+    "clusterStableAt": "2026-11-26T15:45:18.262Z",
+    "probeReadbackAt": "2026-11-26T15:45:26.735Z"
+  },
+  "semanticCases": [
+    {
+      "file": "semantic-gate/scenario-a-delivery-lagrange.json",
+      "sha256": "a8bed7e230b297f65756e4fed98b7cb4ce962bfabaa5db2b34c67a0a3e6b0cd3",
+      "caseId": "scenario-a-delivery-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-durability-lagrange.json",
+      "sha256": "53ac1ae196bfb893192fae6b5388fd0d69fe12701e9c614479f26a592b5c0d76",
+      "caseId": "scenario-a-durable-commit-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-failure-atomicity-lagrange.json",
+      "sha256": "eb21cbad94f9aef920afe06d8396856b9a068a3d84e4a58b02c4d89c0a5ab0ae",
+      "caseId": "scenario-a-failure-atomicity-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-new-order-contention-lagrange.json",
+      "sha256": "0a234e0e2466895f4e8321d6b7afcf00c3651338a46c97d670a5d73b452232a8",
+      "caseId": "scenario-a-new-order-district-contention-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-order-status-lagrange.json",
+      "sha256": "b6a8de0ed8db215755f7610be882799eb401e5a21be05e88e14a0877a3ca92ab",
+      "caseId": "scenario-a-order-status-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-payment-lagrange.json",
+      "sha256": "44c38821ffda79ff494df169121c8f08d85c19aa4e7dfbe9abbdf4be5e5e086e",
+      "caseId": "scenario-a-payment-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-retryable-conflict-lagrange.json",
+      "sha256": "ac5a113c8b26792d7d1caba0bd5a95d44ea38cae1f878dee5217c0b082b12310",
+      "caseId": "scenario-a-retryable-conflict-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-stock-level-lagrange.json",
+      "sha256": "437353ba7fdb1396aad8be12b1a8e4d1f66170cb0d3d0017823091123e619f8e",
+      "caseId": "scenario-a-stock-level-v1",
+      "status": "passed"
+    },
+    {
+      "file": "semantic-gate/scenario-a-visibility-lagrange.json",
+      "sha256": "b9ec28cd99c54c83fc802374ff5ecba4c718a6903f9535db756cc3f29cba1825",
+      "caseId": "scenario-a-visibility-v1",
+      "status": "passed"
+    }
+  ],
+  "distinctProofs": 33,
+  "accounting": {
+    "offered": 100,
+    "issued": 100,
+    "unissued": 0,
+    "attempts": 116,
+    "committed": 43,
+    "conflicts": 16,
+    "conflictExhausted": 0,
+    "terminalFailures": {
+      "product_error": 57,
+      "correctness_failure": 0,
+      "transport_failure": 0,
+      "harness_fault": 0
+    },
+    "unresolved": 0,
+    "ambiguousCommits": 0
+  },
+  "measurementWindow": {
+    "scheduledMs": 20000,
+    "drainMs": 176855.80713700003,
+    "drainOverrunMs": 156855.80713700003,
+    "accountingWindowMs": 176855.80713700003,
+    "startedAt": "2026-11-26T15:51:45.468Z",
+    "endedAt": "2026-11-26T15:54:42.323Z"
+  },
+  "committedLatencyMs": {
+    "count": 43,
+    "avg": 45662.778731186045,
+    "p50": 38575.58149900001,
+    "p95": 97413.24505800001,
+    "p99": 107082.142538,
+    "min": 2109.302447000002,
+    "max": 107082.142538
+  },
+  "terminalRequestSqlStates": {
+    "XX000": 3,
+    "25P02": 54
+  },
+  "firstStatementFailures": [
+    {
+      "requestIndex": 37,
+      "operation": "payment",
+      "serverConnectionId": 222457683,
+      "commitSent": false,
+      "statementErrors": [
+        {
+          "sql": "INSERT INTO history (phase, worker_id, sequence_id, customer_warehouse_id, customer_district_id, customer_id, home_warehouse_id, home_district_id, amount_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+          "sqlState": "XX000",
+          "message": "Distributed operation failed due to participant failures"
+        },
+        {
+          "sql": "ROLLBACK",
+          "sqlState": "XX000",
+          "message": "Distributed operation failed due to participant failures"
+        }
+      ]
+    },
+    {
+      "requestIndex": 50,
+      "operation": "new_order",
+      "serverConnectionId": 325056146,
+      "commitSent": false,
+      "statementErrors": [
+        {
+          "sql": "INSERT INTO orders (warehouse_id, district_id, order_id, customer_id, carrier_id, line_count, all_local) VALUES ($1, $2, $3, $4, NULL, $5, $6)",
+          "sqlState": "XX000",
+          "message": "Distributed operation failed due to participant failures"
+        }
+      ]
+    },
+    {
+      "requestIndex": 52,
+      "operation": "payment",
+      "serverConnectionId": 325056146,
+      "commitSent": false,
+      "statementErrors": [
+        {
+          "sql": "UPDATE warehouse SET ytd_cents = ytd_cents + $1 WHERE id = $2",
+          "sqlState": "XX000",
+          "message": "Distributed operation failed due to participant failures"
+        },
+        {
+          "sql": "ROLLBACK",
+          "sqlState": "XX000",
+          "message": "Distributed operation failed due to participant failures"
+        }
+      ]
+    }
+  ],
+  "finalStateBefore": {
+    "observed": true,
+    "stateSha256": "8b34aef3e0b9b31dba4b8c905c0d97c146ec59920462fe78bb8f5209f5f94bc0",
+    "logicalChecksum": "sha256:65628b029effe33e8563e78c8937d1fa47a05ff7a02ac1b327415230caf6709c",
+    "tableRows": {
+      "warehouse": 1,
+      "district": 2,
+      "customer": 60,
+      "item": 200,
+      "stock": 200,
+      "orders": 4,
+      "new_order": 4,
+      "order_line": 39,
+      "history": 5
+    }
+  },
+  "finalStateAfter": {
+    "observed": false,
+    "error": "Distributed operation failed due to participant failures"
+  },
+  "admission": {
+    "outcome": "failed",
+    "cells": [
+      {
+        "claimKey": "lagrange/scenarioA/smoke",
+        "status": "invalid-measurement",
+        "reasons": [
+          "final-state-missing"
+        ]
+      }
+    ]
+  },
+  "cleanupComplete": true,
+  "exitCode": 1,
+  "rawFileSha256": "bffc40aa3269ceb1d977f7e278fe8f6c71ba32a976150d512a4d16c463baa448",
+  "campaignFileSha256": "9a73b82042017004c57effed14c34d3b51548d46939429f89ba6246057099659",
+  "retainedArtifactSha256": {
+    "bench-review-c0a-three-1538-deadline-census.ndjson": "0cb2ab41a57bc17129375a7a16935f709083e08007b253d5e3da08373e234a10",
+    "bench-review-c0a-three-1538-decision-samples.ndjson": "cf1a1cf3f5572134ad6bc472a220da25fa7e1dcb3458c0d18daa5c5358435ef0",
+    "bench-review-c0a-three-1538-formation.ndjson": "10f710c5e967de5736bfa532db425005871c14caae8f83d8e00ac18bd5443f36",
+    "bench-review-c0a-three-1538-node1.log.gz": "09a326a476c99f303aa1dce9b939d18d73f4bf7ecd8a964379abf9bd89314e56",
+    "bench-review-c0a-three-1538-node2.log.gz": "39f313950d8f9bd34e875fc3e6ffc9b125d1ee5f9bf41836c4ed4a13c4cfa741",
+    "bench-review-c0a-three-1538-node3-restart.log.gz": "e5888449061c5bd0fc74600c1f468b773a3b3e101f36e8447de8bc2de6a1b7ea",
+    "bench-review-c0a-three-1538-node3.log.gz": "1595b37cd8fc8723b46705afe28285c4cbdaa05ee39b8c9d002035005b84c817",
+    "bench-review-c0a-three-1538-raw.ndjson": "bffc40aa3269ceb1d977f7e278fe8f6c71ba32a976150d512a4d16c463baa448"
+  }
+}

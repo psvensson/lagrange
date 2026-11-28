@@ -10,6 +10,7 @@ import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {
   LOCKING_READ_PARTITION_OP,
   LOCKING_READ_RESERVATION_TYPE,
+  normalizePkScalar,
 } from './partition-locking-read-command-constants.js';
 
 const DIGEST_ALGORITHM = 'sha256';
@@ -65,7 +66,7 @@ function normalizeAcquirePayload(input) {
     op: LOCKING_READ_PARTITION_OP.ACQUIRE,
     partitionId: input.partitionId,
     tableName: input.tableName,
-    pkValues: [...input.pkValues],
+    pkValues: input.pkValues.map(normalizePkScalar),
     rowKey: isNonEmptyString(input.rowKey) ? input.rowKey : null,
     transactionId: input.transactionId,
     sessionId: isNonEmptyString(input.sessionId) ? input.sessionId : null,

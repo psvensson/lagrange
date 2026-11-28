@@ -1,0 +1,50 @@
+{
+  "campaignId": "bench-review-owed-three-1929",
+  "sourceCommit": "a723f28f16ac39c760da5d48cdd0706a931a3246",
+  "imageRepoDigest": "lagrange@sha256:b7aaa69ca286c7d8bde55c6c046d1cbea6e63f547b631ba9d853df9e82ec052c",
+  "physicalHosts": [
+    "192.168.86.34",
+    "192.168.86.41",
+    "192.168.86.32"
+  ],
+  "formationBudgetSeconds": 240,
+  "deadline": "2026-11-26T19:36:42.014Z",
+  "lastCompleteCensusAt": "2026-11-26T19:36:36.989Z",
+  "systemPartitions": 46,
+  "belowRf3AtCensus": 5,
+  "attempted": [
+    {
+      "runId": "bench-review-owed-three-1929-r001",
+      "claimKey": "lagrange/scenarioA/smoke/5/1",
+      "targetId": "lagrange",
+      "state": "product-failure",
+      "failureCode": "readiness_exhausted",
+      "closureComplete": true
+    }
+  ],
+  "exitCode": 1,
+  "admissionOutcome": "failed",
+  "observedParticipantReleases": {
+    "count": 89,
+    "medianMs": 913,
+    "p95Ms": 5731,
+    "maxMs": 12820
+  },
+  "evidenceSha256": {
+    "bench-review-owed-three-1929-deadline-census.ndjson": "a68294bb4e4f640b25acebb0e629365310150fb9b9a2e6e84eecadbb34e0efd7",
+    "bench-review-owed-three-1929-decision-samples.ndjson": "8548b7d64ee08522bd2f3fb24689c8d76568ce35739693502d629b64b0a0ee4e",
+    "bench-review-owed-three-1929-formation.ndjson": "c454443968fcb6da2dc748eb089c6c8b5b65c5744eeed1830284925ed10169ff",
+    "bench-review-owed-three-1929-node1-tcp.ndjson.gz": "049ab2a09718a3016a07202ebe61466d2547cdefba2f0862a4feb73a0822f82f",
+    "bench-review-owed-three-1929-node1.log.gz": "ecdeecbb4adf6526f8e4951c3f151d7b9b85f2d36cc09420cd364dc04731438f",
+    "bench-review-owed-three-1929-node2-tcp.ndjson.gz": "91898c760eaa8c5cd7e208d20535d720b14c04a681f562b8c83f71585317d362",
+    "bench-review-owed-three-1929-node2.log.gz": "b5336e8b75519af8808c49f612e3a0326a0d3ffb3349544bd4890c444ff33574",
+    "bench-review-owed-three-1929-node3-tcp.ndjson.gz": "0a2ecaa67a412534f04059ceda7b98d152ab7fc1a9e44a023861c423efd66415",
+    "bench-review-owed-three-1929-node3.log.gz": "bad8430afb3bcc1af87fa2ffe7a7f3594f60505a8592174dbee149c8d37141cb",
+    "bench-review-owed-three-1929-raw.ndjson": "38c9dee40946b745610affcf19615d5f5a2a4ed548eb8f41d4de99623e274e63",
+    "comparative-campaign-bench-review-owed-three-1929.json": "331eebee193fa4025e275954e7cde748ed777e33fa4fd0566150ce18c9f42420",
+    "partition-admission.md": "f6726c3d0bb82b3add17b2a95f6fc7882518bc3540e3d2c4bc87dd02a096a5b5",
+    "partition-waits.json": "9ed3a7211c002311cb0ef062ee9276beeca8272dba8a9adc4fe5032ddc975cc4",
+    "partition-waits.md": "b9acfc97110301f1cf02eb4c6ddbe2b9b256d556a0609b08f2150326c39e892e",
+    "stage-results.txt": "9ba15dd98fdb5ac3a176c4e2df2e08ed9d2d2eec4a3809a81573d2dca0827295"
+  }
+}

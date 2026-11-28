@@ -61,12 +61,13 @@ function roleOf(status) {
 // {successor: NAMED, replicaIdentity} resolved to the raft id the replica's
 // registry reserved for it, {successor: MOST_CAUGHT_UP} as it is, or the
 // refusal naming how the request missed the canonical shape.
-function normalizedTransferRequest(request, registry) {
+function normalizedTransferRequest(request, registry, admitExecution) {
   const successor = request?.successor;
   if (successor === RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP) {
     return {command: deepFreeze({successor})};
   }
-  if (successor !== RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED) {
+  const sourceNamed = successor === RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.SOURCE_NAMED;
+  if (!sourceNamed && successor !== RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED) {
     return {refusal: transferRefusal(RUNTIME_REASON.UNKNOWN_SUCCESSOR)};
   }
   if (typeof request.replicaIdentity !== 'string' ||
@@ -76,6 +77,17 @@ function normalizedTransferRequest(request, registry) {
   const target = registry.raftPeerIdOf(request.replicaIdentity);
   if (target === null) {
     return {refusal: transferRefusal(RUNTIME_REASON.TARGET_UNRESERVED)};
+  }
+  if (sourceNamed) {
+    const {term, configurationKey, membershipGenerationIndex, lifecycleIncarnation, runtimeGeneration} = request;
+    if (!Number.isSafeInteger(term) || term <= 0 || !Number.isSafeInteger(membershipGenerationIndex) ||
+        membershipGenerationIndex < 0 || !Number.isSafeInteger(runtimeGeneration) || runtimeGeneration < 0 ||
+        typeof lifecycleIncarnation !== 'string' || !lifecycleIncarnation ||
+        typeof configurationKey !== 'string' || !configurationKey || typeof admitExecution !== 'function') {
+      return {refusal: transferRefusal(RUNTIME_REASON.SOURCE_CHANGED)};
+    }
+    return {command: Object.freeze({successor, target: String(target), term, configurationKey,
+      membershipGenerationIndex, lifecycleIncarnation, runtimeGeneration, admitExecution})};
   }
   return {command: deepFreeze({successor, target: String(target)})};
 }
@@ -141,6 +153,23 @@ function decideMostCaughtUpTransfer({status, confState}, peerId) {
  *   step's Ready drained.
  */
 function decideLeadershipTransfer(peerId, observation, command) {
+  if (command.successor === RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.SOURCE_NAMED) {
+    const {status, confState} = observation;
+    if (roleOf(status) !== ROLE_LEADER || String(status.lead) !== String(peerId) ||
+        command.target === String(peerId) || Number(status.term) !== command.term ||
+        observation.configurationKey !== command.configurationKey ||
+        observation.membershipGenerationIndex !== command.membershipGenerationIndex ||
+        observation.lifecycleIncarnation !== command.lifecycleIncarnation ||
+        observation.runtimeGeneration !== command.runtimeGeneration ||
+        BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied) ||
+        confState.votersOutgoing.length > 0 || !observation.participation.gateOpen) {
+      return {answer: transferRefusal(RUNTIME_REASON.SOURCE_CHANGED, true)};
+    }
+    if (!confState.voters.includes(command.target) || confState.learnersNext.includes(command.target)) {
+      return {answer: transferRefusal(RUNTIME_REASON.TARGET_NOT_VOTER)};
+    }
+    return decideNamedTransfer(observation, command.target);
+  }
   return command.successor === RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED ?
     decideNamedTransfer(observation, command.target) :
     decideMostCaughtUpTransfer(observation, peerId);
@@ -182,4 +211,5 @@ export {
   droppedByLeadershipTransfer,
   leadershipTransferInProgress,
   normalizedTransferRequest,
+  transferRefusal,
 };

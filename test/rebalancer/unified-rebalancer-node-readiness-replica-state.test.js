@@ -693,9 +693,9 @@ test('UnifiedRebalancer - Node Management', async (t) => {
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
       nodes: [
-        {node_id: 'node-1', status: NodeStatus.ACTIVE, cpu_usage_percent: 80},
-        {node_id: 'node-2', status: NodeStatus.ACTIVE, cpu_usage_percent: 20},
-        {node_id: 'node-3', status: NodeStatus.ACTIVE, cpu_usage_percent: 50},
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, host_cpu_utilization_percent: 80},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE, host_cpu_utilization_percent: 20},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE, host_cpu_utilization_percent: 50},
       ],
     });
 

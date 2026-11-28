@@ -70,7 +70,8 @@ function received(delivered) {
 function observe(index, delivered) {
   const {shape, events} = received(delivered);
   return {index, shape, keys: events.map((event) => event.eventKey),
-    ids: events.map((event) => event.data.id), values: events.map((event) => event.data.value),
+    ids: events.map((event) => event.data.group_id),
+    values: events.map((event) => event.data.representative_node_id),
     positions: events.map((event) => [event.sourceLogIndex, event.sourceOrdinal]),
     digest: cdcCommitWaitIdentity(events)};
 }
@@ -236,9 +237,11 @@ test('R1-3 a partially covered vector is presented again unchanged, the covered 
 test('R1-5 guard: a 2 MiB row among small rows is handed whole and acknowledged; nothing is ' +
   'refused, split or dropped', async (t) => {
   const f = await fixture(t, {rows: ['s1', 's2'], subscribers: 1, statements: [
-    {entryId: 'progress-large', sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`,
+    {entryId: 'progress-large',
+      sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`,
       params: ['large', 'x'.repeat(LARGE_ROW_BYTES)]},
-    {entryId: 'progress-s3', sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`,
+    {entryId: 'progress-s3',
+      sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`,
       params: ['s3', 'small']},
   ]});
   const expected = ledgerOrder(f);
@@ -258,7 +261,7 @@ test('R1-5 a row above the shipping byte bound ships alone between vectors and i
     `the lane names its shipping byte bound: PARTITION_CDC_OBLIGATION_BOUND.SHIP_MAX_BYTES = ${
       byteBound}`);
   const insert = (id, value) => ({entryId: `progress-${id}`,
-    sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [id, value]});
+    sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`, params: [id, value]});
   const f = await fixture(t, {rows: ['s1', 's2'], subscribers: 1, statements: [
     insert('over', 'x'.repeat(byteBound)), insert('s3', 'small'), insert('s4', 'small')]});
   const expected = ledgerOrder(f);
@@ -273,12 +276,12 @@ test('R1-5 a row above the shipping byte bound ships alone between vectors and i
 test('counterexample: several versions of one key in one vector keep their order, values and ' +
   'distinct occurrence identities', async (t) => {
   const statement = (entryId, sql, params, wallMs) => ({entryId, sql, params, wallMs});
-  const update = `UPDATE ${TABLE} SET value = ? WHERE id = ?`;
+  const update = `UPDATE ${TABLE} SET representative_node_id = ? WHERE group_id = ?`;
   const f = await fixture(t, {rows: [], subscribers: 1, statements: [
-    statement('k-insert', `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, ['K', 'v1'], 1000),
+    statement('k-insert', `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`, ['K', 'v1'], 1000),
     statement('k-update-2', update, ['v2', 'K'], 1001),
     statement('k-update-3', update, ['v3', 'K'], 1002),
-    statement('other-insert', `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`,
+    statement('other-insert', `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`,
       ['other', 'o1'], 1003),
   ]});
   const expected = ledgerOrder(f);

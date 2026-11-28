@@ -1,3 +1,5 @@
+import {issueSplitSiblingPlan} from '../../src/partition/managed-split-sibling-plan.js';
+import {openDescriptorRecordStore, parsePartitionTransition, readAuthoritativelyFrom} from './workflow-record-sqlite-world.js';
 import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -8,9 +10,6 @@ import {
 import {
   QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
-import {
-  PARTICIPANT_ACK_FIELD,
-} from '../../src/workflow/workflow-constants.js';
 import {
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
@@ -177,32 +176,89 @@ test('split transition persistence fails closed when no CDC bridge is ' +
   );
 });
 
-test('split sibling promotion refuses a zero-row partition epoch ' +
-  'update', async (t) => {
-  const {workflow} = buildWorkflow({
-    cdcIntegrationService: {
-      async updateSystemTableRow() {
-        // Stale where-clause / vanished descriptor: no row changed.
-        return {success: true, affectedRows: 0};
-      },
-      async insertSystemTableRow() {
-        return {success: true};
-      },
-      async deleteSystemTableRow() {
-        return {success: true};
-      },
-    },
-  });
+async function openCutoverWorld(t) {
+  const store = await openDescriptorRecordStore(t, {partitions: [
+    {partition_id: 'users-p1'}, {partition_id: 'users-p-left', partition_version: 2},
+    {partition_id: 'users-p-right', partition_version: 2}, {partition_id: FIXTURE_SIBLING_PARTITION_ID},
+  ]});
+  const {workflow} = buildWorkflow({topologyAdapter: null,
+    cdcIntegrationService: store.cdcFor('owner'), getTableInfo: store.tablesRow,
+    listTableInfos: () => [store.tablesRow()], getPartitionInfo: store.partitionRow,
+    listTablePartitionRows: () => store.partitionIds().map(store.partitionRow), parsePartitionTransition});
+  readAuthoritativelyFrom(workflow, store);
+  const record = buildCutoverWorkflowRecord('split-cutover-partition-count');
+  const live = await registerFromRecordAsRead(workflow, record);
+  for (const status of [SPLIT_ACK_STATUS.SNAPSHOT_STARTED, SPLIT_ACK_STATUS.CATCHUP_READY]) {
+    const ack = await workflow.workflowCoordinator.acknowledgeParticipant(record.workflowId, {
+      participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION, status, fenceToken: live.fenceToken});
+    if (ack.result !== 'accepted') throw new Error(JSON.stringify(ack));
+  }
+  return {workflow, store, workflowId: record.workflowId};
+}
 
-  await t.rejects(
-    workflow.promoteSiblingPartitionVersion(
-      FIXTURE_SIBLING_PARTITION_ID,
-      2,
-    ),
-    /did not take effect/,
-    'a sibling promotion that lands zero rows must throw — carrying a ' +
-    'sibling forward on a phantom write strands its key range',
-  );
+test('recovered split cannot promote an out-of-plan sibling or epoch', async (t) => {
+  const {workflow, store, workflowId} = await openCutoverWorld(t);
+  const subject = {partitionId: FIXTURE_SIBLING_PARTITION_ID, priorVersion: 1, priorAttempt: 0, targetVersion: 2};
+  const invalid = [{...subject, partitionId: 'users-p1'}, {...subject, partitionId: 'users-p-left'},
+    {...subject, targetVersion: 3}, {...subject, priorVersion: 2, targetVersion: 3}, {...subject, action: 'promoteSibling'}];
+  for (const forged of invalid) {
+    await workflow.workflowCoordinator.updateWorkflow(workflowId, (current) => ({...current,
+      metadata: {...current.metadata, splitIssuedSiblings: [forged]}}));
+    workflow.workflowCoordinator.removeWorkflow(workflowId);
+    workflow.recoverWorkflowState(workflowId);
+    await t.rejects(workflow.applySplitCutoverIfReady(workflowId), {code: 'split-sibling-preimage-invalid'});
+  }
+  // The fresh+planned ID union must also reject a poisoned unissued plan.
+  await workflow.workflowCoordinator.updateWorkflow(workflowId, (current) => ({...current,
+    metadata: {...current.metadata, splitIssuedSiblings: [], siblingPartitionIds: ['users-p1']}}));
+  await t.rejects(workflow.applySplitCutoverIfReady(workflowId), {code: 'split-sibling-preimage-invalid'});
+  const updated = await workflow.workflowCoordinator.updateWorkflow(workflowId, (current) => ({...current,
+    metadata: {...current.metadata, splitIssuedSiblings: [subject], siblingPartitionIds: [subject.partitionId]}}));
+  const asRead = {...updated, metadata: {...updated.metadata, splitIssuedSiblings: [{...subject}]}};
+  await workflow.workflowCoordinator.updateWorkflow(workflowId, (current) => ({...current,
+    metadata: {...current.metadata, splitIssuedSiblings: [{...subject, foreign: 'same known fields'}]}}));
+  await t.rejects(issueSplitSiblingPlan(workflow, asRead), {code: 'split-sibling-preimage-invalid'},
+    'the actual record acquired an unexpected property between the calculation and its CAS');
+  t.same(store.writes.filter((w) => /^UPDATE partitions /u.test(w.sql)), []);
+  t.equal(store.tablesRow().active_partition_version, 1);
+});
+
+test('cutover refuses a sibling plan extended after its first promotion', async (t) => {
+  const {workflow, store, workflowId} = await openCutoverWorld(t);
+  const promote = workflow.promoteSiblingPartitionVersion.bind(workflow);
+  const added = 'users-p4';
+  workflow.promoteSiblingPartitionVersion = async (issued, subject) => {
+    const answer = await promote(issued, subject);
+    workflow.promoteSiblingPartitionVersion = promote;
+    const {partition_id: oldId, ...row} = store.partitionRow(FIXTURE_SIBLING_PARTITION_ID);
+    await store.cdcFor('metadata').insertSystemTableRow(TABLES.PARTITIONS,
+      {...row, partition_id: added, partition_version: 1, split_descriptor_attempt: 0});
+    const extended = await issueSplitSiblingPlan(workflow, issued);
+    t.same(extended.metadata.splitIssuedSiblings.map((entry) => entry.partitionId), [oldId, added]);
+    return answer;
+  };
+  t.equal(await workflow.applySplitCutoverIfReady(workflowId), false,
+    'the old pass cannot publish its shorter issued set');
+  t.equal(store.tablesRow().active_partition_version, 1);
+  t.equal(store.partitionRow(added).partition_version, 1);
+  t.equal(await workflow.applySplitCutoverIfReady(workflowId), true);
+  t.equal(store.partitionRow(added).partition_version, 2);
+  t.equal(store.tablesRow().partition_count, 4);
+});
+
+test('split sibling promotion refuses a zero-row partition epoch update', async (t) => {
+  const {workflow, store, workflowId} = await openCutoverWorld(t);
+  const promote = workflow.promoteSiblingPartitionVersion.bind(workflow);
+  let changed = false;
+  workflow.promoteSiblingPartitionVersion = async (issued, subject) => {
+    t.same(store.metadata().splitIssuedSiblings, [subject]);
+    changed = store.db.prepare('DELETE FROM partitions WHERE partition_id = ?')
+      .run(subject.partitionId).changes === 1;
+    return promote(issued, subject);
+  };
+  await t.rejects(workflow.applySplitCutoverIfReady(workflowId), {code: 'split_descriptor_ownership_unresolved'});
+  t.ok(changed, 'the destination preimage disappeared after TABLES issued the subject');
+  t.equal(store.tablesRow().active_partition_version, 1);
 });
 
 test('split terminal transition clear refuses a zero-row tables ' +
@@ -263,105 +319,19 @@ test('split FAILED transition withdraws the pending partition epoch ' +
 
 test('split cutover sets partition_count to target + sibling count ' +
   'and promotes the epoch', async (t) => {
-  const updateCalls = [];
-  const partitionRows = [
-    {partition_id: 'users-p1', partition_version: 1, state: 'NORMAL'},
-    {partition_id: 'users-p-left', partition_version: 2, state: 'NORMAL'},
-    {partition_id: 'users-p-right', partition_version: 2, state: 'NORMAL'},
-    {
-      partition_id: FIXTURE_SIBLING_PARTITION_ID,
-      partition_version: 1,
-      state: 'NORMAL',
-    },
-  ];
-  // No topologyAdapter: the workflow's authoritative partitions view is
-  // the plain option, avoiding the cache-backed adapter binding.
-  const {workflow} = buildWorkflow({
-    updateCalls,
-    topologyAdapter: null,
-    listTablePartitionRows: (tableId) =>
-      partitionRows.filter((row) => row.partition_id && tableId),
-  });
-  const record = {
-    ...buildCutoverWorkflowRecord('split-cutover-partition-count'),
-    participants: new Map(),
-  };
-  await registerFromRecordAsRead(workflow, record);
-  const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
-    record.workflowId,
-  );
-  // The source ack carries the workflow fence epoch it was started
-  // under (stamped by PartitionService in production); snapshot_started
-  // then catchup_ready follows the participant transition graph.
-  await workflow.workflowCoordinator.acknowledgeParticipant(
-    record.workflowId,
-    {
-      [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
-        SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
-      [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.SNAPSHOT_STARTED,
-      [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]:
-        ownershipClaim.workflow.fenceToken,
-      [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 1000,
-    },
-  );
-  await workflow.workflowCoordinator.acknowledgeParticipant(
-    record.workflowId,
-    {
-      [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
-        SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
-      [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.CATCHUP_READY,
-      [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]:
-        ownershipClaim.workflow.fenceToken,
-      [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 1000,
-    },
-  );
-
-  const cutoverApplied = await workflow.applySplitCutoverIfReady(
-    record.workflowId,
-  );
+  const {workflow, store, workflowId} = await openCutoverWorld(t);
+  const cutoverApplied = await workflow.applySplitCutoverIfReady(workflowId);
   t.equal(cutoverApplied, true, 'the cutover must apply');
-
-  const siblingPromotion = updateCalls.find((entry) =>
-    entry.tableName === TABLES.PARTITIONS &&
-    (entry.whereClause?.partition_id === FIXTURE_SIBLING_PARTITION_ID ||
-      entry.whereClause?.partitionId === FIXTURE_SIBLING_PARTITION_ID),
-  );
-  t.ok(
-    siblingPromotion,
-    'the sibling descriptor must be carried forward at cutover',
-  );
-  t.equal(
-    siblingPromotion.data.partition_version,
-    2,
-    'the sibling must be promoted into the split target epoch',
-  );
-
-  const cutoverUpdate = updateCalls.find((entry) =>
-    entry.tableName === TABLES.TABLES &&
-    entry.data.partition_transition_state ===
-      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-  );
-  t.ok(cutoverUpdate, 'the cutover transition must persist to tables');
-  t.equal(
-    cutoverUpdate.data.partition_count,
-    3,
-    'partition_count = targetIds (2) + carried-forward siblings (1) = ' +
-    'oldCount + 1',
-  );
-  t.equal(
-    cutoverUpdate.data.active_partition_version,
-    2,
-    'the cutover must promote the pending epoch to active',
-  );
-  t.equal(
-    cutoverUpdate.data.pending_partition_version,
-    null,
-    'the cutover must clear the pending epoch',
-  );
+  t.equal(store.partitionRow(FIXTURE_SIBLING_PARTITION_ID).partition_version, 2,
+    'the committed sibling descriptor was carried forward');
+  const cutover = store.tablesRow();
+  t.equal(cutover.partition_transition_state, PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE);
+  t.equal(cutover.partition_count, 3, 'two targets plus the carried-forward sibling');
+  t.equal(cutover.active_partition_version, 2, 'cutover promotes the pending epoch');
+  t.equal(cutover.pending_partition_version, null, 'cutover clears the pending epoch');
 });
 
-test('ensureChildPartitionMetadata removes an orphaned single child ' +
-  'from a crashed attempt and re-inserts both children', async (t) => {
+test('split retry adopts a matching child and inserts only its missing peer', async (t) => {
   const partitionInfos = {
     'users-p-left': {
       partition_id: 'users-p-left',
@@ -370,30 +340,36 @@ test('ensureChildPartitionMetadata removes an orphaned single child ' +
       partition_key_start: null,
       partition_key_end: 'm',
       partition_version: 2,
+      partition_key_type: 'TEXT',
+      split_descriptor_attempt: 4,
       replica_count: 3,
       size_bytes: 0,
       state: 'NORMAL',
     },
   };
-  const deleteCalls = [];
+  let cachedLeft;
+  const acquisitions = [];
   const insertCalls = [];
   const {workflow} = buildWorkflow({
     transactionCoordinator: createTransactionCoordinator(),
-    getPartitionInfo: (partitionId) => partitionInfos[partitionId] || null,
+    getPartitionInfo: (partitionId) => partitionId === 'users-p-left' && cachedLeft ?
+      cachedLeft : partitionInfos[partitionId] || null,
     cdcIntegrationService: {
-      async updateSystemTableRow() {
+      async updateSystemTableRow(_tableName, where, data) {
+        acquisitions.push({where, data});
+        const row = partitionInfos[where.partition_id];
+        if (!Object.entries(where).every(([field, value]) => row[field] === value)) {
+          return {success: true, affectedRows: 0};
+        }
+        Object.assign(row, data);
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow(_tableName, row) {
         insertCalls.push(row.partition_id);
         partitionInfos[row.partition_id] = {...row};
-        return {success: true};
-      },
-      async deleteSystemTableRow(_tableName, whereClause) {
-        deleteCalls.push(whereClause.partition_id);
-        delete partitionInfos[whereClause.partition_id];
         return {success: true, affectedRows: 1};
       },
+
     },
   });
 
@@ -404,6 +380,8 @@ test('ensureChildPartitionMetadata removes an orphaned single child ' +
     partition_key_start: keyStart,
     partition_key_end: keyEnd,
     partition_version: 2,
+    partition_key_type: 'TEXT',
+    split_descriptor_attempt: 8,
     replica_count: 3,
     size_bytes: 0,
     state: 'NORMAL',
@@ -414,17 +392,27 @@ test('ensureChildPartitionMetadata removes an orphaned single child ' +
     rightPartitionMetadata: childRow('users-p-right', 'm', null),
   });
 
-  t.same(
-    deleteCalls,
-    ['users-p-left'],
-    'the orphaned survivor must be deleted, not wedged behind a ' +
-    'terminal inconsistency error',
-  );
-  t.same(
-    insertCalls.sort(),
-    ['users-p-left', 'users-p-right'],
-    'both children must be re-inserted after the orphan cleanup',
-  );
+  t.same(acquisitions, [{
+    where: {table_id: 'tbl-users', table_name: 'users', partition_key_start: null,
+      partition_key_end: 'm', partition_key_type: 'TEXT', partition_version: 2, split_descriptor_attempt: 4,
+      partition_id: 'users-p-left'},
+    data: {split_descriptor_attempt: 8},
+  }]);
+  t.same(insertCalls, ['users-p-right']);
+  t.equal(partitionInfos['users-p-left'].split_descriptor_attempt, 8);
+  await t.rejects(workflow.ensureChildPartitionMetadata({
+    leftPartitionMetadata: {...childRow('users-p-left', null, 'm'), split_descriptor_attempt: 4},
+    rightPartitionMetadata: {...childRow('users-p-right', 'm', null), split_descriptor_attempt: 4},
+  }), {code: 'split_child_descriptor_owner_invalid'});
+  t.equal(acquisitions.length, 1, 'an old attempt cannot acquire the successor row');
+  cachedLeft = {...partitionInfos['users-p-left']};
+  partitionInfos['users-p-left'].partition_key_end = 'z';
+  await t.rejects(workflow.ensureChildPartitionMetadata({
+    leftPartitionMetadata: childRow('users-p-left', null, 'm'),
+    rightPartitionMetadata: childRow('users-p-right', 'm', null),
+  }), {code: 'split_child_descriptor_write_refused'});
+  t.equal(partitionInfos['users-p-left'].partition_key_end, 'z',
+    'a matching cached attempt cannot authorize acquisition of a changed durable range');
   t.ok(
     partitionInfos['users-p-left'] && partitionInfos['users-p-right'],
     'both child rows must exist after recovery',

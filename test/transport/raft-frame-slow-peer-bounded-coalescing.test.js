@@ -22,12 +22,14 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 
+import {socketEvidence} from '../../src/transport/message-router-socket-evidence.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   CONSENSUS_SEND_REFUSAL,
   ROUTER_MESSAGE_TYPE,
 } from '../../src/constants/transport.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {RAFT_RS_MESSAGE_TYPE as RAFT} from '../../src/raft/raft-rs-ingress-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {sendRaftEnvelope, stepRaftEnvelope} from '../../src/raft/raft-packet-utils.js';
 import {RAFT_RS_GROUP_TUNING} from '../../src/raft/raft-rs-group-constants.js';
@@ -154,8 +156,10 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
         return null;
       });
     }
+    let writtenFrame;
     const wsToB = createFakeSocket({
       onSend: (raw) => {
+        writtenFrame = raw;
         receiver.receiveConsensusEnvelope(JSON.parse(raw), null);
       },
     });
@@ -170,11 +174,12 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
       ['g3', 2],
     ];
     let settledBeforeFlush = 0;
+    const context = 'δ "Raft"';
     const deliveries = schedule.map(([groupId, seq]) => {
-      const promise = Promise.resolve(sender.deliver(
-        `node-b/partition/${groupId}-r2`,
-        buildEnvelope(groupId, seq),
-      )).then((outcome) => {
+      const envelope = buildEnvelope(groupId, seq, context);
+      const submitted = sender.deliver(`node-b/partition/${groupId}-r2`, envelope);
+      envelope.message.context = 'changed after admission';
+      const promise = Promise.resolve(submitted).then((outcome) => {
         if (wsToB.sentFrames.length === 0) {
           settledBeforeFlush += 1;
         }
@@ -189,7 +194,12 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
     assert.ok(sender.getStats().consensusDelivery.pendingBatchBytes > 0,
       'pending application batch bytes are tracked before flush');
 
+    const admittedBytes = sender.getStats().consensusDelivery.pendingBatchBytes;
     const outcomes = await Promise.all(deliveries);
+    assert.equal(Buffer.byteLength(writtenFrame), admittedBytes,
+      'UTF-8 bytes sent match the reservation made before the flush');
+    const evidence = socketEvidence(sender, 'node-b', sender.nodeConnections.get('node-b'), wsToB);
+    assert.deepEqual(evidence.applicationSendReturned.consensus, {frames: 1, bytes: admittedBytes});
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.equal(settledBeforeFlush, 0,
@@ -212,13 +222,176 @@ test('(c1-batch) envelopes to one remote peer in the same turn coalesce ' +
     for (const groupId of ['g1', 'g2', 'g3']) {
       const payloads = receivedByGroup.get(groupId);
       assert.deepEqual(payloads, [
-        buildEnvelope(groupId, 1),
-        buildEnvelope(groupId, 2),
+        buildEnvelope(groupId, 1, context),
+        buildEnvelope(groupId, 2, context),
       ], `group ${groupId} received its envelopes unchanged and in FIFO order`);
     }
   } finally {
     await sender.shutdown();
     await receiver.shutdown();
+    resetRouterProcess();
+  }
+});
+
+test('each sender encodes one canonical wrapper across separate remote flushes', async (t) => {
+  configureRouterProcess();
+  const stringify = JSON.stringify;
+  const wrapperEncodings = [];
+  t.mock.method(JSON, 'stringify', (...args) => {
+    const [value] = args;
+    if (value?.type === ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE && value.envelopes?.length === 0) {
+      wrapperEncodings.push(value.sourceNodeId);
+    }
+    return stringify(...args);
+  });
+  const routers = [];
+  const senderIds = ['node-"δ"', 'node-\\雪'];
+  try {
+    for (const nodeId of senderIds) {
+      const router = new MessageRouter({nodeId, bootIncarnation: TEST_BOOT_INCARNATION});
+      routers.push(router);
+      const rawFrames = [];
+      attachConnectedPeer(router, 'peer', createFakeSocket({onSend: (raw) => rawFrames.push(raw)}));
+      const targetAddress = 'peer/partition/g-r2';
+      for (let seq = 0; seq < 24; seq += 1) {
+        const payload = buildEnvelope('g', seq, 'π');
+        const expected = stringify({type: ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE,
+          sourceNodeId: nodeId, envelopes: [{targetAddress, payload}]});
+        const pending = router.deliver(targetAddress, payload);
+        assert.equal(router.getStats().consensusDelivery.pendingBatchBytes, Buffer.byteLength(expected));
+        assert.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await pending)));
+        assert.equal(rawFrames.length, seq + 1);
+        assert.equal(rawFrames[seq], expected);
+      }
+    }
+    assert.deepEqual(wrapperEncodings, senderIds);
+  } finally {
+    await Promise.all(routers.map((router) => router.shutdown()));
+    resetRouterProcess();
+  }
+});
+
+test('successful socket flushes report admitted Raft item families and encoded entry bytes', async () => {
+  configureRouterProcess();
+  const router = new MessageRouter({nodeId: 'sender', bootIncarnation: TEST_BOOT_INCARNATION});
+  try {
+    const targetAddress = 'peer/partition/g-r2';
+    let refuseWrite = false;
+    const socket = createFakeSocket({onSend() {
+      if (refuseWrite) throw new Error('closed during send');
+    }});
+    const connection = attachConnectedPeer(router, 'peer', socket);
+    const evidence = () => socketEvidence(router, 'peer', connection, socket).consensusBatchSendReturned;
+    const cases = [[RAFT.HEARTBEAT, 'heartbeat'], [RAFT.HEARTBEAT_RESPONSE, 'heartbeatResponse'],
+      [RAFT.APPEND, 'append'], [RAFT.APPEND_RESPONSE, 'appendResponse'],
+      [RAFT.REQUEST_PRE_VOTE, 'election'], [RAFT.REQUEST_VOTE_RESPONSE, 'election'], [991, 'other']];
+    const expected = {};
+    const deliveries = [];
+    for (const [type, family] of cases) {
+      const payload = buildEnvelope('g', type, 'α');
+      payload.message.msgType = type;
+      const slot = expected[family] ??= {items: 0, entryBytes: 0};
+      slot.items += 1;
+      slot.entryBytes += Buffer.byteLength(JSON.stringify({targetAddress, payload}));
+      const delivery = router.deliver(targetAddress, payload);
+      payload.message.msgType = RAFT.READ_INDEX;
+      if (type === RAFT.HEARTBEAT) await delivery;
+      else deliveries.push(delivery);
+    }
+    await Promise.all(deliveries);
+    const counts = evidence();
+    assert.deepEqual(counts, {singleItemFrames: 1, multiItemFrames: 1, items: cases.length, families: expected});
+    assert.deepEqual(socket.sentFrames.map((frame) => frame.envelopes.length), [1, cases.length - 1]);
+    refuseWrite = true;
+    const failed = await router.deliver(targetAddress, buildEnvelope('g', 99));
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(failed)), false);
+    assert.deepEqual(evidence(), counts);
+  } finally {
+    await router.shutdown();
+    resetRouterProcess();
+  }
+});
+
+test('independent check callbacks share one heartbeat flush at the first eligible check phase', async () => {
+  configureRouterProcess();
+  const router = new MessageRouter({nodeId: 'sender', bootIncarnation: TEST_BOOT_INCARNATION});
+  try {
+    const socket = createFakeSocket();
+    attachConnectedPeer(router, 'peer', socket);
+    const target = 'peer/partition/g-r2';
+    const deliveries = [];
+    const first = new Promise((resolve) => setImmediate(() => {
+      deliveries.push(router.deliver(target, buildEnvelope('g1', 1)));
+      // Queued behind the first flush, ahead of any flush rearmed by the next producer.
+      setImmediate(() => resolve(socket.sentFrames.map((frame) => frame.envelopes.length)));
+    }));
+    const second = new Promise((resolve) => setImmediate(() => {
+      const response = buildEnvelope('g2', 2);
+      response.message.msgType = RAFT.HEARTBEAT_RESPONSE;
+      deliveries.push(router.deliver(target, response));
+      resolve(socket.sentFrames.length);
+    }));
+    assert.equal(await second, 0, 'first producer left the event loop free for the second');
+    assert.deepEqual(await first, [2], 'second producer did not extend the first deadline');
+    const results = await Promise.all(deliveries);
+    assert.ok(results.every((result) => isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result))));
+  } finally {
+    await router.shutdown();
+    resetRouterProcess();
+  }
+});
+
+test('urgent Raft input expedites queued heartbeat FIFO and receipt settlement', async () => {
+  configureRouterProcess();
+  const router = new MessageRouter({nodeId: 'sender', bootIncarnation: TEST_BOOT_INCARNATION});
+  try {
+    const socket = createFakeSocket();
+    attachConnectedPeer(router, 'peer', socket);
+    const target = 'peer/partition/g-r2';
+    for (const [type, context] of [[RAFT.APPEND], [RAFT.APPEND_RESPONSE], [RAFT.REQUEST_VOTE],
+      [RAFT.TIMEOUT_NOW], [RAFT.HEARTBEAT, 'YQ=='], [RAFT.HEARTBEAT_RESPONSE, 'YQ==']]) {
+      const before = socket.sentFrames.length;
+      const receipts = [];
+      const send = (envelope) => router.deliver(target, envelope).then((result) => {
+        assert.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)));
+        receipts.push(envelope.groupId);
+      });
+      const first = send(buildEnvelope('ordinary', 1));
+      await Promise.resolve();
+      assert.equal(socket.sentFrames.length, before);
+      const urgent = buildEnvelope('urgent', 2, context);
+      urgent.message.msgType = type;
+      const second = send(urgent);
+      assert.deepEqual(receipts, []);
+      await Promise.resolve();
+      assert.equal(socket.sentFrames.length, before + 1, 'urgent work flushes before check phase');
+      assert.deepEqual(socket.sentFrames[before].envelopes.map((entry) => entry.payload.groupId),
+        ['ordinary', 'urgent']);
+      await Promise.all([first, second]);
+      assert.deepEqual(receipts, ['ordinary', 'urgent']);
+    }
+  } finally {
+    await router.shutdown();
+    resetRouterProcess();
+  }
+});
+
+test('one synchronous burst of 129 heartbeats splits at the 64-item frame bound', async () => {
+  configureRouterProcess();
+  const router = new MessageRouter({nodeId: 'sender', bootIncarnation: TEST_BOOT_INCARNATION});
+  try {
+    const socket = createFakeSocket();
+    attachConnectedPeer(router, 'peer', socket);
+    const deliveries = Array.from({length: 129}, (_, index) =>
+      router.deliver('peer/partition/g-r2', buildEnvelope('g', index)));
+    const results = await Promise.all(deliveries);
+    assert.ok(results.every((result) => isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result))));
+    assert.deepEqual(socket.sentFrames.map((frame) => frame.envelopes.length), [64, 64, 1]);
+    const order = socket.sentFrames.flatMap((frame) => frame.envelopes.map((entry) => entry.payload.message.index));
+    assert.deepEqual(order, Array.from({length: 129}, (_, index) => String(index)));
+    assert.equal(router.getStats().consensusDelivery.pendingBatchBytes, 0);
+  } finally {
+    await router.shutdown();
     resetRouterProcess();
   }
 });
@@ -535,6 +708,13 @@ test('(c1-incarnation-fence) closing or replacing a connection incarnation ' +
       newDelivery,
       closingDelivery,
     ]);
+
+    const currentConnection = router.nodeConnections.get('peer-b');
+    const oldStats = socketEvidence(router, 'peer-b', currentConnection, wsOld);
+    const newStats = socketEvidence(router, 'peer-b', currentConnection, wsNew);
+    assert.deepEqual(oldStats.applicationSendReturned.consensus, {frames: 0, bytes: 0});
+    assert.equal(newStats.applicationSendReturned.consensus.frames, 1);
+    assert.notEqual(oldStats.attemptedSocketId, newStats.attemptedSocketId);
 
     assert.equal(
       isDeliveredTransportDeliveryOutcome(deliveryTransportOf(outOld1)),

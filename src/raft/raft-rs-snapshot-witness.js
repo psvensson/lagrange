@@ -1,3 +1,4 @@
+import {pruneCompactedStatementOutcomeEffectsIn} from '../partition/partition-mirror-effect-retention.js';
 // Durable snapshot witness and proof-gated committed-prefix compaction for
 // `RaftRsDurableStore` (SN1 / F5). Persists the folded `maxCommittedHlc`
 // witness inside `_raft_rs_snapshot.data` (canonical base64 JSON) and removes
@@ -25,7 +26,6 @@ const HLC_RADIX = 10;
 // connection's cache. putSnapshot, the one writer of that row (compaction, an
 // installed or staged snapshot, a Ready's snapshot), forgets it.
 const SNAPSHOT_INDEX_FACT = 'raft-rs-snapshot-index';
-
 function refusal(outcome) {
   return Object.freeze({outcome, changed: false});
 }
@@ -286,6 +286,7 @@ function compactRaftRsCommittedPrefix(store, groupId, options = {}) {
     });
     const deleted = sqliteConnectionState(store.db)
       .runNonApplication(RAFT_RS_SQL.DELETE_LOG_UP_TO, groupId, exactToIndex);
+    pruneCompactedStatementOutcomeEffectsIn(store.db, exactToIndex);
     return Object.freeze({
       outcome: RAFT_COMPACTION_OUTCOME.COMPACTED,
       changed: true,

@@ -450,15 +450,15 @@ async (t) => {
   ];
 
   for (const scenario of scenarios) {
-    const systemCache = {
-      getAll(tableName) {
-        if (tableName === 'sql_transactions') return [committedTxRow];
-        if (tableName === 'sql_transaction_participants') {
-          return scenario.participants;
-        }
-        return [];
-      },
-    };
+    const systemCache = createMockSystemCache([], []);
+    systemCache.applySystemTableChange('sql_transactions', 'INSERT', committedTxRow);
+    for (const participantRow of scenario.participants) {
+      systemCache.applySystemTableChange(
+        'sql_transaction_participants',
+        'INSERT',
+        participantRow,
+      );
+    }
     const recoveryGateway = createTransactionPersistenceGateway();
     t.teardown(() => recoveryGateway.db.close());
     const recoveryEngine = new SQLQueryEngine({

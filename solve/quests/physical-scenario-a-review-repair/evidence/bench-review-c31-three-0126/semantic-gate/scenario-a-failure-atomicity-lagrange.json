@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "lagrange-failure-atomicity-v1",
+  "system": "lagrange",
+  "caseId": "scenario-a-failure-atomicity-v1",
+  "caseSha256": "d1af7daee8822e24a296efe1b4dfd69726ac59d3206fa3dff075fd0de29824d7",
+  "datasetSha256": "c910f54f6c8fcaa11da7a22cebe9da838d7b2017cee58cfd4078a5624df72769",
+  "executionPath": "public-sql",
+  "protocol": "postgresql",
+  "lockingReadMode": "snapshot-write-conflict",
+  "serviceEndpoint": null,
+  "admissionSha256": null,
+  "runtimePreflight": null,
+  "binding": {
+    "campaignId": "bench-review-c31-three-0126",
+    "containerId": "97b13609e3e88d0277b8dddcb6e299b0fa634b078a07bb3489c43f17a883bea0",
+    "imageId": "sha256:baa0e43c93c39ae616708939ad3817de4a159fc82062f8c0dda1a67ca4cb7b1a",
+    "endpoint": "192.168.86.34:5432"
+  },
+  "operation": {
+    "kind": "new_order",
+    "phase": "failure",
+    "workerId": 1,
+    "sequence": 1,
+    "warehouseId": 1,
+    "districtId": 1,
+    "customerId": 1,
+    "lines": [
+      {
+        "itemId": 1,
+        "quantity": 3,
+        "supplyWarehouseId": 1
+      },
+      {
+        "itemId": 16,
+        "quantity": 4,
+        "supplyWarehouseId": 1
+      }
+    ]
+  },
+  "retryEvidence": {
+    "policyId": "scenario-a-retry-v2",
+    "attempts": 1,
+    "retries": 0,
+    "retryDelayMs": 0,
+    "failures": [
+      {
+        "attempt": 1,
+        "retryable": false,
+        "outcome": "terminal_failure",
+        "sqlState": null
+      }
+    ],
+    "intendedIssueTimeMs": 1795739609771,
+    "completedAtMs": 1795739610787,
+    "requestClockElapsedMs": 1016
+  },
+  "observation": {
+    "terminalFailureObserved": true,
+    "errorMessage": "OLTP transaction expected one item row",
+    "stateBeforeSha256": "47e958510d71b8fee5d1f08a775cd8f2a0dd4fdfca186bc16bccca1a21bc5615",
+    "stateAfterSha256": "47e958510d71b8fee5d1f08a775cd8f2a0dd4fdfca186bc16bccca1a21bc5615"
+  },
+  "evaluation": {
+    "passed": true,
+    "failures": [],
+    "actual": {
+      "terminalFailureObserved": true,
+      "errorMessage": "OLTP transaction expected one item row",
+      "stateBeforeSha256": "47e958510d71b8fee5d1f08a775cd8f2a0dd4fdfca186bc16bccca1a21bc5615",
+      "stateAfterSha256": "47e958510d71b8fee5d1f08a775cd8f2a0dd4fdfca186bc16bccca1a21bc5615"
+    },
+    "expected": {
+      "terminalErrorSubstring": "OLTP transaction expected one item row",
+      "stateUnchanged": true
+    },
+    "proofIds": [
+      "failureAtomicity:terminal_logical_request_must_not_leave_partial_transaction_effects",
+      "forbidden:partial_commit"
+    ]
+  },
+  "comparable": false,
+  "nonComparableReason": "Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.",
+  "proofRecord": {
+    "evidenceId": "lagrange-failure-atomicity-v1",
+    "system": "lagrange",
+    "status": "passed",
+    "artifactSha256": "18c60c9bf19c881c5d837cb375e12399e836bccc102ca18b5f286d03a0cff98f",
+    "proofIds": [
+      "failureAtomicity:terminal_logical_request_must_not_leave_partial_transaction_effects",
+      "forbidden:partial_commit"
+    ]
+  },
+  "artifactSha256": "18c60c9bf19c881c5d837cb375e12399e836bccc102ca18b5f286d03a0cff98f"
+}

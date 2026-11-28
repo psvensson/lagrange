@@ -208,7 +208,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
 
     const operationId = row.operation_id;
     if (!this.isReplicaOperationLocallyOwned(row)) {
-      await this.sendDirectDispatchWakeup(this.buildOperationFromRow(row));
+      await this.sendDirectDispatchWakeupFromRow(row);
       return;
     }
 
@@ -296,6 +296,8 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       ) {
         dispatchResult =
           await this.rebalanceCoordinator.dispatchOperation(rowOperation, {
+            ...(options.dispatchWake ? {dispatchWake: options.dispatchWake} : {}),
+            ...(options.routineCreateRearmWake === true ? {routineCreateRearmWake: true} : {}),
             cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
           });
       } else {

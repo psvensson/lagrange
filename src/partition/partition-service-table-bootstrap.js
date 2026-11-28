@@ -3,22 +3,19 @@
 // file-size relief). The service owns the open database handle and schema;
 // this module owns only the DDL.
 
-import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {isDeepStrictEqual} from 'node:util';
+import {BOOTSTRAP_MEMBERSHIP_SOURCE} from '../raft/raft-committed-membership-constants.js';
+import {PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_SQL_FRAGMENT} from './partition-service-constants.js';
+import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
 import {
   generateCreateIndexSQL,
 } from '../bootstrap/system-table-schema-sql.js';
 import {
-  getSchemaByTableName,
+  SYSTEM_TABLE_NAME, PARTITIONS_SCHEMA, getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
   renderTableDefinitionSql,
 } from '../query/sql-table-definition.js';
-
-const {
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_SQL_FRAGMENT,
-  SYSTEM_TABLE_NAME,
-} = PARTITION_SERVICE_SHARED;
 
 const PARTITION_TABLE_OBSERVATION = Object.freeze({
   COMPLETE: 'complete', UNAVAILABLE: 'unavailable', CONTRARY: 'contrary',
@@ -79,7 +76,63 @@ function quoteSqliteIdentifier(identifier) {
     PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE;
 }
 
+export const NODES_SCHEMA_UNSUPPORTED = 'NODES_SCHEMA_UNSUPPORTED';
+
+export const PARTITIONS_SCHEMA_UNSUPPORTED = 'PARTITIONS_SCHEMA_UNSUPPORTED';
+const attemptDomain = PARTITIONS_SCHEMA.columns.find(({name}) => name === 'split_descriptor_attempt').checkSql;
+
+// The declared format includes the domain of every retained attempt. Check data as
+// well as DDL: SQLite can read an image written with ignore_check_constraints.
+export function partitionDescriptorsAreCurrentIn(db) {
+  return readPartitionServiceTableSchemaIn(db, PARTITIONS_SCHEMA).state ===
+    PARTITION_TABLE_OBSERVATION.COMPLETE &&
+    !db.prepare(`SELECT 1 FROM partitions WHERE NOT (${attemptDomain}) LIMIT 1`).get();
+}
+
+function refusePartitionsSchema(source) {
+  throw Object.assign(new Error(`${PARTITIONS_SCHEMA_UNSUPPORTED}: unsupported PARTITIONS schema in ${source}`), {
+    code: PARTITIONS_SCHEMA_UNSUPPORTED, source,
+  });
+}
+
+function refuseNodesSchema(source) {
+  throw Object.assign(new Error(`${NODES_SCHEMA_UNSUPPORTED}: unsupported NODES schema in ${source}`), {
+    code: NODES_SCHEMA_UNSUPPORTED, source,
+  });
+}
+
+function openCurrentSystemTable(service) {
+  const current = getSchemaByTableName(service.tableName);
+  const descriptorTable = current === PARTITIONS_SCHEMA;
+  const refuse = descriptorTable ? refusePartitionsSchema : refuseNodesSchema;
+  const declared = service.schema;
+  if (!isDeepStrictEqual(declared, current)) refuse('catalog');
+
+  service.db.transaction(() => {
+    const existing = service.db.prepare('SELECT 1 FROM sqlite_schema WHERE name = ? COLLATE NOCASE')
+      .get(current.tableName);
+    if (!existing) {
+      if (service.bootstrapMembership?.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD ||
+          (descriptorTable && RaftRsDurableStore.hasDurableRecordIn(service.db, service.partitionId))) {
+        refuse('sqlite');
+      }
+      createTableAndIndexes(service);
+    }
+    const valid = descriptorTable ? partitionDescriptorsAreCurrentIn(service.db) :
+      readPartitionServiceTableSchemaIn(service.db, current).state === PARTITION_TABLE_OBSERVATION.COMPLETE;
+    if (!valid) refuse('sqlite');
+  }).immediate();
+}
+
 function createPartitionServiceTable(service) {
+  if (service.tableName === SYSTEM_TABLE_NAME.NODES || service.tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
+    openCurrentSystemTable(service);
+  } else {
+    createTableAndIndexes(service);
+  }
+}
+
+function createTableAndIndexes(service) {
   if (!service.schema || !service.schema.columns) {
     return;
   }

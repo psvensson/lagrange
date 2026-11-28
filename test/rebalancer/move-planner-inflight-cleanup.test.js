@@ -106,10 +106,10 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
         {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
       ];
       const availableNodes = [
-        {node_id: 'node-1', status: ReplicaStatus.ACTIVE, cpu_usage_percent: 0},
-        {node_id: 'node-2', status: ReplicaStatus.ACTIVE, cpu_usage_percent: 1},
-        {node_id: 'node-3', status: ReplicaStatus.ACTIVE, cpu_usage_percent: 90},
-        {node_id: 'node-4', status: ReplicaStatus.ACTIVE, cpu_usage_percent: 5},
+        {node_id: 'node-1', status: ReplicaStatus.ACTIVE, host_cpu_utilization_percent: 0},
+        {node_id: 'node-2', status: ReplicaStatus.ACTIVE, host_cpu_utilization_percent: 1},
+        {node_id: 'node-3', status: ReplicaStatus.ACTIVE, host_cpu_utilization_percent: 90},
+        {node_id: 'node-4', status: ReplicaStatus.ACTIVE, host_cpu_utilization_percent: 5},
       ];
       const planner = new MovePlanner({
         entityId: 'partition-1',
@@ -429,22 +429,22 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
         {
           node_id: SOURCE_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-          cpu_usage_percent: 0,
+          host_cpu_utilization_percent: 0,
         },
         {
           node_id: BLOCKED_TARGET_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-          cpu_usage_percent: 1,
+          host_cpu_utilization_percent: 1,
         },
         {
           node_id: AVAILABLE_TARGET_NODE_ID_A,
           status: ReplicaStatus.ACTIVE,
-          cpu_usage_percent: 2,
+          host_cpu_utilization_percent: 2,
         },
         {
           node_id: AVAILABLE_TARGET_NODE_ID_B,
           status: ReplicaStatus.ACTIVE,
-          cpu_usage_percent: 3,
+          host_cpu_utilization_percent: 3,
         },
       ];
       const planner = new MovePlanner({

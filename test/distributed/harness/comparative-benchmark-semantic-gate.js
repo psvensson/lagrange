@@ -694,7 +694,7 @@ async function executeRemotePgCase(req, overrides) {
       proofRecord: evidence.proofRecord,
       evidence,
       datasetPrepared: true,
-      resetOutcome: adapter?.schemaProvisioning?.outcome ?? null,
+      resetOutcome: adapter?.schemaProvisioning ?? null,
     };
   } finally {
     await closePgAdapterQuietly(adapter, cleanupDiagnostics);
@@ -736,7 +736,7 @@ async function executeRemotePgDurabilityBefore(req, overrides) {
       paymentBeforeRestart,
       stateBeforeRestart,
       datasetPrepared: true,
-      resetOutcome: adapter?.schemaProvisioning?.outcome ?? null,
+      resetOutcome: adapter?.schemaProvisioning ?? null,
     };
   } finally {
     await closePgAdapterQuietly(adapter, cleanupDiagnostics);
@@ -1212,6 +1212,42 @@ function datasetResetMethodForSystem(system) {
   return system === SYSTEM.LAGRANGE ? 'adapter truncate-and-reload' : 'adapter drop-and-reload';
 }
 
+function assignProvisioningResetTimings(event, provisioning) {
+  if (!isRecordObject(provisioning)) return event;
+  if (provisioning.resetStartedAt) event.startedAt = provisioning.resetStartedAt;
+  if (provisioning.resetEndedAt) event.endedAt = provisioning.resetEndedAt;
+  if (numberIsFinite(provisioning.resetDurationMs)) {
+    event.durationMs = provisioning.resetDurationMs;
+  }
+  if (numberIsFinite(provisioning.seedLoadDurationMs)) {
+    event.seedLoadDurationMs = provisioning.seedLoadDurationMs;
+  }
+  return event;
+}
+
+function resolveCanonicalResetProvisioning(adapter, resetOutcome) {
+  if (resetOutcome !== null && resetOutcome !== undefined) {
+    if (!isRecordObject(resetOutcome)) {
+      throw new TypeError(
+        `dataset-reset event requires a canonical provisioning object, got ${typeof resetOutcome}`,
+      );
+    }
+    return resetOutcome;
+  }
+  const adapterProvisioning = ownField(adapter, 'schemaProvisioning');
+  return isRecordObject(adapterProvisioning) ? adapterProvisioning : null;
+}
+
+function buildPreparedCaseDatasetResetEvent({caseId, system, adapter, resetOutcome, at}) {
+  const provisioning = resolveCanonicalResetProvisioning(adapter, resetOutcome);
+  return assignProvisioningResetTimings({
+    kind: EVENT.DATASET_RESET,
+    at: provisioning?.resetEndedAt ?? at(),
+    caseId,
+    method: datasetResetMethodForSystem(system),
+  }, provisioning);
+}
+
 async function dispatchStageSemanticGate({
   run, gateArgs, gateControl, tidbJourney, journey, trackedSshRun, opts, loadGeneratorHost,
   createMysqlConnection,
@@ -1387,23 +1423,31 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
     const reset = async (caseId) => {
       const resetControl = {...gateControl, stage: 'dataset-reset', caseId};
       assertSemanticGateActive(resetControl);
+      const resetStartedAt = at();
       const didReset = await performStageDatasetReset({
         run, current, manifest, caseId, resetControl,
       });
       if (!didReset) return;
       assertSemanticGateActive(resetControl);
+      const resetEndedAt = at();
       arrayPush(events, {
-        kind: EVENT.DATASET_RESET, at: at(), caseId,
+        kind: EVENT.DATASET_RESET,
+        at: resetEndedAt,
+        startedAt: resetStartedAt,
+        endedAt: resetEndedAt,
+        caseId,
         method: datasetResetMethodForSystem(run.system),
       });
     };
-    const onCaseDatasetPrepared = ({caseId}) => {
+    const onCaseDatasetPrepared = ({caseId, adapter, resetOutcome}) => {
       preparedCases += 1;
       if (!hasOuterReset && preparedCases > 1) {
-        arrayPush(events, {
-          kind: EVENT.DATASET_RESET, at: at(), caseId,
-          method: datasetResetMethodForSystem(run.system),
-        });
+        arrayPush(
+          events,
+          buildPreparedCaseDatasetResetEvent({
+            caseId, system: run.system, adapter, resetOutcome, at,
+          }),
+        );
       }
     };
     const beforeCase = async ({caseId}) => {

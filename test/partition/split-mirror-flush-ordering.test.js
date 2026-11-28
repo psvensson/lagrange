@@ -135,6 +135,7 @@ test('runSplitReplicationWorkflow drains queued deltas BEFORE emitting ' +
     },
   };
 
+  context.splitReplication.authorized = true;
   await proto.runSplitReplicationWorkflow.call(context);
 
   const catchupAckIndex = callOrder.indexOf(

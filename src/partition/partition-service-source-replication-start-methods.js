@@ -1,3 +1,6 @@
+import {readDurableMirrorRetentionCustodyIn, replicateSourceMirrorRetentionCustody} from './partition-mirror-effect-retention.js';
+import {canAssumeMirrorCustody} from './partition-mirror-custody-codec.js';
+import {isStoppedSplitWorker, reconcileFailedMirrorCustody} from './partition-mirror-custody-lifecycle.js';
 import {ERRORS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
@@ -10,7 +13,7 @@ import {
 } from './partition-service-constants.js';
 import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
 import {MERGE_ACK_STATUS} from './merge-ack-constants.js';
-import {loadDurableDeltasBehindWatermark} from
+import {loadDurableDeltasBehindWatermark, resolveSnapshotBarrierIndex} from
   './partition-mirror-replay-cursor.js';
 
 const {RaftRole, SPLIT_ACK_STATUS} = PARTITION_SERVICE_SHARED;
@@ -42,6 +45,15 @@ const START_METHOD = Object.freeze({
 function authorizationAccepted(result) {
   return result?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
     result?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+}
+
+async function acknowledgeCommittedStart(send, confirm) {
+  try {
+    return authorizationAccepted(await send());
+  } catch (error) {
+    if (await confirm()) return true;
+    throw error;
+  }
 }
 
 function sameArray(left, right) {
@@ -93,6 +105,11 @@ function mergeStartIsDuplicate(service, metadata) {
   const current = service.mergeReplication;
   return Boolean(current) &&
     service.isSameMergeReplication(current.metadata, metadata);
+}
+
+function acceptsSourceWork(handle) {
+  return !handle.terminal && !handle.quiescing &&
+    handle.phase !== PARTITION_TRANSITION_STATE.FAILED;
 }
 
 function predecessorAllowsStart(previous, metadata) {
@@ -147,6 +164,23 @@ function createExecutionHandle(metadata, phase, startedAt) {
     quiescing: false, quiesced: false,
     authorizationPromise: null, startPromise: null, runPromise: null,
     activities: new Set()};
+}
+
+async function acquireSourceCustody(service, handle, family, recoveredPhases) {
+  await reconcileFailedMirrorCustody(service);
+  if (recoveredPhases.has(handle.phase)) {
+    const custody = readDurableMirrorRetentionCustodyIn(service.db);
+    if (!custody || !canAssumeMirrorCustody(custody, {...handle.metadata, family}) ||
+        custody.barrierIndex > handle.replayWatermarkIndex) {
+      throw new Error('Recovered mirror checkpoint lacks matching committed custody');
+    }
+    if (custody.workflowFenceToken === handle.metadata.workflowFenceToken) return;
+  } else {
+    handle.snapshotBarrierIndex = resolveSnapshotBarrierIndex(service);
+  }
+  await replicateSourceMirrorRetentionCustody(service, handle.metadata, {
+    family, barrierIndex: handle.snapshotBarrierIndex,
+  });
 }
 
 function refreshAuthorizedReplayQueue(service, handle, recoveredPhases,
@@ -206,8 +240,12 @@ class PartitionServiceSourceReplicationStartMethods {
       this, request, transitionMetadata);
     if (followerResponse) return followerResponse;
     if (splitStartIsDuplicate(this, metadata)) {
-      return invokeStartMethod(this, START_METHOD.WAIT_SPLIT,
-        this.splitReplication);
+      const current = this.splitReplication;
+      if (isStoppedSplitWorker(current)) {
+        return await this.startOrResumeSplitReplicationFromDurable() ? {success: true} :
+          rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+      }
+      return invokeStartMethod(this, START_METHOD.WAIT_SPLIT, current, true);
     }
     const predecessors = captureAdmissiblePredecessors(this, metadata);
     if (!predecessors) {
@@ -231,21 +269,27 @@ class PartitionServiceSourceReplicationStartMethods {
 
   async authorizeAndRunSplitReplication(handle) {
     const {metadata} = handle;
-    handle.authorizationPromise = this.emitSplitSourceAck(
-      metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
-    let authorization;
+    const workflow = this.sqlQueryEngine.managedSplitWorkflow;
     try {
-      authorization = await handle.authorizationPromise;
-    } catch (error) {
-      invokeStartMethod(this, START_METHOD.DISCARD_SPLIT, handle);
-      throw error;
-    }
-    if (!authorizationAccepted(authorization) || this.isShutdown === true ||
-        this.role !== RaftRole.LEADER || this.splitReplication !== handle) {
-      invokeStartMethod(this, START_METHOD.DISCARD_SPLIT, handle);
-      return rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
-    }
-    try {
+      handle.authorizationPromise = workflow.reserveSourceMirrorCustody(REPLICATION_FAMILY.SPLIT,
+        this.partitionId, metadata, this.tableId, this.tableName);
+      if (!await handle.authorizationPromise) {
+        invokeStartMethod(this, START_METHOD.DISCARD_SPLIT, handle);
+        return rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+      }
+      await acquireSourceCustody(this, handle, REPLICATION_FAMILY.SPLIT, RECOVERED_SPLIT_PHASES);
+      if (this.isShutdown || this.role !== RaftRole.LEADER || this.splitReplication !== handle) {
+        throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+      }
+      const started = await acknowledgeCommittedStart(
+        () => this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED),
+        () => workflow.confirmSplitReplicationStart(metadata, this.tableId, this.tableName, {requireExecutable: true}),
+      );
+      if (!started || this.isShutdown ||
+          this.role !== RaftRole.LEADER || this.splitReplication !== handle) {
+        invokeStartMethod(this, START_METHOD.DISCARD_SPLIT, handle);
+        return rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+      }
       refreshAuthorizedReplayQueue(this, handle, RECOVERED_SPLIT_PHASES,
         PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
     } catch (error) {
@@ -254,15 +298,17 @@ class PartitionServiceSourceReplicationStartMethods {
     }
     handle.authorized = true;
     consumeAuthorizedPredecessors(this, handle, REPLICATION_FAMILY.SPLIT);
-    const run = this.runSplitReplicationWorkflow({startAuthorized: true})
-      .catch((error) => {
+    const run = this.runSplitReplicationWorkflow()
+      .catch(async (error) => {
         handle.terminal = true;
         if (this.splitReplication === handle) {
+          handle.failedPhase = handle.phase;
           handle.lastError = error.message;
           handle.phase = PARTITION_TRANSITION_STATE.FAILED;
         }
         this.logger.error(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_FAILED,
           {partitionId: this.partitionId, error: error.message});
+        await reconcileFailedMirrorCustody(this);
       }).finally(() => handle.terminal === true ? invokeStartMethod(this,
         START_METHOD.QUIESCE_HANDLE, handle) : undefined);
     handle.runPromise = run;
@@ -270,10 +316,10 @@ class PartitionServiceSourceReplicationStartMethods {
     return {success: true};
   }
 
-  async waitForSplitReplicationStart(handle) {
+  async waitForSplitReplicationStart(handle, requireLive = false) {
     const response = handle.startPromise ? await handle.startPromise : null;
     return response?.success === true && handle.authorized === true &&
-      handle.runPromise && this.splitReplication === handle &&
+      handle.runPromise && this.splitReplication === handle && (!requireLive || acceptsSourceWork(handle)) &&
       this.isShutdown !== true && this.role === RaftRole.LEADER ? response :
       rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
   }
@@ -305,8 +351,8 @@ class PartitionServiceSourceReplicationStartMethods {
         request, transitionMetadata);
     }
     if (mergeStartIsDuplicate(this, metadata)) {
-      return invokeStartMethod(this, START_METHOD.WAIT_MERGE,
-        this.mergeReplication);
+      const current = this.mergeReplication;
+      return invokeStartMethod(this, START_METHOD.WAIT_MERGE, current, true);
     }
     const predecessors = captureAdmissiblePredecessors(this, metadata);
     if (!predecessors) {
@@ -330,21 +376,27 @@ class PartitionServiceSourceReplicationStartMethods {
 
   async authorizeAndRunMergeReplication(handle) {
     const {metadata} = handle;
-    handle.authorizationPromise = this.emitMergeSourceAck(
-      metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED);
-    let authorization;
+    const workflow = this.sqlQueryEngine.managedMergeWorkflow;
     try {
-      authorization = await handle.authorizationPromise;
-    } catch (error) {
-      invokeStartMethod(this, START_METHOD.DISCARD_MERGE, handle);
-      throw error;
-    }
-    if (!authorizationAccepted(authorization) || this.isShutdown === true ||
-        this.role !== RAFT_ROLE.LEADER || this.mergeReplication !== handle) {
-      invokeStartMethod(this, START_METHOD.DISCARD_MERGE, handle);
-      return rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
-    }
-    try {
+      handle.authorizationPromise = workflow.reserveSourceMirrorCustody(REPLICATION_FAMILY.MERGE,
+        this.partitionId, metadata, this.tableId, this.tableName);
+      if (!await handle.authorizationPromise) {
+        invokeStartMethod(this, START_METHOD.DISCARD_MERGE, handle);
+        return rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
+      }
+      await acquireSourceCustody(this, handle, REPLICATION_FAMILY.MERGE, RECOVERED_MERGE_PHASES);
+      if (this.isShutdown || this.role !== RaftRole.LEADER || this.mergeReplication !== handle) {
+        throw new Error(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
+      }
+      const started = await acknowledgeCommittedStart(
+        () => this.emitMergeSourceAck(metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED),
+        () => workflow.confirmMergeReplicationStart(this.partitionId, metadata, this.tableId, this.tableName, {requireExecutable: true}),
+      );
+      if (!started || this.isShutdown ||
+          this.role !== RaftRole.LEADER || this.mergeReplication !== handle) {
+        invokeStartMethod(this, START_METHOD.DISCARD_MERGE, handle);
+        return rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
+      }
       refreshAuthorizedReplayQueue(this, handle, RECOVERED_MERGE_PHASES,
         PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
     } catch (error) {
@@ -353,7 +405,7 @@ class PartitionServiceSourceReplicationStartMethods {
     }
     handle.authorized = true;
     consumeAuthorizedPredecessors(this, handle, REPLICATION_FAMILY.MERGE);
-    const run = this.runMergeReplicationWorkflow({startAuthorized: true})
+    const run = this.runMergeReplicationWorkflow()
       .catch((error) => this.handleMergeReplicationRunFailure(
         metadata, error, handle).finally(() => {
         handle.terminal = true;
@@ -365,10 +417,10 @@ class PartitionServiceSourceReplicationStartMethods {
     return {success: true};
   }
 
-  async waitForMergeReplicationStart(handle) {
+  async waitForMergeReplicationStart(handle, requireLive = false) {
     const response = handle.startPromise ? await handle.startPromise : null;
     return response?.success === true && handle.authorized === true &&
-      handle.runPromise && this.mergeReplication === handle &&
+      handle.runPromise && this.mergeReplication === handle && (!requireLive || acceptsSourceWork(handle)) &&
       this.isShutdown !== true && this.role === RAFT_ROLE.LEADER ? response :
       rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
   }
@@ -413,6 +465,17 @@ class PartitionServiceSourceReplicationStartMethods {
     if (!activity) return;
     handle.activities.delete(activity);
     activity.finish();
+  }
+
+  async retireReleasedMirrorHandle(custody) {
+    const split = custody.family === REPLICATION_FAMILY.SPLIT;
+    const slot = split ? 'splitReplication' : 'mergeReplication';
+    const handle = this[slot];
+    if (!handle || !canAssumeMirrorCustody({...handle.metadata, family: custody.family}, custody)) return;
+    handle.terminal = true;
+    await this.quiesceSourceReplicationHandle(handle);
+    await Promise.allSettled([handle.runPromise]);
+    if (this[slot] === handle) this[slot] = null;
   }
 
   async quiesceSourceReplicationHandle(handle) {

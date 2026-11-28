@@ -1,3 +1,4 @@
+import {splitDescriptorCommitFields} from '../split-descriptor-delivery-fields.js';
 import {pickTypedWriteAnswer} from
   '../../partition/partition-write-kernel.js';
 import {pickRoutingDenialFields} from '../query-execution-budget.js';
@@ -311,6 +312,7 @@ function buildPartitionExecutionSuccessOutcome(
     partitionId,
     success: true,
     status: partitionMetrics.status,
+    ...splitDescriptorCommitFields(result),
     changes: result.changes,
     rowSetComplete: result.rowSetComplete === true,
     readAuthorityWitness: result.readAuthorityWitness,

@@ -8,6 +8,7 @@
 
 import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
+import {TABLES} from '../../src/constants/index.js';
 import {
   GLOBAL_INDEX_SQL_STATE,
   GLOBAL_INDEX_STATE,
@@ -16,6 +17,14 @@ import {
   GlobalIndexLifecycleCoordinator,
   parseGlobalIndexDdl,
 } from '../../src/index-management/global-index-lifecycle-coordinator.js';
+import {
+  buildProductionCoordinatorOptions,
+  syncGlobalIndexesForService,
+} from '../../src/index-management/global-index-production-wiring.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  resolveSystemCacheRowKey,
+} from '../../src/cache/system-cache-key-descriptor.js';
 import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -323,11 +332,24 @@ test('J5 Step 1: Reject CREATE UNIQUE GLOBAL INDEX with UNSUPPORTED_SQL_FEATURE 
       },
     ],
   );
+  const mockCdcService = {
+    async insertSystemTableRow() {
+      return {success: true};
+    },
+    async updateSystemTableRow() {
+      return {success: true};
+    },
+    async deleteSystemTableRow() {
+      return {success: true};
+    },
+  };
   const indexService = new IndexService({
+    cdcIntegrationService: mockCdcService,
     globalIndexCoordinator: cluster.coordinator,
   });
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    cdcIntegrationService: mockCdcService,
     systemCache: cache,
     indexService,
     messageRouter: createMockMessageRouter(),
@@ -877,22 +899,55 @@ test('J5 Step 10: Public SQL CREATE GLOBAL INDEX & DROP INDEX end-to-end wiring'
   );
 
   // 3. Verify SQLQueryEngine execution with IndexService + Coordinator
-  const cache = createMockSystemCache(
-    [{table_name: 'orders', primaryKey: 'order_id'}],
-    [
-      {
-        partition_id: 'orders_p0',
-        table_name: 'orders',
-        partition_key_start: null,
-        partition_key_end: 100,
-      },
-    ],
-  );
-  const indexService = new IndexService({
-    globalIndexCoordinator: cluster.coordinator,
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.TABLES, 'UPSERT', {
+    table_id: 'orders',
+    table_name: 'orders',
+    partition_key: 'order_id',
+    primaryKey: 'order_id',
   });
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'UPSERT', {
+    partition_id: 'orders_p0',
+    table_id: 'orders',
+    table_name: 'orders',
+    partition_key_start: null,
+    partition_key_end: 100,
+  });
+
+  const mockCdcService = {
+    async insertSystemTableRow(tableName, row) {
+      cache.applySystemTableChange(tableName, 'INSERT', row);
+      return {success: true};
+    },
+    async upsertSystemTableRow(tableName, row) {
+      cache.applySystemTableChange(tableName, 'UPSERT', row);
+      return {success: true};
+    },
+    async updateSystemTableRow(tableName, whereClause, data) {
+      const key = resolveSystemCacheRowKey(tableName, whereClause);
+      const current = cache.get(tableName, key) || {...whereClause};
+      cache.applySystemTableChange(tableName, 'UPDATE', {...current, ...data});
+      return {success: true};
+    },
+    async deleteSystemTableRow(tableName, whereClause) {
+      const key = resolveSystemCacheRowKey(tableName, whereClause);
+      const existing = cache.get(tableName, key) || {...whereClause};
+      cache.applySystemTableChange(tableName, 'DELETE', existing);
+      return {success: true};
+    },
+  };
+  const indexService = new IndexService({
+    cdcIntegrationService: mockCdcService,
+    globalIndexCoordinator: cluster.coordinator,
+    systemTableCache: cache,
+  });
+  const prodOptions = buildProductionCoordinatorOptions(indexService);
+  Object.assign(cluster.coordinator, prodOptions);
+  prodOptions.bindCoordinator(cluster.coordinator);
+  syncGlobalIndexesForService(indexService);
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    cdcIntegrationService: mockCdcService,
     systemCache: cache,
     indexService,
     messageRouter: createMockMessageRouter(),
@@ -906,6 +961,34 @@ test('J5 Step 10: Public SQL CREATE GLOBAL INDEX & DROP INDEX end-to-end wiring'
   t.equal(createResult.operation, 'CREATE_INDEX');
   t.equal(createResult.indexName, 'idx_orders_customer');
   t.equal(createResult.tableName, 'orders');
+
+  // Verify persisted in cache.getAll(TABLES.INDICES)
+  const persistedIndicesAfterCreate = cache.getAll(TABLES.INDICES);
+  t.equal(persistedIndicesAfterCreate.length, 1, 'TABLES.INDICES contains persisted global index row');
+  t.equal(persistedIndicesAfterCreate[0].index_name, 'idx_orders_customer');
+  t.equal(persistedIndicesAfterCreate[0].state, GLOBAL_INDEX_STATE.READ_WRITE);
+
+  // Verify newly constructed GlobalIndexLifecycleCoordinator + IndexService recovers index from cache
+  const recoveredIndexService = new IndexService({
+    cdcIntegrationService: mockCdcService,
+    systemTableCache: cache,
+  });
+  const recoveredOptions = buildProductionCoordinatorOptions(
+    recoveredIndexService,
+  );
+  const recoveredCoordinator = new GlobalIndexLifecycleCoordinator(
+    recoveredOptions,
+  );
+  recoveredOptions.bindCoordinator(recoveredCoordinator);
+  recoveredIndexService.setGlobalIndexCoordinator(recoveredCoordinator);
+  syncGlobalIndexesForService(recoveredIndexService);
+  const recoveredRecord = recoveredCoordinator.getCatalogRecord('idx_orders_customer');
+  t.ok(recoveredRecord, 'Newly constructed GlobalIndexLifecycleCoordinator recovers index from cache');
+  t.equal(recoveredRecord.state, GLOBAL_INDEX_STATE.READ_WRITE);
+  const recoveredMeta = recoveredIndexService.getIndex('idx_orders_customer');
+  t.ok(recoveredMeta, 'Newly constructed IndexService recovers index from cache');
+  t.equal(recoveredMeta.isGlobal, true);
+  t.equal(recoveredMeta.state, GLOBAL_INDEX_STATE.READ_WRITE);
 
   // Verify IndexService reflect cached index metadata
   const cachedMeta = indexService.getIndex('idx_orders_customer');
@@ -932,7 +1015,8 @@ test('J5 Step 10: Public SQL CREATE GLOBAL INDEX & DROP INDEX end-to-end wiring'
   t.equal(dropResult.indexName, 'idx_orders_customer');
   t.equal(dropResult.dropped, true);
 
-  // Verify cleaned up in both IndexService and Coordinator
+  // Verify cleaned up in cache, IndexService, and Coordinator
+  t.same(cache.getAll(TABLES.INDICES), [], 'TABLES.INDICES is empty after DROP INDEX');
   t.equal(indexService.getIndex('idx_orders_customer'), null, 'Removed from IndexService cache');
   t.equal(
     cluster.coordinator.getCatalogRecord('idx_orders_customer'),

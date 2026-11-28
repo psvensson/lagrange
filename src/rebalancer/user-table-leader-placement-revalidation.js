@@ -2,31 +2,36 @@ import {resolvePartitionTableId} from '../bootstrap/system-partition-classificat
 import {resolveDesiredReplicationFactor} from '../bootstrap/replication-target-authority.js';
 
 const MIN_SETTLED_PARTITION_COUNT = 2;
-const ALLOW_TARGET_DISPATCH = () => true;
 
-function hasMatchingActiveVoterFollower(collectOwnVoterFollowers, rebalancer, target) {
+function hasMatchingActiveVoterFollower(
+  collectOwnVoterFollowers,
+  rebalancer,
+  target,
+  nowMs,
+) {
   if (!target?.nodeId || !target?.replicaId) {
     return false;
   }
-  return collectOwnVoterFollowers(rebalancer).some(
+  return collectOwnVoterFollowers(rebalancer, nowMs).some(
     (follower) =>
       follower.nodeId === target.nodeId &&
       follower.replicaId === target.replicaId,
   );
 }
 
-function isSystemCohortStillEligibleAfterDemotion(
+function isSystemCohortStillEligibleForHandoff(
   rebalancer,
   partitionRow,
   decision,
   freshCensus,
+  nowMs,
   deps,
 ) {
   const {replicationFactor} = resolveDesiredReplicationFactor(partitionRow);
   const cohort = deps.buildSystemCohortCensus({
     eligibleVoterHosts: freshCensus.systemEligibleVoterHosts,
     nodeId: rebalancer.nodeId,
-    ownVoterFollowers: deps.collectOwnVoterFollowers(rebalancer),
+    ownVoterFollowers: deps.collectOwnVoterFollowers(rebalancer, nowMs),
     partitionId: rebalancer.entityId,
     settledPartitions:
       deps.resolveSettledSystemPartitionsFromCensus(rebalancer, freshCensus),
@@ -54,7 +59,7 @@ function isSystemCohortStillEligibleAfterDemotion(
   return assignedHost === decision.target.nodeId;
 }
 
-function isUserTableCohortStillEligibleAfterDemotion(
+function isUserTableCohortStillEligibleForHandoff(
   rebalancer,
   partitionRow,
   decision,
@@ -90,32 +95,9 @@ function isUserTableCohortStillEligibleAfterDemotion(
     !distinctLeaderHosts.has(decision.target.nodeId);
 }
 
-/**
- * Revalidate from current systemTableCache after awaiting source leader
- * demotion that the target election leg is still safe to dispatch:
- * 1. optional caller predicate allows dispatch,
- * 2. the partition still has no nonterminal replica operation,
- * 3. decision.target is still an active eligible voter follower, and
- * 4. the partition and its settled cohort remain stable and eligible.
- * @param {Object} rebalancer - Rebalancer or coordinator cure context.
- * @param {Object} decision - Pre-demotion handoff decision.
- * @param {number} nowMs - Post-demotion timestamp.
- * @param {Object} options - Dispatch options.
- * @param {Object} deps - Canonical placement census helpers.
- * @return {boolean} True when target election may still dispatch.
- */
-function isTargetEligibleAfterDemotion(
-  rebalancer,
-  decision,
-  nowMs,
-  options,
-  deps,
-) {
-  const {shouldDispatchTargetAfterDemotion = ALLOW_TARGET_DISPATCH} =
-    options || {};
-  if (!shouldDispatchTargetAfterDemotion({decision, nowMs, rebalancer})) {
-    return false;
-  }
+// Re-read placement authority after any queue or inbound-drain wait, just
+// before the native transfer decision uses its own current role and ConfState.
+function isTargetEligibleForHandoff(rebalancer, decision, nowMs, deps) {
   const freshCensus = deps.buildSharedLeaderPlacementPassCensus(rebalancer, nowMs);
   if (!freshCensus) {
     return false;
@@ -128,6 +110,7 @@ function isTargetEligibleAfterDemotion(
       deps.collectOwnVoterFollowers,
       rebalancer,
       decision?.target,
+      nowMs,
     )
   ) {
     return false;
@@ -137,16 +120,17 @@ function isTargetEligibleAfterDemotion(
     return false;
   }
   if (deps.isSystemTableCohortCurePartition(rebalancer, partitionRow)) {
-    return isSystemCohortStillEligibleAfterDemotion(
+    return isSystemCohortStillEligibleForHandoff(
       rebalancer,
       partitionRow,
       decision,
       freshCensus,
+      nowMs,
       deps,
     );
   }
   if (deps.isOrdinaryUserTablePartition(rebalancer, partitionRow)) {
-    return isUserTableCohortStillEligibleAfterDemotion(
+    return isUserTableCohortStillEligibleForHandoff(
       rebalancer,
       partitionRow,
       decision,
@@ -156,4 +140,4 @@ function isTargetEligibleAfterDemotion(
   return false;
 }
 
-export {isTargetEligibleAfterDemotion};
+export {isTargetEligibleForHandoff};

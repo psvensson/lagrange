@@ -3,6 +3,8 @@ import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
   WORKFLOW_ERROR_MSG,
+  hasAdvancedParticipantCheckpoint,
+  mergeParticipantCheckpoint,
   readParticipantCurrentStatus,
 } from './workflow-constants.js';
 
@@ -54,18 +56,18 @@ class WorkflowParticipantAckMethods {
     // Fence token validation: reject stale acknowledgements.
     const ackFence = ack?.[PARTICIPANT_ACK_FIELD.FENCE_TOKEN];
     if (ackFence !== undefined && ackFence !== null) {
-      const staleRejection = this.rejectAckStaleFence(
-        workflowId, participant, participantKey, ackStatus, ackFence,
-      );
-      if (staleRejection) {
-        return staleRejection;
+      const currentFence = participant.fenceToken;
+      if (currentFence != null && !(ackFence >= currentFence)) {
+        return this.rejectAckStaleFence(workflowId, participant, participantKey,
+          ackStatus, ackFence);
       }
       participant.fenceToken = ackFence;
     }
 
-    // Duplicate detection: same status already acknowledged.
-    if (participant.status === ackStatus &&
-        participant.acknowledgedAt !== undefined) {
+    // Duplicate detection: same status already acknowledged, unless the
+    // acknowledgement advances the durable participant checkpoint.
+    const checkpoint = ack?.[PARTICIPANT_ACK_FIELD.CHECKPOINT];
+    if (this.isDuplicateAckWithoutCheckpointAdvance(participant, ackStatus, checkpoint)) {
       return this.rejectAckDuplicate(
         workflowId, participant, participantKey, ackStatus,
       );
@@ -74,11 +76,12 @@ class WorkflowParticipantAckMethods {
     // Explicit participant transition graph: when wired, reject any
     // (from, to) edge the graph does not declare — the coordinator
     // never silently applies an out-of-graph transition.
-    const graphRejection = this.validateParticipantTransitionGraph(
+    const graphRejection = this.validateAckTransitionOrCheckpointRefresh(
       workflowId,
       participant,
       participantKey,
       ackStatus,
+      checkpoint,
     );
     if (graphRejection) {
       return graphRejection;
@@ -91,9 +94,10 @@ class WorkflowParticipantAckMethods {
     participant.updatedAt = now;
 
     // Persist checkpoint data alongside participant state.
-    const checkpoint = ack?.[PARTICIPANT_ACK_FIELD.CHECKPOINT];
     if (checkpoint !== undefined && checkpoint !== null) {
-      participant.checkpoint = checkpoint;
+      participant.checkpoint = mergeParticipantCheckpoint(
+        participant.checkpoint, checkpoint,
+      );
     }
 
     await this.persistParticipant(participant);
@@ -103,6 +107,24 @@ class WorkflowParticipantAckMethods {
       participantKey,
       acknowledgedAt: now,
     };
+  }
+
+  isDuplicateAckWithoutCheckpointAdvance(participant, ackStatus, checkpoint) {
+    return participant.status === ackStatus &&
+      participant.acknowledgedAt !== undefined &&
+      !hasAdvancedParticipantCheckpoint(participant.checkpoint, checkpoint);
+  }
+
+  validateAckTransitionOrCheckpointRefresh(
+    workflowId, participant, participantKey, ackStatus, checkpoint,
+  ) {
+    if (participant.status === ackStatus &&
+        hasAdvancedParticipantCheckpoint(participant.checkpoint, checkpoint)) {
+      return null;
+    }
+    return this.validateParticipantTransitionGraph(
+      workflowId, participant, participantKey, ackStatus,
+    );
   }
 
   /**
@@ -129,25 +151,19 @@ class WorkflowParticipantAckMethods {
   }
 
   /**
-   * Fence-check one acknowledgement against the participant's current
-   * fence epoch. Returns the typed STALE_FENCE rejection when the ack
-   * carries an older epoch, else null.
+   * Report a fence rejection already decided by the acknowledgement owner.
    * @param {string} workflowId
    * @param {Object} participant - Current participant record.
    * @param {string} participantKey
    * @param {string} ackStatus
-   * @param {number} ackFence - Fence epoch carried by the ack.
-   * @return {Object|null}
+   * @param {*} ackFence - Fence offered by the caller, including an absent fence.
+   * @return {Object}
    * @private
    */
   rejectAckStaleFence(
     workflowId, participant, participantKey, ackStatus, ackFence,
   ) {
     const currentFence = participant.fenceToken;
-    if (currentFence === undefined || currentFence === null ||
-        ackFence >= currentFence) {
-      return null;
-    }
     const staleResult = {
       result: PARTICIPANT_ACK_RESULT.STALE_FENCE,
       participantKey,

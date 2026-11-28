@@ -1,3 +1,4 @@
+import {splitDescriptorCommitFields, splitDescriptorIntentFields} from './split-descriptor-delivery-fields.js';
 import {
   deliveryAnswerOf,
   deliveryTransportOf,
@@ -44,22 +45,9 @@ const {
   QUERY_MESSAGE_TYPE,
 } = QUERY_EXECUTOR_SHARED;
 
-const MIN_SAFE_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
-const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
-
-function toJsonSafeParams(params) {
-  if (!Array.isArray(params)) return params;
-  if (!params.some((value) => typeof value === 'bigint')) {
-    return params;
-  }
-  return params.map((value) => {
-    if (typeof value === 'bigint') {
-      return value >= MIN_SAFE_BIGINT && value <= MAX_SAFE_BIGINT ?
-        Number(value) :
-        value.toString();
-    }
-    return value;
-  });
+function hasTypedWireParameter(params) {
+  return Array.isArray(params) &&
+    params.some((value) => typeof value === 'bigint' || ArrayBuffer.isView(value));
 }
 
 function copySafeResultLimit(request, field, value) {
@@ -143,19 +131,22 @@ function createDefaultPartitionRequestBuilder({
 }) {
   const leaderReadField = leaderReadFieldOf(executionOptions, forRead);
   const shouldEncodeTypedParams =
-    forRead === true &&
     !executionOptions?.transactionIdentity &&
     Array.isArray(params);
   const preEncodedTypedParams = shouldEncodeTypedParams ?
     encodeTypedParams(params) :
     null;
-  const jsonSafeParams = toJsonSafeParams(params);
+  const wireParams =
+    preEncodedTypedParams && hasTypedWireParameter(params) ?
+      preEncodedTypedParams.cells :
+      params;
 
   return () => {
     const request = {
+      ...splitDescriptorIntentFields(executionOptions),
       type: QUERY_MESSAGE_TYPE.QUERY,
       sql,
-      params: jsonSafeParams,
+      params: wireParams,
       ...(preEncodedTypedParams ? {typedParams: preEncodedTypedParams} : {}),
       ...leaderReadField,
     };
@@ -327,6 +318,7 @@ function buildDecodedPartitionSuccessResult(partitionId, response, decodedPayloa
     partitionId,
     success: true,
     ...(hasLazyRows ? {} : {rows: decodedPayload.rows}),
+    ...splitDescriptorCommitFields(response),
     changes: response.changes,
     durableCommitWitness: response.durableCommitWitness,
     originHlc: response.originHlc,

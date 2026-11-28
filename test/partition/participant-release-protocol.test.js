@@ -7,6 +7,7 @@ import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {captureParticipantReleaseRecoveryDetail} from '../../src/node/participant-release-diagnostic-observation.js';
 import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -105,12 +106,12 @@ function registeredReleaseRequest(fields = {}) {
   };
 }
 
-async function sendRegisteredRelease(handler, transport, request) {
+async function sendRegisteredRelease(handler, transport, request, messageId) {
   const registered = transport.getRegisteredHandler(
     `${handler.nodeId}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`,
   );
   assert.equal(typeof registered, 'function', 'release route must be registered');
-  const response = await registered({payload: request});
+  const response = await registered({payload: request, messageId});
   return response[PARTICIPANT_RELEASE_RESULT_FIELD];
 }
 
@@ -594,6 +595,42 @@ test('registered participant release projects one real blocked drain and older j
     if (failure !== null) throw failure;
   });
 
+test('slow registered RELEASE responses identify the shared transport request only for a real join',
+  async () => {
+    await withEmptyRegisteredHandler(scriptedTimeSource([100, 100, 101, 102]),
+      async ({handler, transport}) => {
+        const logs = [];
+        const logger = handler.logger;
+        handler.logger = Object.create(logger);
+        handler.logger.info = (message, fields) => {
+          if (message === 'Slow participant release response') logs.push(fields);
+        };
+        // Advance only the diagnostic clock while the registered requests
+        // are pending. Release policy still uses the scripted handler clock.
+        const descriptor = Object.getOwnPropertyDescriptor(performance, 'now');
+        let tick = 0;
+        Object.defineProperty(performance, 'now', {configurable: true, value: () => tick});
+        try {
+          const request = registeredReleaseRequest();
+          const starter = sendRegisteredRelease(handler, transport, request, 'starter-hop');
+          const mixed = sendRegisteredRelease(handler, transport,
+            {...request, targetBuildDigest: 'b'.repeat(64)}, 'mixed-hop');
+          const joined = sendRegisteredRelease(handler, transport, request, 'joined-hop');
+          tick = 6000;
+          const answers = await Promise.all([starter, mixed, joined]);
+          assert.equal(answers[1].outcome, OUTCOME.INVALID);
+          assert.equal(logs.find((row) => row.messageId === 'joined-hop').joinedMessageId,
+            'starter-hop');
+          assert.equal(Object.hasOwn(logs.find((row) => row.messageId === 'mixed-hop'),
+            'joinedMessageId'), false);
+        } finally {
+          if (descriptor) Object.defineProperty(performance, 'now', descriptor);
+          else delete performance.now;
+          handler.logger = logger;
+        }
+      });
+  });
+
 test('registered failed joins bound triggers without getters or coercion', async () => {
   const valid = await joinedHostedPartitionFailure(registeredReleaseRequest({
     trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
@@ -888,6 +925,34 @@ test('registered dependent release retains control expiry before nested client d
     });
   }, undefined, {timeSource: clock});
 });
+
+test('unanswered control INSPECT retains its addressed replica through recovery reporting', () =>
+  fixture(async ({service, controlService, controlHandler, transport, release}) => {
+    const original = transport.deliver;
+    let refused = 0;
+    transport.deliver = function(address, payload, options) {
+      if (payload.partitionId === CONTROL_PARTITION && payload.action === RELEASE_ACTION.INSPECT) {
+        assert.equal(options.targetNodeId, controlHandler.nodeId);
+        assert.equal(payload.replicaId, controlService.replicaId);
+        refused++;
+        throw new Error('control INSPECT link closed');
+      }
+      return original.call(this, address, payload, options);
+    };
+    try {
+      const answer = await release();
+      assert.ok(refused > 0);
+      assert.equal(answer.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
+      const detail = captureParticipantReleaseRecoveryDetail(answer);
+      assert.equal(detail.controlMissingFact, MISSING_FACT.REPLICA_RELEASE_REPLY);
+      assert.equal(detail.controlPhase, RELEASE_ACTION.INSPECT);
+      assert.equal(detail.inspectNodeId, controlHandler.nodeId);
+      assert.equal(detail.inspectReplicaId, controlService.replicaId);
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+    } finally {
+      transport.deliver = original;
+    }
+  }, undefined, {remoteControl: true}));
 
 test('registered dependent release retains delivered control refusal after current leader loss', () =>
   fixture(async ({service, controlService, controlHandler, transport, release}) => {

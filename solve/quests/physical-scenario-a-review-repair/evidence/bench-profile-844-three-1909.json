@@ -1,0 +1,318 @@
+{
+  "campaignId": "bench-profile-844-three-1909",
+  "productCommit": "8449897c6e7798d60463fe7c513624a9df8e6086",
+  "harnessCommit": "5405c64e3afcc2eaa0d6755cc47ee8b1692b220d",
+  "productImage": "lagrange@sha256:a692a3b1b934ba58ca4efcbe14aa39d49e6388a4580c43666865b615219987f6",
+  "scope": "Three physical hosts. Seed profiling enabled only for this diagnostic. Inclusive frames can overlap.",
+  "phase": "lagrange-probe-write-readback",
+  "deadlineAtMs": 1795720451508,
+  "lastCompleteSeedCensusEndMs": 1795720446587,
+  "systemPartitions": 46,
+  "belowRf3": 0,
+  "systemReadyAt": "2026-11-26T19:14:04.446Z",
+  "stablePolls": 3,
+  "publicProbe": {
+    "attempts": 2,
+    "elapsedMs": 7064,
+    "readyAttempts": 0
+  },
+  "workloadStarted": false,
+  "profileWindows": [
+    {
+      "endedAt": "2026-11-26T19:10:45.319Z",
+      "windowMs": 30014,
+      "totalSamples": 14237,
+      "frames": [
+        {
+          "fn": "runFormationOwner",
+          "url": "src/diagnostics/formation-turn-attribution.js",
+          "line": 744,
+          "inclusiveHits": 4789
+        },
+        {
+          "fn": "continueTurn",
+          "url": "src/raft/raft-rs-turn-answer.js",
+          "line": 63,
+          "inclusiveHits": 2955
+        },
+        {
+          "fn": "buildNodeReadinessSyncCurrent",
+          "url": "src/control-plane/control-plane-readiness-service-node-methods.js",
+          "line": 619,
+          "inclusiveHits": 2230
+        },
+        {
+          "fn": "(anonymous)",
+          "url": "src/workflow/owner-key-reconcile-queue.js",
+          "line": 458,
+          "inclusiveHits": 2091
+        },
+        {
+          "fn": "drain",
+          "url": "src/workflow/owner-key-reconcile-queue.js",
+          "line": 471,
+          "inclusiveHits": 2089
+        },
+        {
+          "fn": "dispatch",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 583,
+          "inclusiveHits": 2085
+        }
+      ]
+    },
+    {
+      "endedAt": "2026-11-26T19:11:16.363Z",
+      "windowMs": 30295,
+      "totalSamples": 14315,
+      "frames": [
+        {
+          "fn": "runFormationOwner",
+          "url": "src/diagnostics/formation-turn-attribution.js",
+          "line": 744,
+          "inclusiveHits": 4030
+        },
+        {
+          "fn": "buildNodeReadinessSyncCurrent",
+          "url": "src/control-plane/control-plane-readiness-service-node-methods.js",
+          "line": 619,
+          "inclusiveHits": 2097
+        },
+        {
+          "fn": "(anonymous)",
+          "url": "src/workflow/owner-key-reconcile-queue.js",
+          "line": 458,
+          "inclusiveHits": 2056
+        },
+        {
+          "fn": "drain",
+          "url": "src/workflow/owner-key-reconcile-queue.js",
+          "line": 471,
+          "inclusiveHits": 2056
+        }
+      ]
+    },
+    {
+      "endedAt": "2026-11-26T19:11:47.486Z",
+      "windowMs": 30224,
+      "totalSamples": 14273,
+      "frames": [
+        {
+          "fn": "runFormationOwner",
+          "url": "src/diagnostics/formation-turn-attribution.js",
+          "line": 744,
+          "inclusiveHits": 3357
+        },
+        {
+          "fn": "(anonymous)",
+          "url": "src/raft/raft-rs-runtime-owner.js",
+          "line": 1209,
+          "inclusiveHits": 1817
+        },
+        {
+          "fn": "continueTurn",
+          "url": "src/raft/raft-rs-turn-answer.js",
+          "line": 63,
+          "inclusiveHits": 1621
+        },
+        {
+          "fn": "dispatch",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 583,
+          "inclusiveHits": 1605
+        }
+      ]
+    },
+    {
+      "endedAt": "2026-11-26T19:12:18.500Z",
+      "windowMs": 30215,
+      "totalSamples": 14210,
+      "frames": [
+        {
+          "fn": "runFormationOwner",
+          "url": "src/diagnostics/formation-turn-attribution.js",
+          "line": 744,
+          "inclusiveHits": 3752
+        },
+        {
+          "fn": "dispatch",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 583,
+          "inclusiveHits": 2162
+        },
+        {
+          "fn": "execute",
+          "url": "src/raft/raft-rs-replica-lifecycle-owner.js",
+          "line": 255,
+          "inclusiveHits": 2152
+        },
+        {
+          "fn": "drainInbound",
+          "url": "src/raft/raft-rs-runtime-owner.js",
+          "line": 1858,
+          "inclusiveHits": 2140
+        }
+      ]
+    },
+    {
+      "endedAt": "2026-11-26T19:12:49.566Z",
+      "windowMs": 30220,
+      "totalSamples": 14257,
+      "frames": [
+        {
+          "fn": "runFormationOwner",
+          "url": "src/diagnostics/formation-turn-attribution.js",
+          "line": 744,
+          "inclusiveHits": 3912
+        },
+        {
+          "fn": "(anonymous)",
+          "url": "src/raft/raft-rs-runtime-owner.js",
+          "line": 1209,
+          "inclusiveHits": 2307
+        },
+        {
+          "fn": "drainInbound",
+          "url": "src/raft/raft-rs-runtime-owner.js",
+          "line": 1858,
+          "inclusiveHits": 2166
+        },
+        {
+          "fn": "dispatch",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 583,
+          "inclusiveHits": 2145
+        }
+      ]
+    },
+    {
+      "endedAt": "2026-11-26T19:13:20.436Z",
+      "windowMs": 30047,
+      "totalSamples": 14099,
+      "frames": [
+        {
+          "fn": "runFormationOwner",
+          "url": "src/diagnostics/formation-turn-attribution.js",
+          "line": 744,
+          "inclusiveHits": 3681
+        },
+        {
+          "fn": "dispatch",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 583,
+          "inclusiveHits": 2372
+        },
+        {
+          "fn": "execute",
+          "url": "src/raft/raft-rs-replica-lifecycle-owner.js",
+          "line": 255,
+          "inclusiveHits": 2364
+        },
+        {
+          "fn": "(anonymous)",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 584,
+          "inclusiveHits": 2338
+        },
+        {
+          "fn": "containRuntimeThrow",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 320,
+          "inclusiveHits": 2338
+        },
+        {
+          "fn": "protocolTurn",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 595,
+          "inclusiveHits": 2272
+        }
+      ]
+    },
+    {
+      "endedAt": "2026-11-26T19:13:51.248Z",
+      "windowMs": 30066,
+      "totalSamples": 14058,
+      "frames": [
+        {
+          "fn": "runFormationOwner",
+          "url": "src/diagnostics/formation-turn-attribution.js",
+          "line": 744,
+          "inclusiveHits": 3206
+        },
+        {
+          "fn": "protocolTurn",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 595,
+          "inclusiveHits": 2569
+        },
+        {
+          "fn": "runRaftProtocolActivity",
+          "url": "src/diagnostics/raft-formation-attribution.js",
+          "line": 15,
+          "inclusiveHits": 2569
+        },
+        {
+          "fn": "(anonymous)",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 596,
+          "inclusiveHits": 2569
+        },
+        {
+          "fn": "dispatch",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 583,
+          "inclusiveHits": 2551
+        },
+        {
+          "fn": "execute",
+          "url": "src/raft/raft-rs-replica-lifecycle-owner.js",
+          "line": 255,
+          "inclusiveHits": 2538
+        }
+      ]
+    },
+    {
+      "endedAt": "2026-11-26T19:14:22.295Z",
+      "windowMs": 30237,
+      "totalSamples": 14206,
+      "frames": [
+        {
+          "fn": "runFormationOwner",
+          "url": "src/diagnostics/formation-turn-attribution.js",
+          "line": 744,
+          "inclusiveHits": 3309
+        },
+        {
+          "fn": "dispatch",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 583,
+          "inclusiveHits": 2198
+        },
+        {
+          "fn": "execute",
+          "url": "src/raft/raft-rs-replica-lifecycle-owner.js",
+          "line": 255,
+          "inclusiveHits": 2185
+        },
+        {
+          "fn": "protocolTurn",
+          "url": "src/raft/raft-rs-operation-port.js",
+          "line": 595,
+          "inclusiveHits": 2153
+        },
+        {
+          "fn": "runRaftProtocolActivity",
+          "url": "src/diagnostics/raft-formation-attribution.js",
+          "line": 15,
+          "inclusiveHits": 2153
+        }
+      ]
+    }
+  ],
+  "evidenceSha256": {
+    "bench-profile-844-three-1909-node1.log.gz": "eb7fb402f2b44c5c9723bb58a23c4484de928e4ac9e5cfb526ee6ce525567b9d",
+    "bench-profile-844-three-1909-deadline-census.ndjson": "a46d1e0f38d539763dbcf2b21fd816e142ddee762b8d0aaa3a8ab2f7bc925e8d",
+    "bench-profile-844-three-1909-raw.ndjson": "b8d6eb9666a0d328aa19f89020213c75141f86d07b5d775bbd556df996c84c3c",
+    "comparative-campaign-bench-profile-844-three-1909.json": "ef064c67c5fbd10f806898b914428d2d76239fa0342b6c43633635eefe9a463b"
+  }
+}

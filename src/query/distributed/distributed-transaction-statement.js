@@ -17,6 +17,22 @@ const LOCAL_STR_TYPED_CANCELLED = 'typed_transaction_cancelled';
 const ROW_KEY_WAIT_CYCLE_DETECTED = 'ROW_KEY_WAIT_CYCLE_DETECTED';
 const SETTLED_STATUS_REJECTED = 'rejected';
 
+function enqueueDeferredWriteOperationPersist(tx, persistPromise) {
+  if (!Array.isArray(tx.pendingWriteOperationPersists)) {
+    tx.pendingWriteOperationPersists = [];
+  }
+  persistPromise.catch(() => {});
+  tx.pendingWriteOperationPersists.push(persistPromise);
+}
+
+function drainPendingWriteOperationPersists(tx) {
+  if (!Array.isArray(tx?.pendingWriteOperationPersists) ||
+      tx.pendingWriteOperationPersists.length === 0) {
+    return Promise.resolve();
+  }
+  return Promise.allSettled(tx.pendingWriteOperationPersists.splice(0));
+}
+
 function settledCycleRollbacksOf(coordinator) {
   if (coordinator.settledCycleRollbacksBySession === undefined) {
     coordinator.settledCycleRollbacksBySession = new Map();
@@ -91,8 +107,28 @@ const distributedTransactionStatementMethods = {
     this.settledCycleRollbacksBySession?.delete(sessionId);
   },
 
+  recordSettledRecoveryRollback(tx) {
+    if (!tx || typeof tx.sessionId !== 'string' || tx.sessionId.length === 0) {
+      return;
+    }
+    settledCycleRollbacksOf(this).set(tx.sessionId, {
+      success: true,
+      operation: QUERY_OPERATION.ROLLBACK,
+      transactionId: tx.transactionId,
+      transactionEpoch: tx.transactionEpoch,
+      participants: this.getOrderedParticipantIds(tx),
+      failedParticipants: [],
+      participantFailures: [],
+      firstFailedParticipant: null,
+    });
+  },
+
   async rollbackTransaction(sessionId, options = {}) {
     return this.rollback(sessionId, options);
+  },
+
+  enqueueDeferredWriteOperationPersist(tx, persistPromise) {
+    enqueueDeferredWriteOperationPersist(tx, persistPromise);
   },
   /**
    * Queue transaction operations in FIFO order for one session.
@@ -154,13 +190,14 @@ const distributedTransactionStatementMethods = {
         deferPersistence: true,
       });
       const tx = this.transactionsBySession.get(sessionId);
-      const [persistSettled, writeSettled] = await Promise.allSettled([
+      const [activePersistSettled, , writeSettled] = await Promise.allSettled([
         persistActivePromise,
+        drainPendingWriteOperationPersists(tx),
         Promise.resolve().then(() =>
           executeWrite(tx ? statementTransactionIdentityOf(tx) : null)),
       ]);
-      if (persistSettled.status === SETTLED_STATUS_REJECTED) {
-        throw persistSettled.reason;
+      if (activePersistSettled.status === SETTLED_STATUS_REJECTED) {
+        throw activePersistSettled.reason;
       }
       if (writeSettled.status === SETTLED_STATUS_REJECTED) {
         throw writeSettled.reason;
@@ -170,6 +207,7 @@ const distributedTransactionStatementMethods = {
         sessionId,
         operation.operationId,
         result,
+        {deferPersistenceAwait: result?.success === true},
       );
       if (tx?.telemetry) {
         tx.telemetry.statementsMs += Math.max(0, resolveNowMs() - startedAtMs);

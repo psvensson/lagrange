@@ -9,7 +9,7 @@ import {PARTITION_COMMITTED_COMMAND_OUTCOME as OUTCOME,
   PARTITION_SERVICE_OPERATION} from './partition-service-constants.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND as BOUND} from
   './partition-cdc-obligation-constants.js';
-import {countCdcObligations} from './partition-cdc-obligation-ledger.js';
+import {countOwedCdcObligations} from './partition-cdc-obligation-ledger.js';
 import {PARTICIPANT_TRANSACTION_COMMAND, PARTICIPANT_TRANSACTION_STATE} from './partition-participant-transaction-constants.js';
 import {decisionMatchesPreparedRow, operationsOf} from './partition-participant-transaction-bytes.js';
 import {readParticipantTransactionRow} from './partition-participant-transaction-store.js';
@@ -72,7 +72,7 @@ function admitCdcOwedWork(service, command) {
   if (required > BOUND.OWED_MAX_EVENTS) {
     return capacityRefusal(service, command, CAPACITY_REFUSAL.UNSATISFIABLE);
   }
-  const {owed} = countCdcObligations(service.db);
+  const owed = countOwedCdcObligations(service.db);
   return owed + required <= BOUND.OWED_MAX_EVENTS ? ADMITTED :
     capacityRefusal(service, command, CAPACITY_REFUSAL.TEMPORARY);
 }

@@ -673,8 +673,8 @@ function createRaftRsOperationPort(request) {
     // One named request shape ({successor, replicaIdentity?}); the target
     // is resolved through this replica's own registry, and a request that
     // misses the shape or names an unreserved identity is refused typed.
-    transferLeadership: (transferRequest) => protocolTurn(() => {
-      const normalized = normalizedTransferRequest(transferRequest, registry);
+    transferLeadership: (transferRequest, admitExecution) => protocolTurn(() => {
+      const normalized = normalizedTransferRequest(transferRequest, registry, admitExecution);
       return normalized.refusal === undefined ? dispatcher.execute({
         type: RUNTIME_COMMAND.TRANSFER_LEADERSHIP,
         transfer: normalized.command,

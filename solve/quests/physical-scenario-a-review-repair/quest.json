@@ -1,0 +1,36 @@
+{
+  "schema": "solve-quest/2",
+  "id": "physical-scenario-a-review-repair",
+  "class": "fix",
+  "statement": "Repair the reviewed placement observation, source mirror custody, query submission and schema recovery interactions exercised by the physical Scenario A campaign. Require the scoped witnesses and a successful public workload on three distinct physical data hosts with the original formation deadline.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/physical-scenario-a-review-repair/evidence/receipt.json",
+      "requiredReceipts": [
+        "scenario-a-three-physical-hosts",
+        "placement-scope-and-delay",
+        "committed-retention-and-installed-leader-replay",
+        "submission-and-completion",
+        "durable-schema-recovery",
+        "observation-transition",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "baseline",
+      "statement": "bench-20261126T130159Z-501b4c records a product failure during new_order setup before measured operations. Its endpoint image was verified against 8e6e2d410. This observed baseline allocates no cause to unmeasured findings."
+    },
+    {
+      "id": "authority",
+      "statement": "Committed owner confirmation precedes dependent split/merge work. Exact terminal evidence authorizes release. A cancelled waiter cannot start a new submission or erase a committed answer. Each placement signal retains its resource, interval and denominator."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "8e6e2d4106e9d4b741ec92ccadcda8513163bc5f"
+}

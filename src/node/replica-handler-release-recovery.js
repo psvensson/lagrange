@@ -3,6 +3,9 @@ import {readStateField} from '../utils/state-field-read.js';
 // retries carry no phase authority: every run reads current durable origin,
 // membership, build and live service facts through the release algorithm.
 import {RAFT_ROLE} from '../raft/constants.js';
+import {TABLES} from '../constants/tables.js';
+import {INITIAL_PARTITION_IDS} from
+  '../bootstrap/system-table-schemas-constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {ROLE as RAFT_RS_ROLE} from '../raft/raft-rs-runtime-owner-constants.js';
 import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
@@ -11,9 +14,14 @@ import {readPartitionWriteOrigin} from '../partition/partition-participant-trans
 import {invalidateParticipantReleaseAdmission, participantCutoverPauseOf} from
   '../partition/partition-participant-transaction-pause.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_RELEASE_LOG, PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
+  PARTICIPANT_RELEASE_LOG, PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {runParticipantCutover} from './replica-handler-participant-cutover.js';
+import {
+  hasAnyUnreachableOrDeadClusterNode,
+  hasUnpublishedCompletedMembershipRecovery,
+} from './replica-handler-membership-recovery-decision.js';
 import {captureParticipantReleaseRecoveryDetail} from './participant-release-diagnostic-observation.js';
 import {completeParticipantRelease, requestParticipantRelease} from './participant-release-client.js';
 import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
@@ -37,6 +45,23 @@ const FRESH_CREATE_RELEASE_UNAVAILABLE = 'FRESH_CREATE_RELEASE_UNAVAILABLE';
 
 const PRE_CANDIDATE_RAFT_STATE = 3;
 const PRE_CANDIDATE_ROLE = RAFT_RS_ROLE[PRE_CANDIDATE_RAFT_STATE];
+const PRIORITY_RELEASE_PARTITION_ORDER = Object.freeze([
+  INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS],
+  INITIAL_PARTITION_IDS[TABLES.REPLICA_OPERATIONS],
+  INITIAL_PARTITION_IDS[TABLES.SERVICES],
+  INITIAL_PARTITION_IDS[TABLES.PARTITIONS],
+  INITIAL_PARTITION_IDS[TABLES.TABLES],
+  INITIAL_PARTITION_IDS[TABLES.NODES],
+  INITIAL_PARTITION_IDS[TABLES.SCHEMA_OPERATIONS],
+  INITIAL_PARTITION_IDS[TABLES.SERVICE_ENDPOINTS],
+  INITIAL_PARTITION_IDS[TABLES.NODE_ENDPOINTS],
+]);
+const PRIORITY_RELEASE_PARTITION_SET = new Set(PRIORITY_RELEASE_PARTITION_ORDER);
+
+function releasePartitionPriorityRank(partitionId) {
+  const index = PRIORITY_RELEASE_PARTITION_ORDER.indexOf(partitionId);
+  return index === -1 ? PRIORITY_RELEASE_PARTITION_ORDER.length : index;
+}
 
 function ordinaryNonleaderStatus(status) {
   // PRE_VOTE is enabled on every group (raft-rs-group-constants.js), so
@@ -199,6 +224,51 @@ function createParticipantReleaseRecovery(handler) {
     return handler.localServices.get(leader.replicaId) === leader;
   }
 
+  function enqueuePriorityHostedPartitions(delay = 0) {
+    if (stopped || handler.shuttingDown) return;
+    for (const partitionId of PRIORITY_RELEASE_PARTITION_ORDER) {
+      if (hosted(partitionId).length > 0) {
+        enqueue(partitionId, delay);
+      }
+    }
+  }
+
+  function hasPendingLocalPriorityLeader(excludePartitionId = null) {
+    for (const partitionId of PRIORITY_RELEASE_PARTITION_ORDER) {
+      if (partitionId === excludePartitionId) continue;
+      if (running.has(partitionId)) return true;
+      for (const service of hosted(partitionId)) {
+        if (!service.initialized) continue;
+        if (service.raft?.readStatus?.()?.role === RAFT_ROLE.LEADER &&
+            participantCutoverPauseOf(service) !== null) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function hasAnyCompletedLocalMembershipRecovery() {
+    for (const service of handler.localServices.values()) {
+      if (service?.lastCompletedMembershipRecovery) return true;
+    }
+    return false;
+  }
+
+  function reassertAllLocalLeadersMetadata() {
+    for (const service of handler.localServices.values()) {
+      if (!service || service.isShutdown || !service.initialized) continue;
+      if (service.raft?.readStatus?.()?.role === RAFT_ROLE.LEADER) {
+        service.reassertDurableLeaderNodeId?.();
+        if (service.lastCompletedMembershipRecovery &&
+            service.lastCompletedMembershipRecoveryPersisted !== true) {
+          void handler.tryAutonomousPermanentMemberLossRecovery?.(service);
+        }
+      }
+      service.reassertDurableRaftRole?.();
+    }
+  }
+
   async function reconcile(partitionId) {
     const services = hosted(partitionId);
     const observed = observeHostedServices(services);
@@ -208,7 +278,27 @@ function createParticipantReleaseRecovery(handler) {
       return;
     }
     invalidateParticipantReleaseAdmission(leader);
-    if (participantCutoverPauseOf(leader) === null) return;
+    const isPriorityPartition = PRIORITY_RELEASE_PARTITION_SET.has(partitionId);
+    if (participantCutoverPauseOf(leader) === null) {
+      const voterCount = leader.raft?.readStatus?.()?.voterCount ?? 0;
+      const hasUnpublishedRecovery = hasUnpublishedCompletedMembershipRecovery(
+        handler,
+        leader,
+      );
+      if (!hasUnpublishedRecovery &&
+          (!isPriorityPartition ||
+            (!leader.lastCompletedMembershipRecovery &&
+              (voterCount <= 1 || !hasAnyUnreachableOrDeadClusterNode(handler))))) {
+        return;
+      }
+      const recovered = await handler.tryAutonomousPermanentMemberLossRecovery?.(leader);
+      if (recovered?.success === true) {
+        enqueuePriorityHostedPartitions(0);
+      } else if (recovered?.retry === true) {
+        enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
+      }
+      return;
+    }
     if (readPartitionWriteOrigin(leader.db) === null) {
       report(partitionId, {outcome: OUTCOME.OPERATOR_REQUIRED,
         missingFact: RELEASE_RECOVERY_FACT.ORIGIN});
@@ -226,6 +316,28 @@ function createParticipantReleaseRecovery(handler) {
       deadlineAtMs: now() + BOUND.DRAIN_DEADLINE_MS});
     if (answer.outcome !== OUTCOME.CUT_OVER) {
       report(partitionId, answer);
+      const missingDirectReply =
+        answer.missingFact === MISSING_FACT.REPLICA_RELEASE_REPLY;
+      const missingControlReply =
+        answer.missingFact === MISSING_FACT.CURRENT_CONTROL_OWNER &&
+        answer.controlMissingFact === MISSING_FACT.REPLICA_RELEASE_REPLY;
+      if (missingControlReply) {
+        enqueue(INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS], 0);
+      }
+      if ((missingDirectReply || missingControlReply) &&
+          isActiveHostedLeader(leader) &&
+          (isPriorityPartition || !hasPendingLocalPriorityLeader(partitionId))) {
+        const recovered = await handler.tryAutonomousPermanentMemberLossRecovery?.(
+          leader,
+          answer.inspectNodeId ?? null,
+          missingDirectReply ? answer.inspectReplicaId ?? null : null,
+        );
+        if (recovered?.success === true) {
+          enqueuePriorityHostedPartitions(0);
+          enqueue(partitionId, 0);
+          return;
+        }
+      }
       enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
       return;
     }
@@ -234,17 +346,46 @@ function createParticipantReleaseRecovery(handler) {
       enqueue(partitionId);
       return;
     }
+    const hasUnpublishedRecovery = hasUnpublishedCompletedMembershipRecovery(
+      handler,
+      leader,
+    );
+    if (hasUnpublishedRecovery ||
+        hasAnyCompletedLocalMembershipRecovery() ||
+        hasAnyUnreachableOrDeadClusterNode(handler)) {
+      leader.reassertDurableLeaderNodeId?.();
+      leader.reassertDurableRaftRole?.();
+      if (hasUnpublishedRecovery ||
+          (leader.lastCompletedMembershipRecovery &&
+            leader.lastCompletedMembershipRecoveryPersisted !== true)) {
+        const recovered = await handler.tryAutonomousPermanentMemberLossRecovery?.(leader);
+        if (recovered?.retry === true) {
+          enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
+        }
+      }
+      if (isPriorityPartition) {
+        reassertAllLocalLeadersMetadata();
+        enqueuePriorityHostedPartitions(0);
+      }
+    }
     report(partitionId, answer);
   }
 
   function dispatch() {
     timer = null;
     if (stopped || handler.shuttingDown) return;
-    for (const [partitionId, due] of pending) {
+    const currentNow = now();
+    const readyEntries = [...pending.entries()]
+      .filter(([, due]) => due <= currentNow)
+      .sort(([leftId, leftDue], [rightId, rightDue]) => {
+        const rankDiff = releasePartitionPriorityRank(leftId) -
+          releasePartitionPriorityRank(rightId);
+        return rankDiff !== 0 ? rankDiff : leftDue - rightDue;
+      });
+    for (const [partitionId] of readyEntries) {
       if (running.size >= MAX_CONCURRENT_ATTEMPTS) break;
-      if (due > now()) continue;
       if (running.has(partitionId)) {
-        pending.set(partitionId, now() + BOUND.RECOVERY_RETRY_MS);
+        pending.set(partitionId, currentNow + BOUND.RECOVERY_RETRY_MS);
         continue;
       }
       pending.delete(partitionId);

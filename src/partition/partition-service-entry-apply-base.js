@@ -1,3 +1,8 @@
+import {SIBLING_DESCRIPTOR_ACTION, siblingDescriptorDispositionIn} from './partition-sibling-descriptor-effect.js';
+import {decodeSplitDescriptorCommand, deriveParticipantEntryId, descriptorRefusal,
+  finalizeChildReceipt, isSiblingDescriptorAction, retainedSplitDescriptorAnswer,
+  SPLIT_DESCRIPTOR_ERROR, splitDescriptorCommandDigest, splitDescriptorWriteKey,
+  usesSplitDescriptorIdentity} from './partition-split-descriptor-command.js';
 import {requestPlacementRepairPreparation} from './partition-placement-repair-preparation.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
@@ -11,10 +16,14 @@ import {
 } from './partition-service-constants.js';
 import {isCommittedCommandType, isCommittedSqlCommandType} from
   './partition-committed-command-admission.js';
-import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
+import {hasObsoleteMirrorCustodyField} from './partition-mirror-custody-codec.js';
+import {MIRROR_RETENTION_CUSTODY_COMMAND_ERROR, PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
 import {
+  applyMirrorRetentionCustodyCommand,
+  committedStatementEntryKey,
   isCommittedStatementKeyed, readCommittedStatementOutcome, recordCommittedStatementOutcome,
+  registerMirrorRetentionRaftHooks,
   settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
   settleRecordedCommittedStatement,
 } from './partition-committed-statement-outcome.js';
@@ -64,14 +73,60 @@ import {applyLockingReadReservationCommand, requestLockingReadReservation} from
   './partition-locking-read-service.js';
 import {checkOperationsLockingReadConflict} from './partition-locking-read-write-check.js';
 import {LOCKING_READ_RESERVATION_TYPE} from './partition-locking-read-command-constants.js';
+import {
+  PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE_TYPE,
+  PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+} from './partition-membership-recovery-constants.js';
+import {
+  applyPartitionMembershipRecoveryCommand,
+  checkExcludedMemberEnvelopeFence,
+  handleMembershipRecoveryFenceNotice,
+  stagePartitionMembershipRecoveryIntent,
+} from './partition-membership-recovery.js';
 registerFormationPartitionApplyHooks({
   partitionWriteLeadershipRefusalOf, pausedWriteAnswerOf, recordCommittedOperationCdc,
   settleReservedCommittedStatement, startPartitionRaftWriteCommit,
+});
+registerMirrorRetentionRaftHooks({
+  partitionWriteLeadershipRefusalOf,
+  startPartitionRaftWriteCommit,
 });
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
 });
+
+function readDescriptorAnswer(service, intent) {
+  const entryId = deriveParticipantEntryId(splitDescriptorWriteKey(intent), service.partitionId);
+  const recorded = readCommittedStatementOutcome(service, committedStatementEntryKey({entryId}));
+  if (recorded.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED) return null;
+  return retainedSplitDescriptorAnswer({intent, digest: splitDescriptorCommandDigest(intent)}, recorded);
+}
+
+function withDescriptorReceipt(result, receipt) {
+  return receipt === null ? {refusal: descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.UNRESOLVED, true)} :
+    {result, receipt};
+}
+
+function applySplitDescriptorStatement(service, command, descriptor) {
+  const {intent} = descriptor;
+  if (!isSiblingDescriptorAction(intent.action)) {
+    const result = runCommittedPartitionStatement(service, command);
+    return withDescriptorReceipt(result, finalizeChildReceipt(service.db, intent, result.changes));
+  }
+
+  const promote = intent.action === SIBLING_DESCRIPTOR_ACTION.PROMOTE;
+  const opposite = readDescriptorAnswer(service, {...intent, action: promote ?
+    SIBLING_DESCRIPTOR_ACTION.FINALIZE : SIBLING_DESCRIPTOR_ACTION.PROMOTE});
+  if (opposite?.success === false) return {refusal: opposite};
+  if (promote && opposite !== null) return {refusal: descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.FINALIZED)};
+  if (!promote && opposite === null) {
+    return withDescriptorReceipt({changes: 0, lastInsertRowid: null},
+      siblingDescriptorDispositionIn(service.db, intent, 0, true));
+  }
+  const result = runCommittedPartitionStatement(service, command);
+  return withDescriptorReceipt(result, siblingDescriptorDispositionIn(service.db, intent, result.changes, false));
+}
 
 const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
   [COORDINATOR_SETTLEMENT_TYPE]: requestCoordinatorSettlement,
@@ -79,6 +134,9 @@ const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
   [PLACEMENT_REPAIR_TYPE]: requestPlacementRepair,
   [PLACEMENT_REPAIR_PREPARE_TYPE]: requestPlacementRepairPreparation,
   [FORMATION_TRANSITION_TYPE]: requestFormationTransition,
+  [PARTITION_MEMBERSHIP_RECOVERY_TYPE]: stagePartitionMembershipRecoveryIntent,
+  [PARTITION_MEMBERSHIP_RECOVERY_FENCE_NOTICE_TYPE]:
+    handleMembershipRecoveryFenceNotice,
   [SERVICE_MSG_TYPE.LIVE_QUERY_CDC_SUBSCRIBE]: handleRemoteLiveQueryCdcSubscribe,
   [SERVICE_MSG_TYPE.LIVE_QUERY_CDC_UNSUBSCRIBE]: handleRemoteLiveQueryCdcUnsubscribe,
   [LOCKING_READ_RESERVATION_TYPE]: requestLockingReadReservation,
@@ -88,7 +146,16 @@ const NON_SQL_COMMITTED_APPLIERS = Object.freeze([
   [(type) => type === COORDINATOR_SETTLEMENT_TYPE, applyCoordinatorSettlement],
   [(type) => PLACEMENT_COMMAND_TYPES.includes(type), applyPlacementCommand],
   [(type) => type === FORMATION_TRANSITION_TYPE, applyFormationTransitionCommand],
+  [
+    (type) => type === PARTITION_MEMBERSHIP_RECOVERY_TYPE,
+    applyPartitionMembershipRecoveryCommand,
+  ],
   [(type) => type === LOCKING_READ_RESERVATION_TYPE, applyLockingReadReservationCommand],
+  [
+    (type) => type ===
+      PARTITION_SERVICE_SHARED.PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY,
+    applyMirrorRetentionCustodyCommand,
+  ],
   [isCdcCommandType, applyCdcAcknowledgementCommand],
   [(type) => !isCommittedSqlCommandType(type), applyCommittedTransactionCommand],
 ]);
@@ -129,10 +196,11 @@ function committedCommandRefusal(service, {command, index, rollback}, refusal) {
 // runs, decided from the command alone. Only a bug or version skew commits
 // one (the admission owner never proposes it; every proposer builds its
 // entry with an entryId); consuming it would drop a committed command, so
-// both refusals fail the application closed with one disposition:
+// each refusal fails the application closed:
 // - an unrecognised type;
 // - an SQL command without an entryId: it has no outcome-row key and no
-//   CDC-obligation key, so its statement never runs.
+//   CDC-obligation key, so its statement never runs;
+// - a SQL or custody entry carrying obsolete mirror-retention fields.
 function committedCommandGate(service, committed) {
   const commandType = committed.command?.type;
   if (!isCommittedCommandType(commandType)) {
@@ -142,6 +210,13 @@ function committedCommandGate(service, committed) {
       outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.UNRECOGNISED,
       reason: PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON.COMMAND_UNKNOWN});
   }
+  if ((isCommittedSqlCommandType(commandType) ||
+      commandType === PARTITION_SERVICE_OPERATION.MIRROR_RETENTION_CUSTODY) &&
+      hasObsoleteMirrorCustodyField(committed.command)) {
+    const code = MIRROR_RETENTION_CUSTODY_COMMAND_ERROR.BYTES;
+    throw committedCommandRefusal(service, committed, {message: code, code, reason: code,
+      outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.CUSTODY_BYTES_REFUSED});
+  }
   if (isCommittedSqlCommandType(commandType) &&
       !isCommittedStatementKeyed(committed.command)) {
     throw committedCommandRefusal(service, committed, {
@@ -150,6 +225,26 @@ function committedCommandGate(service, committed) {
       outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.ENTRY_ID_MISSING_REFUSED,
       reason: PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON.ENTRY_ID_MISSING});
   }
+}
+
+function buildSingleStatementLockCheckOperation(command) {
+  return {
+    sql: command.sql,
+    params: command.params || [],
+    ...(command.typedParams ? {typedParams: command.typedParams} : {}),
+  };
+}
+
+function buildAppliedStatementResolutionAnswer(info, identity) {
+  return {
+    success: true,
+    changes: info.changes,
+    lastInsertRowid: info.lastInsertRowid,
+    ...(typeof info.mutationKind === 'string' ? {mutationKind: info.mutationKind} : {}),
+    ...(info.typedEffects ? {typedEffects: info.typedEffects} : {}),
+    ...(Array.isArray(info.affectedRows) ? {affectedRows: info.affectedRows} : {}),
+    ...identity,
+  };
 }
 
 class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
@@ -174,6 +269,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       // A shut-down or no-longer-registered incarnation refuses the envelope
       // it would drop, so the sender never records it as taken (F1).
       assertReplicaHandlerServing(this);
+      const fenceRefusal = checkExcludedMemberEnvelopeFence(this, envelope, payload);
+      if (fenceRefusal !== null) {
+        return fenceRefusal;
+      }
       return stepRaftEnvelope(this.raft, payload);
     }
     return this.handleCanonicalApplicationPayload(payload);
@@ -500,6 +599,13 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       rollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK,
         effect)});
     const commandType = command.type;
+    const descriptor = usesSplitDescriptorIdentity(command) ? decodeSplitDescriptorCommand(this, command) : null;
+    if (usesSplitDescriptorIdentity(command) && descriptor === null) {
+      const code = SPLIT_DESCRIPTOR_ERROR.BYTES;
+      throw committedCommandRefusal(this, {command, index, rollback: (effect) =>
+        scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)},
+      {message: code, code, outcome: code, reason: code});
+    }
     // Witness the committed entry's HLC on EVERY replica (leader and follower),
     // before any branch/early-return, so this clock advances past every entry it
     // applies. Without this, a new leader whose wall clock lags the old leader
@@ -543,18 +649,38 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         return settleCdcOwedRefusal(this, {command, afterCommit}, cdcAdmission.answer);
       }
       const lockConflict = checkOperationsLockingReadConflict(this, {
-        operations: [{sql: command.sql, params: command.params || []}],
+        operations: [buildSingleStatementLockCheckOperation(command)],
         transactionId: command.transactionId ?? null,
         deterministic: true,
       });
       if (lockConflict !== null) {
+        if (descriptor) {
+          afterCommit(() => this.resolveCommittedWrite(command.entryId,
+            {...lockConflict, success: false, failureCode: lockConflict.errorCode, retryable: true, deferRetry: true}));
+          return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
+        }
         return settleLockingReadRefusedCommittedStatement(
           this, {lockConflict, command, entryKey, index, term, identity, afterCommit});
       }
       let info;
+      let receipt;
       try {
-        info = runCommittedPartitionStatement(this, command);
+        if (descriptor) {
+          const effect = applySplitDescriptorStatement(this, command, descriptor);
+          if (effect.refusal) {
+            afterCommit(() => this.resolveCommittedWrite(command.entryId, effect.refusal));
+            return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
+          }
+          info = effect.result;
+          receipt = effect.receipt;
+        } else {
+          info = runCommittedPartitionStatement(this, command);
+        }
       } catch (error) {
+        if (descriptor) {
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () => this.rejectCommittedWrite(command.entryId, error));
+          throw error;
+        }
         return settleFailedCommittedStatement(this, {
           error, command, entryKey, index, term, identity, afterCommit,
           afterRollback: (effect) =>
@@ -562,20 +688,24 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         });
       }
       recordCommittedStatementOutcome(this, {
+        ...(descriptor ? {ownerResultText: JSON.stringify(receipt), commandDigest: descriptor.digest} : {}),
         entryKey,
         outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
         index,
         term,
         result: info,
+        command,
       });
-      recordCommittedStatementCdc(this, {command, index, term, afterCommit},
-        {entryKey, result: info});
-      advancePartitionWriteGeneration(this.db);
-      const committedGeneration = readPartitionWriteGeneration(this.db);
-      recordCommittedAutocommitRowKeys(this, command, committedGeneration);
-      scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
-        resetParticipantRowKeyHistory(this));
-      recordCommittedWriteTraffic(this, afterCommit, 1);
+      if (!descriptor || info.changes > 0) {
+        recordCommittedStatementCdc(this, {command, index, term, afterCommit},
+          {entryKey, result: info});
+        advancePartitionWriteGeneration(this.db);
+        const committedGeneration = readPartitionWriteGeneration(this.db);
+        recordCommittedAutocommitRowKeys(this, command, committedGeneration);
+        scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
+          resetParticipantRowKeyHistory(this));
+        recordCommittedWriteTraffic(this, afterCommit, 1);
+      }
       if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||
           /^\s*(?:CREATE|DROP)\s+TABLE\b/iu.test(String(command.sql || ''))) {
         afterCommit(() => invalidateParticipantDeterminismSelfCheck(this.db));
@@ -584,12 +714,12 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
       }
       afterCommit(() => {
-        this.resolveCommittedWrite(command.entryId, {
-          success: true,
-          changes: info.changes,
-          lastInsertRowid: info.lastInsertRowid,
-          ...identity,
-        });
+        this.resolveCommittedWrite(
+          command.entryId,
+          {...buildAppliedStatementResolutionAnswer(info, identity),
+            ...(receipt ? {splitDescriptorReceipt: receipt, committed: true, term} : {})},
+          descriptor?.digest,
+        );
       });
     }
     scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>

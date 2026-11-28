@@ -7,10 +7,17 @@ import {observeAuthoritativeReplicaLifecycle} from
 
 const DURABLE_REJOIN_LIFECYCLE_AUTHORITY_MISSING_MSG =
   'Durable rejoin replica refused: lifecycle authority changed';
+const DURABLE_REJOIN_LIFECYCLE_AUTHORITY_UNAVAILABLE_MSG =
+  'Durable rejoin replica refused: lifecycle authority unavailable';
 const DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK =
   'DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK';
 const DURABLE_REJOIN_LIFECYCLE_AUTHORITY_CHANGED =
   'DURABLE_REJOIN_LIFECYCLE_AUTHORITY_CHANGED';
+const DURABLE_REJOIN_LIFECYCLE_AUTHORITY_UNAVAILABLE =
+  'DURABLE_REJOIN_LIFECYCLE_AUTHORITY_UNAVAILABLE';
+const MAX_AUTHORITY_OBSERVATION_ATTEMPTS = 20;
+// ends-on: authoritative services-p1 replica lifecycle observation becomes available
+const AUTHORITY_OBSERVATION_POLL_INTERVAL_MS = 250;
 
 function matchesRestoreGeneration(row, authority) {
   return Number.isSafeInteger(authority?.replicaCreatedAt) && row?.created_at ===
@@ -36,19 +43,69 @@ async function claimRestoreGeneration(stateMachine, row) {
     claimLearnerDiskRejoin(stateMachine, row) : true;
 }
 
+async function pollAvailableReplicaLifecycle(
+  replicaStateMachine,
+  replicaId,
+  remainingAttempts,
+  pollIntervalMs,
+) {
+  const observation = await observeAuthoritativeReplicaLifecycle(
+    replicaStateMachine,
+    replicaId,
+  );
+  if (observation?.available === true || remainingAttempts <= 1) {
+    return observation;
+  }
+  if (pollIntervalMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+  return pollAvailableReplicaLifecycle(
+    replicaStateMachine,
+    replicaId,
+    remainingAttempts - 1,
+    pollIntervalMs,
+  );
+}
+
+async function observeAvailableReplicaLifecycle(replicaStateMachine, replicaId, options) {
+  const maxAttempts = Number.isSafeInteger(options?.maxAuthorityObservationAttempts) &&
+      options.maxAuthorityObservationAttempts > 0 ?
+    options.maxAuthorityObservationAttempts :
+    MAX_AUTHORITY_OBSERVATION_ATTEMPTS;
+  const pollIntervalMs = Number.isFinite(options?.authorityObservationPollIntervalMs) &&
+      options.authorityObservationPollIntervalMs >= 0 ?
+    options.authorityObservationPollIntervalMs :
+    AUTHORITY_OBSERVATION_POLL_INTERVAL_MS;
+  return pollAvailableReplicaLifecycle(
+    replicaStateMachine,
+    replicaId,
+    maxAttempts,
+    pollIntervalMs,
+  );
+}
+
 async function assertDurableRejoinStorageAdmission(
   replicaStateMachine,
   options,
 ) {
   if (options.restoringExistingReplica !== true) return;
-  const observation = await observeAuthoritativeReplicaLifecycle(
+  const observation = await observeAvailableReplicaLifecycle(
     replicaStateMachine,
     options.replicaId,
+    options,
   );
-  const retirementOwnsDisk = observation.available === true &&
+  if (observation?.available !== true) {
+    const unavailableError = new Error(
+      `${DURABLE_REJOIN_LIFECYCLE_AUTHORITY_UNAVAILABLE_MSG}: ${options.replicaId}`,
+    );
+    unavailableError.code = DURABLE_REJOIN_LIFECYCLE_AUTHORITY_UNAVAILABLE;
+    unavailableError.deferRetry = true;
+    throw unavailableError;
+  }
+  const retirementOwnsDisk =
     matchesRestoreGeneration(observation.row, options.lifecycleAuthority) &&
     isLearnerRetirementToken(observation.row.cleanup_token);
-  if (!retirementOwnsDisk && observation.available === true &&
+  if (!retirementOwnsDisk &&
       rowMatchesRestoreAuthority(observation.row, options.lifecycleAuthority) &&
       await claimRestoreGeneration(replicaStateMachine, observation.row)) {
     return;
@@ -62,4 +119,9 @@ async function assertDurableRejoinStorageAdmission(
   throw error;
 }
 
-export {DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK, assertDurableRejoinStorageAdmission};
+export {
+  DURABLE_REJOIN_LIFECYCLE_AUTHORITY_CHANGED,
+  DURABLE_REJOIN_LIFECYCLE_AUTHORITY_UNAVAILABLE,
+  DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK,
+  assertDurableRejoinStorageAdmission,
+};

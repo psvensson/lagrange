@@ -222,11 +222,11 @@ tap.test('decision-rule validation retains refusal order and complete coverage',
   const uncovered = 'combination {"signal":"ready"} matches 0 rules; expected exactly 1.';
   const controls = [
     {rule: validRule, errors: []},
-    {rule: null, errors: ['rules[0] must be an object.', uncovered]},
+    {rule: null, errors: ['rules[0] must be object.', uncovered]},
     {rule: {...validRule, id: '', reason: '', invariantRefs: ['undeclared'],
       when: {extra: 'ready'}, outcome: {extra: 'allow'}}, errors: [
-      'rules[0].id must be concrete text.',
-      'rules[0].reason must be concrete text.',
+      'rules[0].id must NOT have fewer than 1 characters.',
+      'rules[0].reason must NOT have fewer than 1 characters.',
       'rules[0].invariantRefs[0] does not match a declared invariant id: undeclared.',
       'rules[0].when.signal is required.',
       'rules[0].when.extra is not a declared input.',
@@ -237,7 +237,7 @@ tap.test('decision-rule validation retains refusal order and complete coverage',
       errors: ['rules[0].when.signal has invalid value invalid.',
         'rules[0].outcome.result has invalid value invalid.', uncovered]},
     {rule: {...validRule, when: null, outcome: null}, errors: [
-      'rules[0].when must be an object.', 'rules[0].outcome must be an object.', uncovered,
+      'rules[0].when must be object.', 'rules[0].outcome must be object.', uncovered,
     ]},
   ];
   for (const control of controls) {
@@ -332,5 +332,52 @@ tap.test('compiled Ajv schemas enforce strict additionalProperties on statechart
   const statechartErrors = validateStatecharts([statechartFile]).errors;
   t.ok(statechartErrors.some((err) => err.includes('unsupported property extraRootField')));
   t.ok(statechartErrors.some((err) => err.includes('states[0] contains unsupported property extraStateField')));
+
+  t.equal(validateDecisionTableSchema({...validTable, owner: '   '}), false);
+  t.equal(
+    validateDecisionTableSchema({
+      ...validTable,
+      rules: [{...validRule, reason: '<fill-me>'}],
+    }),
+    false,
+  );
+  fs.writeFileSync(
+    tableFile,
+    JSON.stringify({
+      ...validTable,
+      owner: '   ',
+      rules: [{...validRule, reason: '<fill-me>'}],
+    }),
+  );
+  const nonConcreteTableErrors = validateDecisionTables([tableFile]).errors;
+  t.ok(nonConcreteTableErrors.some((err) => err.includes('owner must be concrete text.')));
+  t.ok(nonConcreteTableErrors.some((err) => err.includes('rules[0].reason must be concrete text.')));
+
+  t.equal(validateStatechartSchema({...validStatechart, id: '   '}), false);
+  t.equal(
+    validateStatechartSchema({
+      ...validStatechart,
+      transitions: [
+        {from: 'idle', event: 'finish', to: 'done', evidence: '<fill-me>'},
+      ],
+    }),
+    false,
+  );
+  fs.writeFileSync(
+    statechartFile,
+    JSON.stringify({
+      ...validStatechart,
+      id: '   ',
+      transitions: [
+        {from: 'idle', event: 'finish', to: 'done', evidence: '<fill-me>'},
+      ],
+    }),
+  );
+  const nonConcreteStatechartErrors = validateStatecharts([statechartFile]).errors;
+  t.ok(nonConcreteStatechartErrors.some((err) => err.includes('id must be concrete text.')));
+  t.ok(
+    nonConcreteStatechartErrors.some((err) =>
+      err.includes('transitions[0].evidence must be concrete text.')),
+  );
   t.end();
 });

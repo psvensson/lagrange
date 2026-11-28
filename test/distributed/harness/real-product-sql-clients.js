@@ -97,11 +97,18 @@ function resolvePsqlSignal(opts, callOptions) {
   return undefined;
 }
 
-function computePsqlBudgets(rawTimeoutMs, remainingMs = undefined) {
+function computePsqlBudgets(
+  rawTimeoutMs,
+  remainingMs = undefined,
+  maxProbeTimeoutMs = DEFAULT_SQL_PROBE_TIMEOUT_MS,
+) {
+  const probeCapMs = numberIsFinite(maxProbeTimeoutMs) && maxProbeTimeoutMs > 0 ?
+    Math.floor(maxProbeTimeoutMs) :
+    DEFAULT_SQL_PROBE_TIMEOUT_MS;
   const hasCallerTimeout = numberIsFinite(rawTimeoutMs);
   const effectiveTimeoutMs = hasCallerTimeout ?
-    Math.min(DEFAULT_SQL_PROBE_TIMEOUT_MS, Math.max(1, Math.floor(rawTimeoutMs))) :
-    DEFAULT_SQL_PROBE_TIMEOUT_MS;
+    Math.min(probeCapMs, Math.max(1, Math.floor(rawTimeoutMs))) :
+    probeCapMs;
   const connectTimeoutSeconds = Math.max(
     1,
     Math.min(
@@ -124,11 +131,7 @@ function computePsqlBudgets(rawTimeoutMs, remainingMs = undefined) {
   return {effectiveTimeoutMs, sshTimeoutMs, connectTimeoutSeconds, statementTimeoutMs};
 }
 
-async function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql,
-  callOptions = {}) {
-  const signal = resolvePsqlSignal(opts, callOptions);
-  const rawTimeoutMs = callOptions?.timeoutMs;
-  const remainingMs = callOptions?.remainingMs;
+function assertPsqlCallAllowed(signal, rawTimeoutMs, remainingMs) {
   if (signal?.aborted) {
     throw tagCommandError(new Error('psql operation aborted'), {
       aborted: true,
@@ -137,8 +140,9 @@ async function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, 
       observerInfrastructure: false,
     });
   }
-  if ((numberIsFinite(rawTimeoutMs) && rawTimeoutMs <= 0) ||
-      (numberIsFinite(remainingMs) && remainingMs <= 0)) {
+  const rawExpired = numberIsFinite(rawTimeoutMs) && rawTimeoutMs <= 0;
+  const remainingExpired = numberIsFinite(remainingMs) && remainingMs <= 0;
+  if (rawExpired || remainingExpired) {
     throw tagCommandError(new Error('psql operation deadline expired'), {
       aborted: false,
       deadlineExpired: true,
@@ -146,11 +150,19 @@ async function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, 
       observerInfrastructure: false,
     });
   }
+}
+
+async function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql,
+  callOptions = {}) {
+  const options = callOptions || {};
+  const signal = resolvePsqlSignal(opts, options);
+  const {timeoutMs: rawTimeoutMs, remainingMs, maxProbeTimeoutMs} = options;
+  assertPsqlCallAllowed(signal, rawTimeoutMs, remainingMs);
   const {
     sshTimeoutMs,
     connectTimeoutSeconds,
     statementTimeoutMs,
-  } = computePsqlBudgets(rawTimeoutMs, remainingMs);
+  } = computePsqlBudgets(rawTimeoutMs, remainingMs, maxProbeTimeoutMs);
   const callOpts = {
     ...withExplicitSignalOption(opts, signal),
     timeoutMs: sshTimeoutMs,
