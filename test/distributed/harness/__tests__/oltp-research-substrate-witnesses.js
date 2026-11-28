@@ -82,7 +82,8 @@ const SUBSTRATE_KIND = Object.freeze({
   SINGLE_HOST: 'lab-single-host',
   MULTI_HOST: 'lab-multi-host',
 });
-const INTER_NODE_PATH = Object.freeze({LAN: 'lan', LOOPBACK: 'loopback'});
+const INTER_NODE_PATH = Object.freeze({LAN: 'lan', BRIDGE: 'docker-bridge',
+  LOOPBACK: 'loopback'});
 const RESET_METHOD = Object.freeze({
   CREATED: 'created-and-loaded',
   TRUNCATED: 'truncated-and-reloaded',
@@ -95,12 +96,13 @@ const RTT_PACKETS = 20;
 const RTT_FIELDS = Object.freeze(['transmitted', 'received', 'lossPercent', 'minMs', 'avgMs',
   'maxMs', 'mdevMs']);
 const NODE_COUNT = 3;
-const MATRIX_PAIRS_THREE_HOSTS = 7;
-const PORT_BLOCK = 10;
+const MATRIX_ENTRIES = 7;
 const REST_PORT = 8080;
-const ADMIN_OFFSET = 1;
-const TRANSPORT_OFFSET = 2;
+const ADMIN_PORT = 8081;
+const TRANSPORT_PORT = 8082;
+const PLACEMENT_CAMPAIGN = 'bench-research-placement';
 const SINGLE_HOST_DECLARED_COUNT = 1;
+const BRIDGE_NETWORK = 'bridge';
 
 const TEXT = Object.freeze({
   NO_PROFILE: 'the manifest owner exports no COMPARATIVE_RESEARCH_PROFILE: a research ' +
@@ -113,15 +115,15 @@ const TEXT = Object.freeze({
   WRITER_SKIPPED: 'a research writer outside the published store did not append its record',
   NO_PLACEMENT: 'the Lagrange deployer exports no placement plan: one host per node, ' +
     'constant ports 8080-8082, the seed chosen by host equality and ' +
-    'declaredHostCount = hosts.length',
+    'declaredHostCount = hosts.length; no bridge network for one host',
   NO_SUBSTRATE: 'measureRtt is private to its owner and answers the average only; no ' +
     'measureRoundTripMatrix and no buildSubstrateDescriptor exist, so a run record has ' +
     'no substrate descriptor and no round-trip matrix',
   UNREFUSED_PLAN: 'a plan with three nodes on one host and no substrate was not refused',
   UNREFUSED_FACTS: 'host facts accepted one machine without a substrate',
   FACTS_INCOMPLETE: 'host facts of one machine are incomplete',
-  DESCRIPTOR: 'the descriptor builder does not state kind and path, or accepts a lan path ' +
-    'for one host',
+  DESCRIPTOR: 'the descriptor builder does not state kind and path, or accepts a lan or loopback ' +
+    'path for one host',
   NO_RETAINED_FILE: 'the guard workload retained no statement file',
   RUN_NOT_RESEARCH: 'a run of the manifest is not of subkind research',
   COMPARABLE: 'the manifest is comparable',
@@ -526,14 +528,16 @@ function placementProblem(plan) {
     return `a one-host plan declares ${show(plan?.declaredHostCount)} hosts and ` +
       `${plan?.nodes?.length} nodes`;
   }
-  const ports = arrayMap(plan.nodes, (node, index) => [node.ports.rest, node.ports.admin,
-    node.ports.transport, index]);
-  const clean = arrayEvery(ports, ([rest, admin, transport, index]) =>
-    rest === REST_PORT + (index * PORT_BLOCK) && admin === rest + ADMIN_OFFSET &&
-    transport === rest + TRANSPORT_OFFSET);
+  const networkName = plan.network?.name;
+  if (plan.network?.kind !== BRIDGE_NETWORK || typeof networkName !== 'string' ||
+      !stringIncludes(networkName, PLACEMENT_CAMPAIGN)) {
+    return `the one-host plan names network ${show(plan.network)}, not a bridge of the campaign`;
+  }
+  const standard = arrayEvery(plan.nodes, (node) => node.ports.rest === REST_PORT &&
+    node.ports.admin === ADMIN_PORT && node.ports.transport === TRANSPORT_PORT);
   const seeds = arrayFilter(plan.nodes, (node) => node.isSeed === true);
-  return clean && seeds.length === 1 && plan.nodes[FIRST].isSeed === true ? null :
-    `node ports ${show(ports)} or seed choice break the port-block convention`;
+  return standard && seeds.length === 1 && plan.nodes[FIRST].isSeed === true ? null :
+    'node ports or seed choice are not the standard ports with exactly one seed';
 }
 
 async function refusedBy(action) {
@@ -559,9 +563,12 @@ async function witnessOneHost() {
   const plan = deployerLagrange.planLagrangeNodePlacement;
   if (typeof plan !== 'function') return TEXT.NO_PLACEMENT;
   const hosts = Array.from({length: NODE_COUNT}, () => LAB_HOST_IP);
-  const problem = placementProblem(plan({hosts, substrate: SUBSTRATE_KIND.SINGLE_HOST}));
+  const problem = placementProblem(plan({hosts, substrate: SUBSTRATE_KIND.SINGLE_HOST,
+    campaignId: PLACEMENT_CAMPAIGN}));
   if (problem) return problem;
-  if (!await refusedBy(() => plan({hosts}))) return TEXT.UNREFUSED_PLAN;
+  if (!await refusedBy(() => plan({hosts, campaignId: PLACEMENT_CAMPAIGN}))) {
+    return TEXT.UNREFUSED_PLAN;
+  }
   return hostFactsProblem();
 }
 
@@ -601,14 +608,14 @@ async function matrixProblem() {
   const pairs = new Set(arrayMap(entries, (entry) => `${entry.from}>${entry.to}`));
   const complete = arrayEvery(entries, (entry) =>
     arrayEvery(RTT_FIELDS, (field) => numberIsFinite(entry[field])));
-  return entries.length === MATRIX_PAIRS_THREE_HOSTS && pairs.size === entries.length &&
+  return entries.length === MATRIX_ENTRIES && pairs.size === entries.length &&
     complete ? null :
     `the round-trip matrix has ${entries.length} entries, ${pairs.size} distinct`;
 }
 
 async function descriptorProblem() {
   const build = hostPreparation.buildSubstrateDescriptor;
-  const input = {kind: SUBSTRATE_KIND.SINGLE_HOST, interNodePath: INTER_NODE_PATH.LOOPBACK,
+  const input = {kind: SUBSTRATE_KIND.SINGLE_HOST, interNodePath: INTER_NODE_PATH.BRIDGE,
     hosts: [{hostId: LAB_HOST_NAME, ip: LAB_HOST_IP, bootId: LAB_BOOT_ID, cpus: 12,
       memGb: 15, primaryIface: 'eth0', linkType: 'wired'}],
     loadGeneratorHostId: LAB_HOST_NAME,
@@ -618,10 +625,11 @@ async function descriptorProblem() {
     storage: {root: STORAGE_ROOT, kind: 'bind'}};
   const single = build(input);
   const lanRefused = await refusedBy(() => build({...input,
-    interNodePath: INTER_NODE_PATH.LAN}));
+    interNodePath: INTER_NODE_PATH.LAN})) && await refusedBy(() => build({...input,
+    interNodePath: INTER_NODE_PATH.LOOPBACK}));
   return hostPreparation.COMPARATIVE_SUBSTRATE_KIND?.SINGLE_HOST === SUBSTRATE_KIND.SINGLE_HOST &&
     single.kind === SUBSTRATE_KIND.SINGLE_HOST &&
-    single.interNodePath === INTER_NODE_PATH.LOOPBACK && lanRefused ? null : TEXT.DESCRIPTOR;
+    single.interNodePath === INTER_NODE_PATH.BRIDGE && lanRefused ? null : TEXT.DESCRIPTOR;
 }
 
 async function witnessSubstrate() {
@@ -647,7 +655,7 @@ const WITNESS = Object.freeze({
 
 export {
   INTER_NODE_PATH,
-  MATRIX_PAIRS_THREE_HOSTS,
+  MATRIX_ENTRIES,
   NODE_COUNT,
   PING_STATS,
   PUBLISHED_STORE,

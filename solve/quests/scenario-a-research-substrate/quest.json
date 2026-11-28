@@ -2,22 +2,21 @@
   "schema": "solve-quest/2",
   "id": "scenario-a-research-substrate",
   "epic": "developer-journey-and-measured-comparisons",
-  "statement": "Scenario A latency and efficiency research has a valid substrate and honest records. A research profile class, dispatch family and subkind exist that admission refuses by one explicit reason and the record writer refuses to place in the published store. The runner accepts --profile research (one fresh deployment per run on the existing lifecycle; the dry run prints the frozen plan and that nothing is admissible; --storage-root and a passed semantic gate are required). Three Lagrange nodes run on one lab host, declared truthfully: one host, the machine's real host name on every node, declared host count 1, a port block per node, the load generator on the same host, refused for every non-research plan. Every run records a substrate descriptor and a round-trip matrix measured before and after the window, never during it. The dataset reset method is reported by the adapter that performed it. Every statement carries a monotonic start and end in a per-attempt timeline indexed into a per-run statement catalog. Retained statement evidence of every profile is brought into the campaign evidence beside the raw record, digest-verified, before the load-generator worktree is released, and a missing or mismatching file is a typed evidence failure. An unverified seed is never warmed up or measured. Physical evidence: one research run on one lab host and one on three hosts.",
+  "statement": "Scenario A latency and efficiency research has a valid substrate and honest records. A research profile class, dispatch family and subkind exist that admission refuses by one explicit reason and the record writer refuses to place in the published store. The runner accepts --profile research (one fresh deployment per run on the existing lifecycle; the dry run prints the frozen plan and that nothing is admissible; --storage-root and a passed semantic gate are required). Three Lagrange nodes run on one lab host on a campaign-scoped Docker bridge network (created and removed by the campaign's own deployment and cleanup owners, labelled with the campaign; a leftover network is a closure failure), declared truthfully: one host, the machine's real host name on every node, declared host count 1, standard ports on each node's own bridge address, the load generator on the same host, refused for every non-research plan. Every run records a substrate descriptor and a round-trip matrix (the load-generator-to-endpoint path and every ordered node pair, on the bridge for one host) measured before and after the window, never during it. The dataset reset method is reported by the adapter that performed it. Every statement carries a monotonic start and end in a per-attempt timeline indexed into a per-run statement catalog. Retained statement evidence of every profile is brought into the campaign evidence beside the raw record, digest-verified, before the load-generator worktree is released, and a missing or mismatching file is a typed evidence failure. An unverified seed is never warmed up or measured. Physical evidence: one research run on one lab host.",
   "doneWhen": {
     "probe": "script",
     "args": {
       "command": "node scripts/checks/oltp-research-substrate-guard.js --metric",
       "target": 0,
       "artifacts": [
-        "solve/quests/scenario-a-research-substrate/evidence/lab-single-host/raw-observations.ndjson",
-        "solve/quests/scenario-a-research-substrate/evidence/lab-three-host/raw-observations.ndjson"
+        "solve/quests/scenario-a-research-substrate/evidence/lab-single-host/raw-observations.ndjson"
       ]
     }
   },
   "constraints": [
     {
       "id": "planning-only-until-sealed",
-      "statement": "Unsealed draft. The measured red value is 11 unmet properties (stage 1, one WIP commit). The lead seals and lands; no implementer runs start or land. The guard imports harness modules in process, reads the two declared retained artifacts and starts no cluster (R27); the two physical runs are the lead's and are retained as artifacts, never produced by the guard."
+      "statement": "Unsealed draft. The measured red value is 10 unmet properties (stage 1, one WIP commit). The lead seals and lands; no implementer runs start or land. The guard imports harness modules in process, reads the two declared retained artifacts and starts no cluster (R27); the physical run on one lab host is the lead's and is retained as an artifact, never produced by the guard."
     },
     {
       "id": "harness-only-never-src",
@@ -29,7 +28,7 @@
     },
     {
       "id": "truthful-single-host-identity",
-      "statement": "No synthetic host identity (ruling 14): one host, three nodes, the machine's real host name on every node, declared host count 1, the development harness convention (HOST_NETWORK_PORT_BLOCK) for ports. The inter-node path of the single-host substrate is loopback and a record that claims lan is rejected."
+      "statement": "No synthetic host identity (ruling 14): one host, three nodes, the machine's real host name on every node, declared host count 1. Ruling A: the single-host substrate is a campaign-scoped Docker bridge network, nodes addressed as the development harness addresses them in bridge mode (read through the campaign deployer's own owners, never by importing the development lifecycle class), standard ports, no port blocks. The inter-node path is docker-bridge; a record claiming lan or loopback for one host is rejected. Multi-host substrates keep host networking unchanged."
     },
     {
       "id": "published-records-stay-byte-identical",
@@ -42,6 +41,10 @@
     {
       "id": "seal-check-before-change",
       "statement": "Before changing a pinned value, search solve/quests, architecture/contracts, test/guidelines and scripts/checks. Stage 1 found no sealed quest, invariant or guideline that pins the reset-method strings; the consumers are the fixtures and assertions listed in evidence/stage1-findings.md."
+    },
+    {
+      "id": "multi-host-run-not-a-seal-condition",
+      "statement": "Ruling B: a three-host run depends on the household network (same build 98/100 at night, product failure next morning; reports/lab-base-ab3-three-01.md), and this quest's claim is the substrate and honest records. The multi-host descriptor and round-trip matrix stay witnessed in process (property 9); the first multi-host research session is recorded as evidence when it happens and is not part of the seal."
     }
   ],
   "verificationTemplates": [

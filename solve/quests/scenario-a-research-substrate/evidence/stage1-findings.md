@@ -131,3 +131,24 @@ and `COMPARATIVE_SUBSTRATE_KIND`. Retained record shape (properties 10-11 and th
   evaluator behind them is exercised only by the ideal records and the five mutants of the controls.
 - No existing test file was run; stage 1 touches none.
 - Whether `validateRunRecord` accepts the extra fields (`timeline`, `custody`, `substrate`) is open; stage 2 decides.
+
+## 7. Rulings applied after review (stage 1b)
+
+- Ruling A: the single-host substrate is a campaign-scoped Docker bridge network (campaign label, created and removed by
+  the campaign's own deployment and cleanup owners; a leftover network is a closure failure), nodes on standard ports
+  at their own bridge address, declared host count 1, real host name. Inter-node path `docker-bridge`; the guard rejects
+  `lan` and `loopback` for one host. Sections 1 (port block) and 2 blocker 1 are read accordingly: the port-block
+  convention is not used. Witness 8: `planLagrangeNodePlacement({hosts, substrate, campaignId})` ->
+  `{declaredHostCount: 1, network: {kind: 'bridge', name containing the campaign id}, nodes: [{ports: 8080/8081/8082,
+  isSeed}]}`, exactly one seed, refused without a substrate. The multi-host substrates keep host networking.
+- Ruling B: property 11 and the second artifact are removed; expected red is 10. The multi-host descriptor and
+  seven-entry matrix stay witnessed in process (property 9).
+- Round trip: every single-host record needs the load-generator-to-endpoint path and every ordered node pair on the
+  bridge (7 entries for three nodes) before and after the window; the evaluator requires 7 entries for both kinds.
+- Admission: the witness asserts `research-profile-not-admissible` is present among the reasons, not that it is alone.
+
+## 8. Stage-2 plan note: the recompute barrier
+
+Stage 2 gives `recomputeComparativeBenchmarks` a message beginning `published store carries a research-class record`
+when the published store holds a research-class record; the guard's store control then calls the real check on the
+scratch copy instead of its own reader.

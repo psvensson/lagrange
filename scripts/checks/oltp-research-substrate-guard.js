@@ -10,7 +10,7 @@
  * test/distributed/harness/__tests__/oltp-research-substrate-witnesses.js) and
  * reads the declared retained artifacts; it starts no cluster and no container.
  *
- * Eleven properties, one count each when unmet:
+ * Ten properties, one count each when unmet:
  *   1 a research campaign manifest can be built
  *   2 admission refuses a research record by one explicit reason
  *   3 the record writer refuses the published store path
@@ -21,7 +21,6 @@
  *   8 three nodes can be placed on one host, and host facts accept one machine
  *   9 a substrate descriptor and a round-trip matrix exist
  *  10 the retained single-host run holds every property of the evaluator
- *  11 the retained three-host run holds every property of the evaluator
  *
  * The evaluator that reads the retained runs is itself witnessed by negative
  * controls: mutated records that must be rejected and ideal records that must
@@ -36,7 +35,7 @@ import {fileURLToPath} from 'node:url';
 
 import {
   INTER_NODE_PATH,
-  MATRIX_PAIRS_THREE_HOSTS,
+  MATRIX_ENTRIES,
   NODE_COUNT,
   PING_STATS,
   PUBLISHED_STORE,
@@ -113,7 +112,6 @@ const IDEAL_OP_ID = 'measurement:0:0';
 const QUEST_EVIDENCE = 'solve/quests/scenario-a-research-substrate/evidence';
 const RETAINED = Object.freeze({
   SINGLE_HOST: `${QUEST_EVIDENCE}/lab-single-host/raw-observations.ndjson`,
-  THREE_HOST: `${QUEST_EVIDENCE}/lab-three-host/raw-observations.ndjson`,
 });
 
 // --- retained runs: the evaluator ---------------------------------------------
@@ -170,11 +168,11 @@ function matrixIssue(side, matrix, wanted) {
   return complete ? null : `the ${side} matrix is incomplete`;
 }
 
-function roundTripIssues(run, expectedKind) {
+function roundTripIssues(run) {
   const window = run.observations?.window;
   const roundTrip = run.observations?.network?.roundTrip;
   if (!roundTrip?.before || !roundTrip?.after) return [TEXT.NO_MATRICES];
-  const wanted = expectedKind === SUBSTRATE_KIND.MULTI_HOST ? MATRIX_PAIRS_THREE_HOSTS : 1;
+  const wanted = MATRIX_ENTRIES;
   const issues = arrayFilter(arrayMap(MATRIX_SIDES,
     (side) => matrixIssue(side, roundTrip[side], wanted)), (issue) => issue !== null);
   if (!(roundTrip.before.endedAt <= window?.startedAt &&
@@ -198,7 +196,7 @@ function substrateIssues(header, expectedKind) {
       substrate.declaredHostCount !== expectedHosts) {
     arrayPush(issues, TEXT.HOST_MAP);
   }
-  const wantedPath = single ? INTER_NODE_PATH.LOOPBACK : INTER_NODE_PATH.LAN;
+  const wantedPath = single ? INTER_NODE_PATH.BRIDGE : INTER_NODE_PATH.LAN;
   if (substrate.interNodePath !== wantedPath) {
     arrayPush(issues, `inter-node path ${JSON.stringify(substrate.interNodePath)}, ` +
       `${wantedPath} expected`);
@@ -235,7 +233,7 @@ function runIssues(run, expectedKind, baseDir) {
     arrayPush(issues, TEXT.CLOSURE);
   }
   arrayPush(issues, ...timelineIssues(run), ...resetIssues(run),
-    ...roundTripIssues(run, expectedKind), ...custodyIssues(run, baseDir));
+    ...roundTripIssues(run), ...custodyIssues(run, baseDir));
   return issues;
 }
 
@@ -281,8 +279,6 @@ const PROPERTY = Object.freeze([
     witness: WITNESS.substrate}),
   Object.freeze({id: 10, name: 'retained single-host run',
     witness: async () => witnessRetained(RETAINED.SINGLE_HOST, SUBSTRATE_KIND.SINGLE_HOST)}),
-  Object.freeze({id: 11, name: 'retained three-host run',
-    witness: async () => witnessRetained(RETAINED.THREE_HOST, SUBSTRATE_KIND.MULTI_HOST)}),
 ]);
 
 // --- negative controls --------------------------------------------------------
@@ -299,9 +295,8 @@ const IDEAL_ATTEMPT = Object.freeze({startedMs: 100, endedMs: 160,
 const SINGLE_HOSTS = Object.freeze(['lab-a', 'lab-a', 'lab-a']);
 const MULTI_HOSTS = Object.freeze(['lab-a', 'lab-b', 'lab-c']);
 
-function idealMatrix(kind, at) {
-  const count = kind === SUBSTRATE_KIND.MULTI_HOST ? MATRIX_PAIRS_THREE_HOSTS : 1;
-  return {startedAt: at, endedAt: at, entries: Array.from({length: count},
+function idealMatrix(at) {
+  return {startedAt: at, endedAt: at, entries: Array.from({length: MATRIX_ENTRIES},
     (_value, index) => ({from: `10.0.0.${index}`, to: `10.0.0.${index + 1}`, ...PING_STATS,
       transmitted: RTT_PACKETS}))};
 }
@@ -318,15 +313,15 @@ function idealRun(kind, resetMethod, tableOutcome) {
       requests: [{opId: IDEAL_OP_ID, attempts: [IDEAL_ATTEMPT],
         responseEvidence: {encoding: INLINE}}],
       window: {startedAt: ISO_WINDOW_START, endedAt: ISO_WINDOW_END},
-      network: {roundTrip: {before: idealMatrix(kind, ISO_BEFORE),
-        after: idealMatrix(kind, ISO_AFTER)}}}};
+      network: {roundTrip: {before: idealMatrix(ISO_BEFORE),
+        after: idealMatrix(ISO_AFTER)}}}};
 }
 
 function idealRecords(kind) {
   const single = kind === SUBSTRATE_KIND.SINGLE_HOST;
   const hosts = single ? SINGLE_HOSTS : MULTI_HOSTS;
   return [{recordType: HEADER_TYPE, comparable: false,
-    substrate: {kind, interNodePath: single ? INTER_NODE_PATH.LOOPBACK : INTER_NODE_PATH.LAN,
+    substrate: {kind, interNodePath: single ? INTER_NODE_PATH.BRIDGE : INTER_NODE_PATH.LAN,
       declaredHostCount: single ? 1 : NODE_COUNT,
       nodeHostMap: arrayMap(hosts, (hostId, nodeIndex) => ({nodeIndex, hostId,
         declaredHostId: hostId}))}},
@@ -378,6 +373,12 @@ const MUTANT = Object.freeze({
   },
   'a single-host record claiming a lan path': (records) => {
     records[0].substrate.interNodePath = INTER_NODE_PATH.LAN;
+  },
+  'a single-host record claiming a loopback path': (records) => {
+    records[0].substrate.interNodePath = INTER_NODE_PATH.LOOPBACK;
+  },
+  'a single-host round trip with one entry': (records) => {
+    records[1].observations.network.roundTrip.before.entries.length = 1;
   },
   'a round trip measured inside the window': (records) => {
     records[1].observations.network.roundTrip.after.startedAt = ISO_WINDOW_START;
