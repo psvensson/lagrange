@@ -1,5 +1,6 @@
 // One client for the release lifecycle route. Node hints select where to
 // ask; only the answering consensus owner can name the current leader.
+import {performance} from 'node:perf_hooks';
 import {AddressManager} from '../address/address-manager.js';
 import {deliveryTransportOf, deliveryAnswerOf, classifyThrownDeliveryError, isDeliveredTransportDeliveryOutcome,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
@@ -10,7 +11,7 @@ import {participantReleaseClockMeasured, participantReleaseSafeClockInteger, rel
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
-  PARTICIPANT_RELEASE_PRIORITY,
+  PARTICIPANT_RELEASE_ANSWER_FIELD as ANSWER_FIELD, PARTICIPANT_RELEASE_PRIORITY,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_ROUTE_SUFFIX,
   PARTICIPANT_RELEASE_TYPE} from
@@ -121,7 +122,7 @@ function participantReleaseDeliveryAnswer(delivery, prepared, nodeId) {
     observationUnavailable(prepared.request, nodeId);
 }
 
-async function askParticipantRelease(owner, nodeId, request, trace, phase = request.action) {
+async function askParticipantRelease(owner, nodeId, request, trace) {
   const prepared = prepareParticipantReleaseRequest(owner, nodeId, request);
   if (prepared.answer !== undefined) {
     return prepared.answer;
@@ -140,16 +141,20 @@ async function askParticipantRelease(owner, nodeId, request, trace, phase = requ
     const answer = participantReleaseDeliveryAnswer(delivery, prepared, nodeId);
     if (trace) {
       const transport = deliveryTransportOf(delivery);
-      recordReleaseHop(trace, phase, {messageId: transport.messageId, nodeId,
-        elapsedMs: performance.now() - start, outcome: releaseDiagnosticText(answer, 'outcome'),
-        missingFact: releaseDiagnosticText(answer, 'missingFact'), deliveryState: transport.deliveryState});
+      recordReleaseHop(trace, request.action, {messageId: transport.messageId, nodeId,
+        elapsedMs: performance.now() - start,
+        outcome: releaseDiagnosticText(answer, ANSWER_FIELD.OUTCOME),
+        missingFact: releaseDiagnosticText(answer, ANSWER_FIELD.MISSING_FACT),
+        deliveryState: transport.deliveryState});
     }
     return answer;
   } catch (error) {
     const delivery = classifyThrownDeliveryError(error);
-    if (trace) recordReleaseHop(trace, phase, {messageId: delivery.messageId ?? null, nodeId,
-      elapsedMs: performance.now() - start, deliveryState: delivery.deliveryState,
-      reasonCode: delivery.reasonCode});
+    if (trace) {
+      recordReleaseHop(trace, request.action, {messageId: delivery.messageId ?? null,
+        nodeId, elapsedMs: performance.now() - start, deliveryState: delivery.deliveryState,
+        reasonCode: delivery.reasonCode});
+    }
     const reason = prepared.observation &&
       delivery.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
       delivery.reasonCode : String(error?.message ?? error);
@@ -157,13 +162,13 @@ async function askParticipantRelease(owner, nodeId, request, trace, phase = requ
   }
 }
 
-async function requestParticipantRelease(owner, request, trace, phase) {
+async function requestParticipantRelease(owner, request) {
   const payload = {...request, action: ACTION.RELEASE};
-  const first = await askParticipantRelease(owner, request.nodeId ?? owner.nodeId, payload, trace, phase);
+  const first = await askParticipantRelease(owner, request.nodeId ?? owner.nodeId, payload);
   if (first.outcome !== OUTCOME.NOT_LEADER) return first;
   const nodeId = releaseNodeOfAddress(first.leaderAddress);
   return nodeId === null ? first : askParticipantRelease(owner, nodeId,
-    {...payload, replicaId: first.leaderReplicaId}, trace, phase);
+    {...payload, replicaId: first.leaderReplicaId});
 }
 
 // Completion owns response interpretation; clocks only execute the caller's
@@ -183,7 +188,7 @@ async function completeParticipantRelease(owner, request, clock) {
   let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
   do {
     attemptCount += 1;
-    answer = await requestParticipantRelease(owner, intent, clock.trace);
+    answer = await requestParticipantRelease(owner, intent);
     if (seed) {
       firstBlockedDrain = retainFirstReleaseObservation(firstBlockedDrain, answer.blockedDrain);
       firstJoinedAttempt = retainFirstReleaseObservation(firstJoinedAttempt, answer.joinedAttempt);

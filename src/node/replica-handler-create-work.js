@@ -1,5 +1,6 @@
 // Process-local CREATE custody. Durable admission remains the authority for
 // which operation and physical worker may use this tracked incarnation.
+import {performance} from 'node:perf_hooks';
 import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
 import {isSupersededAdmissionError} from './replica-create-admission-retained-recovery.js';
 import {
@@ -13,7 +14,8 @@ import {FRESH_CREATE_RELEASE_UNAVAILABLE} from './replica-handler-release-recove
 import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
 import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
   '../partition/partition-participant-transaction-cutover-constants.js';
-import {REPLICA_HANDLER_DEFAULT, REPLICA_HANDLER_PROGRESS, REPLICA_HANDLER_TYPEOF} from
+import {REPLICA_HANDLER_CREATE_WORKER_OUTCOME as WORKER_OUTCOME, REPLICA_HANDLER_DEFAULT,
+  REPLICA_HANDLER_LOG_MSG, REPLICA_HANDLER_PROGRESS, REPLICA_HANDLER_TYPEOF} from
   './replica-handler-constants.js';
 
 const CREATE_VOTER_CACHE_REQUIRED = 'CREATE voter readiness requires a subscribable SERVICES cache';
@@ -55,7 +57,7 @@ function lostBootPhysicalWorkerError(message) {
 // Correlate target worker decisions with the durable admission generation.
 function traceCreateWorker(handler, request, boundary, outcome, error = null, elapsedMs = null) {
   const evidence = request.createAdmissionEvidence;
-  handler.logger.info('Replica CREATE physical worker', {
+  handler.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_PHYSICAL_WORKER, {
     operationId: request.operationId,
     partitionId: request.partitionId,
     replicaId: request.replicaId,
@@ -66,31 +68,31 @@ function traceCreateWorker(handler, request, boundary, outcome, error = null, el
     boundary,
     outcome,
     elapsedMs,
-    ...(boundary === 'participant_release' && outcome !== 'started' ?
-      {releaseHops: request.releaseTrace?.hops} : {}),
     errorCode: error?.code ?? null,
   });
 }
 
 async function measureCreateStage(handler, request, stage, observe) {
   const start = performance.now();
-  traceCreateWorker(handler, request, stage, 'started');
+  traceCreateWorker(handler, request, stage, WORKER_OUTCOME.STARTED);
   try {
     const result = await observe();
-    traceCreateWorker(handler, request, stage, result === false ? 'refused' : 'settled',
+    traceCreateWorker(handler, request, stage,
+      result === false ? WORKER_OUTCOME.REFUSED : WORKER_OUTCOME.SETTLED,
       null, performance.now() - start);
     return result;
   } catch (error) {
-    traceCreateWorker(handler, request, stage, 'error', error, performance.now() - start);
+    traceCreateWorker(handler, request, stage, WORKER_OUTCOME.ERROR, error,
+      performance.now() - start);
     throw error;
   }
 }
 
 function queuedCreateMayStart(handler, work, request, boundary) {
-  const outcome = handler.shuttingDown ? 'shutdown' :
-    ownsReplicaCreateWork(handler, work) ? 'current' : 'superseded';
+  const outcome = handler.shuttingDown ? WORKER_OUTCOME.SHUTDOWN :
+    ownsReplicaCreateWork(handler, work) ? WORKER_OUTCOME.CURRENT : WORKER_OUTCOME.SUPERSEDED;
   traceCreateWorker(handler, request, boundary, outcome);
-  return outcome === 'current';
+  return outcome === WORKER_OUTCOME.CURRENT;
 }
 
 function replicaCreateWork(handler, request) {

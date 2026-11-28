@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 267,
     "storage-raft": 166,
-    "test-infrastructure": 173,
+    "test-infrastructure": 174,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2847,
-  "digest": "fnv1a32-ac0ff69e",
+  "censusSize": 2848,
+  "digest": "fnv1a32-d8231073",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f0d394a1",
+  "observationDigest": "fnv1a32-320f77dd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2547,6 +2547,7 @@
     "test/scripts/npm-runtime-process.test.js": "test-infrastructure",
     "test/scripts/npm-runtime-smoke.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
+    "test/scripts/participant-release-completion-contract-probe.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
     "test/scripts/pre-push-stage-manifest.test.js": "test-infrastructure",
@@ -29153,6 +29154,24 @@
         "LAGRANGE_PROBE",
         "LAGRANGE_TEST_MACHINE_FACTOR",
         "OTHER_THING"
+      ]
+    },
+    "test/scripts/participant-release-completion-contract-probe.test.js": {
+      "files": [
+        "scripts/checks/participant-release-completion-contract-probe.js",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/constants/index.js",
+        "src/diagnostics/runtime-build-provenance.js",
+        "src/node/participant-release-client.js",
+        "src/node/participant-release-diagnostic-observation.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test"
       ]
     },
     "test/scripts/participant-release-completion-owner.test.js": {
