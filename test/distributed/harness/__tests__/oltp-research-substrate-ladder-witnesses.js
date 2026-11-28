@@ -1,5 +1,5 @@
-// In-process witnesses of the quest scenario-a-research-records, read by
-// scripts/checks/oltp-research-records-guard.js. Each witness answers null
+// In-process witnesses of the quest scenario-a-research-substrate-ladder, read by
+// scripts/checks/oltp-research-substrate-ladder-guard.js. Each witness answers null
 // when its property holds and the failure text when it does not; it imports
 // the harness owners and the controlled in-memory product, and starts no
 // cluster, container or network exchange. The only child process is a local
@@ -107,7 +107,12 @@ const REST_PORT = 8080;
 const ADMIN_PORT = 8081;
 const TRANSPORT_PORT = 8082;
 const PLACEMENT_CAMPAIGN = 'bench-research-placement';
-const SINGLE_HOST_DECLARED_COUNT = 1;
+// The first look declares one synthetic host identity per node (owner, 2026-11-28): a
+// truthfully declared one-host cluster never becomes ready.
+const SINGLE_HOST_DECLARED_COUNT = 3;
+const NODE_INDEXES = Object.freeze([0, 1, 2]);
+const DATA_HOSTS = Object.freeze(['10.0.0.1', '10.0.0.2', '10.0.0.3']);
+const IDENTITY = Object.freeze({SYNTHETIC: 'synthetic', OBSERVED: 'observed'});
 const BRIDGE_NETWORK = 'bridge';
 
 const TEXT = Object.freeze({
@@ -541,11 +546,26 @@ function placementProblem(plan) {
       !stringIncludes(networkName, PLACEMENT_CAMPAIGN)) {
     return `the one-host plan names network ${show(plan.network)}, not a bridge of the campaign`;
   }
+  const expectedIds = arrayMap(NODE_INDEXES, (index) =>
+    `${PLACEMENT_CAMPAIGN}-synthetic-host-${index + 1}`);
+  if (plan.declaredHostIdentity !== IDENTITY.SYNTHETIC ||
+      show(arrayMap(plan.nodes, (node) => node.declaredHostId)) !== show(expectedIds)) {
+    return `the one-host plan declares ${show(arrayMap(plan.nodes,
+      (node) => node.declaredHostId))} as ${show(plan.declaredHostIdentity)} identities, ` +
+      `${show(expectedIds)} synthetic expected`;
+  }
   const standard = arrayEvery(plan.nodes, (node) => node.ports.rest === REST_PORT &&
     node.ports.admin === ADMIN_PORT && node.ports.transport === TRANSPORT_PORT);
   const seeds = arrayFilter(plan.nodes, (node) => node.isSeed === true);
   return standard && seeds.length === 1 && plan.nodes[FIRST].isSeed === true ? null :
     'node ports or seed choice are not the standard ports with exactly one seed';
+}
+
+// Every plan but the first look keeps the observed machine name of each node.
+function observedIdentityProblem(plan) {
+  return plan.declaredHostIdentity === IDENTITY.OBSERVED &&
+    arrayEvery(plan.nodes, (node) => node.declaredHostId === null) ? null :
+    'a multi-host plan declares synthetic host identities';
 }
 
 async function refusedBy(action) {
@@ -577,6 +597,9 @@ async function witnessOneHost() {
   if (!await refusedBy(() => plan({hosts, campaignId: PLACEMENT_CAMPAIGN}))) {
     return TEXT.UNREFUSED_PLAN;
   }
+  const observed = observedIdentityProblem(plan({hosts: DATA_HOSTS,
+    substrate: SUBSTRATE_KIND.MULTI_HOST, campaignId: PLACEMENT_CAMPAIGN}));
+  if (observed) return observed;
   return hostFactsProblem();
 }
 
@@ -589,10 +612,8 @@ const PING_OUTPUT = [
   'rtt min/avg/max/mdev = 0.210/0.350/0.980/0.120 ms', ''].join(LINE_SEPARATOR);
 const PING_STATS = Object.freeze({transmitted: 20, received: 19, lossPercent: 5, minMs: 0.21,
   avgMs: 0.35, maxMs: 0.98, mdevMs: 0.12});
-const DATA_HOSTS = Object.freeze(['10.0.0.1', '10.0.0.2', '10.0.0.3']);
 const ENDPOINT_HOST = '10.0.0.1';
 const STORAGE_ROOT = '/srv/campaign';
-const NODE_INDEXES = Object.freeze([0, 1, 2]);
 
 async function measureProblem() {
   const commands = [];
@@ -630,9 +651,31 @@ function singleHostInput() {
       memGb: 15, primaryIface: 'eth0', linkType: 'wired'}],
     loadGeneratorHostId: LAB_HOST_NAME,
     nodeHostMap: arrayMap(NODE_INDEXES, (nodeIndex) => ({nodeIndex, hostId: LAB_HOST_NAME,
-      declaredHostId: LAB_HOST_NAME})),
+      declaredHostId: `camp-synthetic-host-${nodeIndex + 1}`, machineHostName: LAB_HOST_NAME,
+      declaredHostIdentity: IDENTITY.SYNTHETIC})),
     declaredHostCount: SINGLE_HOST_DECLARED_COUNT,
     storage: {root: STORAGE_ROOT, kind: 'bind'}};
+}
+
+// The configurations the first look must refuse: the machine's real name on every
+// node (never ready), synthetic ids not marked synthetic, a shared declared id, and a
+// synthetic id on a multi-host or GCP rung.
+async function identityRefusals(build, input) {
+  const withNodes = (change) => ({...input,
+    nodeHostMap: arrayMap(input.nodeHostMap,
+      (node, index) => ({...node, ...change(node, index)}))});
+  const real = withNodes((node) => ({declaredHostId: node.machineHostName,
+    declaredHostIdentity: IDENTITY.OBSERVED}));
+  const unmarked = withNodes(() => ({declaredHostIdentity: IDENTITY.OBSERVED}));
+  const shared = withNodes(() => ({declaredHostId: 'camp-synthetic-host-1'}));
+  const syntheticMulti = {...multiInput(SUBSTRATE_KIND.MULTI_HOST, INTER_NODE_PATH.LAN, OWN_HOST)};
+  syntheticMulti.nodeHostMap = arrayMap(syntheticMulti.nodeHostMap, (node) => ({...node,
+    declaredHostId: `${node.hostId}-synthetic`, declaredHostIdentity: IDENTITY.SYNTHETIC}));
+  const results = [];
+  for (const config of [real, unmarked, shared, syntheticMulti]) {
+    results.push(await refusedBy(() => build(config)));
+  }
+  return arrayEvery(results, Boolean);
 }
 
 async function descriptorProblem() {
@@ -640,13 +683,14 @@ async function descriptorProblem() {
   const input = singleHostInput();
   const single = build(input);
   const multi = build(multiInput(SUBSTRATE_KIND.MULTI_HOST, INTER_NODE_PATH.LAN, OWN_HOST));
+  const identityRefused = await identityRefusals(build, input);
   const lanRefused = await refusedBy(() => build({...input,
     interNodePath: INTER_NODE_PATH.LAN})) && await refusedBy(() => build({...input,
     interNodePath: INTER_NODE_PATH.LOOPBACK}));
   return hostPreparation.COMPARATIVE_SUBSTRATE_KIND?.SINGLE_HOST === SUBSTRATE_KIND.SINGLE_HOST &&
     single.kind === SUBSTRATE_KIND.SINGLE_HOST &&
     single.interNodePath === INTER_NODE_PATH.BRIDGE && lanRefused &&
-    multi.kind === SUBSTRATE_KIND.MULTI_HOST ? null : TEXT.DESCRIPTOR;
+    multi.kind === SUBSTRATE_KIND.MULTI_HOST && identityRefused ? null : TEXT.DESCRIPTOR;
 }
 
 function multiInput(kind, interNodePath, hostOfNode) {
@@ -654,7 +698,8 @@ function multiInput(kind, interNodePath, hostOfNode) {
     bootId: `boot-${index}`, cpus: 12, memGb: 15, primaryIface: 'eth0', linkType: 'wifi'}));
   return {kind, interNodePath, hosts, loadGeneratorHostId: 'lab-load',
     nodeHostMap: arrayMap(NODE_INDEXES, (nodeIndex) => ({nodeIndex,
-      hostId: `lab-${hostOfNode(nodeIndex)}`, declaredHostId: `lab-${hostOfNode(nodeIndex)}`})),
+      hostId: `lab-${hostOfNode(nodeIndex)}`, declaredHostId: `lab-${hostOfNode(nodeIndex)}`,
+      machineHostName: `lab-${hostOfNode(nodeIndex)}`, declaredHostIdentity: IDENTITY.OBSERVED})),
     declaredHostCount: NODE_COUNT, storage: {root: STORAGE_ROOT, kind: 'bind'}};
 }
 
@@ -669,8 +714,9 @@ async function witnessLadder() {
   const unknown = await refusedBy(() => build(multiInput('lab-whatever',
     INTER_NODE_PATH.LAN, OWN_HOST)));
   return single.evidenceUse === EVIDENCE_USE.FIRST_LOOK &&
-    lab.evidenceUse === EVIDENCE_USE.WORKING && gcp.evidenceUse === EVIDENCE_USE.FINAL &&
-    twoOnOne && unknown ? null : TEXT.LADDER;
+    single.declaredHostIdentity === IDENTITY.SYNTHETIC &&
+    lab.declaredHostIdentity === IDENTITY.OBSERVED && lab.evidenceUse === EVIDENCE_USE.WORKING &&
+    gcp.evidenceUse === EVIDENCE_USE.FINAL && twoOnOne && unknown ? null : TEXT.LADDER;
 }
 
 async function witnessSubstrate() {
@@ -697,6 +743,7 @@ const WITNESS = Object.freeze({
 
 export {
   EVIDENCE_USE,
+  IDENTITY,
   INTER_NODE_PATH,
   MATRIX_ENTRIES,
   NODE_COUNT,

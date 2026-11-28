@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Acceptance guard of the quest `scenario-a-research-records`.
+ * Acceptance guard of the quest `scenario-a-research-substrate-ladder`.
  *
- *   node scripts/checks/oltp-research-records-guard.js [--metric]
+ *   node scripts/checks/oltp-research-substrate-ladder-guard.js [--metric]
  *
  * Prints the number of unmet properties on stdout (the quest's `doneWhen`
  * metric; exit code 0 only when it is 0) and one line per property on stderr.
  * It imports the harness modules in process (the witnesses live in
- * test/distributed/harness/__tests__/oltp-research-records-witnesses.js) and
+ * test/distributed/harness/__tests__/oltp-research-substrate-ladder-witnesses.js) and
  * reads the declared retained artifacts; it starts no cluster and no container.
  *
  * Twelve properties, one count each when unmet:
@@ -18,7 +18,8 @@
  *   5 the dataset reset method is the one the adapter reports
  *   6 retained statement evidence is in the campaign evidence, digest-verified
  *   7 an unverified seed is never warmed up or measured
- *   8 three nodes can be placed on one host, and host facts accept one machine
+ *   8 three nodes on one host on a campaign bridge with synthetic host ids (declared
+ *     host count 3), and host facts accept one machine
  *   9 a substrate descriptor and a round-trip matrix exist
  *  10 the substrate ladder: every descriptor carries the use of its rung
  *  11 the retained single-host run holds every property of the evaluator
@@ -37,6 +38,7 @@ import {fileURLToPath} from 'node:url';
 
 import {
   EVIDENCE_USE,
+  IDENTITY,
   INTER_NODE_PATH,
   MATRIX_ENTRIES,
   NODE_COUNT,
@@ -52,7 +54,7 @@ import {
   removeDir,
   scratchDir,
   sha256Of,
-} from '../../test/distributed/harness/__tests__/oltp-research-records-witnesses.js';
+} from '../../test/distributed/harness/__tests__/oltp-research-substrate-ladder-witnesses.js';
 import {
   arrayEvery,
   arrayFilter,
@@ -83,6 +85,8 @@ const TABLE_OUTCOME_CREATED = 'created';
 const HEADER_TYPE = 'campaign-header';
 const RUN_TYPE = 'run';
 const GATE_PASSED = 'passed';
+const RUN_COMPLETED = 'completed';
+const RUN_FAILED = 'failed';
 const SEED_VERIFIED = 'verified';
 const CLOSURE_COMPLETE = 'complete';
 const RETAINED_FILE = 'retained-file';
@@ -103,6 +107,10 @@ const TEXT = Object.freeze({
   NO_RUN: 'the file holds no run record',
   STORE_CONTROL: 'a research record in a scratch copy of the published store was not found',
   MET: 'met',
+  IDENTITY: 'the declared host identities do not match the rung: synthetic and marked for ' +
+    'the first look, the observed machine name for every other rung',
+  SHARED_ID: 'two nodes of the first look share one declared host id',
+  NOT_COMPLETED: 'the run did not complete',
 });
 const CONTROL_STORE_LABEL = 'control-store';
 const TABLE_WAREHOUSE = 'warehouse';
@@ -112,7 +120,7 @@ const SQL_COMMIT = 'COMMIT';
 const STATUS_OK = 'ok';
 const IDEAL_OP_ID = 'measurement:0:0';
 
-const QUEST_EVIDENCE = 'solve/quests/scenario-a-research-records/evidence';
+const QUEST_EVIDENCE = 'solve/quests/scenario-a-research-substrate-ladder/evidence';
 const RETAINED = Object.freeze({
   SINGLE_HOST: `${QUEST_EVIDENCE}/lab-single-host/raw-observations.ndjson`,
   THREE_HOST: `${QUEST_EVIDENCE}/lab-three-host/raw-observations.ndjson`,
@@ -186,6 +194,19 @@ function roundTripIssues(run) {
   return issues;
 }
 
+// The declared host identities: the first look declares one distinct synthetic id per
+// node, marked synthetic; every other rung declares each node's observed machine name.
+function identityIssues(substrate, nodes, single) {
+  const wanted = single ? IDENTITY.SYNTHETIC : IDENTITY.OBSERVED;
+  const issues = [];
+  const declared = new Set(arrayMap(nodes, (node) => node.declaredHostId));
+  const sound = arrayEvery(nodes, (node) => node.declaredHostIdentity === wanted &&
+    (node.declaredHostId === node.machineHostName) === !single);
+  if (substrate.declaredHostIdentity !== wanted || !sound) arrayPush(issues, TEXT.IDENTITY);
+  if (single && declared.size !== nodes.length) arrayPush(issues, TEXT.SHARED_ID);
+  return issues;
+}
+
 function substrateIssues(header, expectedKind) {
   const substrate = header.substrate;
   if (!substrate) return [TEXT.NO_DESCRIPTOR];
@@ -194,15 +215,17 @@ function substrateIssues(header, expectedKind) {
   if (substrate.kind !== expectedKind) {
     arrayPush(issues, `substrate kind ${JSON.stringify(substrate.kind)}`);
   }
-  const hostIds = new Set(arrayMap(substrate.nodeHostMap ?? [], (node) => node.hostId));
-  const expectedHosts = single ? 1 : NODE_COUNT;
-  if (substrate.nodeHostMap?.length !== NODE_COUNT || hostIds.size !== expectedHosts ||
-      substrate.declaredHostCount !== expectedHosts) {
+  const nodes = substrate.nodeHostMap ?? [];
+  const hostIds = new Set(arrayMap(nodes, (node) => node.hostId));
+  if (nodes.length !== NODE_COUNT || hostIds.size !== (single ? 1 : NODE_COUNT) ||
+      substrate.declaredHostCount !== NODE_COUNT) {
     arrayPush(issues, TEXT.HOST_MAP);
   }
+  arrayPush(issues, ...identityIssues(substrate, nodes, single));
   const wantedUse = single ? EVIDENCE_USE.FIRST_LOOK : EVIDENCE_USE.WORKING;
   if (substrate.evidenceUse !== wantedUse) {
-    arrayPush(issues, `evidence use ${JSON.stringify(substrate.evidenceUse)}, ${wantedUse} expected`);
+    arrayPush(issues,
+      `evidence use ${JSON.stringify(substrate.evidenceUse)}, ${wantedUse} expected`);
   }
   const wantedPath = single ? INTER_NODE_PATH.BRIDGE : INTER_NODE_PATH.LAN;
   if (substrate.interNodePath !== wantedPath) {
@@ -230,6 +253,9 @@ function runIssues(run, expectedKind, baseDir) {
   const issues = [];
   if (run.subkind !== RESEARCH.CLASS || run.plan?.profileClass !== RESEARCH.CLASS) {
     arrayPush(issues, TEXT.NOT_RESEARCH);
+  }
+  if (run.execution?.state !== RUN_COMPLETED || run.observations?.runStatus !== RUN_COMPLETED) {
+    arrayPush(issues, TEXT.NOT_COMPLETED);
   }
   if (run.correctness?.semanticGate?.status !== GATE_PASSED) {
     arrayPush(issues, TEXT.GATE);
@@ -303,6 +329,7 @@ const IDEAL_ATTEMPT = Object.freeze({startedMs: 100, endedMs: 160,
     Object.freeze({sql: SQL_COMMIT, status: STATUS_OK})]),
   timeline: Object.freeze([Object.freeze([0, 101, 110, STATUS_OK]),
     Object.freeze([1, 120, 150, STATUS_OK])])});
+const SYNTHETIC_ID_PREFIX = 'bench-control-synthetic-host-';
 const SINGLE_HOSTS = Object.freeze(['lab-a', 'lab-a', 'lab-a']);
 const MULTI_HOSTS = Object.freeze(['lab-a', 'lab-b', 'lab-c']);
 
@@ -314,13 +341,14 @@ function idealMatrix(at) {
 
 function idealRun(kind, resetMethod, tableOutcome) {
   return {recordType: RUN_TYPE, subkind: RESEARCH.CLASS,
+    execution: {state: RUN_COMPLETED},
     plan: {profileClass: RESEARCH.CLASS},
     correctness: {semanticGate: {status: GATE_PASSED}},
     deployment: {closure: {status: CLOSURE_COMPLETE}, dataset: {resetMethod,
       verification: {status: SEED_VERIFIED},
       provisioning: {tables: [{table: TABLE_WAREHOUSE, outcome: tableOutcome},
         {table: TABLE_ITEM, outcome: tableOutcome}]}}},
-    observations: {statementCatalog: [SQL_BEGIN, SQL_COMMIT],
+    observations: {runStatus: RUN_COMPLETED, statementCatalog: [SQL_BEGIN, SQL_COMMIT],
       requests: [{opId: IDEAL_OP_ID, attempts: [IDEAL_ATTEMPT],
         responseEvidence: {encoding: INLINE}}],
       window: {startedAt: ISO_WINDOW_START, endedAt: ISO_WINDOW_END},
@@ -334,9 +362,12 @@ function idealRecords(kind) {
   return [{recordType: HEADER_TYPE, comparable: false,
     substrate: {kind, evidenceUse: single ? EVIDENCE_USE.FIRST_LOOK : EVIDENCE_USE.WORKING,
       interNodePath: single ? INTER_NODE_PATH.BRIDGE : INTER_NODE_PATH.LAN,
-      declaredHostCount: single ? 1 : NODE_COUNT,
+      declaredHostIdentity: single ? IDENTITY.SYNTHETIC : IDENTITY.OBSERVED,
+      declaredHostCount: NODE_COUNT,
       nodeHostMap: arrayMap(hosts, (hostId, nodeIndex) => ({nodeIndex, hostId,
-        declaredHostId: hostId}))}},
+        declaredHostId: single ? `${SYNTHETIC_ID_PREFIX}${nodeIndex + 1}` : hostId,
+        machineHostName: hostId,
+        declaredHostIdentity: single ? IDENTITY.SYNTHETIC : IDENTITY.OBSERVED}))}},
   idealRun(kind, RESET_METHOD.CREATED, TABLE_OUTCOME_CREATED)];
 }
 
@@ -395,12 +426,36 @@ const MUTANT = Object.freeze({
   'a round trip measured inside the window': (records) => {
     records[1].observations.network.roundTrip.after.startedAt = ISO_WINDOW_START;
   },
+  'a single-host record declaring the real machine name': (records) => {
+    for (const node of records[0].substrate.nodeHostMap) {
+      node.declaredHostId = node.machineHostName;
+      node.declaredHostIdentity = IDENTITY.OBSERVED;
+    }
+    records[0].substrate.declaredHostIdentity = IDENTITY.OBSERVED;
+  },
+  'a single-host record with synthetic ids not marked synthetic': (records) => {
+    for (const node of records[0].substrate.nodeHostMap) {
+      node.declaredHostIdentity = IDENTITY.OBSERVED;
+    }
+    records[0].substrate.declaredHostIdentity = IDENTITY.OBSERVED;
+  },
+  'two nodes of a single-host record sharing one declared id': (records) => {
+    records[0].substrate.nodeHostMap[2].declaredHostId =
+      records[0].substrate.nodeHostMap[1].declaredHostId;
+  },
+  'a run that did not complete': (records) => {
+    records[1].execution.state = RUN_FAILED;
+  },
   'a single-host record without its first-look marking': (records) => {
     records[0].substrate.evidenceUse = EVIDENCE_USE.WORKING;
   },
 });
 
 const MULTI_MUTANT = Object.freeze({
+  'a multi-host record with a synthetic id': (records) => {
+    records[0].substrate.nodeHostMap[0].declaredHostId = `${SYNTHETIC_ID_PREFIX}1`;
+    records[0].substrate.nodeHostMap[0].declaredHostIdentity = IDENTITY.SYNTHETIC;
+  },
   'a multi-host record with two nodes on one host': (records) => {
     records[0].substrate.nodeHostMap[2].hostId = MULTI_HOSTS[1];
   },
@@ -462,7 +517,7 @@ async function main(argv) {
   for (const problem of controls) process.stderr.write(`${problem}${LINE_SEPARATOR}`);
   const metric = unmet.length + controls.length;
   if (!arrayIncludes(argv, METRIC_FLAG)) {
-    process.stderr.write(`oltp-research-records-guard: ${metric} unmet${LINE_SEPARATOR}`);
+    process.stderr.write(`oltp-research-substrate-ladder-guard: ${metric} unmet${LINE_SEPARATOR}`);
   }
   process.stdout.write(`${metric}${LINE_SEPARATOR}`);
   return metric === 0 ? 0 : 1;

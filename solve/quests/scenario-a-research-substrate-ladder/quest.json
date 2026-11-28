@@ -1,0 +1,59 @@
+{
+  "schema": "solve-quest/2",
+  "id": "scenario-a-research-substrate-ladder",
+  "epic": "developer-journey-and-measured-comparisons",
+  "statement": "Scenario A latency and efficiency research has a valid substrate and honest records. A research profile class, dispatch family and subkind exist that admission refuses by one explicit reason and the record writer refuses to place in the published store. The runner accepts --profile research (one fresh deployment per run on the existing lifecycle; the dry run prints the frozen plan and that nothing is admissible; --storage-root and a passed semantic gate are required). Three Lagrange nodes run on one lab host as a first look, on a campaign-scoped Docker bridge network (created and removed by the campaign's own deployment and cleanup owners, labelled with the campaign; a leftover network is a closure failure), each node declaring its own distinct SYNTHETIC host identity (declared host count 3), standard ports on each node's own bridge address, the load generator on the same host; the machine's real host name and the fact that the identities are synthetic are recorded in the substrate descriptor, the run record and the report text. This substrate exists only for the research class and only with evidenceUse first-look; every non-research plan and every multi-host plan refuses synthetic identities and keeps the observed machine name. Every run records a substrate descriptor and a round-trip matrix (the load-generator-to-endpoint path and every ordered node pair, on the bridge for one host) measured before and after the window, never during it (seven entries for three nodes on either substrate: six ordered node pairs and the load generator to the endpoint). The dataset reset method is reported by the adapter that performed it. Every statement carries a monotonic start and end in a per-attempt timeline indexed into a per-run statement catalog. Retained statement evidence of every profile is brought into the campaign evidence beside the raw record, digest-verified, before the load-generator worktree is released, and a missing or mismatching file is a typed evidence failure. An unverified seed is never warmed up or measured. Every research plan and record names its substrate kind on a ladder (owner, 2026-11-28): lab-single-host (a first look; the report of such a run says so and no speed or efficiency claim stands on it), lab-multi-host (three separate lab hosts, one node each, load generator on a fourth machine that is not a product host; the working evidence, run repeatedly with its measured round trip recorded every time) and gcp-same-zone (final verification). Physical evidence: one COMPLETED first-look research run on one lab host and one completed run on three separate lab hosts; runs that did not complete because of the network are recorded and kept beside it and satisfy nothing.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/oltp-research-substrate-ladder-guard.js --metric",
+      "target": 0,
+      "artifacts": [
+        "solve/quests/scenario-a-research-substrate-ladder/evidence/lab-single-host/raw-observations.ndjson",
+        "solve/quests/scenario-a-research-substrate-ladder/evidence/lab-three-host/raw-observations.ndjson"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "planning-only-until-sealed",
+      "statement": "Unsealed draft. Measured red value: see evidence/stage1-findings.md (12 unmet properties on the unchanged harness at the red commit). The lead seals and lands; no implementer runs start or land. The guard imports harness modules in process, reads the two declared retained artifacts and starts no cluster (R27); the two physical runs are the lead's and are retained as artifacts, never produced by the guard."
+    },
+    {
+      "id": "harness-only-never-src",
+      "statement": "Proof apparatus never changes src/. A product refusal of replication factor three on one declared host would be reported, not worked around. Writable paths are the harness, reference-client adapter, runner CLI, runbook, home-lab single-host paragraph, the guard, the recompute check and the reset-method constant of the paired-sweep runner guard named in the brief; data/tidb-comparison/ is never touched."
+    },
+    {
+      "id": "no-fallback-no-second-path",
+      "statement": "One version of any logic (R11). resetMethodOf(system) is deleted, not kept beside the adapter-reported method. The single-host substrate is a named substrate value consumed by the planner, host facts and descriptor; any non-research plan refuses it. The five single-host blockers are lifted for the research class only, never by a silent relaxation. Statement-evidence custody has one bound and one mechanism for every profile; only the timeline is always inline. No flag, mode, compatibility alias or default standing in for something not measured."
+    },
+    {
+      "id": "synthetic-identities-first-look-only",
+      "statement": "Owner, 2026-11-28: \"A one-host cluster can only ever be a very transient period or a research/test artifact, so synhtetic identities are OK\". The first-look substrate (lab-single-host) therefore declares one distinct SYNTHETIC host identity per node, derived deterministically from the campaign id and the node index (<campaign-id>-synthetic-host-<n>), validated through the product's own requireDeclaredNodeHostId rule and never derived from an address; declared host count 3. This sets aside, for this one labelled case, the rule that a node's host identity is the observed machine name; everywhere else that rule stands unchanged. Three guarantees: (1) research class only: every non-research plan and every multi-host plan refuses synthetic identities and declares each node's observed machine name; (2) first look only: the substrate carries evidenceUse first-look and no speed or efficiency claim stands on it; (3) recorded as synthetic in the campaign header, the run record and the report text: every node entry carries declaredHostId (synthetic), machineHostName (observed) and declaredHostIdentity 'synthetic' ('observed' for the multi-host kinds, where the two names are equal). The standard ports, the campaign bridge, the docker-bridge inter-node path and the seven-entry round trip are unchanged."
+    },
+    {
+      "id": "published-records-stay-byte-identical",
+      "statement": "The smoke and capacity profiles stay byte-identical where plan digests of published records are recomputed by admission: stage 2 adds the golden digests of the smoke profile as a witness. Published records are append-only history; the 22 fresh-formation and 15 truncate-and-reload values in data/tidb-comparison/raw-observations.ndjson stay as written."
+    },
+    {
+      "id": "witness-before-implementation",
+      "statement": "Stage 1: guard and in-process red witnesses only. Stage 2: profile class and barriers, reset method, timeline, custody and seed gate with their witnesses green and the existing campaign tests green. Stage 3: single-host substrate, descriptor and round trip. The guard's negative controls (a missing timeline entry, a reset method contradicting its per-table outcomes, a single-host record claiming lan, a round trip inside the window, a research record placed in a scratch copy of the published store) must be seen rejected by the verifier."
+    },
+    {
+      "id": "seal-check-before-change",
+      "statement": "Before changing a pinned value, search solve/quests, architecture/contracts, test/guidelines and scripts/checks. Stage 1 found no sealed quest, invariant or guideline that pins the reset-method strings; the consumers are the fixtures and assertions listed in evidence/stage1-findings.md."
+    },
+    {
+      "id": "substrate-ladder",
+      "statement": "Owner, 2026-11-28, first message: \"no - any speed/efficieny tests need to be done on three separate hosts, not vms on the same hosts. Start with lab machines and then use gcp for final verification when problems sovled\". Second message: \"There may be a use-case at the start for three virtual node on the same host, then using lacb mahcines (flaky network and all) repatedly, and then gcp as a final\". Rung 1 lab-single-host: three nodes on one lab host on a campaign-scoped Docker bridge; a first look, quick, no network between nodes; no speed or efficiency claim stands on it alone and its report says so. Rung 2 lab-multi-host: three separate lab hosts, one node each, load generator on a fourth machine, run repeatedly with the household network as it is and its measured round trip recorded every time; the working evidence. Rung 3 gcp-same-zone: final verification once the problems are solved. Every plan and record names its kind; a single-host record without the first-look marking, and a multi-host record with two nodes on one host, are rejected."
+    },
+    {
+      "id": "supersedes",
+      "statement": "Supersedes scenario-a-research-records (sealed at 25e6a5935, red 12), which superseded scenario-a-research-substrate (sealed at f93eafdc7, red 10), under R09. Reason: the physical first-look runs bench-research-single-0001 and -0002 on adam-laptop (harness snapshot b506201c8) showed that the harness works end to end but a truthfully declared one-host cluster (real host name on every node, declared host count 1) never becomes ready: all three nodes stay DEGRADED with PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, the seed's placement planner answers decision skip / reason no-deficit with eligibleVoterHostCount 1 while the readiness contract demands spread priority partitions (priority_partitions_not_spread). Evidence: /mnt/data/peter/projects/lagrange-oltp-perf-20261128/lab/research-runs/single-0002-node-logs/. The product inconsistency is routed to the formation owners; the owner ruled synthetic identities acceptable for this labelled case (see synthetic-identities-first-look-only). The predecessors' directories are not touched."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}
