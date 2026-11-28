@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "transaction-path-telemetry-export",
+  "epic": "developer-journey-and-measured-comparisons",
+  "statement": "A running node answers one explicit admin call with typed, bounded, cursor-windowed measurements of the coordinator side of the transaction path: session FIFO wait, operation run time, COMMIT sub-phases, read and write statements, rollback, coordinator-to-participant requests by operation and metadata persistence by purpose. Every catalogued field is measured or named unavailable, each transaction's phases sum to its total with the remainder reported, each sample carries the existing session and transaction identities, and a product-owned collection function returns one typed entry per node. Production scheduling, durable effects and decisions are unchanged.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/transaction-path-telemetry-export-guard.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "contract-before-edit",
+      "statement": "The transition record solve/quests/transaction-path-telemetry-export/evidence/transition-record.md (items 1-8) is the contract. Its open decisions are ruled by the lead before the dependent implementation; a change to a ruled fact is recorded as a scope amendment before editing, never improvised."
+    },
+    {
+      "id": "telemetry-is-a-hint",
+      "statement": "Nothing that decides, schedules, budgets, retries or persists reads telemetry. Its read and answer symbols are used only by the admin answer builder, the src/diagnostics collection module and tests; a static witness in the production-defaults probe enforces it."
+    },
+    {
+      "id": "observation-point-cost",
+      "statement": "Observation points are synchronous clock reads and O(1) increments at existing boundaries: no new await, promise link, timer, async hook or log row. The only allocation on the settled path is one bounded operations array per transaction (MAX_OPERATIONS_PER_SAMPLE = 64, with operationsOmittedCount). Histograms are fixed base-2 (23 buckets, 16 us to 33.55 s, overflow) and record without allocation; there is no max, min or average field and no sampling switch, threshold or mode."
+    },
+    {
+      "id": "catalogue-rule",
+      "statement": "One frozen catalogue lists every observation point (id, section, kind, unit, owner file, driving witness). A section answer contains exactly the catalogue entries of that section. Every entry is driven above zero by its named witness (W9). A value that was not measured is the named state unavailable with a reason, never 0; a section this build does not have is absent from the catalogue and the answer."
+    },
+    {
+      "id": "payload-privacy",
+      "statement": "No SQL text and no row values in the payload: ids, durations, counts, partition ids and (in the successor quest) 12-hex row-key digests only."
+    },
+    {
+      "id": "one-retention",
+      "statement": "Ruling 7: the most-recent sample ring (SAMPLE_RING_CAPACITY = 512, monotonic completionSequence) replaces transactionBreakdownsById, lastTransactionBreakdown, getTransactionTelemetrySummary and getLastTransactionBreakdown, the accessor that reads both stores. No second store and no compatibility accessor; every listed test and guard consumer moves to the export."
+    },
+    {
+      "id": "naming",
+      "statement": "Ruling 5: writeStatementsMs and writeStatementCount replace statementsMs and statementCount, readStatementsMs and readStatementCount are new; no alias. metadataReads and noteMetadataRead are removed (no producer ever existed); metadataReadbackCount is produced by the authoritative readback in readDistributedTransactionRow."
+    },
+    {
+      "id": "sealed-guard-supersession",
+      "statement": "Ruling 3: scripts/checks/scenario-a-transaction-coordination-fast-path-guard.js lines 268-292 (check payment-and-scenario-a-transaction-breakdown-tracer) read the export instead of the removed accessors, recorded as an R09 supersession finding naming quest scenario-a-transaction-coordination-fast-path, the assertions that change and why. The closed quest and epic stay untouched. At ab347e962 the guard measures 2 (priority-1 and priority-5 fail for causes outside this quest); after the change the tracer check passes and the guard measures no worse than its measured base. scripts/checks/scenario-a-deep-stack-throughput-and-latency-guard.js reads none of the removed accessors and is not edited."
+    },
+    {
+      "id": "production-unchanged",
+      "statement": "For one transaction composed as production composes it, the gateway mutation sequence and purposes, the armed host timers (setTimeout, setInterval, setImmediate), the decision trace and the Raft journal writes are identical to ab347e962, async_hooks.createHook is never called and no metrics.* tag is added (test/bootstrap/transaction-telemetry-production-defaults.test.js, pattern of production-scheduling-defaults.test.js)."
+    },
+    {
+      "id": "scope",
+      "statement": "Ruling 8, first quest: the route, the collection function, the shape (histogram owner, catalogue, availability states, cursor window) and the coordinator boundaries B2, B4, B5 and B8. Excluded: B1, B3, B6, B7, B9 (the successor quest transaction-path-telemetry-participant-raft-wire adds them to the same catalogue), the metrics.* log family, the harness collector, and any change to decisions, budgets, retries, durability or message formats."
+    },
+    {
+      "id": "writable-paths",
+      "statement": "src/diagnostics/telemetry-histogram.js and src/diagnostics/transaction-telemetry-collection.js (new); src/query/distributed/distributed-transaction-{telemetry,statement,decision-protocol,coordinator,protocol,participant-set,records}.js; src/query/sql-query-engine-transaction-persistence-methods.js; src/query/query-executor-partition-delivery.js; src/admin/{admin-constants,admin-websocket-api-base,admin-websocket-diagnostics-route-methods}.js and src/admin/admin-transaction-telemetry-answer.js (new); src/entrypoint-runtime-admin-composition.js; the consumer tests listed in the transition record and new tests under test/{query,admin,diagnostics,bootstrap}; scripts/checks/transaction-path-telemetry-export-guard.js and the fast-path guard lines above; solve/quests/transaction-path-telemetry-export/; src/**/INDEX.md and other generated outputs. Paths the record shows to be required beyond these are open decisions until amended."
+    },
+    {
+      "id": "probe-in-process",
+      "statement": "The guard runs in process: a real SQLQueryEngine, the coordinator, the in-memory transaction persistence gateway, PgWireProtocolHandler on a recording socket and the admin API through fastify inject without a listener. It starts no cluster and makes no network call (R27). Its witnesses have one owner shared with test/diagnostics/transaction-telemetry-export.test.js."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ and proof changes land only behind an approving independent verification newer than the last attempt, bound to the collected candidate."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "adversarial-js-intrinsics"
+  ]
+}

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2469,
+    "unit": 2470,
     "integration": 137,
     "bootstrap": 234,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2847,
-  "digest": "fnv1a32-0f61c117",
+  "censusSize": 2848,
+  "digest": "fnv1a32-c228544f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -866,6 +866,7 @@
     "test/diagnostics/topology-convergence-active-gate-handoff-route.test.js": "unit",
     "test/diagnostics/topology-convergence-graph.test.js": "unit",
     "test/diagnostics/topology-convergence-readiness-support-evidence.test.js": "unit",
+    "test/diagnostics/transaction-telemetry-export.test.js": "unit",
     "test/distributed/harness/__tests__/acknowledged-write-visibility-retry.test.js": "unit",
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js": "unit",
     "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": "unit",

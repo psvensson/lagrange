@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 123,
+    "admin-diagnostics": 124,
     "architecture-governance": 21,
     "bootstrap-membership": 358,
     "cdc-metadata": 81,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2847,
-  "digest": "fnv1a32-ac0ff69e",
+  "censusSize": 2848,
+  "digest": "fnv1a32-2fbafe00",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f0d394a1",
+  "observationDigest": "fnv1a32-fa1bd278",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -885,6 +885,7 @@
     "test/diagnostics/topology-convergence-active-gate-handoff-route.test.js": "admin-diagnostics",
     "test/diagnostics/topology-convergence-graph.test.js": "admin-diagnostics",
     "test/diagnostics/topology-convergence-readiness-support-evidence.test.js": "admin-diagnostics",
+    "test/diagnostics/transaction-telemetry-export.test.js": "admin-diagnostics",
     "test/distributed/harness/__tests__/acknowledged-write-visibility-retry.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": "distributed-harness",
@@ -7741,6 +7742,21 @@
       ],
       "directories": [
         "test/scripts/__fixtures__/topology-convergence"
+      ]
+    },
+    "test/diagnostics/transaction-telemetry-export.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/query/distributed/distributed-transaction-decision.js",
+        "src/query/distributed/distributed-transaction-identity.js",
+        "src/query/distributed/distributed-transaction-participant-manifest.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js",
+        "test/test-helpers/transaction-recovery-rows-fixture.js"
       ]
     },
     "test/distributed/harness/__tests__/acknowledged-write-visibility-retry.test.js": {
