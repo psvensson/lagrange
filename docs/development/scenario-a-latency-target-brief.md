@@ -38,28 +38,57 @@ ones.
    (new_order 19, payment 17); a read-only transaction waits for 3. Statements that need no
    round are fast. The code trace with every round named is the report "R1" (see below).
    Removing five rounds from new_order removed about a fifth of its latency, as predicted.
-2. **One round costs about 80 ms on one lab host, and that is not disk or network.**
-   1479 ms over 19 rounds is 78 ms and 1229 ms over 14 rounds is 88 ms; payment
-   gives about 60-65 ms. On that substrate the network round trip is tens of microseconds
-   and a synced SQLite commit (WAL, `synchronous = FULL`) measures about 1 ms on the lab
-   SSDs (0.96 ms on a SATA SSD, 0.69 ms on an NVMe; 44.6 ms on a spinning disk, so check
-   the disk before trusting any number). The trace's model of a round from its primitives
-   is about 4.5 ms. **Roughly 70 ms per round, a factor of about 15, is unexplained.** In
-   process, with recording doubles below the gateway, the coordinator's own logic takes
-   about 1.25 ms for a one-write transaction, so the time is below the gateway call
-   (CDC integration service, partition service, consensus, apply) or in waiting.
+2. **A round is slow because one node's event loop is saturated, not because of consensus.**
+   Dividing latency by rounds gives about 80 ms per round on one lab host (1479 ms over 19
+   rounds, 1229 ms over 14). But the consensus layer alone (real Raft runtime and durable
+   store, three replicas in one process, NVMe) takes 6.2 ms per round at the median: 1.5 ms
+   for the two disk syncs and 2.3 ms for two `setTimeout(0)` inbound drains, which Node
+   rounds up to 1 ms each (`src/raft/raft-rs-runtime-owner-constants.js`,
+   `INBOUND_DRAIN_DELAY_MS`); 180 extra ticking groups do not change it. On a real one-host
+   cluster the seed node is the only SQL endpoint and leads nearly all partitions; with two
+   clients of a one-row transaction its event loop is 99.9 % busy with a queue delay of
+   16 ms, a round costs 28-36 ms, and one such transaction uses about 185 ms of that loop.
+   Right after formation the same node is 98 % busy for about two minutes with no client
+   load. A synced SQLite commit measures 0.7-1.4 ms on the lab SSDs (44.6 ms on a spinning
+   disk, so check the disk before trusting any number). In process, with recording doubles
+   below the gateway, the coordinator's own logic takes about 1.25 ms for a one-write
+   transaction. So the levers on the cost of a round are: the processing per round on the
+   leader's thread, the concentration of every leader and the only endpoint on one node, and
+   the two timer turns. None touches a sealed constraint. (Interim result of R2; its CPU
+   profile of the loaded node is the next thing to read.)
 
 ## What decides whether the target is reachable
 
 From the design study "R3" (interim result; the full report replaces this section):
 
-| Design | Sequential rounds, write | Read-only | A round may cost at most |
+| Design | Sequential rounds, write | Read-only | A round may cost at most (statement 1 ms / 3 ms) |
 | --- | --- | --- | --- |
 | Today | 9 + 2P | 3 | - |
-| Trimmed, no sealed constraint superseded | 5 + P | 0 | - |
-| The product's own protocol at its floor | 4 for any P | 0 | 9-12 ms |
-| Nothing durable before COMMIT | 3 (2 if answered at the decision) | 0 | 13-17 ms (19-25) |
-| Commit implied by the prepare records | 1 | 0 | 39-51 ms |
+| ACTIVE-row removal (built) | 9 + P | 3 | - |
+| End of the track that reverses nothing | 6 + P | 1 | 5.1 / 3.9 ms |
+| The product's own protocol at its floor ("design A") | 4 for any P | 0 | 12.8 / 9.8 ms |
+| Nothing durable before COMMIT | 3 (2 if answered at the decision) | 0 | 17 / 13 ms (25.5 / 19.5) |
+| Commit implied by the prepare records | 1 | 0 | 51 / 39 ms |
+
+The roadmap has two tracks (R3, section 6).
+
+Track 1 reverses no sealed constraint and is built now: (1) a read-only COMMIT is answered
+when its sessions are released, its writes following as owned settlement (read-only 3 -> 1);
+(2) the decision write is retried to a known outcome, the PREPARED status write is dropped,
+settlement follows the answer (new_order 14 -> 11, payment 13 -> 10); (3) BEGIN answers after
+the local can-persist check, its insert durable before the first participant request;
+(4) all rows of one locking statement in one reservation proposal.
+
+Track 2 is unlocked one proof obligation at a time, each proven before the owner reverses
+the sealed text it names: PO-1 the participant set written once at COMMIT instead of per
+statement (gain P rounds); PO-2 PREPARE evidence only in the decision record (1 round);
+PO-3 a locking read as a claim in the partition leader's memory (1 round per locked row;
+the benchmark adapter strips `FOR UPDATE` today, so measured numbers contain none of that
+cost); PO-4 the coordinator row created at COMMIT (1 round; with PO-1 and PO-2 this is
+design A: 4 rounds, read-only 0). At a round of 5 ms and a statement of 3 ms, PO-1 alone
+already puts every transaction kind inside three times TiDB (mix 109 ms), and design A gives
+158 / 38 / 68 / 12 ms, mix 100 ms. Designs with three, two or one round are needed only if
+a round cannot be brought under about 10 ms.
 
 - Necessary for every design: a round of at most about 51 ms, and a statement that needs no
   round costing at most about 6 ms (new_order makes 46 client calls). The second has never
@@ -71,14 +100,13 @@ From the design study "R3" (interim result; the full report replaces this sectio
 
 ## Open question to answer first
 
-**Why does a round cost about 80 ms?** Candidates to falsify by measurement, none confirmed:
-event-loop latency (each node hosts well over a hundred replica groups, each with its own
-tick timer; inbound messages are drained on `setTimeout(0)`); the 10 ms poll of
-`PERSISTENCE_ADMISSION_WAIT` in `src/raft/raft-rs-runtime-owner-constants.js` when a
-transaction session holds the SQLite connection; coalescing or extra awaits on the
-coordinator's metadata write path; CPU per round on the leader's single thread; metadata
-writes routed to another node; apply-side work before the pending write resolves. The
-investigation "R2" measures this; its report is the next thing to read.
+**What is the processing that saturates the leader node's event loop?** About 15 ms of loop
+time per round and about 185 ms per one-row transaction are far more than the coordinator's
+own logic. R2's CPU profile of that node under load answers this; the candidates are the
+SQL engine statement each coordinator write is executed as, CDC obligations and cache
+propagation per write, digests and canonical JSON, logging, and the background work after
+formation. The cost of a statement that needs no round must be measured separately
+(R3 needs it at or below about 3-6 ms).
 
 ## Directions, and whether they fit the product
 
