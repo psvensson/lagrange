@@ -28,6 +28,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 function createInProcHttpPost(seedApi) {
   return async (url, body) => {
     const {pathname} = new URL(url);
@@ -425,10 +426,15 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       });
 
       const failingQueryEngine = {
-        executeQuery: async () => ({
-          success: false,
-          error: 'Table not found: nodes',
-        }),
+        // A write fails as the partition leader answers a committed statement
+        // that failed deterministically; a read has no write answer to build.
+        executeQuery: async (sql, params, options) => (
+          /^\s*(INSERT|UPDATE|DELETE)\b/iu.test(sql) ?
+            engineCommittedWriteAnswer(sql, params, options, {
+              statementFailure: {failureCode: 'SQLITE_ERROR',
+                failureMessage: 'Table not found: nodes'},
+            }) :
+            {success: false, error: 'Table not found: nodes'}),
         setSystemCache: () => {},
         setMessageRouter: () => {},
         // Current SQLQueryEngine surface: control-plane setup hands the

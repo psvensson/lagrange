@@ -21,6 +21,7 @@ import {SERVICE_DEFINITIONS_SCHEMA} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {TABLES} from '../../src/constants/index.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 import {RuntimeServiceRebalancerOwner} from
   '../../src/bootstrap/shared/runtime-service-rebalancer-setup.js';
 import {resolveRuntimeServiceDefinitionPolicy} from '../../src/rebalancer/runtime-service-policy.js';
@@ -45,7 +46,7 @@ function createFixture(t, beforeUpdate = () => {}) {
   cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, CACHE_CDC_OPERATIONS.INSERT, observe());
   const writes = [];
   const service = new CDCIntegrationService({nodeId: 'scale-node', systemTableCache: cache,
-    sqlQueryEngine: {async executeQuery(sql, params) {
+    sqlQueryEngine: {async executeQuery(sql, params, options) {
       writes.push({sql, params});
       beforeUpdate(db);
       const result = db.prepare(sql).run(...params);
@@ -53,7 +54,7 @@ function createFixture(t, beforeUpdate = () => {}) {
         cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS,
           CACHE_CDC_OPERATIONS.UPSERT, observe());
       }
-      return {success: true, affectedRows: result.changes};
+      return engineCommittedWriteAnswer(sql, params, options, {changes: result.changes});
     }},
   });
   service.initialize();

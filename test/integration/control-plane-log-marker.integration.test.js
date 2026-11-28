@@ -16,6 +16,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {LOGS_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {TABLES} from '../../src/constants/index.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
@@ -25,7 +26,7 @@ const REQUEST = Object.freeze({markerId: 'probe-one', message: 'partition witnes
 const LOG_ID = 'diagnostic-marker:probe-one';
 const NOW = 1700000000000;
 
-function createFixture(t, afterWrite = null) {
+function createFixture(t, effect = {}) {
   const db = new Database(':memory:');
   t.teardown(() => db.close());
   db.exec(generateCreateTableSQL(LOGS_SCHEMA));
@@ -40,8 +41,8 @@ function createFixture(t, afterWrite = null) {
         const row = db.prepare('SELECT * FROM logs ORDER BY rowid DESC LIMIT 1').get();
         cache.applySystemTableChange(TABLES.LOGS, CACHE_CDC_OPERATIONS.INSERT, row);
       }
-      return afterWrite ? afterWrite(result) :
-        {success: true, affectedRows: result.changes};
+      return engineCommittedWriteAnswer(sql, params, options,
+        {changes: result.changes, ...effect});
     }},
   });
   service.initialize();
@@ -101,7 +102,7 @@ test('same original marker retries settle without changing the first row', async
 });
 
 test('an applied marker with an unknown write count settles from its durable row', async (t) => {
-  const f = createFixture(t, () => ({success: true}));
+  const f = createFixture(t, {settledReplay: true, changes: null});
   const response = await f.app.inject({method: 'POST', url: MARKER_PATH, payload: REQUEST});
   t.equal(response.statusCode, 200);
   t.equal(response.json().markerState, 'recorded');

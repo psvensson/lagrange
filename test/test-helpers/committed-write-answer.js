@@ -78,7 +78,8 @@ function partitionLeader(partitionId, effect) {
  * @param {Object} entry - {partitionId, entryId, idempotencyKey, operationId}:
  *   the entry as the engine proposed it.
  * @param {Object} [effect] - The double's storage outcome: changes (default
- *   1), lastInsertRowid, rows, originHlc (the committed command's HLC),
+ *   1; null with settledReplay: the settled row retains no count),
+ *   lastInsertRowid, rows, originHlc (the committed command's HLC),
  *   settledReplay (answer from the entry's settled outcome row), logIndex,
  *   term, nodeId, replicaId; or the definite failure the leader answers
  *   instead: notLeader (refused before proposal: this replica does not lead
@@ -107,7 +108,7 @@ function committedPartitionWriteAnswer(entry, effect = {}) {
       logIndex, term, failureCode, failureMessage};
     return answerSettledStatement(leader, {command, recorded});
   }
-  const changes = effect.changes ?? 1;
+  const changes = effect.changes === undefined ? 1 : effect.changes;
   const lastInsertRowid = effect.lastInsertRowid ?? 0;
   if (effect.settledReplay === true) {
     const recorded = {outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,

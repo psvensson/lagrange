@@ -42,6 +42,7 @@ import {WasmComponentDriver} from
   '../../src/runtime/wasm-component-driver.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {readinessCollaboratorFake} from '../helpers/readiness-service-fixture.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const NODE_ID = 'runtime-access-live-node';
@@ -164,7 +165,7 @@ function createCdcBackedStore(systemTableCache) {
     cacheApplies.push(pending);
   }
 
-  async function execute(sql, params) {
+  async function execute(sql, params, options) {
     const insert = /^INSERT(?: OR REPLACE)? INTO ([a-z_]+) \(([^)]+)\) VALUES \(([^)]+)\)$/iu
       .exec(sql);
     if (insert) {
@@ -178,7 +179,8 @@ function createCdcBackedStore(systemTableCache) {
       row.updated_at_hlc = originHlc;
       table(tableName).set(row[primaryKey], {...row});
       scheduleCacheUpsert(tableName, row);
-      return {affectedRows: 1, originHlc, rows: [], success: true};
+      return engineCommittedWriteAnswer(sql, params, options,
+        {changes: 1, originHlc, rows: []});
     }
 
     const update = /^UPDATE ([a-z_]+) SET (.+) WHERE (.+)$/iu.exec(sql);
@@ -205,7 +207,8 @@ function createCdcBackedStore(systemTableCache) {
         scheduleCacheUpsert(tableName, row);
         affectedRows += 1;
       }
-      return {affectedRows, originHlc, rows: [], success: true};
+      return engineCommittedWriteAnswer(sql, params, options,
+        {changes: affectedRows, originHlc, rows: []});
     }
 
     throw new Error(`unsupported fixture SQL: ${sql}`);

@@ -22,8 +22,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NODE_STATE} from '../../src/constants/node-state.js';
 import {TABLES} from '../../src/constants/index.js';
-import {PARTITION_SETTLED_REPLAY} from
-  '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
@@ -65,7 +64,7 @@ function createFixture(t, beforeDelete = () => {}, afterDelete = () => {}) {
         cache.applySystemTableChange(TABLES.NODES, CACHE_CDC_OPERATIONS.UPSERT, observe());
       }
       if (deleting) await afterDelete({register, setStatus, db, cache});
-      return {success: true, affectedRows: result.changes};
+      return engineCommittedWriteAnswer(sql, params, options, {changes: result.changes});
     }},
   });
   service.initialize();
@@ -171,9 +170,11 @@ test('CDC conditional settled replay with an unknown count never requests row ab
   async (t) => {
     const fixture = createFixture(t, ({setStatus}) => setStatus(NODE_STATE.ACTIVE));
     const execute = fixture.service.sqlQueryEngine.executeQuery;
-    fixture.service.sqlQueryEngine.executeQuery = async (...args) => {
-      await execute(...args);
-      return {success: true, settledReplay: PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED};
+    fixture.service.sqlQueryEngine.executeQuery = async (sql, params, options) => {
+      await execute(sql, params, options);
+      // The settled replay of an entry whose row retains no count.
+      return engineCommittedWriteAnswer(sql, params, options,
+        {settledReplay: true, changes: null});
     };
     const answer = await fixture.admin.removeNode(NODE_ID, OBSERVATION);
     t.equal(answer.statusCode, 503, 'unknown affected count stays unconfirmed');
