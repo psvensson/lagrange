@@ -23,6 +23,12 @@ import {
   reportWaitBoundSpent,
 } from '../../logging/wait-bound-spent.js';
 import {noteCommitPoint} from './distributed-transaction-commit-point.js';
+import {readTelemetryClockMs} from '../../diagnostics/telemetry-histogram.js';
+import {
+  handParticipantWritePurpose,
+  handTransactionStatusWritePurpose,
+  noteParticipantRetryBackoff,
+} from './distributed-transaction-telemetry.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const TRANSACTION_BUDGET_WAIT = Object.freeze({
@@ -281,9 +287,17 @@ function assertStageBudgetNotExceeded(owner, tx, budgetBound) {
 }
 
 const distributedTransactionProtocolMethods = {
-  async setTransactionStatus(tx, status) {
+  /**
+   * Persist the transaction's next status; the caller names the purpose of
+   * the metadata write (telemetry, B8).
+   * @param {Object} tx
+   * @param {string} status
+   * @param {string} purpose - A TRANSACTION_METADATA_PERSIST_PURPOSE.
+   */
+  async setTransactionStatus(tx, status, purpose) {
     const previousStatus = tx.status;
     const previousUpdatedAt = tx.updatedAt;
+    handTransactionStatusWritePurpose(tx, purpose);
     noteCommitPoint(tx, status);
     tx.status = status;
     tx.updatedAt = this.now();
@@ -396,6 +410,8 @@ const distributedTransactionProtocolMethods = {
    * @param {string[]} [options.participantKeys] - Participant keys.
    * @param {boolean} [options.skipBudgetEnforcement] - Skip budget timeout
    *   checks during participant operation retries.
+   * @param {string} options.persistPurpose - The purpose of the stage's
+   *   participant-row writes (telemetry, B8).
    * @return {Promise<Object[]>} Failed participant entries.
    * @private
    */
@@ -407,6 +423,7 @@ const distributedTransactionProtocolMethods = {
     operation,
     options = {},
   ) {
+    handParticipantWritePurpose(tx, options.persistPurpose);
     const stageOptions = {
       failureStatus: PARTICIPANT_STATUS.FAILED,
     };
@@ -518,7 +535,9 @@ const distributedTransactionProtocolMethods = {
           error: error.message,
         });
         assertStageBudgetNotExceeded(this, tx, budgetBound);
+        const backoffStartedAtMs = readTelemetryClockMs();
         await this.sleep(retryDelayMs);
+        noteParticipantRetryBackoff(this, tx, readTelemetryClockMs() - backoffStartedAtMs);
       }
     }
   },

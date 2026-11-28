@@ -316,6 +316,7 @@ async function startJoinNode(options) {
   joinAdminRuntime = await acquireStartupOwner({
     acquire: () => startAdminRuntimeComposition({
       nodeId,
+      bootIncarnation,
       [METADATA_KEY]: metadata,
       [METADATA_MUTATION_TARGET_KEY]: mutationTarget || metadata,
       sqlQueryEngine,
@@ -559,6 +560,7 @@ async function startSeedNode(options) {
   seedAdminRuntime = await acquireStartupOwner({
     acquire: () => startAdminRuntimeComposition({
       nodeId,
+      bootIncarnation,
       [METADATA_KEY]: metadata,
       [METADATA_MUTATION_TARGET_KEY]: metadata,
       sqlQueryEngine,

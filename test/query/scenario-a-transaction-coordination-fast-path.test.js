@@ -48,6 +48,8 @@ import {
 } from '../test-helpers/participant-transaction-fixture.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import {createMockSystemCache} from './sql-query-engine-test-support.js';
+import {readTransactionTelemetryAnswer, transactionSampleOf, transactionSamplesOf} from
+  '../diagnostics/transaction-telemetry-sample-reader.js';
 const QUIET_LOGGER = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 
 function buildPrepareEvidence(partitionId) {
@@ -145,20 +147,18 @@ test('Scenario A fast path: payment transaction breakdown tracer and Priority 1 
   assert.equal(writeOpMutations[0].operation, 'upsert_batch');
   assert.equal(writeOpMutations[0].rows?.length, 2);
 
-  const breakdown = coordinator.getLastTransactionBreakdown(begun.transactionId);
-  assert.equal(Boolean(breakdown), true);
-  assert.equal(breakdown.transactionId, begun.transactionId);
-  assert.equal(breakdown.statementCount, 2);
-  assert.equal(breakdown.participantCount, 1);
-  assert.equal(typeof breakdown.beginMs, 'number');
-  assert.equal(typeof breakdown.statementsMs, 'number');
-  assert.equal(typeof breakdown.preparePhaseMs, 'number');
-  assert.equal(typeof breakdown.decisionPersistMs, 'number');
-  assert.equal(typeof breakdown.commitPhaseMs, 'number');
-  assert.equal(typeof breakdown.totalMs, 'number');
-
-  const summary = coordinator.getTransactionTelemetrySummary();
-  assert.equal(summary.transactionCount, 1);
+  const sample = transactionSampleOf(engine, begun.transactionId);
+  assert.equal(sample.identity.transactionId, begun.transactionId);
+  assert.equal(sample.writeStatementCount, 2);
+  assert.equal(sample.participantCount, 1);
+  assert.deepEqual(sample.operations.map((op) => op.kind), ['BEGIN', 'WRITE', 'WRITE', 'COMMIT']);
+  const phases = new Map(sample.operations[3].subPhases.map(({phase, ms}) => [phase, ms]));
+  for (const ms of [sample.operations[0].runMs, sample.writeStatementsMs,
+    phases.get('PREPARE_FANOUT'), phases.get('DECISION'), phases.get('COMMIT_FANOUT'),
+    sample.accounting.totalMs]) {
+    assert.equal(Number.isFinite(ms) && ms >= 0, true);
+  }
+  assert.equal(transactionSamplesOf(readTransactionTelemetryAnswer(engine)).length, 1);
 
   const selectSql = 'SELECT 1 AS ok WHERE 1 = $1';
   const descResult = await engine.describeSqlRequest({

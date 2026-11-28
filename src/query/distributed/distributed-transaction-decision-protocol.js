@@ -60,10 +60,18 @@ import {reportTransactionBudgetSpent} from
 import {completePrepareEvidenceOf} from
   './distributed-transaction-prepare-evidence.js';
 import {
-  TRANSACTION_METADATA_PERSIST_PURPOSE,
   finalizeTransactionTelemetry,
-  resolveNowMs,
+  noteMetadataMutation,
+  noteMetadataPersistElapsed,
+  noteTransactionFailure,
+  noteTransactionSubPhase,
 } from './distributed-transaction-telemetry.js';
+import {
+  TRANSACTION_FAILURE_REFUSAL,
+  TRANSACTION_METADATA_PERSIST_PURPOSE,
+  TRANSACTION_SUB_PHASE,
+} from '../../diagnostics/transaction-telemetry-collection.js';
+import {readTelemetryClockMs} from '../../diagnostics/telemetry-histogram.js';
 
 const {COMMIT, ROLLBACK} = PARTICIPANT_TRANSACTION_DECISION;
 const NO_PARTICIPANT_FAILURES = Object.freeze([]);
@@ -165,6 +173,29 @@ function rolledBackCommitFailure(preparation) {
       error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE};
 }
 
+// The first refusal cause a failed participant named (telemetry, D11).
+function firstRefusalCauseOf(failedParticipants) {
+  for (const entry of failedParticipants) {
+    if (typeof entry.refusalCause === 'string') return entry.refusalCause;
+  }
+  return TRANSACTION_FAILURE_REFUSAL.NOT_REFUSED;
+}
+
+// Telemetry reads what the answer will name before the rollback fan-out can
+// end the transaction; the answer's own fields stay where they are computed,
+// after the rollback. The stage recorded is the one the failure was decided
+// in: the stage a preparing drive reached, or, for a drive of a decision
+// recorded earlier (preparation null), the transaction's stage now.
+function noteRolledBackCommitFailure(tx, preparation) {
+  const prepared = preparation !== null;
+  noteTransactionFailure(tx, {
+    stage: prepared ? preparation.stage : tx.status,
+    refusalCause: prepared ? firstRefusalCauseOf(preparation.failedParticipants) :
+      TRANSACTION_FAILURE_REFUSAL.NOT_REFUSED,
+    errorCode: rolledBackCommitFailure(preparation).errorCode,
+  });
+}
+
 function commitSuccessResult(coordinator, tx) {
   return {
     success: true,
@@ -213,7 +244,8 @@ async function settleInDoubtRollback(coordinator, tx) {
 async function prepareEnlistedParticipantsForDecision(coordinator, tx,
   recovering, timedOut) {
   if (!PREPARE_SENT_TRANSACTION_STATUS.has(tx.status)) {
-    await coordinator.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARING);
+    await coordinator.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARING,
+      TRANSACTION_METADATA_PERSIST_PURPOSE.PREPARING);
   }
   const failedParticipants = await coordinator.runPrepareStage(tx,
     {skipBudgetEnforcement: recovering});
@@ -226,7 +258,11 @@ async function prepareEnlistedParticipantsForDecision(coordinator, tx,
     return timedOut();
   }
   if (tx.status !== TRANSACTION_STATUS.PREPARED) {
-    await coordinator.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARED);
+    const phaseStartedAtMs = readTelemetryClockMs();
+    await coordinator.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARED,
+      TRANSACTION_METADATA_PERSIST_PURPOSE.PREPARING);
+    noteTransactionSubPhase(coordinator, tx, TRANSACTION_SUB_PHASE.PREPARED_STATUS,
+      phaseStartedAtMs);
   }
   return {decision: COMMIT, stage: TRANSACTION_STATUS.PREPARED,
     failedParticipants: [], timedOut: false};
@@ -241,11 +277,8 @@ const distributedTransactionDecisionProtocolMethods = {
    * @return {Promise<string>} A TRANSACTION_DECISION_RECORDING state.
    */
   async recordTransactionDecision(tx, decision) {
-    const startedAtMs = resolveNowMs();
-    this.noteMetadataMutation?.(
-      tx,
-      TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING,
-    );
+    const startedAtMs = readTelemetryClockMs();
+    noteMetadataMutation(tx, TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING);
     try {
       const outcome = await recordTransactionDecision(this, tx, decision);
       if (outcome === TRANSACTION_DECISION_RECORDING.RECORDED) {
@@ -253,15 +286,10 @@ const distributedTransactionDecisionProtocolMethods = {
       }
       return outcome;
     } finally {
-      const elapsedMs = Math.max(0, resolveNowMs() - startedAtMs);
-      if (tx?.telemetry) {
-        tx.telemetry.decisionPersistMs += elapsedMs;
-      }
-      this.noteMetadataPersistElapsed?.(
-        tx,
+      noteMetadataPersistElapsed(this, tx,
         TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING,
-        elapsedMs,
-      );
+        readTelemetryClockMs() - startedAtMs);
+      noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.DECISION, startedAtMs);
     }
   },
 
@@ -277,10 +305,7 @@ const distributedTransactionDecisionProtocolMethods = {
     if (participantKeys.length === 0 && tx.participants.size > 0) {
       return [];
     }
-    const startedAtMs = resolveNowMs();
-    if (tx?.telemetry) {
-      tx.telemetry.prepareConcurrency = participantKeys.length;
-    }
+    const startedAtMs = readTelemetryClockMs();
     try {
       return await this.executeParticipantStage(
         tx,
@@ -292,12 +317,11 @@ const distributedTransactionDecisionProtocolMethods = {
         {
           participantKeys,
           skipBudgetEnforcement: options.skipBudgetEnforcement === true,
+          persistPurpose: TRANSACTION_METADATA_PERSIST_PURPOSE.PREPARING,
         },
       );
     } finally {
-      if (tx?.telemetry) {
-        tx.telemetry.preparePhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
-      }
+      noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.PREPARE_FANOUT, startedAtMs);
     }
   },
 
@@ -427,6 +451,7 @@ const distributedTransactionDecisionProtocolMethods = {
     if (tx.decision.decision === COMMIT) {
       return this.completeCommitDecision(tx);
     }
+    noteRolledBackCommitFailure(tx, preparation);
     const rollback = await this.completeRollbackDecision(tx);
     const failedParticipants = preparation?.failedParticipants || [];
     return {
@@ -452,11 +477,14 @@ const distributedTransactionDecisionProtocolMethods = {
    */
   async completeCommitDecision(tx) {
     if (tx.participants.size === 0) {
+      const settlementStartedAtMs = readTelemetryClockMs();
       tx[COMMIT_POINT_REACHED_FIELD] = false;
       await this.releaseReadOnlyParticipants(tx);
       if (tx.status !== TRANSACTION_STATUS.COMMITTED) {
-        await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED,
+          TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT);
       }
+      noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.SETTLEMENT, settlementStartedAtMs);
       endTransaction(this, tx);
       return commitSuccessResult(this, tx);
     }
@@ -464,13 +492,11 @@ const distributedTransactionDecisionProtocolMethods = {
       tx.status !== TRANSACTION_STATUS.COMMITTING &&
       tx.status !== TRANSACTION_STATUS.COMMITTED
     ) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTING);
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTING,
+        TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING);
     }
     const participantKeys = this.getCommitParticipantKeys(tx);
-    const startedAtMs = resolveNowMs();
-    if (tx?.telemetry) {
-      tx.telemetry.commitConcurrency = participantKeys.length;
-    }
+    const startedAtMs = readTelemetryClockMs();
     const failedParticipants =
       participantKeys.length === 0 && tx.participants.size > 0 ? [] :
         await this.executeParticipantStage(
@@ -481,11 +507,10 @@ const distributedTransactionDecisionProtocolMethods = {
             ...participantIdentityOf(tx, partitionId),
             ...participantDecisionBindingOf(tx, partitionId),
           }),
-          {participantKeys, skipBudgetEnforcement: true},
+          {participantKeys, skipBudgetEnforcement: true,
+            persistPurpose: TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT},
         );
-    if (tx?.telemetry) {
-      tx.telemetry.commitPhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
-    }
+    noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.COMMIT_FANOUT, startedAtMs);
     if (failedParticipants.length > 0) {
       this.reportRefusedCommitDecision(tx, failedParticipants);
       await this.releaseReadOnlyParticipants(tx);
@@ -500,13 +525,14 @@ const distributedTransactionDecisionProtocolMethods = {
         commitMode: tx.commitMode,
       };
     }
+    const settlementStartedAtMs = readTelemetryClockMs();
     const pendingCommit = [this.releaseReadOnlyParticipants(tx)];
     if (tx.status !== TRANSACTION_STATUS.COMMITTED) {
-      pendingCommit.push(
-        this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED),
-      );
+      pendingCommit.push(this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED,
+        TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT));
     }
     await settleAllOrThrow(pendingCommit);
+    noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.SETTLEMENT, settlementStartedAtMs);
     endTransaction(this, tx);
     return commitSuccessResult(this, tx);
   },
@@ -552,10 +578,13 @@ const distributedTransactionDecisionProtocolMethods = {
    */
   async runRollbackStage(tx, requestOf) {
     if (tx.participants.size === 0) {
+      const settlementStartedAtMs = readTelemetryClockMs();
       await this.releaseReadOnlyParticipants(tx);
       if (tx.status !== TRANSACTION_STATUS.ROLLED_BACK) {
-        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK,
+          TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT);
       }
+      noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.SETTLEMENT, settlementStartedAtMs);
       endTransaction(this, tx);
       return {
         success: true,
@@ -571,10 +600,11 @@ const distributedTransactionDecisionProtocolMethods = {
       tx.status !== TRANSACTION_STATUS.ROLLING_BACK &&
       tx.status !== TRANSACTION_STATUS.ROLLED_BACK
     ) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK,
+        TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING);
     }
     const rollbackParticipantKeys = this.getRollbackParticipantKeys(tx);
-    const startedAtMs = resolveNowMs();
+    const startedAtMs = readTelemetryClockMs();
     const rollbackFailures =
       rollbackParticipantKeys.length === 0 && tx.participants.size > 0 ? [] :
         await this.executeParticipantStage(
@@ -583,28 +613,30 @@ const distributedTransactionDecisionProtocolMethods = {
           PARTICIPANT_STATUS.ROLLED_BACK,
           (partitionId) => this.rollbackParticipant(tx.sessionId, partitionId,
             requestOf(partitionId)),
-          {participantKeys: rollbackParticipantKeys},
+          {participantKeys: rollbackParticipantKeys,
+            persistPurpose: TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT},
         );
+    noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.ROLLBACK_FANOUT, startedAtMs);
     if (rollbackFailures.length > 0) {
       await this.releaseReadOnlyParticipants(tx);
       if (
         tx.status !== TRANSACTION_STATUS.ROLLING_BACK &&
         tx.status !== TRANSACTION_STATUS.ROLLED_BACK
       ) {
-        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK,
+          TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING);
       }
     } else {
+      const settlementStartedAtMs = readTelemetryClockMs();
       const pendingRollback = [this.releaseReadOnlyParticipants(tx)];
       if (tx.status !== TRANSACTION_STATUS.ROLLED_BACK) {
-        pendingRollback.push(
-          this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK),
-        );
+        pendingRollback.push(this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK,
+          TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT));
       }
       await settleAllOrThrow(pendingRollback);
+      noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.SETTLEMENT,
+        settlementStartedAtMs);
       endTransaction(this, tx);
-    }
-    if (tx?.telemetry) {
-      tx.telemetry.rollbackPhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
     }
     return {
       success: rollbackFailures.length === 0,

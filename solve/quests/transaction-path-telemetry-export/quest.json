@@ -68,5 +68,6 @@
     "owner-interaction",
     "concurrency-serialization",
     "adversarial-js-intrinsics"
-  ]
+  ],
+  "sealedAt": "86d4d392b716b015e9335b0d658e99212ea3d865"
 }

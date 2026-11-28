@@ -1,6 +1,8 @@
 import {readStateField} from './utils/state-field-read.js';
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
+import {createTransactionTelemetryAnswerBuilder} from
+  './admin/admin-transaction-telemetry-answer.js';
 import {ConfigurationManager} from './config/configuration-manager.js';
 import {CONFIG_KEY} from './config/config-key-constants.js';
 import {LifecycleController} from './bootstrap/lifecycle-controller.js';
@@ -176,6 +178,7 @@ function createAdminAPIWithLiveQuery(options) {
     cdcIntegrationService: options.cdcIntegrationService || null,
     messageRouter: options.messageRouter || null,
     serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
+    transactionTelemetryAnswerBuilder: options.transactionTelemetryAnswerBuilder,
     controlPlaneReadinessService:
       options.controlPlaneReadinessService || null,
     heartbeatService: options.heartbeatService || null,
@@ -612,6 +615,12 @@ async function startAdminRuntimeComposition(options) {
     messageRouter: options.messageRouter,
     serviceDiagnosticsProvider:
       createServiceDiagnosticsProvider(options.owner),
+    // The boot incarnation comes from its durable owner, the startup's
+    // reservation; never from a cached nodes row.
+    transactionTelemetryAnswerBuilder: createTransactionTelemetryAnswerBuilder({
+      nodeId: options.nodeId,
+      bootIncarnation: options.bootIncarnation,
+    }),
     controlPlaneReadinessService:
       resolveOwnerControlPlaneReadinessService(options.owner),
     heartbeatService: options.owner.heartbeatService,

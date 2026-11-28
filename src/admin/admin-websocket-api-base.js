@@ -170,6 +170,9 @@ class AdminWebSocketAPIBase {
       options.serviceDispatcher || this.createLocalServiceDispatcher();
     this.serviceDiagnosticsProvider =
       options.serviceDiagnosticsProvider || null;
+    // Bound by the composition with the durable boot incarnation
+    // (admin-transaction-telemetry-answer.js).
+    this.transactionTelemetryAnswerBuilder = options.transactionTelemetryAnswerBuilder;
     this.partitionServicesProvider =
       typeof options.partitionServicesProvider === 'function' ?
         options.partitionServicesProvider :
@@ -425,6 +428,9 @@ class AdminWebSocketAPIBase {
     );
     this.fastify.get(ADMIN_ROUTE.SQL_DIAGNOSTICS, async (_request, reply) => {
       return this.handleSqlDiagnostics(reply);
+    });
+    this.fastify.get(ADMIN_ROUTE.TRANSACTION_DIAGNOSTICS, async (request, reply) => {
+      return this.handleTransactionDiagnostics(request, reply);
     });
     this.fastify.get(
       ADMIN_ROUTE.PREFLIGHT_CRITICAL_PATH_SNAPSHOT,

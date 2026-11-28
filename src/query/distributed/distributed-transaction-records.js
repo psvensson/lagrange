@@ -6,7 +6,8 @@ import {
 } from './distributed-transaction-identity.js';
 import {
   TRANSACTION_METADATA_PERSIST_PURPOSE,
-} from './distributed-transaction-telemetry.js';
+} from '../../diagnostics/transaction-telemetry-collection.js';
+import {noteMetadataMutation} from './distributed-transaction-telemetry.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
 const LOCAL_STR_HEX = 'hex';
@@ -161,10 +162,7 @@ const distributedTransactionRecordMethods = {
     }
     const batch = tx.pendingWriteOperationRecords.splice(0);
     tx.pendingWriteOperationBytes = 0;
-    this.noteMetadataMutation?.(
-      tx,
-      TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME,
-    );
+    noteMetadataMutation(tx, TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME);
     return Promise.resolve(
       this.persistWriteOperationRecordsBatch(tx, batch),
     ).catch((persistErr) => {

@@ -14,6 +14,7 @@ import {
 } from './admin-control-snapshot-serve-lane.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {parseTransactionTelemetryCursor} from './admin-transaction-telemetry-answer.js';
 
 const SNAPSHOT_RETRY_LOG_MSG =
   'Snapshot query encountered pressure or timeout. Retrying after stale socket cleanup...';
@@ -266,6 +267,46 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
     try {
       const diagnostics = this.buildLocalSqlDiagnostics();
       reply.code(HTTP_STATUS.OK).send(diagnostics);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  },
+
+  /**
+   * Answer this node's transaction-path telemetry from memory: no I/O, no
+   * system cache, nothing changed by the read. A cursor of another window
+   * is refused with its typed reason (409); a failed build answers 503 like
+   * the sibling diagnostics routes.
+   * @param {Object} request
+   * @param {Object} reply
+   */
+  async handleTransactionDiagnostics(request, reply) {
+    if (!this.transactionTelemetryAnswerBuilder) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE)
+        .send({error: ADMIN_ERROR_MESSAGE.TRANSACTION_TELEMETRY_NOT_COMPOSED});
+      return;
+    }
+    const cursor = parseTransactionTelemetryCursor(request?.query);
+    if (cursor === null) {
+      reply.code(HTTP_STATUS.BAD_REQUEST)
+        .send({error: ADMIN_ERROR_MESSAGE.TRANSACTION_TELEMETRY_CURSOR_INVALID});
+      return;
+    }
+    try {
+      const built = this.transactionTelemetryAnswerBuilder({
+        sqlQueryEngine: this.sqlQueryEngine,
+        cursor,
+      });
+      if (built.cursorRefusal !== undefined) {
+        reply.code(HTTP_STATUS.CONFLICT).send({
+          error: ADMIN_ERROR_MESSAGE.TRANSACTION_TELEMETRY_CURSOR_REFUSED,
+          ...built.cursorRefusal,
+        });
+        return;
+      }
+      reply.code(HTTP_STATUS.OK).send(built.answer);
     } catch (error) {
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
         error: error.message,

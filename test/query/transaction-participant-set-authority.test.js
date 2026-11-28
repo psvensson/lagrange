@@ -11,6 +11,9 @@ import {
 import {
   isFullyTerminalTransactionRow,
 } from '../../src/query/distributed/distributed-transaction-recovery-authority.js';
+import {TRANSACTION_OPERATION_KIND} from
+  '../../src/diagnostics/transaction-telemetry-collection.js';
+import {transactionSampleOf} from '../diagnostics/transaction-telemetry-sample-reader.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const logger = {debug() {}, warn() {}, error() {}};
@@ -614,9 +617,10 @@ test('Optimization 5C: zero-participant COMMIT persists COMMITTED atomically wit
       'zero-participant COMMIT performs INSERT + FREEZE + atomic DECIDE/COMMITTED (no 4th update)');
     assert.equal(txMutations[2].data.decision, 'COMMIT');
     assert.equal(txMutations[2].data.status, 'COMMITTED');
-    const breakdown = coordinator.getLastTransactionBreakdown(begun.transactionId);
-    assert.equal(breakdown.metadataSubmissionsByPurpose.decisionAndCommitting, 1);
-    assert.equal(breakdown.metadataSubmissionsByPurpose.settlement, 0);
+    const submissions =
+      transactionSampleOf(engine, begun.transactionId).metadata.submissionCountByPurpose;
+    assert.equal(submissions.decisionAndCommitting, 1);
+    assert.equal(submissions.settlement, 0);
   });
 
 test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert with executeWrite and COMMIT overlaps read-only release with COMMITTED status',
@@ -794,10 +798,11 @@ test('Finding 1B: parallel ACTIVE persistence waits for all siblings before rele
     let p2ActiveReleased = false;
     let queuedProbeRan = false;
     let commitStartedBeforeP2Settled = false;
-    const queuedProbe = coordinator.runTransactionOperation('f1b-tx', async () => {
-      commitStartedBeforeP2Settled = !p2ActiveReleased;
-      queuedProbeRan = true;
-    });
+    const queuedProbe = coordinator.runTransactionOperation('f1b-tx',
+      TRANSACTION_OPERATION_KIND.COMMIT, async () => {
+        commitStartedBeforeP2Settled = !p2ActiveReleased;
+        queuedProbeRan = true;
+      });
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(
       writeSettled,

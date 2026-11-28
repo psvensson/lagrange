@@ -1,142 +1,76 @@
 /**
  * Witnesses of the transaction-path telemetry export (quest
  * transaction-path-telemetry-export; design record O1 section 8 as ruled,
- * rulings 1-9). One owner of every witness: the node:test file
- * transaction-telemetry-export.test.js and the sealed guard
+ * rulings 1-9 and the stage rulings). One owner of every witness: the
+ * node:test file transaction-telemetry-export.test.js and the sealed guard
  * scripts/checks/transaction-path-telemetry-export-guard.js both run these
  * functions, so the probe and the tests can never disagree.
  *
- * Each witness first drives the real path (a real SQLQueryEngine, its
- * DistributedTransactionCoordinator, the in-memory transaction persistence
- * gateway, PgWireProtocolHandler on a frame-recording socket, and the admin
- * API through fastify inject without a listener) and asserts that the path
- * did what the scenario needs. Only then does it read the export, so a red
- * witness names the missing export property, never a broken fixture.
- *
- * The contract modules are loaded on demand: on a tree without them every
- * dependent witness is one unmet property (the guard counts each), not a
- * crash of the whole probe.
+ * Each witness drives the real path through the node of
+ * transaction-telemetry-witness-node.js, asserts that the path did what the
+ * scenario needs, and only then reads the export. The product's vocabulary
+ * comes from the contract modules (one definition); what the witnesses pin
+ * is the contract itself: the route, the sequences and the bounds.
  */
 import assert from 'node:assert/strict';
-import {EventEmitter} from 'node:events';
 import fs from 'node:fs';
 import {performance} from 'node:perf_hooks';
 
-import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {ADMIN_ROUTE} from '../../src/admin/admin-constants.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {TABLES} from '../../src/constants/index.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {PARTICIPANT_TRANSACTION_FAILURE_CODE} from
-  '../../src/partition/partition-participant-transaction-constants.js';
-import {PostgresWireAdapter} from '../../src/query/pg/postgres-wire-adapter.js';
+import {HTTP_STATUS, TABLES} from '../../src/constants/index.js';
+import {
+  PARTICIPANT_TRANSACTION_FAILURE_CODE,
+  PARTICIPANT_TRANSACTION_REFUSAL_CAUSE,
+} from '../../src/partition/partition-participant-transaction-constants.js';
+import {TRANSACTION_STATUS} from
+  '../../src/query/distributed/distributed-transaction-coordinator-constants.js';
 import {
   QUERY_ERROR_CODE,
   QUERY_OPERATION,
   QUERY_SESSION,
 } from '../../src/query/query-constants.js';
-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {encodeTypedRowSet} from '../../src/query/sql-value-codec.js';
-import {PgWireProtocolHandler} from '../../src/runtime/pgwire-protocol-handler.js';
-import {
-  PG_FRONTEND_MSG,
-  PG_PROTOCOL_VERSION,
-} from '../../src/runtime/pgwire-protocol-constants.js';
-import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {createCommittedServeEligibilityOwner} from
-  '../control-plane/serve-eligibility-test-support.js';
-import {createMockSystemCache} from '../query/sql-query-engine-test-support.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
-import {createTransactionPersistenceGateway} from
-  '../test-helpers/transaction-persistence-gateway.js';
 import {recoveryDecisionColumns, recoveryRowsOf} from
   '../test-helpers/transaction-recovery-rows-fixture.js';
+import {
+  BOOT_INCARNATION,
+  NODE_ID,
+  PARTITION_ID,
+  TABLE,
+  TRANSACTION_ROUTE,
+  cursorAfter,
+  loadCollectionContract,
+  loadHistogramContract,
+  mutationsOf,
+  openPgWireSession,
+  runTransactionBlock,
+  withTelemetryNode,
+} from './transaction-telemetry-witness-node.js';
 
-// --- The contract this quest defines (transition record, item 2) ----------
+// --- The contract's bounds -----------------------------------------------------
 
-const TRANSACTION_ROUTE = '/api/admin/diagnostics/transactions';
-const SINCE_SEQUENCE_PARAM = 'sinceSequence';
-const COLLECTION_MODULE_PATH = 'src/diagnostics/transaction-telemetry-collection.js';
-const HISTOGRAM_MODULE_PATH = 'src/diagnostics/telemetry-histogram.js';
-const COORDINATOR_SECTION = 'coordinator';
-const AVAILABILITY_MEASURED = 'measured';
-const AVAILABILITY_UNAVAILABLE = 'unavailable';
-const REASON_NOT_COMPOSED = 'NOT_COMPOSED';
-const WINDOW_COMPARABLE = 'COMPARABLE';
-const WINDOW_INCOMPARABLE_RESTARTED = 'INCOMPARABLE_RESTARTED';
-const NODE_STATE = Object.freeze({
-  ANSWERED: 'ANSWERED',
-  UNREACHABLE: 'UNREACHABLE',
-  TIMED_OUT: 'TIMED_OUT',
-  HTTP_REFUSED: 'HTTP_REFUSED',
-  MALFORMED: 'MALFORMED',
-});
-const OPERATION_KIND = Object.freeze({
-  BEGIN: 'BEGIN',
-  WRITE: 'WRITE',
-  READ: 'READ',
-  COMMIT: 'COMMIT',
-  ROLLBACK: 'ROLLBACK',
-});
-const COMMIT_SUB_PHASES = Object.freeze([
-  'FREEZE',
-  'PREPARING_STATUS',
-  'PREPARE_FANOUT',
-  'PREPARED_STATUS',
-  'DECISION',
-  'COMMITTING_STATUS',
-  'COMMIT_FANOUT',
-  'SETTLEMENT',
-]);
-const REQUEST = Object.freeze({
-  QUERY_READ: 'QUERY_READ',
-  QUERY_WRITE: 'QUERY_WRITE',
-  BEGIN: 'BEGIN',
-  PREPARE: 'PREPARE',
-  COMMIT: 'COMMIT',
-  ROLLBACK: 'ROLLBACK',
-  TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
-});
-const REQUEST_OUTCOME = Object.freeze({ACCEPTED: 'ACCEPTED', FAILED: 'FAILED'});
-const OUTCOME_COMMITTED = 'COMMITTED';
-const OUTCOME_ROLLED_BACK = 'ROLLED_BACK';
-const METADATA_PURPOSES = Object.freeze([
-  'registration',
-  'participantAdmission',
-  'statementOutcome',
-  'manifestFreeze',
-  'preparing',
-  'decisionAndCommitting',
-  'settlement',
-]);
-const OBSERVATION = Object.freeze({
-  BEGIN_RUN: 'runMs.BEGIN',
-  READ_RUN: 'runMs.READ',
-  RECOVERY_FIFO_WAIT: 'fifoWaitMs.RECOVERY',
-  RECOVERY_RUN: 'runMs.RECOVERY',
-  QUERY_READ_REQUEST: 'participantRequestMs.QUERY_READ',
-  OUTCOME_REQUEST: 'participantRequestMs.TRANSACTION_OUTCOME',
-  RETRY_BACKOFF: 'participantRetryBackoffMs',
-  READBACK: 'metadataReadbackCount',
-});
 const HISTOGRAM_BUCKET_COUNT = 23;
 const HISTOGRAM_UPPER_BOUNDS_US = Object.freeze(Array.from(
   {length: HISTOGRAM_BUCKET_COUNT - 1}, (_, index) => 2 ** (index + 4)));
 const SAMPLE_RING_CAPACITY = 512;
 const ACCOUNTING_TOLERANCE_MS = 0.5;
 const HISTOGRAM_SUM_TOLERANCE_MS = 1e-6;
+// Offsets of one transaction are differences of one monotonic clock; a
+// request's start is read after its operation's start, and a fan-out's span
+// is read around its requests, so only floating point rounding separates them.
+const CLOCK_ARITHMETIC_EPSILON_MS = 1e-6;
 const OBSERVATION_UNITS = Object.freeze(new Set(['Ms', 'Count']));
 
 // --- Fixture constants ------------------------------------------------------
 
-const TABLE = 'users';
-const PARTITION_ID = 'p1';
-const NODE_ID = 'telemetry-witness-node';
-const BOOT_INCARNATION = 7;
 const RESTARTED_BOOT_INCARNATION = 8;
-const ROLLBACK_FANOUT_HOLD_MS = 5;
+const FANOUT_HOLD_MS = 5;
 const RECOVERY_HOLD_MS = 15;
+// A host timer may fire up to one millisecond before its delay (libuv
+// millisecond granularity); a hold is therefore observed as at least this
+// much less than it was armed for.
+const TIMER_GRANULARITY_MS = 1;
 const RECOVERY_START_POLLS = 2000;
 const COLLECTION_DEADLINE_MS = 100;
 const COLLECTION_SLACK_MS = 2000;
@@ -156,26 +90,9 @@ const TAG_INSERT = 'INSERT 0 1';
 const TAG_SELECT = 'SELECT 1';
 const TAG_COMMIT = 'COMMIT';
 const TAG_ROLLBACK = 'ROLLBACK';
-const FRAME_COMMAND_COMPLETE = 'C';
-const FRAME_ERROR = 'E';
-const FRAME_HEADER_BYTES = 5;
-const ERROR_FIELD_MESSAGE = 'M';
-const HTTP_OK = 200;
-const HTTP_BAD_REQUEST = 400;
-const HTTP_NOT_FOUND = 404;
-const HTTP_UNAVAILABLE = 503;
-const QUIET_LOGGER = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
-const TRUSTING_AUTH = Object.freeze({
-  authenticate: async ({user, database}) => ({
-    authenticated: true,
-    context: {tenantId: database, principal: user, roles: ['admin']},
-  }),
-  authorizeQuery: () => ({authorized: true}),
-});
-const SCHEMA = Object.freeze({columns: [
-  {name: 'id', type: 'TEXT', primaryKey: true},
-  {name: 'name', type: 'TEXT'},
-]});
+const TAG_ERROR_PREFIX = 'ERROR ';
+const ENGINE_SESSION = 'telemetry-engine-session';
+const BUILD_FAILURE = 'telemetry answer build failed in the witness';
 
 function sleepMs(ms) {
   return new Promise((resolve) => {
@@ -187,272 +104,18 @@ function sum(values) {
   return values.reduce((total, value) => total + value, 0);
 }
 
-// --- Contract loading -------------------------------------------------------
-
-async function importContractModule(relativePath, absentMeaning) {
-  const url = new URL(`../../${relativePath}`, import.meta.url);
-  if (!fs.existsSync(url)) {
-    assert.fail(`${relativePath} does not exist: ${absentMeaning}`);
-  }
-  return import(url.href);
-}
-
-async function loadCollectionContract() {
-  return importContractModule(COLLECTION_MODULE_PATH,
-    'collectTransactionTelemetry, the observation catalogue, the answer ' +
-    'validator and the window derivation are not implemented');
-}
-
-async function loadHistogramContract() {
-  return importContractModule(HISTOGRAM_MODULE_PATH,
-    'the fixed base-2 telemetry histogram owner is not implemented');
-}
-
-// --- Engine, admin route and PG-wire fixture --------------------------------
-
-function resetEnvironment() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({node: {id: NODE_ID}});
-  LoggingService.getInstance().initialize({level: 'fatal'});
-}
-
-function envelopeOf(answer) {
-  return buildDeliveryEnvelope({acknowledged: true}, answer);
-}
-
-function defaultAnswerOf(message, partitionId) {
-  if (message.type === QUERY_OPERATION.TRANSACTION) {
-    return answerParticipantTransactionRequest(message, partitionId);
-  }
-  if (SELECT_PATTERN.test(message.sql || '')) {
-    return {success: true, rowSet: encodeTypedRowSet(['id'], [['u1']]),
-      rowSetComplete: true, readGeneration: 1};
-  }
-  return {success: true, rows: [], changes: 1};
-}
-
-/**
- * A node: a real engine whose partitions answer through a recording router,
- * and its admin API (no listener).
- * @param {Object} [options] - {bootIncarnation, composeEngine, onDeliver}.
- *   onDeliver(message, partitionId) may await, and may return an answer that
- *   replaces the participant's default success answer.
- * @return {Promise<Object>}
- */
-async function createTelemetryNode(options = {}) {
-  resetEnvironment();
-  const gateway = createTransactionPersistenceGateway();
-  const cache = createMockSystemCache(
-    [{table_name: TABLE, primaryKey: 'id', schema: SCHEMA}],
-    [{partition_id: PARTITION_ID, table_name: TABLE,
-      partition_key_start: null, partition_key_end: null}],
-  );
-  const deliveries = [];
-  const router = {
-    async deliver(address, message) {
-      const partitionId = address.split('/')[2];
-      const copy = structuredClone(message);
-      deliveries.push(copy);
-      const scripted = await options.onDeliver?.(copy, partitionId);
-      return envelopeOf(scripted ?? defaultAnswerOf(copy, partitionId));
-    },
-  };
-  const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-    systemCache: cache,
-    messageRouter: router,
-    controlPlaneSystemTableGateway: gateway,
-    autoStartDistributedTransactionRecovery: false,
-    unrefRetryDelayTimers: true,
-    logger: QUIET_LOGGER,
-  });
-  engine.transactionCoordinator.sleep = async () => {};
-  const admin = new AdminWebSocketAPI({
-    nodeId: NODE_ID,
-    bootIncarnation: options.bootIncarnation ?? BOOT_INCARNATION,
-    sqlQueryEngine: options.composeEngine === false ? null : engine,
-    enableAdminStream: false,
-  });
-  await admin.initialize(0, {listen: false});
-  const inject = async (url) => {
-    const response = await admin.getFastify().inject({method: 'GET', url});
-    return {status: response.statusCode, body: response.json()};
-  };
-  return {
-    engine,
-    gateway,
-    deliveries,
-    admin,
-    inject,
-    async readAnswer(sinceSequence = 0) {
-      const url = `${TRANSACTION_ROUTE}?${SINCE_SEQUENCE_PARAM}=${sinceSequence}`;
-      const {status, body} = await inject(url);
-      assert.equal(status, HTTP_OK, `GET ${url} answered HTTP ${status}` +
-        (status === HTTP_NOT_FOUND ? ': the route is not registered' : ''));
-      return body;
-    },
-    async dispose() {
-      await admin.shutdown();
-      await engine.shutdown();
-      gateway.db.close();
-    },
-  };
-}
-
-async function withTelemetryNode(options, run) {
-  const node = await createTelemetryNode(options);
-  try {
-    return await run(node);
-  } finally {
-    await node.dispose();
-  }
-}
-
-class FrameSocket extends EventEmitter {
-  constructor() {
-    super();
-    this.written = [];
-    this.writable = true;
-    this.destroyed = false;
-  }
-
-  write(chunk) {
-    this.written.push(Buffer.from(chunk));
-    return true;
-  }
-
-  end() {
-    this.writable = false;
-  }
-
-  destroy() {
-    this.destroyed = true;
-    this.emit('close');
-  }
-
-  frames() {
-    const all = Buffer.concat(this.written);
-    const frames = [];
-    for (let offset = 0; offset + FRAME_HEADER_BYTES <= all.length;) {
-      const length = all.readInt32BE(offset + 1);
-      frames.push({
-        type: String.fromCharCode(all[offset]),
-        body: all.subarray(offset + FRAME_HEADER_BYTES, offset + 1 + length),
-      });
-      offset += 1 + length;
-    }
-    return frames;
-  }
-}
-
-function startupMessage() {
-  const payload = Buffer.concat([
-    Buffer.alloc(4),
-    Buffer.from('user\0telemetry\0database\0telemetry\0\0', 'utf8'),
-  ]);
-  payload.writeInt32BE(PG_PROTOCOL_VERSION.CODE, 0);
-  const header = Buffer.alloc(4);
-  header.writeInt32BE(payload.length + 4, 0);
-  return Buffer.concat([header, payload]);
-}
-
-function queryMessage(sql) {
-  const body = Buffer.from(`${sql}\0`, 'utf8');
-  const frame = Buffer.alloc(FRAME_HEADER_BYTES + body.length);
-  frame[0] = PG_FRONTEND_MSG.QUERY;
-  frame.writeInt32BE(4 + body.length, 1);
-  body.copy(frame, FRAME_HEADER_BYTES);
-  return frame;
-}
-
-function errorMessageOf(body) {
-  for (const field of body.toString('utf8').split('\0')) {
-    if (field.startsWith(ERROR_FIELD_MESSAGE)) return field.slice(1);
-  }
-  return body.toString('utf8');
-}
-
-function completionOf(frames) {
-  for (const frame of frames) {
-    if (frame.type === FRAME_COMMAND_COMPLETE) {
-      return frame.body.toString('utf8').replace(/\0+$/u, '');
-    }
-    if (frame.type === FRAME_ERROR) return `ERROR ${errorMessageOf(frame.body)}`;
-  }
-  return 'NO COMPLETION';
-}
-
-/**
- * One PG-wire connection to the engine: the production handler and adapter
- * on a socket that records frames.
- * @param {SQLQueryEngine} engine
- * @return {Promise<Object>}
- */
-async function openPgWireSession(engine) {
-  const socket = new FrameSocket();
-  const adapter = new PostgresWireAdapter({sqlCore: engine, authHandler: TRUSTING_AUTH});
-  const handler = new PgWireProtocolHandler({adapter, socket, logger: QUIET_LOGGER});
-  handler.start();
-  const send = async (buffer) => {
-    socket.emit('data', buffer);
-    await handler._processing;
-  };
-  await send(startupMessage());
-  return {
-    sessionId: handler.getSession().sessionId,
-    async run(sql) {
-      const before = socket.frames().length;
-      await send(queryMessage(sql));
-      return completionOf(socket.frames().slice(before));
-    },
-    transactionId: () => handler.getSession().transactionId,
-    close: () => handler.destroy(),
-  };
-}
-
-/**
- * Run one transaction block and require the PG-wire completions it must
- * produce on any tree; returns its transaction ID.
- * @param {Object} pg
- * @param {string[]} statements
- * @param {string[]} expectedTags
- * @return {Promise<string>}
- */
-async function runTransactionBlock(pg, statements, expectedTags) {
-  const tags = [];
-  let transactionId = null;
-  for (const sql of statements) {
-    tags.push(await pg.run(sql));
-    transactionId ??= pg.transactionId();
-  }
-  assert.deepEqual(tags, expectedTags, 'precondition: the PG-wire block completes');
-  assert.equal(typeof transactionId, 'string', 'precondition: BEGIN opened a transaction');
-  return transactionId;
-}
-
-function transactionIdOfMutation(mutation) {
-  return mutation.whereClause?.transaction_id ?? mutation.row?.transaction_id ??
-    mutation.rows?.[0]?.transaction_id ?? mutation.data?.transaction_id ?? null;
-}
-
-function mutationsOf(gateway, transactionId) {
-  return gateway.mutations.filter((mutation) =>
-    transactionIdOfMutation(mutation) === transactionId);
-}
-
 // --- Assertions on the answer shape ------------------------------------------
 
-function coordinatorSectionOf(answer) {
-  const section = answer?.sections?.[COORDINATOR_SECTION];
-  assert.equal(section?.availability?.state, AVAILABILITY_MEASURED,
-    'the coordinator section is measured');
+function coordinatorSectionOf(contract, answer) {
+  const section = answer?.sections?.[contract.TRANSACTION_TELEMETRY_SECTION.COORDINATOR];
+  assert.equal(section?.availability?.state,
+    contract.TRANSACTION_TELEMETRY_AVAILABILITY.MEASURED, 'the coordinator section is measured');
   return section;
 }
 
-function sampleOf(answer, transactionId) {
-  const entries = coordinatorSectionOf(answer).samples.entries;
-  const sample = entries.find((entry) => entry.identity?.transactionId === transactionId);
+function sampleOf(contract, answer, transactionId) {
+  const sample = coordinatorSectionOf(contract, answer).samples.entries.find((entry) =>
+    entry.identity?.transactionId === transactionId);
   assert.ok(sample, `a sample of transaction ${transactionId} is retained`);
   return sample;
 }
@@ -461,12 +124,40 @@ function operationsOfKind(sample, kind) {
   return sample.operations.filter((operation) => operation.kind === kind);
 }
 
-function requestsOf(operation, requestOperation) {
-  return operation.participantRequests.filter((request) =>
+function phaseOf(operation, phase) {
+  const found = operation.subPhases.find((entry) => entry.phase === phase);
+  assert.ok(found, `${operation.kind} reports its ${phase} sub-phase`);
+  return found;
+}
+
+// The operation that was running when a request started, on the
+// transaction's own clock (offsets from the transaction's start): operations
+// run one at a time, so it is the latest one whose run had begun, and the
+// request must start before that run ended.
+function operationContaining(sample, request) {
+  let running = null;
+  for (const candidate of sample.operations) {
+    const runStart = candidate.startOffsetMs + candidate.fifoWaitMs;
+    if (runStart <= request.startOffsetMs + CLOCK_ARITHMETIC_EPSILON_MS) running = candidate;
+  }
+  assert.ok(running, `the ${request.operation} request starts inside the transaction`);
+  const runEnd = running.startOffsetMs + running.fifoWaitMs + running.runMs;
+  assert.ok(request.startOffsetMs <= runEnd + ACCOUNTING_TOLERANCE_MS,
+    `the ${request.operation} request starts while the ${running.kind} operation runs`);
+  return running;
+}
+
+// Ruling 49 (D2): a sample's participant requests are the executor's records
+// joined by transactionId at read time, in request order.
+function requestsOf(contract, entry, requestOperation) {
+  assert.equal(entry.participantRequests?.state, contract.PARTICIPANT_REQUESTS_STATE.MEASURED,
+    'the participant requests are joined from the delivery section');
+  return entry.participantRequests.entries.filter((request) =>
     request.operation === requestOperation);
 }
 
-function assertSampleAccounting(sample, label) {
+function assertSampleAccounting(contract, sample, label) {
+  const {COMMIT, ROLLBACK} = contract.TRANSACTION_OPERATION_KIND;
   const operations = sample.operations;
   const fifo = sum(operations.map((operation) => operation.fifoWaitMs));
   const run = sum(operations.map((operation) => operation.runMs));
@@ -488,11 +179,13 @@ function assertSampleAccounting(sample, label) {
       `${label}: operations are in FIFO order`);
     previousOffset = operation.startOffsetMs;
   }
-  for (const commit of operationsOfKind(sample, OPERATION_KIND.COMMIT)) {
-    const phases = sum(commit.subPhases.map((phase) => phase.ms));
-    assert.ok(Math.abs(commit.runMs - (phases + commit.commitUnattributedMs)) <=
-      ACCOUNTING_TOLERANCE_MS, `${label}: COMMIT run time is its sub-phases plus ` +
-      'commitUnattributedMs');
+  for (const [kind, field] of [[COMMIT, 'commitUnattributedMs'],
+    [ROLLBACK, 'rollbackUnattributedMs']]) {
+    for (const terminal of operationsOfKind(sample, kind)) {
+      const phases = sum(terminal.subPhases.map((phase) => phase.ms));
+      assert.ok(Math.abs(terminal.runMs - (phases + terminal[field])) <=
+        ACCOUNTING_TOLERANCE_MS, `${label}: ${kind} run time is its sub-phases plus ${field}`);
+    }
   }
   assert.ok(sample.observationCount > 0, `${label}: the sample exports its observation count`);
 }
@@ -516,10 +209,51 @@ function assertHistogramSnapshot(snapshot, id) {
 }
 
 function observationCountOf(answer, id) {
-  return coordinatorSectionOf(answer).observations[id]?.count ?? 0;
+  for (const section of Object.values(answer?.sections ?? {})) {
+    const observation = section?.observations?.[id];
+    if (observation !== undefined) return observation.count;
+  }
+  assert.fail(`observation ${id} is in no section of the answer`);
+}
+
+function observationCountsWithPrefix(answer, prefix) {
+  const observations = Object.values(answer.sections).flatMap((section) =>
+    Object.entries(section.observations ?? {}));
+  return sum(observations.filter(([id]) => id.startsWith(prefix))
+    .map(([, value]) => value.count));
 }
 
 // --- W1: the route answers a typed node answer -------------------------------
+
+async function assertRouteRefusals(contract, node) {
+  for (const query of ['sinceSequence=-1', 'sinceSequence=3', 'sinceSequence=3&bootIncarnation=7']) {
+    const refused = await node.inject(`${TRANSACTION_ROUTE}?${query}`);
+    assert.equal(refused.status, HTTP_STATUS.BAD_REQUEST,
+      `an invalid cursor (${query}) is refused, typed`);
+  }
+  await withTelemetryNode({composeEngine: false}, async (bare) => {
+    const uncomposed = await bare.readAnswer(0);
+    for (const name of Object.values(contract.TRANSACTION_TELEMETRY_SECTION)) {
+      assert.deepEqual(uncomposed.sections[name], {availability: {
+        state: contract.TRANSACTION_TELEMETRY_AVAILABILITY.UNAVAILABLE,
+        reason: contract.TRANSACTION_TELEMETRY_UNAVAILABLE_REASON.NOT_COMPOSED}},
+      `a node without an engine names its ${name} section unavailable`);
+    }
+  });
+  await withTelemetryNode({answerBuilder: null}, async (unbound) => {
+    const unboundAnswer = await unbound.inject(TRANSACTION_ROUTE);
+    assert.equal(unboundAnswer.status, HTTP_STATUS.SERVICE_UNAVAILABLE,
+      'an admin runtime without the bound answer builder refuses, typed');
+  });
+  const throwing = () => {
+    throw new Error(BUILD_FAILURE);
+  };
+  await withTelemetryNode({answerBuilder: throwing}, async (failing) => {
+    const failed = await failing.inject(TRANSACTION_ROUTE);
+    assert.deepEqual([failed.status, failed.body], [HTTP_STATUS.SERVICE_UNAVAILABLE,
+      {error: BUILD_FAILURE}], 'a failed build answers 503 like the sibling routes');
+  });
+}
 
 async function witnessRouteAnswer() {
   return withTelemetryNode({}, async (node) => {
@@ -527,8 +261,6 @@ async function witnessRouteAnswer() {
     assert.equal(ADMIN_ROUTE.TRANSACTION_DIAGNOSTICS, TRANSACTION_ROUTE,
       'the route is a sibling in ADMIN_ROUTE');
     const contract = await loadCollectionContract();
-    assert.equal(typeof contract.collectTransactionTelemetry, 'function',
-      'collectTransactionTelemetry exists');
     assert.equal(answer.schemaVersion, contract.TRANSACTION_TELEMETRY_SCHEMA_VERSION);
     assert.equal(answer.nodeId, NODE_ID);
     assert.equal(answer.bootIncarnation, BOOT_INCARNATION);
@@ -538,89 +270,131 @@ async function witnessRouteAnswer() {
       assert.equal(Number.isFinite(answer[field]) && answer[field] >= 0, true,
         `${field} is a non-negative number`);
     }
-    const section = coordinatorSectionOf(answer);
-    const catalogued = contract.TRANSACTION_TELEMETRY_CATALOGUE
-      .filter((entry) => entry.section === COORDINATOR_SECTION)
-      .map((entry) => entry.id).sort();
-    assert.deepEqual(Object.keys(section.observations).sort(), catalogued,
-      'the section contains exactly the catalogued observations');
-    for (const id of catalogued) assertHistogramSnapshot(section.observations[id], id);
+    const sections = Object.values(contract.TRANSACTION_TELEMETRY_SECTION);
+    assert.deepEqual(Object.keys(answer.sections).sort(), [...sections].sort(),
+      'the answer has exactly the catalogued sections');
+    for (const name of sections) {
+      const measured = answer.sections[name];
+      assert.equal(measured.availability.state,
+        contract.TRANSACTION_TELEMETRY_AVAILABILITY.MEASURED, `${name} is measured`);
+      assert.equal(Number.isSafeInteger(measured.telemetryEpoch) &&
+        measured.telemetryEpoch > 0, true, `${name} names its telemetry epoch`);
+      const catalogued = contract.TRANSACTION_TELEMETRY_CATALOGUE
+        .filter((entry) => entry.section === name)
+        .map((entry) => entry.id).sort();
+      assert.ok(catalogued.length > 0, `${name} has catalogued observations`);
+      assert.deepEqual(Object.keys(measured.observations).sort(), catalogued,
+        `${name} contains exactly its catalogued observations`);
+      for (const id of catalogued) assertHistogramSnapshot(measured.observations[id], id);
+    }
+    const section = coordinatorSectionOf(contract, answer);
     assert.equal(section.samples.capacity, SAMPLE_RING_CAPACITY);
     assert.deepEqual(section.samples.entries, []);
     assert.equal(section.samples.droppedCount, 0);
+    assert.deepEqual([section.withoutSample.entries, section.withoutSample.droppedCount],
+      [[], 0], 'no transaction has completed without a sample');
     assert.deepEqual(contract.validateTransactionTelemetryAnswer(answer),
       {valid: true, reason: null}, 'the answer satisfies its own validator');
-    const refused = await node.inject(`${TRANSACTION_ROUTE}?${SINCE_SEQUENCE_PARAM}=-1`);
-    assert.equal(refused.status, HTTP_BAD_REQUEST, 'an invalid cursor is refused, typed');
-    await withTelemetryNode({composeEngine: false}, async (bare) => {
-      const uncomposed = await bare.readAnswer(0);
-      assert.deepEqual(uncomposed.sections[COORDINATOR_SECTION],
-        {availability: {state: AVAILABILITY_UNAVAILABLE, reason: REASON_NOT_COMPOSED}},
-        'a node without an engine names the coordinator section unavailable');
-    });
+    await assertRouteRefusals(contract, node);
     return {answers: [answer]};
   });
 }
 
 // --- W2: accounting, through PgWireProtocolHandler ---------------------------
 
-async function holdRollbackFanout(message) {
+// The participant fan-outs of W2's PG-wire blocks are held, so each fan-out
+// is measurably longer than a timer's granularity.
+async function holdFanouts(message) {
   if (message.type === QUERY_OPERATION.TRANSACTION &&
-      message.operation === QUERY_OPERATION.ROLLBACK) {
-    await sleepMs(ROLLBACK_FANOUT_HOLD_MS);
+      [QUERY_OPERATION.PREPARE, QUERY_OPERATION.COMMIT, QUERY_OPERATION.ROLLBACK]
+        .includes(message.operation)) {
+    await sleepMs(FANOUT_HOLD_MS);
   }
   return undefined;
 }
 
-function assertCommittedSample(sample, pg, node) {
-  assert.equal(sample.outcome, OUTCOME_COMMITTED);
+// A fan-out sub-phase spans its participant requests: it is at least as long
+// as the held request it contains.
+function assertFanoutSpansRequest(operation, phase, request) {
+  assert.ok(request.ms >= FANOUT_HOLD_MS - TIMER_GRANULARITY_MS,
+    `the ${request.operation} request time is retained`);
+  assert.ok(phaseOf(operation, phase).ms >= request.ms - CLOCK_ARITHMETIC_EPSILON_MS,
+    `${phase} is measured around its ${request.operation} request`);
+}
+
+function assertTerminalPhasesMeasured(operation) {
+  for (const {phase, ms} of operation.subPhases) {
+    assert.ok(ms > 0, `${operation.kind} sub-phase ${phase} is measured, not zero`);
+  }
+}
+
+function assertCommittedSample(contract, sample, pg, node) {
+  const KIND = contract.TRANSACTION_OPERATION_KIND;
+  const REQUEST = contract.PARTICIPANT_REQUEST_OPERATION;
+  const PHASE = contract.TRANSACTION_SUB_PHASE;
+  assert.equal(sample.outcome, TRANSACTION_STATUS.COMMITTED);
   assert.equal(sample.identity.sessionId, pg.sessionId,
     'the sample joins its PG-wire session by the existing session identity');
   assert.deepEqual(sample.operations.map((operation) => operation.kind),
-    [OPERATION_KIND.BEGIN, OPERATION_KIND.WRITE, OPERATION_KIND.COMMIT]);
+    [KIND.BEGIN, KIND.WRITE, KIND.COMMIT]);
   assert.equal(sample.operationsOmittedCount, 0);
-  const [write] = operationsOfKind(sample, OPERATION_KIND.WRITE);
-  assert.equal(requestsOf(write, REQUEST.BEGIN).length, 1);
-  assert.equal(requestsOf(write, REQUEST.QUERY_WRITE).length, 1);
-  assert.equal(requestsOf(write, REQUEST.QUERY_WRITE)[0].partitionId, PARTITION_ID);
-  const [commit] = operationsOfKind(sample, OPERATION_KIND.COMMIT);
-  assert.deepEqual(commit.subPhases.map((phase) => phase.phase), COMMIT_SUB_PHASES,
-    'COMMIT reports its sub-phases in order');
-  assert.equal(requestsOf(commit, REQUEST.PREPARE).length, 1);
-  assert.equal(requestsOf(commit, REQUEST.COMMIT).length, 1);
-  for (const request of [...write.participantRequests, ...commit.participantRequests]) {
-    assert.equal(request.outcome, REQUEST_OUTCOME.ACCEPTED);
-    assert.ok(request.attempts >= 1 && request.ms >= 0);
+  for (const [operation, kind] of [[REQUEST.BEGIN, KIND.WRITE],
+    [REQUEST.QUERY_WRITE, KIND.WRITE], [REQUEST.PREPARE, KIND.COMMIT],
+    [REQUEST.COMMIT, KIND.COMMIT]]) {
+    const requests = requestsOf(contract, sample, operation);
+    assert.equal(requests.length, 1, `one ${operation} request`);
+    assert.equal(requests[0].partitionId, PARTITION_ID);
+    assert.equal(requests[0].outcome, contract.PARTICIPANT_REQUEST_OUTCOME.ACCEPTED);
+    assert.ok(requests[0].attempts >= 1 && requests[0].ms >= 0);
+    assert.equal(operationContaining(sample, requests[0]).kind, kind,
+      `the ${operation} request ran inside the ${kind} operation`);
   }
+  // The PREPARING and COMMITTING status writes are atomic with the freeze
+  // and the decision, so they are not phases of their own.
+  const [commit] = operationsOfKind(sample, KIND.COMMIT);
+  assert.deepEqual(commit.subPhases.map((phase) => phase.phase), [PHASE.FREEZE,
+    PHASE.PREPARE_FANOUT, PHASE.PREPARED_STATUS, PHASE.DECISION, PHASE.COMMIT_FANOUT,
+    PHASE.SETTLEMENT], 'COMMIT reports the sub-phases that ran, in order');
+  assertTerminalPhasesMeasured(commit);
+  assertFanoutSpansRequest(commit, PHASE.PREPARE_FANOUT,
+    requestsOf(contract, sample, REQUEST.PREPARE)[0]);
+  assertFanoutSpansRequest(commit, PHASE.COMMIT_FANOUT,
+    requestsOf(contract, sample, REQUEST.COMMIT)[0]);
   assert.equal(sample.writeStatementCount, 1);
   assert.ok(sample.writeStatementsMs > 0, 'the write statement is timed');
   assert.equal(sample.readStatementCount, 0);
   assert.equal(sample.participantCount, 1);
   const submissions = sample.metadata.submissionCountByPurpose;
-  assert.deepEqual(Object.keys(submissions).sort(), [...METADATA_PURPOSES].sort());
+  assert.deepEqual(Object.keys(submissions).sort(),
+    Object.values(contract.TRANSACTION_METADATA_PERSIST_PURPOSE).sort());
   assert.equal(sum(Object.values(submissions)),
     mutationsOf(node.gateway, sample.identity.transactionId).length,
     'metadata submissions by purpose account for every gateway mutation');
-  assertSampleAccounting(sample, 'committed transaction');
+  assertSampleAccounting(contract, sample, 'committed transaction');
 }
 
-function assertRolledBackSample(sample, pg) {
-  assert.equal(sample.outcome, OUTCOME_ROLLED_BACK);
+function assertRolledBackSample(contract, sample, pg) {
+  const KIND = contract.TRANSACTION_OPERATION_KIND;
+  const PHASE = contract.TRANSACTION_SUB_PHASE;
+  assert.equal(sample.outcome, TRANSACTION_STATUS.ROLLED_BACK);
   assert.equal(sample.identity.sessionId, pg.sessionId);
   assert.deepEqual(sample.operations.map((operation) => operation.kind),
-    [OPERATION_KIND.BEGIN, OPERATION_KIND.WRITE, OPERATION_KIND.ROLLBACK]);
-  const [rollback] = operationsOfKind(sample, OPERATION_KIND.ROLLBACK);
-  const [request] = requestsOf(rollback, REQUEST.ROLLBACK);
-  assert.ok(request, 'the ROLLBACK operation reports its participant request');
-  assert.ok(request.ms >= ROLLBACK_FANOUT_HOLD_MS - ACCOUNTING_TOLERANCE_MS,
-    'the ROLLBACK fan-out time is retained');
-  assert.ok(rollback.runMs >= request.ms - ACCOUNTING_TOLERANCE_MS,
-    'rollback is accounted before the transaction is finalized');
-  assertSampleAccounting(sample, 'rolled-back transaction');
+    [KIND.BEGIN, KIND.WRITE, KIND.ROLLBACK]);
+  // Ruling 56 (D10): ROLLBACK sub-phases, enumerated like COMMIT.
+  const [rollback] = operationsOfKind(sample, KIND.ROLLBACK);
+  assert.deepEqual(rollback.subPhases.map((phase) => phase.phase), [PHASE.FREEZE,
+    PHASE.DECISION, PHASE.ROLLBACK_FANOUT, PHASE.SETTLEMENT],
+  'ROLLBACK reports its sub-phases in order');
+  assertTerminalPhasesMeasured(rollback);
+  const [request] = requestsOf(contract, sample, contract.PARTICIPANT_REQUEST_OPERATION.ROLLBACK);
+  assert.ok(request, 'the ROLLBACK participant request is joined to the sample');
+  assert.equal(operationContaining(sample, request).kind, KIND.ROLLBACK);
+  assertFanoutSpansRequest(rollback, PHASE.ROLLBACK_FANOUT, request);
+  assertSampleAccounting(contract, sample, 'rolled-back transaction');
 }
 
-async function witnessCommitAndRollbackAccounting() {
-  return withTelemetryNode({onDeliver: holdRollbackFanout}, async (node) => {
+async function witnessCommitAndRollbackAccounting(contract) {
+  return withTelemetryNode({onDeliver: holdFanouts}, async (node) => {
     const pg = await openPgWireSession(node.engine);
     try {
       const committedId = await runTransactionBlock(pg, ['BEGIN', INSERT_A, 'COMMIT'],
@@ -631,9 +405,9 @@ async function witnessCommitAndRollbackAccounting() {
         message.operation === QUERY_OPERATION.ROLLBACK), true,
       'precondition: the rolled-back transaction fanned out a participant ROLLBACK');
       const answer = await node.readAnswer(0);
-      assert.equal(coordinatorSectionOf(answer).samples.entries.length, 2);
-      assertCommittedSample(sampleOf(answer, committedId), pg, node);
-      assertRolledBackSample(sampleOf(answer, rolledBackId), pg);
+      assert.equal(coordinatorSectionOf(contract, answer).samples.entries.length, 2);
+      assertCommittedSample(contract, sampleOf(contract, answer, committedId), pg, node);
+      assertRolledBackSample(contract, sampleOf(contract, answer, rolledBackId), pg);
       assertNoStatementText(answer);
       return answer;
     } finally {
@@ -662,7 +436,7 @@ function createRetryMissScript() {
     if (message.operation === QUERY_OPERATION.TRANSACTION_OUTCOME) {
       seen.outcome += 1;
       return {...answerParticipantTransactionRequest(message, partitionId),
-        durable: true, state: OUTCOME_COMMITTED, outcome: OUTCOME_COMMITTED};
+        durable: true, state: TRANSACTION_STATUS.COMMITTED, outcome: TRANSACTION_STATUS.COMMITTED};
     }
     return undefined;
   };
@@ -694,7 +468,10 @@ function loseFirstParticipantSetCertification(gateway) {
   return counters;
 }
 
-async function witnessRetryMissAndReadback() {
+async function witnessRetryMissAndReadback(contract) {
+  const REQUEST = contract.PARTICIPANT_REQUEST_OPERATION;
+  const OUTCOME = contract.PARTICIPANT_REQUEST_OUTCOME;
+  const NAME = contract.TRANSACTION_TELEMETRY_OBSERVATION;
   const script = createRetryMissScript();
   return withTelemetryNode({onDeliver: script.onDeliver}, async (node) => {
     const lost = loseFirstParticipantSetCertification(node.gateway);
@@ -707,21 +484,23 @@ async function witnessRetryMissAndReadback() {
       assert.equal(lost.readbacks >= 1, true,
         'precondition: the uncertified participant-set update was read back');
       const answer = await node.readAnswer(0);
-      const sample = sampleOf(answer, transactionId);
-      const [commit] = operationsOfKind(sample, OPERATION_KIND.COMMIT);
-      assert.deepEqual(requestsOf(commit, REQUEST.PREPARE).map((request) => request.outcome),
-        [REQUEST_OUTCOME.FAILED, REQUEST_OUTCOME.ACCEPTED]);
-      assert.deepEqual(requestsOf(commit, REQUEST.COMMIT).map((request) => request.outcome),
-        [REQUEST_OUTCOME.FAILED]);
-      assert.deepEqual(requestsOf(commit, REQUEST.TRANSACTION_OUTCOME)
-        .map((request) => request.outcome), [REQUEST_OUTCOME.ACCEPTED]);
+      const sample = sampleOf(contract, answer, transactionId);
+      const outcomesOf = (operation) => requestsOf(contract, sample, operation).map((request) => {
+        assert.equal(operationContaining(sample, request).kind,
+          contract.TRANSACTION_OPERATION_KIND.COMMIT);
+        return request.outcome;
+      });
+      assert.deepEqual(outcomesOf(REQUEST.PREPARE), [OUTCOME.FAILED, OUTCOME.ACCEPTED]);
+      assert.deepEqual(outcomesOf(REQUEST.COMMIT), [OUTCOME.FAILED]);
+      assert.deepEqual(outcomesOf(REQUEST.TRANSACTION_OUTCOME), [OUTCOME.ACCEPTED]);
       assert.equal(sample.metadata.readbackCount, lost.readbacks,
         'metadata readbacks have their real producer');
-      assert.equal(observationCountOf(answer, OBSERVATION.RETRY_BACKOFF), 1,
+      assert.equal(observationCountOf(answer, NAME.RETRY_BACKOFF), 1,
         'the participant retry backoff is recorded separately');
-      assert.equal(observationCountOf(answer, OBSERVATION.OUTCOME_REQUEST), 1);
-      assert.equal(observationCountOf(answer, OBSERVATION.READBACK), lost.readbacks);
-      assertSampleAccounting(sample, 'retried transaction');
+      assert.equal(observationCountOf(answer,
+        `${NAME.PARTICIPANT_REQUEST}.${REQUEST.TRANSACTION_OUTCOME}`), 1);
+      assert.equal(observationCountOf(answer, NAME.METADATA_READBACK), lost.readbacks);
+      assertSampleAccounting(contract, sample, 'retried transaction');
       return answer;
     } finally {
       pg.close();
@@ -729,22 +508,199 @@ async function witnessRetryMissAndReadback() {
   });
 }
 
+function refusePrepare(message, partitionId) {
+  if (message.type !== QUERY_OPERATION.TRANSACTION ||
+      message.operation !== QUERY_OPERATION.PREPARE) {
+    return undefined;
+  }
+  return typedParticipantFailure(message, partitionId, {
+    failureCode: PARTICIPANT_TRANSACTION_FAILURE_CODE.PREPARE_REFUSED,
+    refusalCause: PARTICIPANT_TRANSACTION_REFUSAL_CAUSE.CONFLICT,
+    error: 'prepare refused',
+  });
+}
+
+function refusedPrepareFailure() {
+  return {stage: TRANSACTION_STATUS.PREPARING,
+    refusalCause: PARTICIPANT_TRANSACTION_REFUSAL_CAUSE.CONFLICT,
+    errorCode: QUERY_ERROR_CODE.TRANSACTION_CONFLICT};
+}
+
+function refusedPrepareStageAndCode() {
+  const {stage, errorCode} = refusedPrepareFailure();
+  return {stage, errorCode};
+}
+
+async function witnessRefusedPrepareFailure(contract) {
+  const PHASE = contract.TRANSACTION_SUB_PHASE;
+  const REQUEST = contract.PARTICIPANT_REQUEST_OPERATION;
+  const OUTCOME = contract.PARTICIPANT_REQUEST_OUTCOME;
+  return withTelemetryNode({onDeliver: refusePrepare}, async (node) => {
+    const pg = await openPgWireSession(node.engine);
+    try {
+      const tags = [];
+      let transactionId = null;
+      for (const sql of ['BEGIN', INSERT_A, 'COMMIT']) {
+        tags.push(await pg.run(sql));
+        transactionId ??= pg.transactionId();
+      }
+      assert.deepEqual(tags.slice(0, 2), [TAG_BEGIN, TAG_INSERT],
+        'precondition: the block reached COMMIT');
+      assert.equal(tags[2].startsWith(TAG_ERROR_PREFIX), true,
+        'precondition: the refused PREPARE fails the COMMIT');
+      const answer = await node.readAnswer(0);
+      const sample = sampleOf(contract, answer, transactionId);
+      assert.equal(sample.outcome, TRANSACTION_STATUS.ROLLED_BACK);
+      // Ruling 56 (D11): the sample names the failure the COMMIT ended in.
+      assert.deepEqual(sample.failure, refusedPrepareFailure());
+      const [commit] = operationsOfKind(sample, contract.TRANSACTION_OPERATION_KIND.COMMIT);
+      assert.deepEqual(commit.subPhases.map((phase) => phase.phase), [PHASE.FREEZE,
+        PHASE.PREPARE_FANOUT, PHASE.DECISION, PHASE.ROLLBACK_FANOUT, PHASE.SETTLEMENT]);
+      assert.deepEqual(requestsOf(contract, sample, REQUEST.PREPARE).map((request) =>
+        request.outcome), [OUTCOME.FAILED]);
+      assert.deepEqual(requestsOf(contract, sample, REQUEST.ROLLBACK).map((request) =>
+        request.outcome), [OUTCOME.ACCEPTED]);
+      assertSampleAccounting(contract, sample, 'refused transaction');
+      return answer;
+    } finally {
+      pg.close();
+    }
+  });
+}
+
+// --- W2: answers and failures of re-driven decisions ---------------------------
+
+function engineStep(node, sql, transactionId = undefined) {
+  return node.engine.executeQuery(sql, [],
+    {sessionId: ENGINE_SESSION, expectedTransactionId: transactionId});
+}
+
+function answerFieldsOf(result) {
+  return {success: result.success, stage: result.stage, errorCode: result.errorCode};
+}
+
+// The first participant ROLLBACK is refused; a later drive succeeds.
+function refuseFirstRollback(also = () => undefined) {
+  let rollbacks = 0;
+  return (message, partitionId) => {
+    if (message.type === QUERY_OPERATION.TRANSACTION &&
+        message.operation === QUERY_OPERATION.ROLLBACK && ++rollbacks === 1) {
+      return typedParticipantFailure(message, partitionId,
+        {failureCode: 'ROLLBACK_REFUSED_FOR_WITNESS', error: 'rollback refused'});
+    }
+    return also(message, partitionId);
+  };
+}
+
+async function runEngineTransaction(node, terminals) {
+  const begun = await engineStep(node, 'BEGIN');
+  const written = await engineStep(node, INSERT_A);
+  assert.equal(begun.success && written.success, true, 'precondition: the write ran');
+  const answers = [];
+  for (const sql of terminals) answers.push(await engineStep(node, sql, begun.transactionId));
+  return {transactionId: begun.transactionId, answers};
+}
+
+// S6: a refused PREPARE whose rollback fan-out fails, then COMMIT again. The
+// second COMMIT re-drives the recorded ROLLBACK; its answer is computed after
+// that rollback, and the first failure stays on the sample.
+async function witnessRefusedPrepareRedriven(contract) {
+  return withTelemetryNode({onDeliver: refuseFirstRollback(refusePrepare)}, async (node) => {
+    const {transactionId, answers} = await runEngineTransaction(node, ['COMMIT', 'COMMIT']);
+    assert.deepEqual(answers.map(answerFieldsOf), [
+      {success: false, ...refusedPrepareStageAndCode()},
+      {success: false, stage: TRANSACTION_STATUS.ROLLED_BACK,
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE},
+    ], 'the answers are those of the base: the re-driven COMMIT answers ROLLED_BACK');
+    const answer = await node.readAnswer(0);
+    const sample = sampleOf(contract, answer, transactionId);
+    assert.equal(sample.outcome, TRANSACTION_STATUS.ROLLED_BACK);
+    assert.deepEqual(sample.failure, refusedPrepareFailure(),
+      'a later drive of the recorded decision does not replace the first failure');
+    assertSampleAccounting(contract, sample, 're-driven refused transaction');
+    return answer;
+  });
+}
+
+// S7: a client ROLLBACK whose fan-out fails, then COMMIT: the COMMIT re-drives
+// the recorded ROLLBACK and answers its stage after the rollback.
+async function witnessClientRollbackRedriven(contract) {
+  return withTelemetryNode({onDeliver: refuseFirstRollback()}, async (node) => {
+    const {transactionId, answers} = await runEngineTransaction(node, ['ROLLBACK', 'COMMIT']);
+    assert.deepEqual(answers.map(answerFieldsOf), [
+      {success: false, stage: undefined,
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE},
+      {success: false, stage: TRANSACTION_STATUS.ROLLED_BACK,
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE},
+    ], 'the answers are those of the base: the COMMIT answers ROLLED_BACK');
+    const answer = await node.readAnswer(0);
+    const sample = sampleOf(contract, answer, transactionId);
+    assert.equal(sample.outcome, TRANSACTION_STATUS.ROLLED_BACK);
+    assert.deepEqual(sample.failure, {stage: TRANSACTION_STATUS.ROLLING_BACK,
+      refusalCause: contract.TRANSACTION_FAILURE_REFUSAL.NOT_REFUSED,
+      errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE},
+    'the failure names the stage it was decided in');
+    assertSampleAccounting(contract, sample, 're-driven client rollback');
+    return answer;
+  });
+}
+
+function answerWaitCycle(message, partitionId) {
+  if (message.type === QUERY_OPERATION.TRANSACTION) return undefined;
+  return {success: false, deadlockDetected: true, partitionId, error: 'wait cycle'};
+}
+
+// A write chosen as a wait-cycle victim rolls its transaction back inside the
+// statement: the statement still counts.
+async function witnessStatementThatEndsItsTransaction(contract) {
+  const KIND = contract.TRANSACTION_OPERATION_KIND;
+  return withTelemetryNode({onDeliver: answerWaitCycle}, async (node) => {
+    const begun = await engineStep(node, 'BEGIN');
+    const written = await engineStep(node, INSERT_A);
+    assert.equal(written.success === false && written.deadlockDetected === true, true,
+      'precondition: the write was a wait-cycle victim');
+    assert.equal(node.engine.transactionCoordinator.transactionsBySession.has(ENGINE_SESSION),
+      false, 'precondition: the write ended its transaction');
+    const answer = await node.readAnswer(0);
+    const sample = sampleOf(contract, answer, begun.transactionId);
+    assert.equal(sample.outcome, TRANSACTION_STATUS.ROLLED_BACK);
+    assert.deepEqual(sample.operations.map((operation) => operation.kind),
+      [KIND.BEGIN, KIND.WRITE]);
+    assert.equal(sample.writeStatementCount, 1, 'the write that ended it is counted');
+    assert.ok(sample.writeStatementsMs > 0, 'and timed');
+    assertSampleAccounting(contract, sample, 'wait-cycle victim');
+    return answer;
+  });
+}
+
 /**
  * W2: a committed and a rolled-back transaction through the PG-wire handler
- * have phases that sum to totalMs with the remainder reported; a third
- * transaction drives the participant retry backoff, the TRANSACTION_OUTCOME
- * request and the metadata readback the catalogue names W2 for.
+ * have measured sub-phases that span their held fan-outs and phases that sum
+ * to totalMs; a third drives the retry backoff, the TRANSACTION_OUTCOME
+ * request and the metadata readback; a fourth, whose PREPARE is refused,
+ * names its failure (D11). Re-driven decisions answer as the base did and
+ * keep their first failure (S6, S7), and a statement that ends its
+ * transaction counts.
  * @return {Promise<{answers: Object[]}>}
  */
 async function witnessAccounting() {
-  const accounting = await witnessCommitAndRollbackAccounting();
-  const retried = await witnessRetryMissAndReadback();
-  return {answers: [accounting, retried]};
+  const contract = await loadCollectionContract();
+  const answers = [];
+  for (const witness of [witnessCommitAndRollbackAccounting, witnessRetryMissAndReadback,
+    witnessRefusedPrepareFailure, witnessRefusedPrepareRedriven, witnessClientRollbackRedriven,
+    witnessStatementThatEndsItsTransaction]) {
+    answers.push(await witness(contract));
+  }
+  return {answers};
 }
 
 // --- W3: in-transaction reads are timed and counted --------------------------
 
 async function witnessReads() {
+  const contract = await loadCollectionContract();
+  const KIND = contract.TRANSACTION_OPERATION_KIND;
+  const REQUEST = contract.PARTICIPANT_REQUEST_OPERATION;
+  const NAME = contract.TRANSACTION_TELEMETRY_OBSERVATION;
   return withTelemetryNode({}, async (node) => {
     const pg = await openPgWireSession(node.engine);
     try {
@@ -756,22 +712,23 @@ async function witnessReads() {
       assert.equal(transactionalReads.length, 2,
         'precondition: both reads reached the participant inside the transaction');
       const answer = await node.readAnswer(0);
-      const sample = sampleOf(answer, transactionId);
+      const sample = sampleOf(contract, answer, transactionId);
       assert.deepEqual(sample.operations.map((operation) => operation.kind),
-        [OPERATION_KIND.BEGIN, OPERATION_KIND.READ, OPERATION_KIND.WRITE,
-          OPERATION_KIND.READ, OPERATION_KIND.COMMIT]);
+        [KIND.BEGIN, KIND.READ, KIND.WRITE, KIND.READ, KIND.COMMIT]);
       assert.equal(sample.readStatementCount, 2, 'in-transaction reads are counted');
       assert.ok(sample.readStatementsMs > 0, 'in-transaction reads are timed');
       assert.equal(sample.writeStatementCount, 1);
-      for (const read of operationsOfKind(sample, OPERATION_KIND.READ)) {
-        const requests = requestsOf(read, REQUEST.QUERY_READ);
-        assert.equal(requests.length, 1);
-        assert.equal(requests[0].partitionId, PARTITION_ID);
-        assert.equal(requests[0].outcome, REQUEST_OUTCOME.ACCEPTED);
+      const reads = requestsOf(contract, sample, REQUEST.QUERY_READ);
+      assert.equal(reads.length, 2, 'each read reports its participant request');
+      for (const request of reads) {
+        assert.equal(request.partitionId, PARTITION_ID);
+        assert.equal(request.outcome, contract.PARTICIPANT_REQUEST_OUTCOME.ACCEPTED);
+        assert.equal(operationContaining(sample, request).kind, KIND.READ);
       }
-      assert.ok(observationCountOf(answer, OBSERVATION.READ_RUN) >= 2);
-      assert.ok(observationCountOf(answer, OBSERVATION.QUERY_READ_REQUEST) >= 2);
-      assertSampleAccounting(sample, 'read transaction');
+      assert.ok(observationCountOf(answer, `${NAME.RUN}.${KIND.READ}`) >= 2);
+      assert.ok(observationCountOf(answer, `${NAME.PARTICIPANT_REQUEST}.${REQUEST.QUERY_READ}`) >=
+        2);
+      assertSampleAccounting(contract, sample, 'read transaction');
       return {answers: [answer]};
     } finally {
       pg.close();
@@ -781,7 +738,46 @@ async function witnessReads() {
 
 // --- W4: a RECOVERY operation holds the lane ----------------------------------
 
+function seedRecoveredTransaction(node) {
+  const rows = recoveryRowsOf({transactionId: RECOVERED_ID, sessionId: QUERY_SESSION.DEFAULT,
+    overrides: {status: TRANSACTION_STATUS.COMMITTING,
+      ...recoveryDecisionColumns(RECOVERED_ID, [PARTITION_ID])}});
+  node.engine.transactionCoordinator.recoverFromSystemTables(rows);
+  rows.transactions.forEach((row) => node.gateway.seed(TABLES.SQL_TRANSACTIONS, row));
+  rows.participants.forEach((row) =>
+    node.gateway.seed(TABLES.SQL_TRANSACTION_PARTICIPANTS, row));
+}
+
+// Ruling for B4: a transaction restored from rows has no sample; it is
+// counted by its typed reason, its metadata writes are recorded at node level
+// and in its entry, and its participant request is attributed to that entry.
+function assertRecoveredWithoutSample(contract, answer, node) {
+  const reason = contract.TRANSACTION_WITHOUT_SAMPLE_REASON.RECOVERED_FROM_ROWS;
+  const NAME = contract.TRANSACTION_TELEMETRY_OBSERVATION;
+  const section = coordinatorSectionOf(contract, answer);
+  assert.equal(section.samples.entries.some((sample) =>
+    sample.identity.transactionId === RECOVERED_ID), false, 'the recovered transaction has no sample');
+  assert.equal(observationCountOf(answer, `${NAME.COMPLETED_WITHOUT_SAMPLE}.${reason}`), 1,
+    'it is counted as completed without a sample, by its typed reason');
+  const entry = section.withoutSample.entries.find((candidate) =>
+    candidate.identity.transactionId === RECOVERED_ID);
+  assert.ok(entry, 'its entry is retained');
+  assert.deepEqual([entry.reason, entry.outcome], [reason, TRANSACTION_STATUS.COMMITTED]);
+  const recoveredMutations = mutationsOf(node.gateway, RECOVERED_ID).length;
+  assert.equal(recoveredMutations, 3, 'precondition: recovery made three gateway mutations');
+  assert.equal(sum(Object.values(entry.metadata.submissionCountByPurpose)), recoveredMutations,
+    'its entry accounts for every gateway mutation it made');
+  assert.equal(observationCountsWithPrefix(answer, `${NAME.METADATA_PERSIST}.`),
+    node.gateway.mutations.length, 'every metadata write of the node is recorded at node level');
+  assert.deepEqual(requestsOf(contract, entry, contract.PARTICIPANT_REQUEST_OPERATION.COMMIT)
+    .map((request) => request.outcome), [contract.PARTICIPANT_REQUEST_OUTCOME.ACCEPTED],
+  'its participant COMMIT is attributed to its entry');
+}
+
 async function witnessFifoWait() {
+  const contract = await loadCollectionContract();
+  const KIND = contract.TRANSACTION_OPERATION_KIND;
+  const NAME = contract.TRANSACTION_TELEMETRY_OBSERVATION;
   const hold = Promise.withResolvers();
   let recoveryHolding = false;
   const onDeliver = async (message) => {
@@ -792,15 +788,8 @@ async function witnessFifoWait() {
     return undefined;
   };
   return withTelemetryNode({onDeliver}, async (node) => {
-    const coordinator = node.engine.transactionCoordinator;
-    const rows = recoveryRowsOf({transactionId: RECOVERED_ID, sessionId: QUERY_SESSION.DEFAULT,
-      overrides: {status: 'COMMITTING',
-        ...recoveryDecisionColumns(RECOVERED_ID, [PARTITION_ID])}});
-    coordinator.recoverFromSystemTables(rows);
-    rows.transactions.forEach((row) => node.gateway.seed(TABLES.SQL_TRANSACTIONS, row));
-    rows.participants.forEach((row) =>
-      node.gateway.seed(TABLES.SQL_TRANSACTION_PARTICIPANTS, row));
-    const resumed = coordinator.resumeRecoveredTransactions();
+    seedRecoveredTransaction(node);
+    const resumed = node.engine.transactionCoordinator.resumeRecoveredTransactions();
     for (let polls = 0; !recoveryHolding && polls < RECOVERY_START_POLLS; polls += 1) {
       await sleepMs(1);
     }
@@ -815,21 +804,24 @@ async function witnessFifoWait() {
     const beginWaitMs = performance.now() - queuedAt;
     assert.equal(replay.resumed, 1, 'precondition: recovery completed the recorded COMMIT');
     assert.equal(begun.success, true, 'precondition: BEGIN ran after recovery');
-    assert.ok(beginWaitMs >= RECOVERY_HOLD_MS, 'precondition: BEGIN waited behind recovery');
+    assert.ok(beginWaitMs >= RECOVERY_HOLD_MS - TIMER_GRANULARITY_MS,
+      'precondition: BEGIN waited behind recovery');
     const committed = await node.engine.executeQuery('COMMIT', [],
       {expectedTransactionId: begun.transactionId});
     assert.equal(committed.success, true, 'precondition: the user transaction committed');
     const answer = await node.readAnswer(0);
-    const sample = sampleOf(answer, begun.transactionId);
+    const sample = sampleOf(contract, answer, begun.transactionId);
     assert.equal(sample.identity.sessionId, QUERY_SESSION.DEFAULT);
     const [begin] = sample.operations;
-    assert.equal(begin.kind, OPERATION_KIND.BEGIN);
-    assert.ok(begin.fifoWaitMs > 0, 'the user operation shows its FIFO wait');
+    assert.equal(begin.kind, KIND.BEGIN);
+    assert.ok(begin.fifoWaitMs >= RECOVERY_HOLD_MS - TIMER_GRANULARITY_MS,
+      'the user operation shows the recovery hold as its FIFO wait');
     assert.ok(begin.fifoWaitMs <= beginWaitMs + ACCOUNTING_TOLERANCE_MS,
       'the FIFO wait is bounded by the observed wait');
-    assert.ok(observationCountOf(answer, OBSERVATION.RECOVERY_FIFO_WAIT) >= 1);
-    assert.ok(observationCountOf(answer, OBSERVATION.RECOVERY_RUN) >= 1);
-    assertSampleAccounting(sample, 'transaction queued behind recovery');
+    assert.ok(observationCountOf(answer, `${NAME.FIFO_WAIT}.${KIND.RECOVERY}`) >= 1);
+    assert.ok(observationCountOf(answer, `${NAME.RUN}.${KIND.RECOVERY}`) >= 1);
+    assertSampleAccounting(contract, sample, 'transaction queued behind recovery');
+    assertRecoveredWithoutSample(contract, answer, node);
     return {answers: [answer]};
   });
 }
@@ -869,45 +861,79 @@ async function witnessHistogramLayout() {
   assert.ok(Math.abs(delta.sumMs - 40001.032) < HISTOGRAM_SUM_TOLERANCE_MS);
 }
 
+// A cursor read in another window is refused with its typed reason, never
+// answered as an empty page.
+async function assertForeignCursorsRefused(contract, node, cursor) {
+  const REFUSAL = contract.TRANSACTION_TELEMETRY_CURSOR_REFUSAL;
+  for (const [foreign, reason] of [
+    [{...cursor, bootIncarnation: cursor.bootIncarnation + 1}, REFUSAL.OTHER_BOOT_INCARNATION],
+    [{...cursor, telemetryEpoch: cursor.telemetryEpoch + 1}, REFUSAL.OTHER_TELEMETRY_EPOCH],
+  ]) {
+    const refused = await node.readCursor(foreign);
+    assert.deepEqual([refused.status, refused.body.reason], [HTTP_STATUS.CONFLICT, reason],
+      `a cursor of another window is refused: ${reason}`);
+    assert.equal(refused.body.bootIncarnation, BOOT_INCARNATION, 'the refusal names this window');
+  }
+}
+
 /**
  * W7: two reads give a delta, the cursor returns exactly the new samples,
- * overflowing the ring reports droppedCount, and a changed incarnation is
- * INCOMPARABLE_RESTARTED.
+ * overflowing the ring reports droppedCount, a changed incarnation or store
+ * is INCOMPARABLE_RESTARTED, and a cursor of another window is refused.
  * @return {Promise<{answers: Object[]}>}
  */
 async function witnessWindow() {
   const contract = await loadCollectionContract();
+  const WINDOW = contract.TRANSACTION_TELEMETRY_WINDOW_STATE;
+  const COORDINATOR = contract.TRANSACTION_TELEMETRY_SECTION.COORDINATOR;
+  const beginRun = `${contract.TRANSACTION_TELEMETRY_OBSERVATION.RUN}.` +
+    contract.TRANSACTION_OPERATION_KIND.BEGIN;
   await witnessHistogramLayout();
   const sessionId = 'telemetry-window-session';
   return withTelemetryNode({}, async (node) => {
     await commitEmptyTransactions(node.engine, sessionId, WINDOW_FIRST_BATCH);
     const first = await node.readAnswer(0);
-    const firstSamples = coordinatorSectionOf(first).samples;
+    const firstSamples = coordinatorSectionOf(contract, first).samples;
     assert.deepEqual(firstSamples.entries.map((entry) => entry.completionSequence), [1, 2]);
     await commitEmptyTransactions(node.engine, sessionId, WINDOW_SECOND_BATCH);
-    const second = await node.readAnswer(firstSamples.lastCompletionSequence);
-    const secondSamples = coordinatorSectionOf(second).samples;
+    const second = await node.readAnswer(cursorAfter(first));
+    const secondSamples = coordinatorSectionOf(contract, second).samples;
     assert.deepEqual(secondSamples.entries.map((entry) => entry.completionSequence),
       [3, 4, 5], 'the cursor returns exactly the new samples');
     assert.equal(secondSamples.droppedCount, 0);
     const window = contract.deriveTransactionTelemetryWindow(first, second);
-    assert.equal(window.state, WINDOW_COMPARABLE);
-    assert.equal(window.sections[COORDINATOR_SECTION].observations[OBSERVATION.BEGIN_RUN]
-      .count, WINDOW_SECOND_BATCH, 'two reads give a delta');
+    assert.equal(window.state, WINDOW.COMPARABLE);
+    assert.equal(window.sections[COORDINATOR].observations[beginRun].count,
+      WINDOW_SECOND_BATCH, 'two reads give a delta');
     await commitEmptyTransactions(node.engine, sessionId, SAMPLE_RING_CAPACITY + RING_OVERFLOW);
-    const third = await node.readAnswer(secondSamples.lastCompletionSequence);
-    const thirdSamples = coordinatorSectionOf(third).samples;
+    const third = await node.readAnswer(cursorAfter(second));
+    const thirdSamples = coordinatorSectionOf(contract, third).samples;
     assert.equal(thirdSamples.entries.length, SAMPLE_RING_CAPACITY);
     assert.equal(thirdSamples.droppedCount, RING_OVERFLOW,
       'overflowing the ring reports droppedCount');
     assert.equal(thirdSamples.firstRetainedSequence,
       secondSamples.lastCompletionSequence + RING_OVERFLOW + 1);
-    const restarted = await withTelemetryNode(
-      {bootIncarnation: RESTARTED_BOOT_INCARNATION},
-      (restartedNode) => restartedNode.readAnswer(0));
+    await assertForeignCursorsRefused(contract, node, cursorAfter(third));
+    const restarted = await withTelemetryNode({bootIncarnation: RESTARTED_BOOT_INCARNATION},
+      async (restartedNode) => {
+        const stale = await restartedNode.readCursor(cursorAfter(third));
+        assert.deepEqual([stale.status, stale.body.reason], [HTTP_STATUS.CONFLICT,
+          contract.TRANSACTION_TELEMETRY_CURSOR_REFUSAL.OTHER_BOOT_INCARNATION],
+        'a cursor read before a restart is refused after it');
+        return restartedNode.readAnswer(0);
+      });
     const incomparable = contract.deriveTransactionTelemetryWindow(third, restarted);
-    assert.equal(incomparable.state, WINDOW_INCOMPARABLE_RESTARTED);
+    assert.equal(incomparable.state, WINDOW.INCOMPARABLE_RESTARTED);
     assert.equal(incomparable.sections, undefined, 'no delta across a restart');
+    // Ruling 56 (D13): a store created again under the same boot incarnation
+    // has a new telemetry epoch and is incomparable exactly like a restart.
+    const replaced = await withTelemetryNode({}, (replacedNode) => replacedNode.readAnswer(0));
+    assert.equal(replaced.bootIncarnation, third.bootIncarnation);
+    assert.notEqual(replaced.sections[COORDINATOR].telemetryEpoch,
+      third.sections[COORDINATOR].telemetryEpoch);
+    const replacedWindow = contract.deriveTransactionTelemetryWindow(third, replaced);
+    assert.equal(replacedWindow.state, WINDOW.INCOMPARABLE_RESTARTED);
+    assert.equal(replacedWindow.sections, undefined, 'no delta across a replaced store');
     return {answers: [first, second, third]};
   });
 }
@@ -928,6 +954,7 @@ function refusedConnectionError() {
  */
 async function witnessCollection() {
   const contract = await loadCollectionContract();
+  const STATE = contract.TRANSACTION_TELEMETRY_NODE_STATE;
   return withTelemetryNode({}, async (node) => {
     const requested = [];
     let timedOutSignal = null;
@@ -946,8 +973,9 @@ async function witnessCollection() {
         timedOutSignal = signal;
         return new Promise(() => {});
       }],
-      ['node-d', async () => ({status: HTTP_UNAVAILABLE, body: {error: 'unavailable'}})],
-      ['node-e', async () => ({status: HTTP_OK, body: {schemaVersion: 1, nodeId: 'node-e'}})],
+      ['node-d', async () => ({status: HTTP_STATUS.SERVICE_UNAVAILABLE,
+        body: {error: 'unavailable'}})],
+      ['node-e', async () => ({status: HTTP_STATUS.OK, body: {schemaVersion: 1, nodeId: 'node-e'}})],
       ['node-f', injectRoute],
     ]);
     const nodes = [...answerers.keys()].map((nodeId) => ({nodeId,
@@ -965,25 +993,28 @@ async function witnessCollection() {
     assert.ok(elapsedMs < COLLECTION_DEADLINE_MS + COLLECTION_SLACK_MS,
       'collection is bounded by its deadline');
     assert.equal(requested.find((entry) => entry.nodeId === NODE_ID)?.url,
-      `http://${NODE_ID}.invalid:8080${TRANSACTION_ROUTE}?${SINCE_SEQUENCE_PARAM}=0`,
+      `http://${NODE_ID}.invalid:8080${TRANSACTION_ROUTE}?sinceSequence=0`,
       'the collection function owns the route and the cursor parameter');
     assert.deepEqual(entries.map((entry) => [entry.nodeId, entry.state]), [
-      [NODE_ID, NODE_STATE.ANSWERED],
-      ['node-b', NODE_STATE.UNREACHABLE],
-      ['node-c', NODE_STATE.TIMED_OUT],
-      ['node-d', NODE_STATE.HTTP_REFUSED],
-      ['node-e', NODE_STATE.MALFORMED],
-      ['node-f', NODE_STATE.MALFORMED],
+      [NODE_ID, STATE.ANSWERED],
+      ['node-b', STATE.UNREACHABLE],
+      ['node-c', STATE.TIMED_OUT],
+      ['node-d', STATE.HTTP_REFUSED],
+      ['node-e', STATE.MALFORMED],
+      ['node-f', STATE.MALFORMED],
     ], 'one typed entry per node, in the order asked');
     const [answered, unreachable, timedOut, refused, malformed, misrouted] = entries;
     assert.equal(answered.answer.nodeId, NODE_ID);
     assert.equal(unreachable.errorCode, 'ECONNREFUSED');
     assert.equal(timedOut.deadlineMs, COLLECTION_DEADLINE_MS);
     assert.equal(timedOutSignal?.aborted, true, 'the timed-out request is cancelled');
-    assert.equal(refused.httpStatus, HTTP_UNAVAILABLE);
+    assert.equal(refused.httpStatus, HTTP_STATUS.SERVICE_UNAVAILABLE);
     for (const entry of [malformed, misrouted]) {
       assert.equal(typeof entry.reason, 'string', 'a malformed answer names its reason');
     }
+    await assert.rejects(contract.collectTransactionTelemetry({deadlineMs: COLLECTION_DEADLINE_MS,
+      nodes: [{nodeId: NODE_ID, adminUrl: 'http://x.invalid:8080', sinceSequence: 3}],
+      fetchAnswer: injectRoute}), TypeError, 'a cursor above 0 must name its window');
     return {answers: [answered.answer]};
   });
 }
@@ -1063,16 +1094,17 @@ async function negativeControlAccountingOverrun() {
   assert.deepEqual(contract.validateTransactionTelemetryAnswer(answer),
     {valid: true, reason: null}, 'the unmodified answer is valid');
   const overrun = structuredClone(answer);
-  const [sample] = overrun.sections[COORDINATOR_SECTION].samples.entries;
+  const [sample] = overrun.sections[contract.TRANSACTION_TELEMETRY_SECTION.COORDINATOR]
+    .samples.entries;
   sample.operations[0].fifoWaitMs += sample.accounting.totalMs + 1;
   assert.equal(contract.validateTransactionTelemetryAnswer(overrun).valid, false,
     'phases that sum to more than totalMs are rejected');
   const [entry] = await contract.collectTransactionTelemetry({
     nodes: [{nodeId: NODE_ID, adminUrl: 'http://overrun.invalid:8080', sinceSequence: 0}],
     deadlineMs: COLLECTION_DEADLINE_MS,
-    fetchAnswer: async () => ({status: HTTP_OK, body: overrun}),
+    fetchAnswer: async () => ({status: HTTP_STATUS.OK, body: overrun}),
   });
-  assert.equal(entry.state, NODE_STATE.MALFORMED);
+  assert.equal(entry.state, contract.TRANSACTION_TELEMETRY_NODE_STATE.MALFORMED);
 }
 
 /**
@@ -1102,7 +1134,6 @@ async function negativeControlUndrivenEntry() {
 }
 
 export {
-  findUndrivenCatalogueEntries,
   negativeControlAccountingOverrun,
   negativeControlUndrivenEntry,
   witnessAccounting,

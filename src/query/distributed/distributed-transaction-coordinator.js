@@ -74,11 +74,11 @@ import {
 } from './distributed-transaction-identity.js';
 import {distributedTransactionStatementMethods} from
   './distributed-transaction-statement.js';
-import {
-  createTransactionTelemetry,
-  distributedTransactionTelemetryMethods,
-  resolveNowMs,
-} from './distributed-transaction-telemetry.js';
+import {createCoordinatorTelemetryStore, createTransactionTelemetry,
+  distributedTransactionTelemetryReadMethods, noteMetadataMutation, noteParticipantRowMutation,
+  noteTransactionRowMutation} from './distributed-transaction-telemetry.js';
+import {TRANSACTION_METADATA_PERSIST_PURPOSE, TRANSACTION_OPERATION_KIND} from
+  '../../diagnostics/transaction-telemetry-collection.js';
 import {admitExpectedTransaction, STATEMENT_ADMISSION} from
   '../sql-query-engine-statement-admission.js';
 
@@ -171,7 +171,7 @@ class DistributedTransactionCoordinator {
         // The transaction row is inserted once, before any participant
         // work; every later write of it updates the existing row.
         persistWorkflow: async (workflow) => {
-          this.noteMetadataMutation?.(workflow);
+          noteTransactionRowMutation(workflow);
           await this.persistTransaction({
             transactionId: workflow.transactionId || workflow.workflowId,
             sessionId: workflow.sessionId || workflow.ownerKey,
@@ -189,9 +189,7 @@ class DistributedTransactionCoordinator {
           workflow.transactionRowInserted = true;
         },
         persistParticipant: async (participant) => {
-          this.noteMetadataMutation?.(
-            participant.transactionId || participant.workflowId,
-          );
+          noteParticipantRowMutation(this, participant.transactionId || participant.workflowId);
           await this.persistParticipant({
             participantId: participant.participantId,
             transactionId: participant.transactionId || participant.workflowId,
@@ -217,8 +215,7 @@ class DistributedTransactionCoordinator {
     this.transactionOperationTailBySession = new Map();
     this.inFlightBeginsBySession = new Map();
     this.recoveredTransactionIds = new Set();
-    this.transactionBreakdownsById = new Map();
-    this.lastTransactionBreakdown = null;
+    this.transactionTelemetry = createCoordinatorTelemetryStore();
   }
 
   markInFlightBeginsClosed(sessionId) {
@@ -261,7 +258,7 @@ class DistributedTransactionCoordinator {
     }
     activeBegins.add(beginState);
     try {
-      return await this.runTransactionOperation(sessionId,
+      return await this.runTransactionOperation(sessionId, TRANSACTION_OPERATION_KIND.BEGIN,
         () => this.beginOwned(sessionId, {
           ...options,
           beginState,
@@ -416,12 +413,11 @@ class DistributedTransactionCoordinator {
       pendingWriteOperationRecords: [],
       pendingWriteOperationBytes: 0,
       pendingWriteOperationPersists: [],
-      telemetry: createTransactionTelemetry(transactionId, sessionId),
+      telemetry: createTransactionTelemetry(this, transactionId, sessionId, transactionEpoch),
       createdAt: now,
       updatedAt: now,
     };
     await this.workflowCoordinator.registerWorkflow(tx);
-    tx.telemetry.beginMs = Math.max(0, resolveNowMs() - tx.telemetry.startedAtMs);
   }
 
   /**
@@ -433,7 +429,7 @@ class DistributedTransactionCoordinator {
   async enlistParticipants(sessionId, partitionIds,
     expectedTransactionId = this.transactionsBySession.get(sessionId)?.transactionId) {
     return this.runTransactionOperation(
-      sessionId,
+      sessionId, TRANSACTION_OPERATION_KIND.WRITE,
       () => {
         const admission = admitExpectedTransaction(this, sessionId, expectedTransactionId);
         return admission.state === STATEMENT_ADMISSION.REFUSED ? admission.failure :
@@ -468,7 +464,7 @@ class DistributedTransactionCoordinator {
     tx.updatedAt = now;
 
     if (options?.deferPersistence !== true) {
-      this.noteMetadataMutation?.(tx);
+      noteMetadataMutation(tx, TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME);
       await this.persistWriteOperationRecord(tx, normalized);
     }
   }
@@ -511,7 +507,7 @@ class DistributedTransactionCoordinator {
       await this.flushPendingWriteOperationRecords(tx);
       return;
     }
-    this.noteMetadataMutation?.(tx);
+    noteMetadataMutation(tx, TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME);
     await Promise.resolve(
       this.persistWriteOperationRecord(tx, operation),
     ).catch((persistErr) => {
@@ -537,7 +533,7 @@ class DistributedTransactionCoordinator {
     const expectedTransactionId = options.expectedTransactionId ??
       this.transactionsBySession.get(sessionId)?.transactionId ?? null;
     return this.runTransactionOperation(
-      sessionId,
+      sessionId, TRANSACTION_OPERATION_KIND.COMMIT,
       () => this.commitOwned(sessionId, expectedTransactionId),
     );
   }
@@ -583,7 +579,7 @@ class DistributedTransactionCoordinator {
       options.expectedTransactionId :
       this.transactionsBySession.get(sessionId)?.transactionId ?? null;
     return this.runTransactionOperation(
-      sessionId,
+      sessionId, TRANSACTION_OPERATION_KIND.ROLLBACK,
       () => this.rollbackOwned(
         sessionId,
         hasExpectedTransactionId ?
@@ -651,8 +647,8 @@ class DistributedTransactionCoordinator {
     return this.transactionsBySession.has(sessionId);
   }
 
-  async setTransactionStatus(tx, status) {
-    return setTransactionStatus.call(this, tx, status);
+  async setTransactionStatus(tx, status, purpose) {
+    return setTransactionStatus.call(this, tx, status, purpose);
   }
 
   getRemainingTransactionBudgetMs(tx) {
@@ -790,7 +786,7 @@ Object.assign(DistributedTransactionCoordinator.prototype,
   distributedTransactionParticipantSetMethods,
   distributedTransactionStatementMethods,
   distributedTransactionDecisionProtocolMethods,
-  distributedTransactionTelemetryMethods);
+  distributedTransactionTelemetryReadMethods);
 
 export {
   DistributedTransactionCoordinator,

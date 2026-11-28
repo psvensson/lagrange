@@ -44,6 +44,7 @@ import {
 } from '../../src/partition/partition-write-footprint-contract.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {transactionSampleOf} from '../diagnostics/transaction-telemetry-sample-reader.js';
 const QUIET_LOGGER = Object.freeze({
   debug() {},
   info() {},
@@ -282,8 +283,8 @@ test('Scenario A deep-stack: Workstream 2 coordinator participant-set deduplicat
   );
   assert.equal(transientParticipantWrites.length, 0);
 
-  const breakdown = coordinator.getLastTransactionBreakdown(begun.transactionId);
-  assert.equal(breakdown.skippedParticipantSetMutations >= 3, true);
+  const sample = transactionSampleOf(engine, begun.transactionId);
+  assert.equal(sample.metadata.skippedParticipantSetMutationCount >= 3, true);
 });
 
 test('Scenario A deep-stack: Workstreams 3, 4, and 5 Raft batch telemetry, canonical UPDATE row-key concurrency, and O(1) disjoint staging', async () => {

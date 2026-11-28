@@ -14,9 +14,17 @@ import {
   TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 import {
-  TRANSACTION_METADATA_PERSIST_PURPOSE,
-  resolveNowMs,
+  handParticipantWritePurpose,
+  noteMetadataMutation,
+  noteMetadataPersistElapsed,
+  noteSkippedParticipantSetMutation,
+  noteTransactionSubPhase,
 } from './distributed-transaction-telemetry.js';
+import {
+  TRANSACTION_METADATA_PERSIST_PURPOSE,
+  TRANSACTION_SUB_PHASE,
+} from '../../diagnostics/transaction-telemetry-collection.js';
+import {readTelemetryClockMs} from '../../diagnostics/telemetry-histogram.js';
 
 import {participantSetTextOf, readParticipantSet} from
   './distributed-transaction-participant-manifest.js';
@@ -162,9 +170,9 @@ const distributedTransactionParticipantSetMethods = {
     if (tx && drainBookkeeping !== null) {
       tx.pendingBookkeepingDrainPromise = null;
     }
-    const startedAtMs = resolveNowMs();
+    const startedAtMs = readTelemetryClockMs();
     try {
-      this.noteMetadataMutation?.(tx, purpose);
+      noteMetadataMutation(tx, purpose);
       const persistPromise = this.persistTransactionParticipantSet(
         intended,
         tx.participantSetText,
@@ -174,17 +182,9 @@ const distributedTransactionParticipantSetMethods = {
       } else {
         await persistPromise;
       }
-      this.noteMetadataPersistElapsed?.(
-        tx,
-        purpose,
-        Math.max(0, resolveNowMs() - startedAtMs),
-      );
+      noteMetadataPersistElapsed(this, tx, purpose, readTelemetryClockMs() - startedAtMs);
     } catch (error) {
-      this.noteMetadataPersistElapsed?.(
-        tx,
-        purpose,
-        Math.max(0, resolveNowMs() - startedAtMs),
-      );
+      noteMetadataPersistElapsed(this, tx, purpose, readTelemetryClockMs() - startedAtMs);
       // Another admission/freeze or a lost answer may own the row. Keep this
       // exact ID on the existing authoritative recovery path, never old bytes.
       tx.recoveryDiscovered = true;
@@ -200,10 +200,7 @@ const distributedTransactionParticipantSetMethods = {
       [...prior.map((pair) => pair[1]), ...partitionIds]);
     let pairs = prior;
     if (text === tx.participantSetText) {
-      if (tx?.telemetry) {
-        tx.telemetry.skippedParticipantSetMutations =
-          (tx.telemetry.skippedParticipantSetMutations || 0) + 1;
-      }
+      noteSkippedParticipantSetMutation(tx);
     } else {
       await this.persistAdmittedParticipantSet(tx, {...tx, participantSetText: text});
       tx.participantSetText = text;
@@ -222,6 +219,7 @@ const distributedTransactionParticipantSetMethods = {
   },
 
   async freezeParticipantSet(tx, options = {}) {
+    const freezeStartedAtMs = readTelemetryClockMs();
     const flushBufferedWriteOps =
       Array.isArray(tx.pendingWriteOperationRecords) &&
       tx.pendingWriteOperationRecords.length > 0 ?
@@ -259,6 +257,7 @@ const distributedTransactionParticipantSetMethods = {
     tx.pendingBookkeepingDrainPromise = drainBookkeepingPromise;
     await this.persistAdmittedParticipantSet(tx, {...tx, ...frozen});
     Object.assign(tx, frozen);
+    noteTransactionSubPhase(this, tx, TRANSACTION_SUB_PHASE.FREEZE, freezeStartedAtMs);
   },
 
   async enlistParticipantsOwned(
@@ -296,13 +295,14 @@ const distributedTransactionParticipantSetMethods = {
       );
       activeUpserts.push(participant);
     }));
-    const persistActiveParticipants = () => settleAllOrThrow(
-      activeUpserts.map((participant) =>
+    const persistActiveParticipants = () => {
+      handParticipantWritePurpose(tx, TRANSACTION_METADATA_PERSIST_PURPOSE.PARTICIPANT_ADMISSION);
+      return settleAllOrThrow(activeUpserts.map((participant) =>
         this.workflowCoordinator.upsertParticipant(tx.workflowId, {
           ...participant, status: PARTICIPANT_STATUS.ACTIVE, lastError: null,
           updatedAt: this.now(),
-        })),
-    );
+        })));
+    };
     if (options?.deferActivePersistence !== true) {
       await persistActiveParticipants();
     }

@@ -34,7 +34,10 @@ import {
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {TRANSACTION_OPERATION_KIND} from '../../diagnostics/transaction-telemetry-collection.js';
 
+// The session-lane kind recovery's re-drives are measured under.
+const RECOVERY_OPERATION = TRANSACTION_OPERATION_KIND.RECOVERY;
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_TRANSACTION_EPOCH = 'transaction_epoch';
@@ -284,7 +287,7 @@ const distributedTransactionRecoveryMethods = {
       let replayPath = null;
       let skipped = false;
 
-      await this.runTransactionOperation(tx.sessionId, async () => {
+      await this.runTransactionOperation(tx.sessionId, RECOVERY_OPERATION, async () => {
         if (!tx.recoveryDiscovered && TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
           skipped = true;
           protocolResult = {success: true};
@@ -390,7 +393,7 @@ const distributedTransactionRecoveryMethods = {
         let sweepPath = null;
         try {
           await this.runTransactionOperation(
-            tx.sessionId,
+            tx.sessionId, RECOVERY_OPERATION,
             async () => {
               if (!tx.recoveryDiscovered && TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
                 protocolResult = {success: true};

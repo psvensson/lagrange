@@ -52,6 +52,7 @@ documentClass: generated
 - [query-executor-base.js](query-executor-base.js) - The one table-name read for a SELECT that executeSelect fans out. (importers: one)
 - [query-executor-cancellation-routing-install.js](query-executor-cancellation-routing-install.js) - Signal that the owning SQL query engine is shutting down. (importers: one)
 - [query-executor-canonical-leader-routing-methods.js](query-executor-canonical-leader-routing-methods.js) - No leading comment; first export: QueryExecutorCanonicalLeaderRoutingMethods. (importers: one)
+- [query-executor-delivery-telemetry.js](query-executor-delivery-telemetry.js) - The query executor's participant request section of the transaction-path telemetry (quest... (importers: few)
 - [query-executor-join-execution.js](query-executor-join-execution.js) - Cross-partition JOIN execution via CoordinatorMergeSession (`COORDINATOR_EVALUATED`, design coordinator-sqlite-merge... (importers: one)
 - [query-executor-partition-attempt-budget.js](query-executor-partition-attempt-budget.js) - One spent-bound reporter per executeOnPartition call: the deadline (or the read attempt limit) is reported once,... (importers: few)
 - [query-executor-partition-candidate-state.js](query-executor-partition-candidate-state.js) - Report one delivery attempt to a straggler-hedging observer when the caller supplied one, so a speculative retry can... (importers: few)

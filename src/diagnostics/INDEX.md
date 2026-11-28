@@ -33,6 +33,7 @@ documentClass: generated
 - [runtime-content-fingerprint.js](runtime-content-fingerprint.js) - The source/build manifest owner enumerates the executable content of a deployment: source and the installed... (importers: many)
 - [source-fingerprint.js](source-fingerprint.js) - Deterministic content fingerprint of a source tree, shared verbatim by the node entrypoint (src/index.js) and the... (importers: hub)
 - [stop-condition-decision.js](stop-condition-decision.js) - No leading comment; first export: decideStopCondition. (importers: few)
+- [telemetry-histogram.js](telemetry-histogram.js) - Telemetry shape primitives (quest transaction-path-telemetry-export): a fixed base-2 histogram that records without... (importers: many)
 - [topology-convergence-active-gate-normalizers.js](topology-convergence-active-gate-normalizers.js) - No leading comment; first export: normalizeActiveGateSnapshotCoverageProgress. (importers: one)
 - [topology-convergence-constant-helpers.js](topology-convergence-constant-helpers.js) - No leading comment; first export: cloneDecisionTableRows. (importers: few)
 - [topology-convergence-constants.js](topology-convergence-constants.js) - No leading comment; first export: ABSENT_VALUE. (importers: many)
@@ -46,3 +47,4 @@ documentClass: generated
 - [topology-convergence-publication-normalizers.js](topology-convergence-publication-normalizers.js) - No leading comment; first export: isClosedPublicationOwnerAckState. (importers: one)
 - [topology-convergence-readiness-normalizers.js](topology-convergence-readiness-normalizers.js) - No leading comment; first export: resolveReadinessSupportPath. (importers: one)
 - [topology-convergence-replay.js](topology-convergence-replay.js) - No leading comment; first export: buildTopologyConvergenceReplayFixture. (importers: few)
+- [transaction-telemetry-collection.js](transaction-telemetry-collection.js) - The transaction-path telemetry contract (quest transaction-path-telemetry-export): its vocabulary, the one catalogue... (importers: many)

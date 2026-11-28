@@ -28,6 +28,16 @@ import {
   createTransactionPersistenceGateway,
 } from '../../test/test-helpers/transaction-persistence-gateway.js';
 import {
+  TRANSACTION_SUB_PHASE,
+  collectTransactionTelemetry,
+} from '../../src/diagnostics/transaction-telemetry-collection.js';
+import {createTransactionTelemetryAnswerBuilder} from
+  '../../src/admin/admin-transaction-telemetry-answer.js';
+import {
+  metadataSubmissionCountOf,
+  transactionSampleOf,
+} from '../../test/diagnostics/transaction-telemetry-sample-reader.js';
+import {
   INSERT_SQL,
   ROW,
   ROW_2,
@@ -42,6 +52,7 @@ import {
 } from '../../test/test-helpers/participant-transaction-fixture.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySlice = Function.call.bind(Array.prototype.slice);
@@ -265,8 +276,11 @@ async function checkTransactionBreakdownTracer() {
     coordinator.prepareParticipant = async (_s, partitionId) => buildPrepareResult(partitionId);
     coordinator.commitParticipant = async () => {};
 
-    assert.equal(typeof coordinator.getLastTransactionBreakdown, TYPE_FUNCTION);
-    assert.equal(typeof coordinator.getTransactionTelemetrySummary, TYPE_FUNCTION);
+    // Superseded in quest transaction-path-telemetry-export (ruling 54): the
+    // per-transaction breakdown and its summary are retired; the tracer is
+    // the transaction telemetry export and its collection function.
+    assert.equal(typeof createTransactionTelemetryAnswerBuilder, TYPE_FUNCTION);
+    assert.equal(typeof collectTransactionTelemetry, TYPE_FUNCTION);
 
     const begun = await coordinator.begin(SESSION_TRACE, {transactionId: TX_TRACE});
     assert.equal(begun.success, true);
@@ -278,18 +292,19 @@ async function checkTransactionBreakdownTracer() {
     const committed = await coordinator.commit(SESSION_TRACE);
     assert.equal(committed.success, true);
 
-    const breakdown = coordinator.getLastTransactionBreakdown(begun.transactionId);
-    assert.equal(Boolean(breakdown), true);
-    assert.equal(breakdown.transactionId, begun.transactionId);
-    assert.equal(typeof breakdown.beginMs, TYPE_NUMBER);
-    assert.equal(typeof breakdown.statementsMs, TYPE_NUMBER);
-    assert.equal(typeof breakdown.preparePhaseMs, TYPE_NUMBER);
-    assert.equal(typeof breakdown.decisionPersistMs, TYPE_NUMBER);
-    assert.equal(typeof breakdown.commitPhaseMs, TYPE_NUMBER);
-    assert.equal(typeof breakdown.totalMs, TYPE_NUMBER);
-    assert.equal(Number.isInteger(breakdown.metadataMutations), true);
-    assert.equal(Number.isInteger(breakdown.metadataReads), true);
-    assert.equal(breakdown.participantCount, ONE);
+    const sample = transactionSampleOf(engine, begun.transactionId);
+    assert.equal(sample.identity.transactionId, begun.transactionId);
+    const [beginOperation] = sample.operations;
+    const commitOperation = sample.operations[sample.operations.length - ONE];
+    const phaseMs = (phase) => arrayFind(commitOperation.subPhases,
+      (entry) => entry.phase === phase)?.ms;
+    for (const measured of [beginOperation.runMs, sample.writeStatementsMs,
+      phaseMs(TRANSACTION_SUB_PHASE.PREPARE_FANOUT), phaseMs(TRANSACTION_SUB_PHASE.DECISION),
+      phaseMs(TRANSACTION_SUB_PHASE.COMMIT_FANOUT), sample.accounting.totalMs]) {
+      assert.equal(Number.isFinite(measured), true);
+    }
+    assert.equal(Number.isInteger(metadataSubmissionCountOf(sample)), true);
+    assert.equal(sample.participantCount, ONE);
     await engine.shutdown();
   } finally {
     gateway.db.close();

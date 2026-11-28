@@ -11,7 +11,13 @@ import {statementTransactionIdentityOf} from
   './distributed-transaction-identity.js';
 import {PARTICIPANT_ENLISTMENT_MODE} from
   './distributed-transaction-coordinator-constants.js';
-import {resolveNowMs} from './distributed-transaction-telemetry.js';
+import {
+  queueTransactionOperation,
+  settleTransactionOperation,
+  startTransactionOperation,
+} from './distributed-transaction-telemetry.js';
+import {TRANSACTION_OPERATION_KIND} from
+  '../../diagnostics/transaction-telemetry-collection.js';
 
 const LOCAL_STR_TYPED_CANCELLED = 'typed_transaction_cancelled';
 const ROW_KEY_WAIT_CYCLE_DETECTED = 'ROW_KEY_WAIT_CYCLE_DETECTED';
@@ -133,19 +139,28 @@ const distributedTransactionStatementMethods = {
   /**
    * Queue transaction operations in FIFO order for one session.
    * Unlike workflow single-flight, distinct calls never share a result.
+   * The operation is stamped at the call, when the lane starts it and when it
+   * settles, inside the continuations the lane already has (telemetry, B2
+   * and B4).
    * @param {string} sessionId
+   * @param {string} kind - A TRANSACTION_OPERATION_KIND.
    * @param {Function} operation
    * @return {Promise<*>}
    * @private
    */
-  runTransactionOperation(sessionId, operation) {
+  runTransactionOperation(sessionId, kind, operation) {
+    const observed = queueTransactionOperation(this, kind);
     const previous = this.transactionOperationTailBySession.get(sessionId) ||
       Promise.resolve();
     const execution = previous
       .catch(() => {})
-      .then(operation);
+      .then(() => {
+        startTransactionOperation(this, sessionId, observed);
+        return operation();
+      });
     this.transactionOperationTailBySession.set(sessionId, execution);
     return execution.finally(() => {
+      settleTransactionOperation(this, sessionId, observed);
       if (this.transactionOperationTailBySession.get(sessionId) === execution) {
         this.transactionOperationTailBySession.delete(sessionId);
       }
@@ -164,13 +179,12 @@ const distributedTransactionStatementMethods = {
    */
   async executeWriteStatement(sessionId, operation, executeWrite,
     expectedTransactionId = this.transactionsBySession.get(sessionId)?.transactionId) {
-    return this.runTransactionOperation(sessionId, async () => {
+    return this.runTransactionOperation(sessionId, TRANSACTION_OPERATION_KIND.WRITE, async () => {
       const admission = admitExpectedTransaction(this, sessionId,
         expectedTransactionId);
       if (admission.state === STATEMENT_ADMISSION.REFUSED) {
         return admission.failure;
       }
-      const startedAtMs = resolveNowMs();
       const enlistResult = await this.enlistParticipantsOwned(
         sessionId,
         operation.partitionIds,
@@ -209,10 +223,6 @@ const distributedTransactionStatementMethods = {
         result,
         {deferPersistenceAwait: result?.success === true},
       );
-      if (tx?.telemetry) {
-        tx.telemetry.statementsMs += Math.max(0, resolveNowMs() - startedAtMs);
-        tx.telemetry.statementCount += 1;
-      }
       return settleCycleVictimTransaction(this, sessionId, tx, result);
     });
   },
@@ -227,7 +237,7 @@ const distributedTransactionStatementMethods = {
    * @return {Promise<Object>}
    */
   async executeReadStatement(sessionId, expectedTransactionId, executeRead) {
-    return this.runTransactionOperation(sessionId, async () => {
+    return this.runTransactionOperation(sessionId, TRANSACTION_OPERATION_KIND.READ, async () => {
       const admission = admitExpectedTransaction(this, sessionId,
         expectedTransactionId);
       if (admission.state === STATEMENT_ADMISSION.REFUSED) {

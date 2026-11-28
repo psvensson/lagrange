@@ -56,7 +56,15 @@ import {deriveCommandTag} from '../../src/runtime/pgwire-result-mapper.js';
 import {PgWireOutputWriter} from '../../src/runtime/pgwire-output-writer.js';
 import {QUERY_ERROR_CODE, QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {TRANSACTION_METADATA_PERSIST_PURPOSE} from
-  '../../src/query/distributed/distributed-transaction-telemetry.js';
+  '../../src/diagnostics/transaction-telemetry-collection.js';
+import {
+  metadataSubmissionCountOf,
+  readTransactionTelemetryAnswer,
+  transactionSampleOf,
+  transactionSamplesOf,
+} from '../diagnostics/transaction-telemetry-sample-reader.js';
+import {TRANSACTION_TELEMETRY_PRODUCTION_BASELINE} from
+  '../bootstrap/transaction-telemetry-production-baseline.js';
 import {
   applyTransactionSettlement,
   observeTransactionSettlement,
@@ -369,32 +377,24 @@ test('§1 & §2 Witness: 1-participant 1-write explicit transaction executes ' +
     decision: 'COMMIT',
   });
 
-  // Verify telemetry by purpose
-  const breakdown = harness.engine.transactionCoordinator.getLastTransactionBreakdown();
-  assert.ok(breakdown);
-  assert.equal(breakdown.transactionId, begun.transactionId);
+  // Verify telemetry by purpose, read from the export; the pinned counts are
+  // the base commit's, held once in the production baseline fixture.
+  const sample = transactionSampleOf(harness.engine, begun.transactionId);
   assert.equal(
-    breakdown.metadataMutations,
+    metadataSubmissionCountOf(sample),
     harness.gateway.mutations.length,
     'elided transient participant statuses are not counted as gateway submissions',
   );
   for (const purpose of Object.values(TRANSACTION_METADATA_PERSIST_PURPOSE)) {
-    assert.equal(typeof breakdown.metadataSubmissionsByPurpose[purpose], 'number');
-    assert.equal(typeof breakdown.metadataPersistMsByPurpose[purpose], 'number');
+    assert.equal(Number.isInteger(sample.metadata.submissionCountByPurpose[purpose]), true);
+    assert.equal(sample.metadata.persistMsByPurpose[purpose] >= 0, true);
   }
-  assert.equal(breakdown.metadataSubmissionsByPurpose.registration, 1);
-  assert.equal(breakdown.metadataSubmissionsByPurpose.participantAdmission, 2);
-  assert.equal(breakdown.metadataSubmissionsByPurpose.statementOutcome, 1);
-  assert.equal(breakdown.metadataSubmissionsByPurpose.manifestFreeze, 1);
-  assert.equal(breakdown.metadataSubmissionsByPurpose.preparing, 2);
-  assert.equal(breakdown.metadataSubmissionsByPurpose.decisionAndCommitting, 1);
-  assert.equal(breakdown.metadataSubmissionsByPurpose.settlement, 2);
-  assert.equal(harness.gateway.mutations.length, 10);
+  const {COMMIT_ONE_WRITE} = TRANSACTION_TELEMETRY_PRODUCTION_BASELINE.scenarios;
+  assert.deepEqual(sample.metadata.submissionCountByPurpose,
+    COMMIT_ONE_WRITE.submissionCountByPurpose);
+  assert.equal(harness.gateway.mutations.length, COMMIT_ONE_WRITE.gatewayMutations.length);
 
-  const summary = harness.engine.transactionCoordinator.getTransactionTelemetrySummary();
-  assert.equal(summary.transactionCount, 1);
-  assert.ok(summary.avgMetadataSubmissionsByPurpose);
-  assert.ok(summary.avgMetadataPersistMsByPurpose);
+  assert.equal(transactionSamplesOf(readTransactionTelemetryAnswer(harness.engine)).length, 1);
 });
 
 test('§2 Witness: atomic freeze+PREPARING lost-answer readback and settlement ' +

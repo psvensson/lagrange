@@ -13,6 +13,7 @@ quests:
   - tidb-canonical-semantic-case-completion
   - developer-journey-and-measured-comparisons-acceptance
   - comparative-benchmark-evidence-repair
+  - transaction-path-telemetry-export
 authorizes:
   - Dockerfile
   - README.md
@@ -37,6 +38,15 @@ authorizes:
   - src/query/sql-query-engine-write-execution.js
   - src/runtime/pgwire-result-mapper.js
   - src/wasm-service
+  - src/admin
+  - src/diagnostics/telemetry-histogram.js
+  - src/diagnostics/transaction-telemetry-collection.js
+  - src/query/distributed
+  - src/query/sql-query-engine-transaction-persistence-methods.js
+  - src/query/query-executor-partition-delivery.js
+  - src/query/query-executor-delivery-telemetry.js
+  - src/entrypoint-runtime-admin-composition.js
+  - src/lagrange-runtime-startup.js
   - data/tidb-comparison
   - scripts/checks
   - scripts/lab

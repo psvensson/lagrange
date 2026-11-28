@@ -20,6 +20,7 @@ const ADMIN_ROUTE = Object.freeze({
   CDC_DIAGNOSTICS: '/api/admin/diagnostics/cdc',
   PARTITION_DIAGNOSTICS: '/api/admin/diagnostics/partitions',
   SQL_DIAGNOSTICS: '/api/admin/diagnostics/sql',
+  TRANSACTION_DIAGNOSTICS: '/api/admin/diagnostics/transactions',
   PREFLIGHT_CRITICAL_PATH_SNAPSHOT:
     '/api/admin/diagnostics/preflight-critical-path-snapshot',
   CONTROL_SNAPSHOT: '/api/admin/control-snapshot',
@@ -214,6 +215,13 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
     'Partition diagnostics unavailable because system cache is not configured',
   SQL_DIAGNOSTICS_UNAVAILABLE:
     'SQL diagnostics unavailable because system cache is not configured',
+  TRANSACTION_TELEMETRY_NOT_COMPOSED:
+    'Transaction telemetry is not composed on this admin runtime',
+  TRANSACTION_TELEMETRY_CURSOR_INVALID:
+    'Transaction telemetry sinceSequence must be a non-negative integer; above 0 it ' +
+    'needs the bootIncarnation and telemetryEpoch of the answer it came from',
+  TRANSACTION_TELEMETRY_CURSOR_REFUSED:
+    'Transaction telemetry cursor was read in another window of this node',
   SERVICE_DISCOVERY_UNAVAILABLE:
     'Service discovery unavailable because system cache is not configured',
   EXTERNAL_BIND_REQUIRES_EXPLICIT_TRUST:

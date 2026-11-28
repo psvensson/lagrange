@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 124,
+    "admin-diagnostics": 125,
     "architecture-governance": 21,
-    "bootstrap-membership": 358,
+    "bootstrap-membership": 359,
     "cdc-metadata": 81,
     "cli-tooling": 99,
     "control-plane": 246,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2848,
-  "digest": "fnv1a32-2fbafe00",
+  "censusSize": 2850,
+  "digest": "fnv1a32-49e9df81",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fa1bd278",
+  "observationDigest": "fnv1a32-6f857ad0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -100,6 +100,7 @@
     "test/admin/load-admission-ingress-identity.test.js": "admin-diagnostics",
     "test/admin/standalone-test-run-server.test.js": "admin-diagnostics",
     "test/admin/test-run-dashboard-trace-panel.test.js": "admin-diagnostics",
+    "test/admin/transaction-diagnostics-payload-bounds.test.js": "admin-diagnostics",
     "test/admin/wasm-meta-serviceized-routing.test.js": "admin-diagnostics",
     "test/authoring/authoring-descriptors.test.js": "architecture-governance",
     "test/boot/load-env.test.js": "bootstrap-membership",
@@ -334,6 +335,7 @@
     "test/bootstrap/system-partition-classification-owner.test.js": "bootstrap-membership",
     "test/bootstrap/traffic-readiness-utils.test.js": "bootstrap-membership",
     "test/bootstrap/transaction-recovery-handoff-outcome.test.js": "bootstrap-membership",
+    "test/bootstrap/transaction-telemetry-production-defaults.test.js": "bootstrap-membership",
     "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js": "bootstrap-membership",
     "test/bootstrap/universal-partition-implementation.property.test.js": "bootstrap-membership",
     "test/bootstrap/wasm-meta-table-schemas.test.js": "bootstrap-membership",
@@ -3256,6 +3258,11 @@
         "src/admin/static/test-run-dashboard.html"
       ]
     },
+    "test/admin/transaction-diagnostics-payload-bounds.test.js": {
+      "files": [
+        "src/admin/admin-transaction-telemetry-answer.js"
+      ]
+    },
     "test/authoring/authoring-descriptors.test.js": {
       "directories": [
         "src/authoring",
@@ -4670,6 +4677,29 @@
         "src/bootstrap/node-joining-service.js",
         "src/bootstrap/owners/bootstrap-readiness-owner.js",
         "src/bootstrap/owners/startup-runtime-handoff-owner.js"
+      ]
+    },
+    "test/bootstrap/transaction-telemetry-production-defaults.test.js": {
+      "files": [
+        "src/admin/admin-transaction-telemetry-answer.js",
+        "src/admin/admin-websocket-api-base.js",
+        "src/admin/admin-websocket-diagnostics-route-methods.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/diagnostics/telemetry-histogram.js",
+        "src/diagnostics/transaction-telemetry-collection.js",
+        "src/entrypoint-runtime-admin-composition.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/distributed/distributed-transaction-telemetry.js",
+        "src/query/query-executor-delivery-telemetry.js",
+        "src/query/query-executor-partition-delivery.js",
+        "test/bootstrap/transaction-telemetry-production-baseline.js",
+        "test/bootstrap/transaction-telemetry-production-scenarios.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
     "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js": {
@@ -7746,10 +7776,14 @@
     },
     "test/diagnostics/transaction-telemetry-export.test.js": {
       "files": [
+        "src/admin/admin-transaction-telemetry-answer.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/diagnostics/telemetry-histogram.js",
+        "src/diagnostics/transaction-telemetry-collection.js",
         "src/partition/partition-participant-transaction-constants.js",
+        "src/query/distributed/distributed-transaction-coordinator-constants.js",
         "src/query/distributed/distributed-transaction-decision.js",
         "src/query/distributed/distributed-transaction-identity.js",
         "src/query/distributed/distributed-transaction-participant-manifest.js",
@@ -18886,6 +18920,7 @@
     },
     "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": {
       "files": [
+        "src/admin/admin-transaction-telemetry-answer.js",
         "src/bootstrap/shared/partition-service-construction.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
@@ -18935,6 +18970,7 @@
     },
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": {
       "files": [
+        "src/admin/admin-transaction-telemetry-answer.js",
         "src/bootstrap/shared/partition-service-construction.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
@@ -18968,6 +19004,7 @@
         "src/rebalancer/replica-placement-owner-order.js",
         "src/time/time-source.js",
         "src/transport/transport-semantic-outcome.js",
+        "test/diagnostics/transaction-telemetry-sample-reader.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-protocol-double.js",
@@ -19558,8 +19595,10 @@
     },
     "test/query/transaction-participant-set-authority.test.js": {
       "files": [
+        "src/admin/admin-transaction-telemetry-answer.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/diagnostics/transaction-telemetry-collection.js",
         "src/query/distributed/distributed-transaction-decision.js",
         "test/test-helpers/transaction-persistence-gateway.js"
       ]
@@ -19697,16 +19736,18 @@
     },
     "test/query/tx-metadata-pgwire-and-result-representation.test.js": {
       "files": [
+        "src/admin/admin-transaction-telemetry-answer.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/diagnostics/transaction-telemetry-collection.js",
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/distributed/distributed-merge-engine.js",
         "src/query/distributed/distributed-select-fanout-plan.js",
-        "src/query/distributed/distributed-transaction-telemetry.js",
         "src/query/pg/postgres-wire-adapter.js",
         "src/transport/transport-semantic-outcome.js",
+        "test/bootstrap/transaction-telemetry-production-baseline.js",
         "test/control-plane/serve-eligibility-test-support.js",
         "test/distributed/harness/oltp-open-loop-step-owner.js",
         "test/test-helpers/participant-protocol-double.js",

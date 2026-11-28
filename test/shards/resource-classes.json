@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2822,
+    "ordinary": 2824,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2848,
-  "digest": "fnv1a32-b2313a0e",
+  "censusSize": 2850,
+  "digest": "fnv1a32-11a2ac28",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -80,6 +80,7 @@
     "test/admin/load-admission-ingress-identity.test.js": "ordinary",
     "test/admin/standalone-test-run-server.test.js": "ordinary",
     "test/admin/test-run-dashboard-trace-panel.test.js": "ordinary",
+    "test/admin/transaction-diagnostics-payload-bounds.test.js": "ordinary",
     "test/admin/wasm-meta-serviceized-routing.test.js": "ordinary",
     "test/authoring/authoring-descriptors.test.js": "ordinary",
     "test/boot/load-env.test.js": "ordinary",
@@ -314,6 +315,7 @@
     "test/bootstrap/system-partition-classification-owner.test.js": "ordinary",
     "test/bootstrap/traffic-readiness-utils.test.js": "ordinary",
     "test/bootstrap/transaction-recovery-handoff-outcome.test.js": "ordinary",
+    "test/bootstrap/transaction-telemetry-production-defaults.test.js": "ordinary",
     "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js": "ordinary",
     "test/bootstrap/universal-partition-implementation.property.test.js": "ordinary",
     "test/bootstrap/wasm-meta-table-schemas.test.js": "ordinary",

@@ -32,9 +32,15 @@ import {
   TRANSACTION_ID_COLLISION_CODE,
   TRANSACTION_STATUS,
 } from './distributed/distributed-transaction-coordinator-constants.js';
+import {TRANSACTION_METADATA_PERSIST_PURPOSE} from
+  '../diagnostics/transaction-telemetry-collection.js';
+import {readTelemetryClockMs} from '../diagnostics/telemetry-histogram.js';
 import {
-  TRANSACTION_METADATA_PERSIST_PURPOSE,
-  resolveNowMs,
+  noteElidedParticipantRowMutation,
+  noteHeldMetadataPersistElapsed,
+  noteMetadataReadback,
+  noteParticipantRowPersistElapsed,
+  noteTransactionRowPersistElapsed,
 } from './distributed/distributed-transaction-telemetry.js';
 import {
   incompleteParticipantSet,
@@ -154,48 +160,6 @@ function matchesParticipantSetReadback(row, data) {
   );
 }
 
-function resolveTransactionRowPersistPurpose(record, options) {
-  if (options?.insertOnce === true) {
-    return TRANSACTION_METADATA_PERSIST_PURPOSE.REGISTRATION;
-  }
-  const status = record?.status;
-  if (
-    status === TRANSACTION_STATUS.PREPARING ||
-    status === TRANSACTION_STATUS.PREPARED
-  ) {
-    return TRANSACTION_METADATA_PERSIST_PURPOSE.PREPARING;
-  }
-  if (
-    status === TRANSACTION_STATUS.COMMITTING ||
-    status === TRANSACTION_STATUS.ROLLING_BACK
-  ) {
-    return TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING;
-  }
-  if (
-    status === TRANSACTION_STATUS.COMMITTED ||
-    status === TRANSACTION_STATUS.ROLLED_BACK
-  ) {
-    return TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT;
-  }
-  return TRANSACTION_METADATA_PERSIST_PURPOSE.REGISTRATION;
-}
-
-function resolveParticipantRowPersistPurpose(record) {
-  const status = record?.status;
-  if (status === TRANSACTION_STATUS.ACTIVE) {
-    return TRANSACTION_METADATA_PERSIST_PURPOSE.PARTICIPANT_ADMISSION;
-  }
-  if (status === TRANSACTION_STATUS.PREPARED || status === TRANSACTION_STATUS.PREPARING) {
-    return TRANSACTION_METADATA_PERSIST_PURPOSE.PREPARING;
-  }
-  if (
-    status === TRANSACTION_STATUS.COMMITTED ||
-    status === TRANSACTION_STATUS.ROLLED_BACK
-  ) {
-    return TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT;
-  }
-  return TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME;
-}
 
 function resolveDecisionProgressStatus(record) {
   if (record?.decision === DECISION_COMMIT) {
@@ -322,8 +286,7 @@ const sqlQueryEngineTransactionPersistenceMethods = {
       throw persistenceUnavailableError();
     }
     const transactionId = trimmedString(record?.transactionId);
-    const purpose = resolveTransactionRowPersistPurpose(record, options);
-    const startedAtMs = resolveNowMs();
+    const startedAtMs = readTelemetryClockMs();
     try {
       if (options.insertOnce === true) {
         await this.insertDistributedTransactionRowOnce(transactionId, record);
@@ -350,11 +313,8 @@ const sqlQueryEngineTransactionPersistenceMethods = {
         TABLES.SQL_TRANSACTIONS,
       );
     } finally {
-      this.transactionCoordinator?.noteMetadataPersistElapsed?.(
-        transactionId,
-        purpose,
-        Math.max(0, resolveNowMs() - startedAtMs),
-      );
+      noteTransactionRowPersistElapsed(this.transactionCoordinator, transactionId,
+        readTelemetryClockMs() - startedAtMs);
     }
   },
 
@@ -553,6 +513,7 @@ const sqlQueryEngineTransactionPersistenceMethods = {
     if (typeof gateway?.readAuthoritativeRows !== LOCAL_STR_FUNCTION) {
       return null;
     }
+    noteMetadataReadback(this.transactionCoordinator, trimmedString(transactionId));
     const read = await gateway.readAuthoritativeRows(
       TABLES.SQL_TRANSACTIONS,
       SQL_TRANSACTION_ROW_READ_SQL,
@@ -583,13 +544,12 @@ const sqlQueryEngineTransactionPersistenceMethods = {
     }
     const transactionId = trimmedString(record?.transactionId);
     if (shouldElideTransientParticipantStatus(record)) {
-      this.transactionCoordinator?.noteElidedMetadataMutation?.(transactionId);
+      noteElidedParticipantRowMutation(this.transactionCoordinator, transactionId);
       return;
     }
     const participantId = trimmedString(record?.participantId);
-    const purpose = resolveParticipantRowPersistPurpose(record);
     const coalescingKey = participantCoalescingKeyOf(participantId);
-    const startedAtMs = resolveNowMs();
+    const startedAtMs = readTelemetryClockMs();
     try {
       const result = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
@@ -604,11 +564,8 @@ const sqlQueryEngineTransactionPersistenceMethods = {
         TABLES.SQL_TRANSACTION_PARTICIPANTS,
       );
     } finally {
-      this.transactionCoordinator?.noteMetadataPersistElapsed?.(
-        transactionId,
-        purpose,
-        Math.max(0, resolveNowMs() - startedAtMs),
-      );
+      noteParticipantRowPersistElapsed(this.transactionCoordinator, transactionId,
+        readTelemetryClockMs() - startedAtMs);
     }
   },
 
@@ -629,7 +586,7 @@ const sqlQueryEngineTransactionPersistenceMethods = {
     const coalescingKey = operationId.length > 0 ?
       `${SQL_WRITE_OPERATION_COALESCING_PREFIX}${operationId}` :
       null;
-    const startedAtMs = resolveNowMs();
+    const startedAtMs = readTelemetryClockMs();
     try {
       const result = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
@@ -644,11 +601,9 @@ const sqlQueryEngineTransactionPersistenceMethods = {
         TABLES.SQL_WRITE_OPERATIONS,
       );
     } finally {
-      this.transactionCoordinator?.noteMetadataPersistElapsed?.(
-        transactionId,
+      noteHeldMetadataPersistElapsed(this.transactionCoordinator, transactionId,
         TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME,
-        Math.max(0, resolveNowMs() - startedAtMs),
-      );
+        readTelemetryClockMs() - startedAtMs);
     }
   },
 
@@ -680,7 +635,7 @@ const sqlQueryEngineTransactionPersistenceMethods = {
     const coalescingKey = transactionId.length > 0 ?
       `${SQL_WRITE_OPERATION_COALESCING_PREFIX}${transactionId}` :
       null;
-    const startedAtMs = resolveNowMs();
+    const startedAtMs = readTelemetryClockMs();
     try {
       const result = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT_BATCH,
@@ -695,11 +650,9 @@ const sqlQueryEngineTransactionPersistenceMethods = {
         TABLES.SQL_WRITE_OPERATIONS,
       );
     } finally {
-      this.transactionCoordinator?.noteMetadataPersistElapsed?.(
-        transactionId,
+      noteHeldMetadataPersistElapsed(this.transactionCoordinator, transactionId,
         TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME,
-        Math.max(0, resolveNowMs() - startedAtMs),
-      );
+        readTelemetryClockMs() - startedAtMs);
     }
   },
 };
