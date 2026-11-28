@@ -17,6 +17,7 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySome = Function.call.bind(Array.prototype.some);
 const DateConstructor = Date;
+const bufferIndexOf = Function.call.bind(Buffer.prototype.indexOf);
 const dateNow = Date.now;
 const dateParse = Date.parse;
 const dateToISOString = Function.call.bind(Date.prototype.toISOString);
@@ -61,6 +62,7 @@ export {
   arrayMap,
   arrayPush,
   arraySome,
+  bufferIndexOf,
   dateNow,
   dateParse,
   dateToISOString,

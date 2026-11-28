@@ -343,23 +343,23 @@ test('pin by the requested reference and its config, including loaded hosts befo
     [/docker info --format/u, (_, host) => host === 'overlay' ? 'overlay2|[]' :
       'overlayfs|[["driver-type","io.containerd.snapshotter.v1"]]'],
     [/docker image inspect/u, (command, host) => {
-      if (command.includes(registryRef) || command.includes('local:final')) {
+      if (stringIncludes(command, registryRef) || stringIncludes(command, 'local:final')) {
         if (host === 'different') return inspect(intermediate);
         return host === 'anchor' ? inspect(manifest, [registryRef]) : missing;
       }
-      if (host === 'overlay' && command.includes(config)) return inspect(config);
-      if (command.includes(intermediate)) return inspect(intermediate);
-      if (command.includes(loadedManifest)) return inspect(loadedManifest);
+      if (host === 'overlay' && stringIncludes(command, config)) return inspect(config);
+      if (stringIncludes(command, intermediate)) return inspect(intermediate);
+      if (stringIncludes(command, loadedManifest)) return inspect(loadedManifest);
       throw new Error(command);
     }],
     [/docker image ls/u, `${intermediate}\n${loadedManifest}\n__exit_code=0`],
     [/docker image save/u, (command, host) => {
       if (host === 'ambiguous') return archive(config);
       if (host === 'unverified') return '[]\n__exit_code=0';
-      return archive(command.includes(intermediate) ? intermediate : config);
+      return archive(stringIncludes(command, intermediate) ? intermediate : config);
     }],
   ]);
-  const resolve = (ref, ...ips) => resolvePinnedImage({hosts: ips.map((ip) => ({ip})),
+  const resolve = (ref, ...ips) => resolvePinnedImage({hosts: arrayMap(ips, (ip) => ({ip})),
     registryRef: ref, contentIdentity, sshRun, opts: {}});
   const resolved = await resolve(registryRef, 'overlay', 'loaded', 'anchor');
   assert.equal(resolved.anchor.runRef, registryRef);
@@ -369,7 +369,8 @@ test('pin by the requested reference and its config, including loaded hosts befo
   assert.equal(resolved.loaded.provenance, `loaded:${loadedManifest}`);
   const tagged = await resolve('local:final', 'anchor');
   assert.equal(tagged.anchor.runRef, manifest, 'freeze the tag to its actual local image');
-  assert.equal(calls.some((call) => call.host === 'anchor' && /docker image ls/u.test(call.command)), false);
+  assert.equal(arraySome(calls,
+    (call) => call.host === 'anchor' && /docker image ls/u.test(call.command)), false);
   const refusal = (reason) => (error) => error.code === 'image_unavailable' &&
     error.diagnostic.reason === reason;
   await assert.rejects(resolve(registryRef, 'loaded'), refusal('reference_absent'));

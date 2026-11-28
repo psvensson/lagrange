@@ -349,8 +349,8 @@ test('campaign CLI binds the expected boot source to the requested product revis
       const file = path.join('src/diagnostics', name);
       fs.copyFileSync(path.join(ROOT, file), path.join(root, file));
     }
-    const git = (...args) => execGit(args, {cwd: root, encoding: 'utf8',
-      env: gitProcessEnvironment()}).trim();
+    const git = (...args) => stringTrim(execGit(args, {cwd: root, encoding: 'utf8',
+      env: gitProcessEnvironment()}));
     const commit = () => {
       git('add', '.');
       git('-c', 'user.name=Witness', '-c', 'user.email=witness@example.org',

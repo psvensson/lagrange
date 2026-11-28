@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2473,
+    "unit": 2475,
     "integration": 137,
     "bootstrap": 234,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2851,
-  "digest": "fnv1a32-a3055d12",
+  "censusSize": 2853,
+  "digest": "fnv1a32-40f5a412",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -878,6 +878,7 @@
     "test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js": "unit",
     "test/distributed/harness/__tests__/benchmark-claim-admission.test.js": "unit",
     "test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js": "unit",
+    "test/distributed/harness/__tests__/benchmark-cohort-remote-reset-timing.test.js": "unit",
     "test/distributed/harness/__tests__/benchmark-history-selection.test.js": "unit",
     "test/distributed/harness/__tests__/benchmark-oltp-state-reconciliation.test.js": "unit",
     "test/distributed/harness/__tests__/benchmark-operation-outcome.test.js": "unit",
@@ -931,6 +932,7 @@
     "test/distributed/harness/__tests__/comparative-benchmark-generated-commands.test.js": "unit",
     "test/distributed/harness/__tests__/comparative-benchmark-provisioning-entrypoint.test.js": "unit",
     "test/distributed/harness/__tests__/comparative-benchmark-provisioning.test.js": "unit",
+    "test/distributed/harness/__tests__/comparative-benchmark-revision-source.test.js": "unit",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "unit",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js": "unit",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "unit",
