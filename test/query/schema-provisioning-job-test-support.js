@@ -93,7 +93,8 @@ function createGateway() {
           const [status, updatedAt, rowId] = params;
           const filtered = candidates.map((row, index) => ({...row, recovery_rowid: index + 1}))
             .filter((row) => row.status === status && (params.length === 1 ||
-              row.updated_at < updatedAt || (row.updated_at === updatedAt && row.recovery_rowid < rowId)))
+              row.updated_at < updatedAt ||
+              (row.updated_at === updatedAt && row.recovery_rowid < rowId)))
             .sort((a, b) => b.updated_at - a.updated_at || b.recovery_rowid - a.recovery_rowid);
           return {rows: filtered.slice(0, 32)};
         }

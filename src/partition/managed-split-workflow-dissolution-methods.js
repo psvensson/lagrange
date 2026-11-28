@@ -463,10 +463,12 @@ class ManagedSplitWorkflowDissolutionMethods {
   }
 
   async teardownAbortedSplitChildren(workflowId, workflow) {
-    if (workflow?.workflowId !== workflowId || workflow.status !== PARTITION_TRANSITION_STATE.FAILED) {
+    if (workflow?.workflowId !== workflowId ||
+        workflow.status !== PARTITION_TRANSITION_STATE.FAILED) {
       return false;
     }
-    for (const childPartitionId of cleanupRecord(workflow.metadata, workflow.tableId).pendingChildren) {
+    for (const childPartitionId of cleanupRecord(workflow.metadata,
+      workflow.tableId).pendingChildren) {
       await this.teardownAbortedSplitChild(workflowId, workflow,
         childPartitionId);
     }
@@ -486,13 +488,15 @@ class ManagedSplitWorkflowDissolutionMethods {
         code: 'split-descriptor-cleanup-unconfirmed', intent});
     }
     return this.workflowCoordinator.updateWorkflow(workflow.workflowId, (record) => {
-      if (record.status !== PARTITION_TRANSITION_STATE.FAILED || record.tableId !== intent.tableId ||
+      if (record.status !== PARTITION_TRANSITION_STATE.FAILED ||
+          record.tableId !== intent.tableId ||
           record.metadata.workflowAttempt !== intent.workflowAttempt) {
         return refuseRecordChange('split-descriptor-cleanup-decision-moved', {superseded: true});
       }
       const manifest = cleanupRecord(record.metadata, record.tableId);
       const current = terminalSubjects(record.metadata, record.tableId).get(partitionId);
-      if (manifest.decisionFence !== decision.decisionFence || !matchesTerminalReceipt(result.splitDescriptorReceipt, current)) {
+      if (manifest.decisionFence !== decision.decisionFence ||
+          !matchesTerminalReceipt(result.splitDescriptorReceipt, current)) {
         return refuseRecordChange('split-descriptor-cleanup-decision-moved', {superseded: true});
       }
       const pending = intent.action === SIBLING_DESCRIPTOR_ACTION.FINALIZE ? 'pendingSiblings' : 'pendingChildren';
@@ -548,7 +552,6 @@ class ManagedSplitWorkflowDissolutionMethods {
             superseded: error?.superseded === true,
             membershipUnavailable: error?.membershipUnavailable === true,
             redrive: () => this.teardownAbortedSplitChild(workflowId, workflow, childPartitionId)});
-
         }
       }, {attempt});
   }
@@ -580,7 +583,8 @@ class ManagedSplitWorkflowDissolutionMethods {
     return this.groupRetirementRedrive.exclusive(`${workflowId}:${partitionId}`, async () => {
       try {
         await assertWorkflowRecordHeld(this, workflowId, ABORTED_RECORD_STATES, attempt);
-        const result = await submitSplitSiblingDescriptor(this, workflow, subject, SIBLING_DESCRIPTOR_ACTION.FINALIZE);
+        const result = await submitSplitSiblingDescriptor(this, workflow, subject,
+          SIBLING_DESCRIPTOR_ACTION.FINALIZE);
         await this.acknowledgeAbortedSplitDescriptor(workflow, partitionId, result);
         this.groupRetirementRedrive.settle(workflowId, partitionId, attempt);
       } catch (error) {

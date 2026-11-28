@@ -281,7 +281,9 @@ test('unavailable socket backlog cannot prevent the delivery timeout or quaranti
     initializeEnvironment();
     const router = await buildRouter(t);
     const {connection, ws} = installPeerConnection(router);
-    Object.defineProperty(ws, 'bufferedAmount', {get() { throw new Error('unavailable'); }});
+    Object.defineProperty(ws, 'bufferedAmount', {get() {
+      throw new Error('unavailable');
+    }});
     ws.send = (_bytes, _options, callback) => callback();
     const result = await router.deliver(PEER_NODE_ID + '/service/no-ack', {type: 'TEST'});
     t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false);

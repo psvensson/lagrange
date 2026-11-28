@@ -5,7 +5,8 @@ import {PgWireProtocolHandler, parseQueryMessage} from '../../../src/runtime/pgw
 import {ServiceRuntimeLifecycle} from '../../../src/runtime/service-runtime-lifecycle.js';
 import {LIFECYCLE_EVENT, OPERATION_JOURNAL_EVENT, STATE_PROJECTION_EVENT} from '../../../src/constants/runtime.js';
 
-const events = new Set([...Object.values(OPERATION_JOURNAL_EVENT), ...Object.values(STATE_PROJECTION_EVENT),
+const events = new Set([...Object.values(OPERATION_JOURNAL_EVENT),
+  ...Object.values(STATE_PROJECTION_EVENT),
   ...Object.values(LIFECYCLE_EVENT)]);
 events.delete(LIFECYCLE_EVENT.HEALTH_CHECK);
 events.delete(LIFECYCLE_EVENT.HEALTH_RESULT);
@@ -61,8 +62,12 @@ PgWireProtocolHandler.prototype._handleSimpleQuery = function(payload) {
       record.protocolFailure ??= {at: Date.now(), message: String(message).slice(0, 256)};
       return fail.call(this, message);
     };
-    socket.once('error', (error) => { record.socketError = {at: Date.now(), code: error.code}; });
-    socket.once('end', () => { record.remoteEndAt = Date.now(); });
+    socket.once('error', (error) => {
+      record.socketError = {at: Date.now(), code: error.code};
+    });
+    socket.once('end', () => {
+      record.remoteEndAt = Date.now();
+    });
     socket.once('close', (hadError) => {
       record.closed = {at: Date.now(), hadError};
       record.lifecycleAtClose = history.filter((event) => event.replica === record.replica);
@@ -72,10 +77,13 @@ PgWireProtocolHandler.prototype._handleSimpleQuery = function(payload) {
   return simpleQuery.call(this, payload);
 };
 
-export function armListenerObservation(sql) { expectedSql = sql; }
+export function armListenerObservation(sql) {
+  expectedSql = sql;
+}
 export function listenerObservation() {
   if (!observed) return null;
-  return {...observed.record, lifecycle: history.filter((event) => event.replica === observed.record.replica)};
+  return {...observed.record,
+    lifecycle: history.filter((event) => event.replica === observed.record.replica)};
 }
 
 export function boundListenerReplicas() {

@@ -301,7 +301,8 @@ class ResourceDiagnosticsSampler {
         cpuUserDeltaUs: cpuDeltaUserUs,
         cpuSystemDeltaUs: cpuDeltaSystemUs,
         cpuCount,
-        processCpuPercentOfHostCores: this.calculateProcessCpuPercentOfHostCores(cpuDeltaTotalUs, sampleIntervalMs, cpuCount),
+        processCpuPercentOfHostCores: this.calculateProcessCpuPercentOfHostCores(cpuDeltaTotalUs,
+          sampleIntervalMs, cpuCount),
         sampleIntervalMs: sampleIntervalMs > 0 ? sampleIntervalMs : null,
         mainThreadCpuPercent: intervalUs > 0 && threadDeltaUs !== null && threadDeltaUs >= 0 ?
           roundToTwo(100 * threadDeltaUs / intervalUs) : null,

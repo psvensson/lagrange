@@ -29,10 +29,10 @@ async function allocationFixture(t) {
   const descriptors = [];
   const deliveries = [];
   const gateway = createTransactionPersistenceGateway();
-  let engine;
+  const late = {engine: null};
   t.after(async () => {
     try {
-      await engine?.shutdown();
+      await late.engine?.shutdown();
     } finally {
       gateway.db.close();
       try {
@@ -46,7 +46,8 @@ async function allocationFixture(t) {
     const ddl = LAGRANGE_OLTP_SCHEMA_DDL.find((statement) => statement.startsWith('CREATE TABLE ' + name + ' ('));
     const ast = new SQLParser(ddl).parse();
     const schema = buildSchemaDefinition(ast.columns, ast);
-    const table = {table_id: name, table_name: name, active_partition_version: 1, partition_key: derivePartitionKey(ast.primaryKey),
+    const table = {table_id: name, table_name: name, active_partition_version: 1,
+      partition_key: derivePartitionKey(ast.primaryKey),
       schema_definition: JSON.stringify(schema)};
     const keyType = resolveDeclaredPartitionKeyType(table);
     assert.equal(keyType, PARTITION_BOUNDARY_KEY_TYPE.COMPOSITE);
@@ -71,9 +72,12 @@ async function allocationFixture(t) {
     assert.equal(originOf(leader), GENERATION_ORIGIN_INDEX);
     assert.equal(leader.leaderId, replicaId);
     leader.concurrencyGranularity = 'row-key';
-    leader.controllablePort.setProposeHandler(async (entry) => { leader.controllablePort.commit(entry); });
+    leader.controllablePort.setProposeHandler(async (entry) => {
+      leader.controllablePort.commit(entry);
+    });
   }
-  engine = new SQLQueryEngine({controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     controlPlaneSystemTableGateway: gateway, autoStartDistributedTransactionRecovery: false,
     systemCache: catalog,
     messageRouter: {async deliver(address, message) {
@@ -83,6 +87,7 @@ async function allocationFixture(t) {
       deliveries.push({address, message, answer});
       return buildDeliveryEnvelope({acknowledged: true}, answer);
     }}});
+  late.engine = engine;
   const [district, orders] = replicas.values();
   const seeded = await district.executeQuery('INSERT INTO district ' +
     '(warehouse_id, district_id, ytd_cents, next_order_id) VALUES (?, ?, ?, ?)', [1, 2, 0, 14],
@@ -127,7 +132,8 @@ test('a concurrent committed allocation invalidates the plain district read befo
     assert.equal(address, district.nodeId + '/partition/' + district.replicaId);
     assert.equal(message.participantId, readDelivery.message.participantId);
     assert.ok(message.idempotencyKey);
-    assert.equal(message.entryId, deriveParticipantEntryId(message.idempotencyKey, district.partitionId));
+    assert.equal(message.entryId,
+      deriveParticipantEntryId(message.idempotencyKey, district.partitionId));
     assert.equal(answer.success, false);
     assert.equal(answer.failureCode, 'participant_transaction_stale_read', JSON.stringify(answer));
     assert.equal(update.firstFailedParticipant?.failureCode, answer.failureCode);

@@ -21,14 +21,18 @@ const hosted = new Map();
 const publication = new AsyncLocalStorage();
 const activeWrite = new AsyncLocalStorage();
 const modes = new Map();
-const trace = {lost: null, lastRenewal: null, lastRenewalByNode: {}, committedByNode: {}, withheldCount: 0,
+const modeFor = (subject) => modes.get(subject) ?? modes.get('*') ?? 'open';
+const trace = {lost: null, lastRenewal: null, lastRenewalByNode: {}, committedByNode: {},
+  withheldCount: 0,
   withheldByNode: {}, lastWithheld: null, gatedCount: 0, lastGated: null, lastReplay: null};
 let gateEnabled = false;
 
 const initialize = PartitionService.prototype.initialize;
 PartitionService.prototype.initialize = async function(...args) {
   const result = await initialize.apply(this, args);
-  if (this.partitionId === NODES || this.partitionId === PARTITIONS) hosted.set(this.replicaId, this);
+  if (this.partitionId === NODES || this.partitionId === PARTITIONS) {
+    hosted.set(this.replicaId, this);
+  }
   return result;
 };
 
@@ -83,18 +87,19 @@ CDCIntegrationService.prototype.updateSystemTableRow = async function(table, whe
     readyLeaseExpiresAt: data.ready_lease_expires_at, bootIncarnation: where.boot_incarnation,
     priorHeartbeat: where.last_heartbeat, normalPublisher};
   const invocation = {renewal, returnedRemoteReceipt: null};
-  const result = await activeWrite.run(invocation, () => update.call(this, table, where, data, options));
+  const result = await activeWrite.run(invocation,
+    () => update.call(this, table, where, data, options));
   if (result?.committed === true && result.success === true) {
     const receipt = publicationReceipt(invocation, result.partitionResult);
     const previous = trace.committedByNode[renewal.nodeId];
-    if (receipt && (!previous || receipt.commitWitness.logIndex >= previous.commitWitness.logIndex)) {
+    if (receipt &&
+        (!previous || receipt.commitWitness.logIndex >= previous.commitWitness.logIndex)) {
       trace.committedByNode[renewal.nodeId] = receipt;
     }
   }
   return result;
 };
 
-const modeFor = (subject) => modes.get(subject) ?? modes.get('*') ?? 'open';
 function recordWithheld(hop) {
   trace.withheldCount++;
   trace.withheldByNode[hop.nodeId] = (trace.withheldByNode[hop.nodeId] ?? 0) + 1;
@@ -103,17 +108,22 @@ function recordWithheld(hop) {
 
 function confirmedReceipt(renewal, answer) {
   const witness = answer?.durableCommitWitness;
-  if (!renewal.normalPublisher || answer?.success !== true || (answer.affectedRows ?? answer.changes) !== 1 ||
+  if (!renewal.normalPublisher || answer?.success !== true ||
+      (answer.affectedRows ?? answer.changes) !== 1 ||
       witness?.partitionId !== NODES || witness.entryId !== renewal.entryId ||
       witness.idempotencyKey !== renewal.idempotencyKey || !Number.isSafeInteger(witness.term) ||
-      witness.term <= 0 || !Number.isSafeInteger(witness.logIndex) || witness.logIndex <= 0) return null;
+      witness.term <= 0 || !Number.isSafeInteger(witness.logIndex) || witness.logIndex <= 0) {
+    return null;
+  }
   return {...renewal, changes: 1, commitWitness: witness, at: Date.now()};
 }
 
 function publicationReceipt({renewal, returnedRemoteReceipt}, result) {
   if (!Array.isArray(result?.participantResults)) return confirmedReceipt(renewal, result);
-  if (result.success !== true || result.affectedRows !== 1 || result.idempotencyKey !== renewal.idempotencyKey ||
-      result.partitions?.length !== 1 || result.partitions[0] !== NODES || result.mirrorPartitions?.length !== 0 ||
+  if (result.success !== true || result.affectedRows !== 1 ||
+      result.idempotencyKey !== renewal.idempotencyKey ||
+      result.partitions?.length !== 1 || result.partitions[0] !== NODES ||
+      result.mirrorPartitions?.length !== 0 ||
       result.participantResults.length !== 1 || !returnedRemoteReceipt) return null;
   const participant = result.participantResults[0];
   if (participant?.role !== 'primary' || participant.partitionId !== NODES) return null;
@@ -121,8 +131,12 @@ function publicationReceipt({renewal, returnedRemoteReceipt}, result) {
   const witness = receipt?.commitWitness;
   const returned = returnedRemoteReceipt.commitWitness;
   if (!witness || witness.term !== returned.term || witness.logIndex !== returned.logIndex ||
-      witness.leaderReplicaId !== returned.leaderReplicaId || witness.leaderNodeId !== returned.leaderNodeId) return null;
-  return {...receipt, address: returnedRemoteReceipt.address, targetNodeId: returnedRemoteReceipt.targetNodeId};
+      witness.leaderReplicaId !== returned.leaderReplicaId ||
+      witness.leaderNodeId !== returned.leaderNodeId) {
+    return null;
+  }
+  return {...receipt, address: returnedRemoteReceipt.address,
+    targetNodeId: returnedRemoteReceipt.targetNodeId};
 }
 
 function closedReply(beforeSend) {
@@ -134,7 +148,8 @@ const deliver = MessageRouter.prototype.deliver;
 MessageRouter.prototype.deliver = async function(address, request, options) {
   const invocation = activeWrite.getStore();
   const renewal = invocation?.renewal;
-  if (!renewal || renewal.idempotencyKey !== request?.idempotencyKey || renewal.entryId !== request.entryId ||
+  if (!renewal || renewal.idempotencyKey !== request?.idempotencyKey ||
+      renewal.entryId !== request.entryId ||
       !/^\s*UPDATE\s+["`]?nodes["`]?\s+SET\s/i.test(request.sql)) {
     return deliver.call(this, address, request, options);
   }
@@ -151,7 +166,8 @@ MessageRouter.prototype.deliver = async function(address, request, options) {
   const receipt = confirmedReceipt(hop, answer);
   // Arm only on a proven remote route from the actual publisher. The local
   // fast path can supply recovery receipts but never the transport loss.
-  if (receipt && targetNodeId !== this.nodeId && targetNodeId === receipt.commitWitness.leaderNodeId) {
+  if (receipt && targetNodeId !== this.nodeId &&
+      targetNodeId === receipt.commitWitness.leaderNodeId) {
     trace.lastRenewal = trace.lastRenewalByNode[renewal.nodeId] = receipt;
     if (armed && modeFor(renewal.nodeId) === 'lose_next') {
       modes.set(renewal.nodeId, 'withhold');
@@ -161,13 +177,15 @@ MessageRouter.prototype.deliver = async function(address, request, options) {
     invocation.returnedRemoteReceipt = receipt;
   }
   if (trace.lost?.entryId === request.entryId) {
-    trace.lastReplay = {...hop, success: answer?.success === true, commitWitness: answer?.durableCommitWitness};
+    trace.lastReplay = {...hop, success: answer?.success === true,
+      commitWitness: answer?.durableCommitWitness};
   }
   return delivery;
 };
 
 function replicas(partitionId) {
-  return [...hosted.values()].filter((s) => s.partitionId === partitionId && s.initialized && !s.isShutdown);
+  return [...hosted.values()].filter((s) => s.partitionId === partitionId && s.initialized &&
+      !s.isShutdown);
 }
 
 async function localRows(replica, sql, params = []) {
@@ -199,7 +217,8 @@ async function nodesLeaseView({nodeId}) {
     const read = await localRows(replica, sql + (nodeId ? ' WHERE node_id = ?' : ' ORDER BY node_id'),
       nodeId ? [nodeId] : []);
     const status = replica.initialized && !replica.isShutdown ? replica.getStatus() : null;
-    result.push({...membership, nodeId: replica.nodeId, replicaId: replica.replicaId, partitionId: NODES,
+    result.push({...membership, nodeId: replica.nodeId, replicaId: replica.replicaId,
+      partitionId: NODES,
       isLeader: status?.isLeader === true && status.term === membership.term,
       rowReadState: read.state, rowReadReason: read.reason, rows: read.rows});
   }
@@ -213,7 +232,8 @@ async function nodesLeaseView({nodeId}) {
     const row = read.rows?.[0];
     partitionOwnerRead = {state: read.state, reason: read.reason};
     if (row && tenure && leader.leadershipTenure === tenure && leader.isLeader) {
-      partitionOwner = {...row, nodeId: leader.nodeId, replicaId: leader.replicaId, term: tenure.term};
+      partitionOwner = {...row, nodeId: leader.nodeId, replicaId: leader.replicaId,
+        term: tenure.term};
     }
   }
   const cache = (nodes[0] ?? leader)?.systemTableCache;
@@ -230,7 +250,8 @@ registerEmbeddedWorkerOperations({
     }
     const membership = await readPartitionReplicaMembership(leader, leader.replicaId);
     if (!membership.gateOpen || !membership.voterReplicaIds?.includes(successorReplicaId) ||
-        membership.votersOutgoingReplicaIds?.length !== 0 || leader.getCurrentTerm() !== membership.term ||
+        membership.votersOutgoingReplicaIds?.length !== 0 ||
+        leader.getCurrentTerm() !== membership.term ||
         !leader.isLeader) throw new Error('Named transfer peer is outside the current stable voter set');
     return turnChainValue(leader.requestLeadershipTransfer({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: successorReplicaId,

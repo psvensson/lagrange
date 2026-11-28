@@ -349,4 +349,5 @@ async function measurePackagedDependencies(root) {
     new Set(), CONTENT_LAYOUT.BUNDLED));
 }
 
-export {RUNTIME_BUILD_MANIFEST, measureCheckoutSourceFingerprint, measurePackagedDependencies, measureRuntimeContent};
+export {RUNTIME_BUILD_MANIFEST, measureCheckoutSourceFingerprint, measurePackagedDependencies,
+  measureRuntimeContent};

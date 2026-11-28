@@ -361,7 +361,8 @@ async function proposeMirrorCustody(service, metadata, {family, barrierIndex}, a
   if (result?.success !== true) {
     throw new Error('Mirror retention custody commitment unconfirmed', {cause: result});
   }
-  return Object.freeze({partitionId: service.partitionId, action, custody, logIndex: result.logIndex});
+  return Object.freeze({partitionId: service.partitionId, action, custody,
+    logIndex: result.logIndex});
 }
 
 function replicateSourceMirrorRetentionCustody(service, metadata, options) {

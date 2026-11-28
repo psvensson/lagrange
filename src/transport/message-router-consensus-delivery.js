@@ -288,7 +288,8 @@ function isOrdinaryHeartbeat(payload) {
   try {
     const message = Object.getOwnPropertyDescriptor(payload, 'message')?.value;
     const type = message && Object.getOwnPropertyDescriptor(message, 'msgType')?.value;
-    return (type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT || type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE) &&
+    return (type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT ||
+        type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE) &&
       !('context' in message);
   } catch {
     return false;
@@ -349,7 +350,8 @@ function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry)
   batch.byteLength += addedBytes;
   router.consensusDelivery.pendingBatchBytes += addedBytes;
   return new Promise((resolve) => {
-    batch.items.push({encodedEntry, entryBytes, family: consensusItemFamily(entry.payload), resolve});
+    batch.items.push({encodedEntry, entryBytes, family: consensusItemFamily(entry.payload),
+      resolve});
     scheduleBatchFlush(router, batch, entry.payload);
   });
 }

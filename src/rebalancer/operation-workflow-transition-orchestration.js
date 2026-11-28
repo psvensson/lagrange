@@ -308,7 +308,8 @@ class OperationWorkflowTransitionOrchestration
     const previousStep = operation.workflowStep;
     if (createBasis && (previousStep !== WORKFLOW_STEP.SENDING ||
         !matchesRequestedCreateGrant(createBasis, operation))) {
-      this.scheduleObservedProgressRetry(operation.operationId, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      this.scheduleObservedProgressRetry(operation.operationId,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT);
       return OPERATION_RECONCILE_OUTCOME.WAITING;
     }

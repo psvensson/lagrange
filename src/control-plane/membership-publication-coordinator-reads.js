@@ -282,7 +282,8 @@ class MembershipPublicationCoordinatorReads {
         latestPublicationRow = row;
       }
       if (row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
-          (!latestPublishedPublicationRow || epoch > (latestPublishedPublicationRow.publicationEpoch || 0))) {
+          (!latestPublishedPublicationRow ||
+          epoch > (latestPublishedPublicationRow.publicationEpoch || 0))) {
         latestPublishedPublicationRow = row;
       }
     }

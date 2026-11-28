@@ -11,8 +11,10 @@ function terminalGrantForSource(row, partitionId) {
   const transition = parseTablePartitionTransition(row);
   if (!transition) return null;
   const metadata = transition.metadata;
-  const grants = metadata.mirrorCustodyGrants?.filter((grant) => grant.partitionId === partitionId &&
-    (grant.release || (metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(transition.state))));
+  const grants = metadata.mirrorCustodyGrants?.filter((grant) =>
+    grant.partitionId === partitionId &&
+    (grant.release ||
+    (metadata.mirrorExecutionEnded && endsSourceExecutionAttempt(transition.state))));
   if (!grants?.length) return null;
   const family = metadata.sourcePartitionId === partitionId ? 'split' :
     metadata.sourcePartitionIds?.includes(partitionId) ? 'merge' : null;
@@ -69,7 +71,8 @@ export function redriveFailedMirrorRelease(service) {
     if ((!service.splitReplication || isStoppedSplitWorker(service.splitReplication)) &&
         !service.mergeReplication &&
         metadata?.mirrorCustodyGrants?.some((grant) => grant.partitionId === service.partitionId &&
-          grant.fence === metadata.workflowFenceToken && !grant.release) && !metadata.mirrorExecutionEnded) {
+          grant.fence === metadata.workflowFenceToken && !grant.release) &&
+          !metadata.mirrorExecutionEnded) {
       service.resumeDurableMirrorReplicationWorkers();
     }
     return;

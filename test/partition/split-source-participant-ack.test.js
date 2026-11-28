@@ -380,9 +380,13 @@ async (t) => {
     const [service] = group.services;
     service.sqlQueryEngine = {managedSplitWorkflow: {
       reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
-      async acknowledgeSourceParticipant() { return {result: PARTICIPANT_ACK_RESULT.ACCEPTED}; },
+      async acknowledgeSourceParticipant() {
+        return {result: PARTICIPANT_ACK_RESULT.ACCEPTED};
+      },
     }};
-    service.backfillSplitSnapshot = async () => { throw new Error('simulated backfill failure'); };
+    service.backfillSplitSnapshot = async () => {
+      throw new Error('simulated backfill failure');
+    };
     const result = await service.handleStartSplitReplication({
       transitionMetadata: {...buildMetadata(), workflowAttempt: 1, workflowFenceToken: 1},
     });

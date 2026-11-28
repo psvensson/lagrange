@@ -63,7 +63,9 @@ function ensureLeaderPlacementOwnerSink(leader) {
   if (leader && !leader.rebalancerLeadershipSink) {
     leader.setRebalancerLeadershipSink({
       isLeader: false,
-      setLeader(isLeader) { this.isLeader = isLeader; },
+      setLeader(isLeader) {
+        this.isLeader = isLeader;
+      },
       now: () => (leader.timeSource ? leader.timeSource.now() : Date.now()),
       adaptiveBudgetController: createAdaptivePlacementBudgetController(),
     });

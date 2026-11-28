@@ -64,7 +64,8 @@ const GROUP_MEMBER_CHECKPOINT_FIELD = Object.freeze({
 // refusals ride along unchanged).
 function holdsRetirementSubject(workflow, evidence) {
   return workflow?.workflowId === evidence.workflowId && workflow.tableId === evidence.tableId &&
-    workflowAttemptOf(workflow.metadata) === evidence.attempt && workflow.fenceToken === evidence.fenceToken;
+    workflowAttemptOf(workflow.metadata) === evidence.attempt &&
+    workflow.fenceToken === evidence.fenceToken;
 }
 
 const GROUP_MEMBER_REFUSAL = Object.freeze({

@@ -37,7 +37,8 @@ function sourceFailureAuthorization(workflow, key, status, fence) {
 
 function sameSourceFailure(left, right) {
   return Boolean(left && right && left.workflowId === right.workflowId &&
-    left.workflowAttempt === right.workflowAttempt && left.participantKey === right.participantKey &&
+    left.workflowAttempt === right.workflowAttempt &&
+    left.participantKey === right.participantKey &&
     left.fenceToken === right.fenceToken && left.status === right.status);
 }
 
@@ -69,21 +70,29 @@ function matchesTerminalReceipt(receipt, intent) {
 
 function cleanupRecord(metadata, tableId) {
   const manifest = metadata.splitDescriptorCleanup;
-  if (!manifest || !Number.isSafeInteger(metadata.workflowAttempt) || metadata.workflowAttempt < 1 ||
+  if (!manifest || !Number.isSafeInteger(metadata.workflowAttempt) ||
+      metadata.workflowAttempt < 1 ||
       manifest.tableId !== tableId || manifest.workflowAttempt !== metadata.workflowAttempt ||
-      !Number.isSafeInteger(manifest.decisionFence) || manifest.decisionFence < manifest.workflowAttempt ||
+      !Number.isSafeInteger(manifest.decisionFence) ||
+      manifest.decisionFence < manifest.workflowAttempt ||
       !distinctIds(manifest.pendingChildren) || !distinctIds(manifest.pendingSiblings) ||
       !Array.isArray(manifest.receipts)) throw invalidCleanupRecord(metadata.workflowId);
   const remaining = terminalSubjects(metadata, tableId);
   for (const id of manifest.pendingChildren) {
-    if (!metadata.splitIssuedChildren.includes(id) || !remaining.delete(id)) throw invalidCleanupRecord(metadata.workflowId);
+    if (!metadata.splitIssuedChildren.includes(id) || !remaining.delete(id)) {
+      throw invalidCleanupRecord(metadata.workflowId);
+    }
   }
   for (const id of manifest.pendingSiblings) {
-    if (remaining.get(id)?.action !== SIBLING_DESCRIPTOR_ACTION.FINALIZE) throw invalidCleanupRecord(metadata.workflowId);
+    if (remaining.get(id)?.action !== SIBLING_DESCRIPTOR_ACTION.FINALIZE) {
+      throw invalidCleanupRecord(metadata.workflowId);
+    }
     remaining.delete(id);
   }
   for (const receipt of manifest.receipts) {
-    if (!matchesTerminalReceipt(receipt, remaining.get(receipt?.partitionId))) throw invalidCleanupRecord(metadata.workflowId);
+    if (!matchesTerminalReceipt(receipt, remaining.get(receipt?.partitionId))) {
+      throw invalidCleanupRecord(metadata.workflowId);
+    }
     remaining.delete(receipt.partitionId);
   }
   if (remaining.size) throw invalidCleanupRecord(metadata.workflowId);
@@ -105,12 +114,16 @@ function withSplitCleanupDecision(current, next) {
   const issued = current.metadata.splitIssuedChildren;
   terminalSubjects(current.metadata, current.tableId);
   return {...next, metadata: {...next.metadata, splitDescriptorCleanup: {
-    tableId: current.tableId, workflowAttempt: current.metadata.workflowAttempt, decisionFence: current.fenceToken,
-    pendingChildren: [...issued], pendingSiblings: current.metadata.splitIssuedSiblings.map((item) => item.partitionId), receipts: [],
+    tableId: current.tableId, workflowAttempt: current.metadata.workflowAttempt,
+    decisionFence: current.fenceToken,
+    pendingChildren: [...issued],
+    pendingSiblings: current.metadata.splitIssuedSiblings.map((item) => item.partitionId),
+    receipts: [],
   }}};
 }
 
 export {
   PRE_CUTOVER_SPLIT_STATES, SPLIT_FAILURE_PENDING, childIntent, cleanupRecord,
-  matchesTerminalReceipt, sameSourceFailure, sourceFailureAuthorization, splitCleanupRefusal, terminalSubjects, withSplitCleanupDecision,
+  matchesTerminalReceipt, sameSourceFailure, sourceFailureAuthorization, splitCleanupRefusal,
+  terminalSubjects, withSplitCleanupDecision,
 };

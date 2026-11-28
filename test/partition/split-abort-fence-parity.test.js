@@ -57,7 +57,8 @@ async function registerClaimedWorkflow(workflow) {
 
 async function driveSourceFailureAck(workflow, workflowId, fenceToken) {
   const result = await workflow.acknowledgeSourceParticipant(workflowId, {
-    [PARTICIPANT_ACK_FIELD.ATTEMPT]: workflow.resolveWorkflowState(workflowId).metadata.workflowAttempt,
+    [PARTICIPANT_ACK_FIELD.ATTEMPT]: workflow.resolveWorkflowState(
+      workflowId).metadata.workflowAttempt,
     [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
       SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
     [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.SNAPSHOT_FAILED,
@@ -138,7 +139,8 @@ test('abort-transition-fenced: the split abort persists FAILED through ' +
 test('abort-dissolution-acks-fenced: the post-abort owner-recorded ' +
 'teardown path runs under the same claim fence (abort children torn ' +
 'down fence-stamped through F14 dissolution acks)', async (t) => {
-  const store = await openDescriptorRecordStore(t, {partitions: [{partition_id: SOURCE_PARTITION_ID}]});
+  const store = await openDescriptorRecordStore(t,
+    {partitions: [{partition_id: SOURCE_PARTITION_ID}]});
   const removedReplicas = [];
   const {workflow, provisionCalls} = buildWorkflow({
     cdcIntegrationService: store.cdcFor('A'),
@@ -176,7 +178,8 @@ test('abort-dissolution-acks-fenced: the post-abort owner-recorded ' +
     'the abort tears down both never-authoritative children',
   );
   t.same(removedReplicas.map(({partitionId, replicaId, groupRetirement}) =>
-    [partitionId, replicaId, groupRetirement.workflowId, groupRetirement.attempt, groupRetirement.fenceToken]),
+    [partitionId, replicaId, groupRetirement.workflowId, groupRetirement.attempt,
+      groupRetirement.fenceToken]),
   issued.map((id) => [id, id + '-r1', workflowId, attempt, fenceToken]));
   const terminal = store.metadata();
   t.equal(terminal.splitDescriptorCleanup.decisionFence, fenceToken);
@@ -350,15 +353,18 @@ test('an accepted split failure survives a lost ACK and a new owner fence', asyn
   const authorization = store.metadata().splitSourceFailure;
   t.same(authorization, {workflowId: WORKFLOW_ID, workflowAttempt: attempt,
     participantKey: ack.participantKey, status: ack.status, fenceToken});
-  t.equal(store.tablesRow().partition_transition_state, PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING);
+  t.equal(store.tablesRow().partition_transition_state,
+    PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING);
   t.equal(await original.reserveSourceMirrorCustody('split', SOURCE_PARTITION_ID, store.metadata(), store.tableId, 'users'),
     false, 'a pending accepted failure cannot admit new physical source custody');
   t.same(store.metadata().mirrorCustodyGrants ?? [], []);
-  const denied = await coordinator.registerWorkflowFromRead(buildAbortingRecord(), store.tablesRow());
+  const denied = await coordinator.registerWorkflowFromRead(buildAbortingRecord(),
+    store.tablesRow());
   t.equal(denied.reason, 'split-source-failure-pending');
   now = store.metadata().workflowLeaseExpiresAt + 1;
   const restarted = build('next-holder');
-  for (let i = 0; i < 500 && store.tablesRow().partition_transition_state !== PARTITION_TRANSITION_STATE.FAILED; i++) {
+  for (let i = 0; i < 500 &&
+      store.tablesRow().partition_transition_state !== PARTITION_TRANSITION_STATE.FAILED; i++) {
     await turns(1);
   }
   await restarted.settleSplitOwnerLaneForWorkflow(WORKFLOW_ID);
@@ -369,8 +375,9 @@ test('an accepted split failure survives a lost ACK and a new owner fence', asyn
   t.same(terminal.failure.sourceFailure, authorization);
   t.same(terminal.splitSourceFailure, authorization);
   t.equal(terminal.workflowAttempt, attempt);
-  t.equal(await restarted.abortSplitOnSourceFailure(WORKFLOW_ID, {...authorization, workflowAttempt: attempt + 1}),
-    false, 'a different attempt cannot claim this decision');
+  t.equal(await restarted.abortSplitOnSourceFailure(WORKFLOW_ID,
+    {...authorization, workflowAttempt: attempt + 1}),
+  false, 'a different attempt cannot claim this decision');
 });
 
 test('lost CATCHUP_READY reply cannot authorize an earlier backfill failure', async (t) => {

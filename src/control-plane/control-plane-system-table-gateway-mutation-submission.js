@@ -400,8 +400,10 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       const result = await deliverMutation();
       if (result?.success !== true) return result;
       const answer = executesStartupSql ? result : result.partitionResult;
-      if (!isSplitDescriptorReceiptFor(answer?.splitDescriptorReceipt, mutationOptions.splitDescriptorIntent) ||
-          answer.committed !== true || !Number.isSafeInteger(answer.logIndex) || answer.logIndex < 1 ||
+      if (!isSplitDescriptorReceiptFor(answer?.splitDescriptorReceipt,
+        mutationOptions.splitDescriptorIntent) ||
+          answer.committed !== true || !Number.isSafeInteger(answer.logIndex) ||
+          answer.logIndex < 1 ||
           !Number.isSafeInteger(answer.term) || answer.term < 1) {
         return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.RECEIPT, true);
       }

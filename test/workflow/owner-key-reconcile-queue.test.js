@@ -1213,7 +1213,7 @@ test('OwnerKeyReconcileQueue - retry exhaustion is loud and only a new ' +
   t.ok(retained.reasons.has('retained_observation'), 'retains the additional reason');
   await t.rejects(queue.enqueueAndWait('owner-a', 'source_changed',
     {generation: 2}, {fenceToken: 6}), /stale fence token/i,
-    'a stale fence cannot reopen the key');
+  'a stale fence cannot reopen the key');
   await new Promise((resolve) => setTimeout(resolve, 5));
   t.equal(callCount, 3,
     'same-generation nudges cannot reset an exhausted retry forever');

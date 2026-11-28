@@ -101,7 +101,8 @@ function sampleNodeHostStatistics(source, clock, nowMs, maxAgeMs) {
     cpuCount: cpus.length,
     cpuModel: cpus[0]?.model || STRING.UNKNOWN,
     hostCpuUtilizationPercent,
-    cpuSampleIntervalMs: hostCpuUtilizationPercent === null ? null : nowMs - previousTicks.sampledAtMs,
+    cpuSampleIntervalMs: hostCpuUtilizationPercent === null ? null :
+      nowMs - previousTicks.sampledAtMs,
     cpuMeasurementMode: hostCpuUtilizationPercent === null ?
       CPU_MEASUREMENT_MODE.UNAVAILABLE : CPU_MEASUREMENT_MODE.INTERVAL_DELTA,
     totalMemory,

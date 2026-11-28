@@ -38,7 +38,8 @@ class ManagedSourceReplicationStartConfirmationMethods {
     const workflow = this.resolveWorkflowState(metadata.workflowId);
     if (split ? this.isSplitWorkflowStateUnavailable(workflow) :
       this.isMergeWorkflowStateUnavailable(workflow)) return false;
-    const key = split ? SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION : buildMergeSourceParticipantKey(sourceId);
+    const key = split ? SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION :
+      buildMergeSourceParticipantKey(sourceId);
     const build = split ? splitStartAuthorization : mergeStartAuthorization;
     const authorization = build({...metadata, tableId, tableName, participantKey: key});
     const result = await this.workflowCoordinator.authorizeParticipantStart(metadata.workflowId,
@@ -47,7 +48,8 @@ class ManagedSourceReplicationStartConfirmationMethods {
     return accepted(result);
   }
 
-  async confirmSplitReplicationStart(metadata, tableId, tableName, {requireExecutable = false} = {}) {
+  async confirmSplitReplicationStart(metadata, tableId, tableName,
+    {requireExecutable = false} = {}) {
     const result = await this.acknowledgeSourceParticipant(
       metadata[FIELD.WORKFLOW_ID],
       startAck(SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,

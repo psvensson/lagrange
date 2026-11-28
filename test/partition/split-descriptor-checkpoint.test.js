@@ -50,7 +50,8 @@ const key = splitDescriptorWriteKey(intent);
 const entryId = deriveParticipantEntryId(key, partitionId);
 
 function finalize(service) {
-  return service.executeQuery(SPLIT_DESCRIPTOR_FINALIZE_SQL, [intent.tableId, intent.workflowAttempt, child],
+  return service.executeQuery(SPLIT_DESCRIPTOR_FINALIZE_SQL,
+    [intent.tableId, intent.workflowAttempt, child],
     {entryId, idempotencyKey: key, splitDescriptorIntent: intent});
 }
 
@@ -104,7 +105,8 @@ test('PARTITIONS startup, checkpoint sealing and incoming image validation share
 // A lagging member alone does not cause this system partition to compact.
 async function serveRequestedImage(leader, receiver, checkpointsRoot, boundary, members) {
   const senderIdentity = buildSnapshotCatchupIdentityFromCache(leader);
-  const membership = await leader.raft.readCommittedMembership({purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP});
+  const membership = await leader.raft.readCommittedMembership(
+    {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP});
   const stamp = committedStampOfAnswer(membership);
   assert.ok(stamp, JSON.stringify(membership));
   assert.deepEqual(stamp.voters.map((peerId) => stamp.identities[peerId]).sort(),
@@ -125,26 +127,35 @@ async function serveRequestedImage(leader, receiver, checkpointsRoot, boundary, 
     });
     const decision = buildSnapshotCatchupDecision({
       outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
-      followerAddress: receiver.getUnifiedAddress(), startIndex: 1, failedIndex: boundary, leaderBoundary: boundary,
+      followerAddress: receiver.getUnifiedAddress(), startIndex: 1, failedIndex: boundary,
+      leaderBoundary: boundary,
     });
     const [dispatched, received] = await Promise.all([
       leader.onSnapshotCatchupNeeded(decision).then((answer) => {
-        assert.equal(answer?.outcome, RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME.SERVED, JSON.stringify(answer));
+        assert.equal(answer?.outcome, RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME.SERVED,
+          JSON.stringify(answer));
         return answer;
       }),
-      receiveSnapshotTransfer({socket: bulkConnectionTransferSocket(connection), checkpointsRoot, expectedIdentity}),
+      receiveSnapshotTransfer({socket: bulkConnectionTransferSocket(connection), checkpointsRoot,
+        expectedIdentity}),
     ]);
-    assert.equal(received.outcome, RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED, JSON.stringify(received));
+    assert.equal(received.outcome, RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED,
+      JSON.stringify(received));
     assert.equal(received.descriptor.lastIncludedIndex, dispatched.generationIndex);
     assert.ok(dispatched.generationIndex >= boundary);
     assert.deepEqual(expectedIdentity, senderIdentity);
     assert.equal(received.descriptor.membershipEpoch, senderIdentity.membershipEpoch);
-    assert.equal(received.descriptor.raftRs.membershipGenerationIndex, String(stamp.membershipGenerationIndex));
-    assert.deepEqual([...received.descriptor.raftRs.confState.voters].sort(), [...stamp.voters].sort());
+    assert.equal(received.descriptor.raftRs.membershipGenerationIndex,
+      String(stamp.membershipGenerationIndex));
+    assert.deepEqual([...received.descriptor.raftRs.confState.voters].sort(),
+      [...stamp.voters].sort());
     assert.deepEqual(received.descriptor.raftRs.peerReservations, reservations);
-    const stale = readCheckpoint({checkpointDir: path.join(checkpointsRoot, String(dispatched.generationIndex)),
-      expectedIdentity: {...expectedIdentity, membershipEpoch: senderIdentity.membershipEpoch + 1}});
-    assert.equal(stale.outcome, RAFT_CHECKPOINT_VALIDATION_OUTCOME.STALE_EPOCH, JSON.stringify(stale));
+    const stale = readCheckpoint({checkpointDir: path.join(checkpointsRoot,
+      String(dispatched.generationIndex)),
+    expectedIdentity: {...expectedIdentity,
+      membershipEpoch: senderIdentity.membershipEpoch + 1}});
+    assert.equal(stale.outcome, RAFT_CHECKPOINT_VALIDATION_OUTCOME.STALE_EPOCH,
+      JSON.stringify(stale));
     return {generationIndex: dispatched.generationIndex, expectedIdentity};
   } finally {
     sender.closeAll();
@@ -159,19 +170,20 @@ test('PARTITIONS refuses periodic compaction and replays the terminal receipt af
     ConfigurationManager.getInstance().initialize({node: {id: 'descriptor-recovery'},
       raft: {heartbeatIntervalMs: 20, electionTimeoutMinMs: 150, electionTimeoutMaxMs: 300}});
     LoggingService.getInstance().initialize({level: 'error'});
-    let group;
+    const late = {group: null};
     t.after(async () => {
       try {
-        if (group) await group.dispose();
+        if (late.group) await late.group.dispose();
       } finally {
         LoggingService.resetInstance();
         ConfigurationManager.resetInstance();
       }
     });
     const members = [1, 2, 3].map((i) => [partitionId + '-r' + i, 'node-' + i]);
-    group = await formAdmittedGroup({partitionId, members, tempPrefix: 'split-descriptor-install-',
+    late.group = await formAdmittedGroup({partitionId, members, tempPrefix: 'split-descriptor-install-',
       serviceOptions: {tableName, tableId: tableName,
         schema: JSON.parse(seedTableRow(PARTITIONS_SCHEMA, 1).schema_definition)}, budgetMs: 5000});
+    const group = late.group;
     const [leader, , receiver] = group.services;
     await settleGroupLeader(group, leader);
     await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
@@ -180,7 +192,8 @@ test('PARTITIONS refuses periodic compaction and replays the terminal receipt af
     const first = await insert(intent.workflowAttempt);
     assert.equal(first.success, true, JSON.stringify(first));
     const readChild = (db) => db.prepare('SELECT * FROM partitions WHERE partition_id = ?').get(child);
-    assert.ok(await group.waitFor(() => readChild(receiver.db)?.split_descriptor_attempt === intent.workflowAttempt));
+    assert.ok(await group.waitFor(() =>
+      readChild(receiver.db)?.split_descriptor_attempt === intent.workflowAttempt));
     await receiver.shutdown();
 
     const done = await finalize(leader);
@@ -196,13 +209,15 @@ test('PARTITIONS refuses periodic compaction and replays the terminal receipt af
     assert.equal(receipt.log_index, done.logIndex);
     assert.deepEqual(JSON.parse(receipt.owner_result_text), done.splitDescriptorReceipt);
 
-    const tick = await createPartitionSnapshotCadence({service: leader, entryThreshold: 1}).tick(Date.now());
+    const tick = await createPartitionSnapshotCadence({service: leader, entryThreshold: 1})
+      .tick(Date.now());
     assert.equal(tick.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.UNSUPPORTED_PARTITION);
     assert.equal(tick.partitionId, partitionId);
     assert.deepEqual(listCheckpointGenerations(resolveReplicaCheckpointsRoot(leader.dbPath)), []);
     const dbPath = group.dbFileOf(members[2]);
     const checkpointsRoot = resolveReplicaCheckpointsRoot(dbPath);
-    const image = await serveRequestedImage(leader, receiver, checkpointsRoot, leader.raft.readStatus().appliedIndex, members);
+    const image = await serveRequestedImage(leader, receiver, checkpointsRoot,
+      leader.raft.readStatus().appliedIndex, members);
     const stale = new Database(dbPath, {readonly: true});
     try {
       assert.equal(readChild(stale).split_descriptor_attempt, intent.workflowAttempt);
@@ -213,7 +228,8 @@ test('PARTITIONS refuses periodic compaction and replays the terminal receipt af
     const installed = await requestSnapshotInstall({replicaDbPath: dbPath, checkpointsRoot,
       ...image,
       expectedReplicaIdentity: receiver.replicaId});
-    assert.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED, JSON.stringify(installed));
+    assert.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+      JSON.stringify(installed));
     const replica = new PartitionService({...buildReplacementServiceOptions(receiver),
       transport: receiver.transport, systemTableCache: receiver.systemTableCache,
       peerAddresses: members.map(group.addressOf)});
@@ -239,8 +255,9 @@ test('PARTITIONS refuses periodic compaction and replays the terminal receipt af
     try {
       damaged.exec('DROP TABLE _partition_statement_outcomes');
       const rejected = new PartitionService(replacement);
-      await assert.rejects(rejected.initialize(), {code: PARTITION_COMMITTED_STATEMENT_ERROR_CODE.FORMAT_UNSUPPORTED});
-      assert.equal(damaged.prepare("SELECT 1 FROM sqlite_schema WHERE name = '_partition_statement_outcomes'").get(),
+      await assert.rejects(rejected.initialize(),
+        {code: PARTITION_COMMITTED_STATEMENT_ERROR_CODE.FORMAT_UNSUPPORTED});
+      assert.equal(damaged.prepare('SELECT 1 FROM sqlite_schema WHERE name = \'_partition_statement_outcomes\'').get(),
         undefined);
     } finally {
       damaged.close();

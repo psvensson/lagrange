@@ -16,7 +16,8 @@ function open(t) {
 
 function request(status) {
   return {successor: SUCCESSOR.SOURCE_NAMED, replicaIdentity: c, term: status.term,
-    configurationKey: status.configurationKey, membershipGenerationIndex: status.membershipGenerationIndex,
+    configurationKey: status.configurationKey,
+    membershipGenerationIndex: status.membershipGenerationIndex,
     runtimeGeneration: status.runtimeGeneration, lifecycleIncarnation: status.lifecycleIncarnation};
 }
 
@@ -24,11 +25,11 @@ async function assertRefusalSteps(driver, captured, eligible, expected, inboundS
   const before = driver.coreOperations().length;
   const answer = await turnChainValue(driver.port(a).transferLeadership(captured, eligible));
   assertRefused(answer, expected);
-  assert.equal(driver.coreOperations().slice(before).filter(op => op === 'step').length, inboundSteps,
+  assert.equal(driver.coreOperations().slice(before).filter((op) => op === 'step').length, inboundSteps,
     'only the previously received frames were stepped');
 }
 
-test('cancelled or stale source authorization does not step a transfer', async t => {
+test('cancelled or stale source authorization does not step a transfer', async (t) => {
   const driver = open(t);
   const captured = request(driver.status(a));
   let observedCall;
@@ -41,12 +42,13 @@ test('cancelled or stale source authorization does not step a transfer', async t
     membershipGenerationIndex: captured.membershipGenerationIndex + 1,
     configurationKey: 'obsolete configuration', runtimeGeneration: captured.runtimeGeneration + 1,
     lifecycleIncarnation: captured.lifecycleIncarnation + '-retired'})) {
-    await assertRefusalSteps(driver, {...captured, [key]: value}, () => true, REASON.SOURCE_CHANGED);
+    await assertRefusalSteps(driver, {...captured, [key]: value}, () => true,
+      REASON.SOURCE_CHANGED);
   }
   assert.equal(driver.leads(a), true);
 });
 
-test('draining a higher-term vote invalidates the captured leader before transfer', async t => {
+test('draining a higher-term vote invalidates the captured leader before transfer', async (t) => {
   const driver = open(t);
   const captured = request(driver.status(a));
   await turnChainValue(driver.port(a).transferLeadership(namedSuccessor(b)));
@@ -58,7 +60,7 @@ test('draining a higher-term vote invalidates the captured leader before transfe
   assert.equal(driver.leads(a), false);
 });
 
-test('draining a target removal invalidates the captured configuration before transfer', async t => {
+test('draining a target removal invalidates the captured configuration before transfer', async (t) => {
   const driver = open(t);
   const captured = request(driver.status(a));
   const targetPeer = driver.raftIdAt(a, c);
@@ -73,12 +75,13 @@ test('draining a target removal invalidates the captured configuration before tr
   assert.equal(driver.status(a).confState.voters.includes(targetPeer), false);
 });
 
-test('a matching stamp during joint consensus still refuses placement transfer', async t => {
+test('a matching stamp during joint consensus still refuses placement transfer', async (t) => {
   const driver = open(t);
   // Explicit joint transition retains the outgoing voter set until explicitly left.
   const change = {transition: 2, changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE,
     nodeId: driver.raftIdAt(a, b)}]};
-  assert.equal(driver.port(a).proposeConfChange(change).result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+  assert.equal(driver.port(a).proposeConfChange(change).result.outcome,
+    RAFT_OPERATION_OUTCOME.CORE_OK);
   driver.deliver();
   const status = driver.status(a);
   assert.ok(status.confState.votersOutgoing.length > 0);

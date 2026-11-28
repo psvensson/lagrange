@@ -57,7 +57,8 @@ test('reply family follows the received request through success, error and absen
       return {ok: true};
     });
     const evidence = () => socketEvidence(f.router, CDC_ROUTER_TEST.PEER,
-      f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER), f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER).ws);
+      f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER),
+      f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER).ws);
     for (const [type, family, target] of [
       ['PARTICIPANT_RELEASE', 'participantRelease', address], ['QUERY', 'query', address],
       ['LIVE_QUERY_CDC_EVENT', 'cdc', address], ['unknown-δ', 'other', address + '-absent'],
@@ -79,8 +80,11 @@ test('reply family follows the received request through success, error and absen
       peer.off(TRANSPORT_EVENT.MESSAGE, onMessage);
       const after = evidence();
       const slots = after.requestFamilySendReturned.serviceResponse;
-      assert.equal(slots[family].bytes - before.requestFamilySendReturned.serviceResponse[family].bytes, bytes);
-      assert.equal(slots[family].frames - before.requestFamilySendReturned.serviceResponse[family].frames, 1);
+      assert.equal(
+        slots[family].bytes - before.requestFamilySendReturned.serviceResponse[family].bytes,
+        bytes);
+      assert.equal(
+        slots[family].frames - before.requestFamilySendReturned.serviceResponse[family].frames, 1);
       for (const field of ['frames', 'bytes']) {
         assert.equal(Object.values(slots).reduce((n, slot) => n + slot[field], 0),
           after.applicationSendReturned.serviceResponse[field]);
@@ -128,7 +132,8 @@ test('router timeout retains the actual write callback, outbound slot and brande
     const write = await peer.nextWrite(0);
     await write.handedOff;
     const firstCounts = sendCounts(f, peer.accepted);
-    assert.deepEqual(firstCounts.cdcGrantService, {frames: 1, bytes: Buffer.byteLength(write.bytes)});
+    assert.deepEqual(firstCounts.cdcGrantService,
+      {frames: 1, bytes: Buffer.byteLength(write.bytes)});
     const queue = f.router.getOutboundQueue(CDC_ROUTER_TEST.PEER);
     assert.equal(queue.inFlight, 1, 'the real outbound owner acquired this raw send');
     peer.inbound();
@@ -162,9 +167,11 @@ test('router timeout retains the actual write callback, outbound slot and brande
     const secondWrite = await peer.nextWrite(1);
     await secondWrite.handedOff;
     const secondCounts = sendCounts(f, peer.accepted);
-    assert.deepEqual(secondCounts.otherService, {frames: 1, bytes: Buffer.byteLength(secondWrite.bytes)});
+    assert.deepEqual(secondCounts.otherService,
+      {frames: 1, bytes: Buffer.byteLength(secondWrite.bytes)});
     const families = socketEvidence(f.router, CDC_ROUTER_TEST.PEER,
-      f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER), peer.accepted).requestFamilySendReturned.otherService;
+      f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER),
+      peer.accepted).requestFamilySendReturned.otherService;
     assert.deepEqual(families.controlRead, secondCounts.otherService);
     assert.equal(Object.values(families).reduce((n, slot) => n + slot.frames, 0), 1);
     assert.deepEqual(secondCounts.cdcGrantService, firstCounts.cdcGrantService);

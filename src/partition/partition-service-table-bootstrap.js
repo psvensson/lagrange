@@ -113,19 +113,22 @@ function openCurrentSystemTable(service) {
       .get(current.tableName);
     if (!existing) {
       if (service.bootstrapMembership?.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD ||
-          (descriptorTable && RaftRsDurableStore.hasDurableRecordIn(service.db, service.partitionId))) {
+          (descriptorTable &&
+          RaftRsDurableStore.hasDurableRecordIn(service.db, service.partitionId))) {
         refuse('sqlite');
       }
       createTableAndIndexes(service);
     }
     const valid = descriptorTable ? partitionDescriptorsAreCurrentIn(service.db) :
-      readPartitionServiceTableSchemaIn(service.db, current).state === PARTITION_TABLE_OBSERVATION.COMPLETE;
+      readPartitionServiceTableSchemaIn(service.db,
+        current).state === PARTITION_TABLE_OBSERVATION.COMPLETE;
     if (!valid) refuse('sqlite');
   }).immediate();
 }
 
 function createPartitionServiceTable(service) {
-  if (service.tableName === SYSTEM_TABLE_NAME.NODES || service.tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
+  if (service.tableName === SYSTEM_TABLE_NAME.NODES ||
+      service.tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
     openCurrentSystemTable(service);
   } else {
     createTableAndIndexes(service);

@@ -65,7 +65,8 @@ async function startRuntime(t, mark) {
   mark('authenticate client');
   const client = await openConsumerSession({...endpoint, ...CREDENTIALS});
   t.teardown(() => client.end());
-  return {client, db, endpoint, engine: runtime.engine, partitionServices: runtime.partitionServices};
+  return {client, db, endpoint, engine: runtime.engine,
+    partitionServices: runtime.partitionServices};
 }
 
 test('failed participant rollback recovers on the same live PG-wire session',
@@ -74,7 +75,9 @@ test('failed participant rollback recovers on the same live PG-wire session',
     reportOpenHandlesOnTeardown(t);
     let phase = 'setup';
     const evidence = {};
-    const mark = (name) => { phase = name; };
+    const mark = (name) => {
+      phase = name;
+    };
     try {
       const runtime = await startRuntime(t, mark);
       mark('create witness tables');
@@ -84,7 +87,8 @@ test('failed participant rollback recovers on the same live PG-wire session',
       // the typed observation on a fresh, extensible test failure.
       const failure = new Error('PG-wire rollback witness failed during ' + phase);
       failure.phase = phase;
-      const observed = {name: error?.name, code: error?.code, message: error?.message, errorCode: error?.errorCode,
+      const observed = {name: error?.name, code: error?.code, message: error?.message,
+        errorCode: error?.errorCode,
         detail: error?.detail, causeCode: error?.cause?.code, causeMessage: error?.cause?.message,
         response: error?.response ?? error?.details ?? error, ...evidence};
       failure.observed = inspect(observed, {depth: 3, maxStringLength: 320, maxArrayLength: 16,

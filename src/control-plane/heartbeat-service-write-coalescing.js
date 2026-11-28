@@ -78,7 +78,8 @@ function heartbeatPlacementPressureReason(row) {
 
 function buildNodeHeartbeatUtilizationSignature(updateRow, options = {}) {
   return JSON.stringify({
-    cpuUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.host_cpu_utilization_percent, options),
+    cpuUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.host_cpu_utilization_percent,
+      options),
     memoryUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.memory_usage_percent, options),
     diskUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.disk_usage_percent, options),
   });

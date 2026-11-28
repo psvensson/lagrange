@@ -233,7 +233,8 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
     });
     t.same(scoreResult.rankedNodeIds, [NODE_1, NODE_2]);
     for (const {dimensions} of scoreResult.scoreVector) {
-      t.notOk(dimensions.some(({dimension}) => dimension === PLACEMENT_OWNER_SCORE_DIMENSION.CPU_LOAD));
+      t.notOk(dimensions.some(({dimension}) =>
+        dimension === PLACEMENT_OWNER_SCORE_DIMENSION.CPU_LOAD));
     }
     t.end();
   });

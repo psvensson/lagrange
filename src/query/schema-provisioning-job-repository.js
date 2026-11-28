@@ -211,7 +211,9 @@ class SchemaProvisioningJobRepository {
       TABLES.SCHEMA_OPERATIONS, SELECT_BY_IDENTITY, [tableIdentityKey], TABLE_LIFECYCLE_READ_OPTIONS,
     );
     const [row = null] = authoritativeRows(result);
-    if (row && row.table_identity_key !== tableIdentityKey) throw createPersistenceUnavailableError();
+    if (row && row.table_identity_key !== tableIdentityKey) {
+      throw createPersistenceUnavailableError();
+    }
     if (row) this.rowsByJobId.set(row.job_id, row);
     return row;
   }
@@ -286,7 +288,9 @@ class SchemaProvisioningJobRepository {
     if (!tenure || tenure !== leader.leadershipTenure || result?.rowSetComplete !== true ||
         result.partitionId !== leader.partitionId) throw createPersistenceUnavailableError();
     const [row] = authoritativeRows(result);
-    if (row && row.table_identity_key !== tableIdentityKey) throw createPersistenceUnavailableError();
+    if (row && row.table_identity_key !== tableIdentityKey) {
+      throw createPersistenceUnavailableError();
+    }
     if (row) this.rowsByJobId.set(row.job_id, row);
     return row || null;
   }
@@ -309,7 +313,6 @@ class SchemaProvisioningJobRepository {
     }
     return rows;
   }
-
 }
 
 export {

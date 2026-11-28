@@ -590,7 +590,8 @@ test('I5 split: the destination deletes only a fully retired child across overla
   const failed = recordOf(store);
   t.same(failed.metadata.splitDescriptorCleanup.pendingChildren, [LEFT, RIGHT]);
   const observations = [];
-  watchInvariants({generations: new Set([failed.generation]), attempts: new Set([attemptKeyOf(failed)]),
+  watchInvariants({generations: new Set([failed.generation]),
+    attempts: new Set([attemptKeyOf(failed)]),
     registrationReads: new Set()}, store, 'split', observations);
   const members = ['r1', 'r2'];
   workflow.readCommittedGroupMembers = async () => members;
@@ -599,7 +600,8 @@ test('I5 split: the destination deletes only a fully retired child across overla
   let refuseLeft = true;
   workflow.deliverReplicaRemoval = async ({message}) =>
     refuseLeft && message.partitionId === LEFT && message.replicaId === 'r2' ? null : {status: 'completed'};
-  const pass = () => workflow.teardownAbortedSplitChildren(workflowId, workflow.resolveWorkflowState(workflowId));
+  const pass = () =>
+    workflow.teardownAbortedSplitChildren(workflowId, workflow.resolveWorkflowState(workflowId));
   await Promise.all([pass(), pass()]);
   t.ok(store.partitionRow(LEFT), 'one unanswered member keeps its child');
   t.same(store.partitionDeletesBy('A'), [RIGHT], 'the other child completed retirement');

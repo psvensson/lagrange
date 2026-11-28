@@ -104,7 +104,8 @@ function resolveTerminalCreateDelivery(owner, operation, errorMsg) {
 function isRetainedAdmission(owner, requested, authoritative) {
   return Boolean(authoritative) &&
     sameCreateDispatchIdentity(requested, authoritative) &&
-    (requiresPartitionCreateGrant(requested) ? matchesRequestedCreateGrant(requested, authoritative) :
+    (requiresPartitionCreateGrant(requested) ?
+      matchesRequestedCreateGrant(requested, authoritative) :
       operationCarriesReplicaCreateAdmission(authoritative)) &&
     !owner.repository.isOperationTerminal(authoritative);
 }
@@ -143,7 +144,8 @@ async function resolveAmbiguousCreateDeliveryFailure(
     Object.assign(operation, authoritativeOperation);
     return resolveTerminalCreateDelivery(owner, operation, errorMsg);
   }
-  if (requiresPartitionCreateGrant(operation) && operationCarriesReplicaCreateAdmission(authoritativeOperation)) {
+  if (requiresPartitionCreateGrant(operation) &&
+      operationCarriesReplicaCreateAdmission(authoritativeOperation)) {
     scheduleCreateDeliveryObservation(owner, operation);
     return buildDeferredCreateDelivery(owner, operation, errorMsg);
   }

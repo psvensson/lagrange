@@ -766,6 +766,7 @@ export {
 };
 
 export function endsSourceExecutionAttempt(state) {
-  return state === PARTITION_TRANSITION_STATE.FAILED || state === PARTITION_TRANSITION_STATE.DEFERRED ||
+  return state === PARTITION_TRANSITION_STATE.FAILED ||
+      state === PARTITION_TRANSITION_STATE.DEFERRED ||
     state === PARTITION_TRANSITION_STATE.BLOCKED;
 }

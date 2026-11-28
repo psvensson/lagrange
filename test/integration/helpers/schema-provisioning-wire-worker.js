@@ -19,7 +19,8 @@ TableCreationService.prototype.provisionInitialPartition = async function(contex
 };
 
 const transition = SchemaProvisioningJobOwner.prototype.transitionTerminal;
-SchemaProvisioningJobOwner.prototype.transitionTerminal = async function(intent, workflow, options) {
+SchemaProvisioningJobOwner.prototype.transitionTerminal = async function(intent, workflow,
+  options) {
   const result = await transition.call(this, intent, workflow, options);
   if (intent.tableName === heldTable) {
     terminal.resolve({jobId: intent.workflowId, status: options.updates.status});
@@ -28,7 +29,9 @@ SchemaProvisioningJobOwner.prototype.transitionTerminal = async function(intent,
 };
 
 registerEmbeddedWorkerOperations({
-  holdProvisioning: ({tableName}) => { heldTable = tableName; },
+  holdProvisioning: ({tableName}) => {
+    heldTable = tableName;
+  },
   catalogCommitted: () => entered.promise,
   releaseProvisioning: () => release.resolve(),
   terminalProvisioning: () => terminal.promise,

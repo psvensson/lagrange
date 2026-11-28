@@ -152,11 +152,15 @@ const runCaseGuard = async () => {
         commands.push(sql);
         if (sql === 'ROLLBACK' && !available) throw cleanupError;
       }});
-      await assert.rejects(session.transaction(async () => { throw statementError; }), (error) => {
+      await assert.rejects(session.transaction(async () => {
+        throw statementError;
+      }), (error) => {
         assert.deepEqual(error.errors, [statementError, cleanupError]);
         return true;
       });
-      const work = async () => { executions++; };
+      const work = async () => {
+        executions++;
+      };
       await assert.rejects(session.transaction(work), (error) => {
         assert.match(error.message, /rollback failed before BEGIN/u);
         assert.equal(error.cause, cleanupError);

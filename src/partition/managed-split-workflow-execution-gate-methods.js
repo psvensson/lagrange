@@ -383,7 +383,8 @@ class ManagedSplitWorkflowExecutionGateMethods {
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
       const failure = this.resolveWorkflowState(workflowId)?.metadata?.splitSourceFailure;
       if (ackResult.result === PARTICIPANT_ACK_RESULT.DUPLICATE &&
-          failure?.status === ackStatus && failure.participantKey === ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]) {
+          failure?.status === ackStatus &&
+          failure.participantKey === ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]) {
         dispatchAcceptedSplitFailure(this, workflowId, failure);
       } else {
         await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult, ack);

@@ -17,8 +17,12 @@ function captureTimers() {
   const pending = new Set();
   return {
     pending,
-    set(callback) { pending.add(callback); return callback; },
-    clear(callback) { pending.delete(callback); },
+    set(callback) {
+      pending.add(callback); return callback;
+    },
+    clear(callback) {
+      pending.delete(callback);
+    },
     fire() {
       assert.equal(pending.size, 1, 'one timer owns the next wake');
       const [callback] = pending;
@@ -53,7 +57,8 @@ test('GSI discovery progresses other generations across retry exhaustion and res
     }
   });
 
-async function exerciseRecovery({engine: producer, gateway, cache, readiness, partitionServices, coordinator}) {
+async function exerciseRecovery({engine: producer, gateway, cache, readiness, partitionServices,
+  coordinator}) {
   const insert = await producer.executeQuery(
     'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
     [10, 'alice@example.com', 'Alice', 'active']);
@@ -78,12 +83,13 @@ async function exerciseRecovery({engine: producer, gateway, cache, readiness, pa
   let blocked = true;
   let holdPartitionRead = false;
   let refusals = 0;
+  const late = {receiver: null};
   const readerGateway = Object.create(gateway);
   readerGateway.readRows = (table, sql, params, options) => {
     const denied = holdPartitionRead ? table === TABLES.PARTITIONS :
       table === TABLES.INDICES && params?.[0] === FIRST && sql === 'SELECT * FROM indices WHERE index_name = ?';
     if (blocked && denied) {
-      const queue = receiver.indexService._gsiRecoveryQueue;
+      const queue = late.receiver.indexService._gsiRecoveryQueue;
       queue.setTimeoutFn = retryTimers.set;
       queue.clearTimeoutFn = retryTimers.clear;
       refusals++;
@@ -94,10 +100,13 @@ async function exerciseRecovery({engine: producer, gateway, cache, readiness, pa
   };
   const receiver = new SQLQueryEngine({
     nodeId: 'test-node', systemCache: cache, controlPlaneReadinessService: readiness,
-    controlPlaneSystemTableGateway: readerGateway, cdcIntegrationService: producer.cdcIntegrationService,
+    controlPlaneSystemTableGateway: readerGateway,
+    cdcIntegrationService: producer.cdcIntegrationService,
     messageRouter: producer.messageRouter, partitionServicesProvider: () => partitionServices,
-    rebalanceCoordinator: coordinator, autoStartDistributedTransactionRecovery: false, migrationAutoWire: false,
+    rebalanceCoordinator: coordinator, autoStartDistributedTransactionRecovery: false,
+    migrationAutoWire: false,
   });
+  late.receiver = receiver;
   const index = receiver.indexService;
   const service = receiver.tableCreationService;
   const owner = service.schemaProvisioningJobOwner;
@@ -147,8 +156,9 @@ async function exerciseRecovery({engine: producer, gateway, cache, readiness, pa
     };
     const waiters = [];
     try {
-      assert.equal(await owner.findSucceededGlobalIndexIntent(intent.tableName, intent.globalIndex.generation),
-        null, 'the discovery path currently lacks the retained schema intent');
+      assert.equal(await owner.findSucceededGlobalIndexIntent(intent.tableName,
+        intent.globalIndex.generation),
+      null, 'the discovery path currently lacks the retained schema intent');
       // The strong attempt reaches partition refresh. The weak alternative
       // would settle as null before it can read any partition metadata.
       holdPartitionRead = true;
@@ -218,7 +228,8 @@ async function exerciseRecovery({engine: producer, gateway, cache, readiness, pa
     assert.equal(recovered.index_id, first.index_id);
     const query = await receiver.executeQuery('SELECT * FROM users WHERE email = ?', ['alice@example.com']);
     assert.equal(query.success, true);
-    assert.equal(query.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    assert.equal(query.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
     assert.deepEqual(query.rows.map(({id, email}) => ({id, email})), [{id: 10, email: 'alice@example.com'}]);
     assert.equal(owner.indexRecovery, null);
     assert.equal(inventoryTimers.pending.size, 1, 'the warm owner still has its ordinary wake');

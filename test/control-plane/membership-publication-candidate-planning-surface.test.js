@@ -106,7 +106,8 @@ test('synchronous planning selects both publication answers from one inventory',
   const previous = {publicationId: 'prior', status: 'PUBLISHED'};
   const reference = createCoordinator({calls: []});
   reference.resolvePlanningPublicationRowsSync = (options) => {
-    const latestPublicationRow = options.latestPublicationRow || reference.getLatestPublicationRowSync(options);
+    const latestPublicationRow = options.latestPublicationRow ||
+        reference.getLatestPublicationRowSync(options);
     const latestPublishedPublicationRow = options.latestPublishedPublicationRow ||
       (latestPublicationRow?.status?.toUpperCase() === 'PUBLISHED' ? latestPublicationRow :
         reference.getLatestPublishedPublicationRowSync(options));
@@ -125,15 +126,20 @@ test('synchronous planning selects both publication answers from one inventory',
     let normalizations = 0;
     const observed = rows.map((raw) => ({...raw,
       // The canonical normalizer reads publication_id exactly once on entry.
-      get publication_id() { normalizations++; return raw.publication_id; },
+      get publication_id() {
+        normalizations++; return raw.publication_id;
+      },
     }));
-    coordinator.systemTableCache.getAll = () => { reads++; return observed; };
+    coordinator.systemTableCache.getAll = () => {
+      reads++; return observed;
+    };
     const options = {nodeRows: [], serviceRows: [], nodeEndpointRows: [], replicaOperationRows: [],
       partitionRows: [], readinessEntries: [], ...inputs};
     reference.systemTableCache.getAll = coordinator.systemTableCache.getAll;
     const request = preloaded ? {...options, publicationRows: observed} : options;
     const expected = reference.readPublicationPlanningSnapshotSync(request);
-    const originalScans = scans + Number(!inputs.latestPublicationRow && !inputs.latestPublishedPublicationRow &&
+    const originalScans = scans + Number(!inputs.latestPublicationRow &&
+        !inputs.latestPublishedPublicationRow &&
       expected.latestPublicationRow?.status !== 'PUBLISHED');
     t.equal(reads, preloaded ? 0 : originalScans, 'original inventory reads');
     t.equal(normalizations, originalScans * rows.length, 'original normalized row count');

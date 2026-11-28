@@ -72,7 +72,8 @@ test('gateway remote DELETE retains the committed split descriptor receipt acros
         {splitDescriptorIntent: FIRST});
       assert.equal(refused.errorCode, SPLIT_DESCRIPTOR_ERROR.BYTES);
       assert.deepEqual(child(), successorRows);
-      assert.equal(deliveries.filter((entry) => entry.sql === SPLIT_DESCRIPTOR_FINALIZE_SQL).length, 2);
+      assert.equal(deliveries.filter((entry) => entry.sql === SPLIT_DESCRIPTOR_FINALIZE_SQL).length,
+        2);
 
       const older = {...FIRST, workflowAttempt: 2};
       const stale = await finalize(gateway, older);
@@ -159,7 +160,8 @@ test('overlapping sibling finalizations with identical SQL and different plans r
       // to the receiver.
       const observed = await Promise.race([committed.promise, first]);
       assert.deepEqual(observed.splitDescriptorReceipt, {...a, disposition: 'cancelled'});
-      await assert.rejects(submit(b), (error) => error.errorCode === SPLIT_DESCRIPTOR_ERROR.COLLISION);
+      await assert.rejects(submit(b),
+        (error) => error.errorCode === SPLIT_DESCRIPTOR_ERROR.COLLISION);
     } finally {
       release.resolve();
       await first;

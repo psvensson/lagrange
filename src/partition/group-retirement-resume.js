@@ -99,13 +99,17 @@ function attachGroupRetirementResume(owner, spec) {
       const record = storedTransitionOf(row);
       const metadata = record?.metadata;
       if (metadata?.sourcePartitionId && record.state === PARTITION_TRANSITION_STATE.FAILED) {
-        const {pendingChildren, pendingSiblings, decisionFence} = cleanupRecord(metadata, row.table_id);
-        return {retiring: pendingChildren.length + pendingSiblings.length > 0, family: spec.family, aborted: true,
-          workflowId: metadata.workflowId, attempt: metadata.workflowAttempt, decisionFence, retiringPartitionIds: [...pendingChildren, ...pendingSiblings], manifest: true};
+        const {pendingChildren, pendingSiblings, decisionFence} = cleanupRecord(metadata,
+          row.table_id);
+        return {retiring: pendingChildren.length + pendingSiblings.length > 0, family: spec.family,
+          aborted: true,
+          workflowId: metadata.workflowId, attempt: metadata.workflowAttempt, decisionFence,
+          retiringPartitionIds: [...pendingChildren, ...pendingSiblings], manifest: true};
       }
       if (metadata?.splitSourceFailure && PRE_CUTOVER_SPLIT_STATES.has(record.state)) {
         return {retiring: true, family: spec.family, workflowId: metadata.workflowId,
-          retiringPartitionIds: [], attempt: metadata.workflowAttempt, failure: metadata.splitSourceFailure};
+          retiringPartitionIds: [], attempt: metadata.workflowAttempt,
+          failure: metadata.splitSourceFailure};
       }
     }
     return retiringWorkflowOf(row);
@@ -182,7 +186,8 @@ function attachGroupRetirementResume(owner, spec) {
     if (!workflow?.workflowId) {
       return false;
     }
-    if (ownsLiveLease(owner, workflow) && (attempt === undefined || workflow.metadata?.workflowAttempt === attempt)) {
+    if (ownsLiveLease(owner, workflow) &&
+        (attempt === undefined || workflow.metadata?.workflowAttempt === attempt)) {
       return true;
     }
     // The claim itself refuses a live foreign lease without writing
@@ -238,7 +243,9 @@ function attachGroupRetirementResume(owner, spec) {
         if (retiring.failure) return owner.abortSplitOnSourceFailure(workflowId, retiring.failure);
         if (retiring.manifest && (workflow?.status !== PARTITION_TRANSITION_STATE.FAILED ||
             workflow.metadata.workflowAttempt !== retiring.attempt ||
-            workflow.metadata.splitDescriptorCleanup?.decisionFence !== retiring.decisionFence)) return false;
+            workflow.metadata.splitDescriptorCleanup?.decisionFence !== retiring.decisionFence)) {
+          return false;
+        }
         return retiring.aborted ? spec.teardown(workflowId, workflow) : spec.finalize(workflowId);
       }, {attempt: retiring.attempt});
     } finally {

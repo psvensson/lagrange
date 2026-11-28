@@ -172,7 +172,8 @@ test('the answered ids only grow: an answer recorded from an older ' +
     ['r1', 'r2'], 'both answers are on the record');
   // Retirement may need the next pass to observe both checkpointed replies.
   if (store.metadata().splitDescriptorCleanup.pendingChildren.includes(LEFT)) {
-    await workflow.teardownAbortedSplitChild(workflowId, workflow.resolveWorkflowState(workflowId), LEFT);
+    await workflow.teardownAbortedSplitChild(workflowId, workflow.resolveWorkflowState(workflowId),
+      LEFT);
   }
   t.same(store.partitionDeletesBy('A').filter((id) => id === LEFT), [LEFT]);
   t.ok(store.metadata().splitDescriptorCleanup.receipts.some((receipt) =>

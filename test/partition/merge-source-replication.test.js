@@ -10,7 +10,7 @@ import {admittedMirrorSource, sourceMirrorReservationFixture} from './source-mir
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
+import '../../src/raft/constants.js';
 import {
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
@@ -30,11 +30,6 @@ const FIXTURE_WORKFLOW_ID = 'merge-tbl-users-users-p1-users-p2-v2';
 const FIXTURE_TARGET_PARTITION_ID = 'tbl-users_p_abcd1234_merged';
 const FIXTURE_SOURCE_PARTITION_ID = 'users-p1';
 const FIXTURE_PEER_SOURCE_PARTITION_ID = 'users-p2';
-
-async function loadPartitionServicePrototype() {
-  const mod = await import('../../src/partition/partition-service.js');
-  return mod.PartitionService.prototype;
-}
 
 function buildMetadata() {
   return {

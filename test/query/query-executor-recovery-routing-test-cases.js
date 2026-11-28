@@ -216,14 +216,19 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       const onlyOld = mode === 'no_alternative' || mode === 'closed_before_send';
       const noIdentity = mode === 'no_replay_identity' || mode === 'thrown_timeout_without_identity';
       const executor = new QueryExecutor({
-        systemCache: {...systemCache, services: onlyOld ? systemCache.services.slice(0, 1) : systemCache.services},
+        systemCache: {...systemCache,
+          services: onlyOld ? systemCache.services.slice(0, 1) : systemCache.services},
         controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         messageRouter: {async deliver(address, request) {
           deliveries.push({address, entryId: request.entryId});
-          if (address === live) return buildDeliveryEnvelope({acknowledged: true},
-            {success: true, changes: 1, rows: []});
-          if (mode === 'handler_refusal') return buildDeliveryEnvelope({acknowledged: true},
-            {success: false, ...close});
+          if (address === live) {
+            return buildDeliveryEnvelope({acknowledged: true},
+              {success: true, changes: 1, rows: []});
+          }
+          if (mode === 'handler_refusal') {
+            return buildDeliveryEnvelope({acknowledged: true},
+              {success: false, ...close});
+          }
           if (mode === 'thrown_timeout_without_identity') {
             throw Object.assign(new Error('Message timeout'), {retryAfterMs: 1, deferRetry: true});
           }

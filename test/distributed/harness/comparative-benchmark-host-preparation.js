@@ -132,7 +132,7 @@ async function ensureProductImages({hosts, role, images, sshRun, opts}) {
 
 const IMAGE_DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const CONFIG_BLOB = /^(?:blobs\/sha256\/([0-9a-f]{64})|([0-9a-f]{64})\.json)$/u;
-const IMAGE_FIELDS = "docker image inspect --format '{{.Id}}|{{json .RepoDigests}}|{{json .RootFS.Layers}}'";
+const IMAGE_FIELDS = 'docker image inspect --format \'{{.Id}}|{{json .RepoDigests}}|{{json .RootFS.Layers}}\'';
 
 function refuseImage(host, reason, detail) {
   throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
@@ -148,7 +148,8 @@ function parseImage(line, host) {
     const repoDigests = jsonParse(digests) ?? [];
     if (IMAGE_DIGEST.test(id) && arrayIsArray(repoDigests) &&
         arrayEvery(repoDigests, (value) => typeof value === 'string') &&
-        arrayIsArray(layers) && layers.length && arrayEvery(layers, (value) => IMAGE_DIGEST.test(value))) {
+        arrayIsArray(layers) && layers.length &&
+        arrayEvery(layers, (value) => IMAGE_DIGEST.test(value))) {
       return {id, repoDigests, contentIdentity: contentIdentityOf(layers)};
     }
   } catch (error) {
@@ -201,7 +202,10 @@ async function loadedConfig(ctx, configDigest, contentIdentity) {
       const image = await inspectLocalImage(ctx, id);
       if (!image) continue;
       if (image.id !== id) refuseImage(ctx.host, 'invalid_inventory', {id, observed: image.id});
-      if (image.contentIdentity !== contentIdentity || await configOf(ctx, image) !== configDigest) continue;
+      if (image.contentIdentity !== contentIdentity ||
+          await configOf(ctx, image) !== configDigest) {
+        continue;
+      }
       if (match) refuseImage(ctx.host, 'ambiguous_config', {configDigest});
       match = image;
     }

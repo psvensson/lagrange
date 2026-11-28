@@ -78,7 +78,7 @@ async function waitForCliReadiness(baseUrl, nodeId, signal) {
 }
 
 async function verifyForegroundSql(adminPort, nodeId) {
-  const socket = new WebSocket(`ws://${LOOPBACK}:${adminPort}/api/admin/stream`);
+  const socket = new globalThis.WebSocket(`ws://${LOOPBACK}:${adminPort}/api/admin/stream`);
   const statements = [
     'CREATE TABLE npm_smoke (id INTEGER PRIMARY KEY, value TEXT)',
     `INSERT INTO npm_smoke (id, value) VALUES (1, '${nodeId}')`,
@@ -131,7 +131,8 @@ async function verifyForegroundCli() {
   const [rest, admin, transport] = await freshListenerPorts();
   const env = {...process.env, NODE_ID: nodeId, NODE_HOST_ID: HOST_ID,
     PARTITION_DEFAULT_REPLICA_COUNT: '1',
-    REST_API_PORT: String(rest), ADMIN_WS_PORT: String(admin), TRANSPORT_WS_PORT: String(transport)};
+    REST_API_PORT: String(rest), ADMIN_WS_PORT: String(admin),
+    TRANSPORT_WS_PORT: String(transport)};
   delete env.SEED_NODE_ADDRESS;
   // Inherit the smoke owner's process group, output budget and deadline.
   const child = spawn(join(process.cwd(), 'node_modules', '.bin', 'lagrange'),

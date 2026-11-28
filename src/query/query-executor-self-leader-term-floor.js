@@ -723,7 +723,9 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
       return await router.deliver(ticket.address, ticket.request, options);
     } catch (error) {
       const transport = classifyThrownDeliveryError(error);
-      if (transport.reasonCode !== TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED) throw error;
+      if (transport.reasonCode !== TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED) {
+        throw error;
+      }
       return buildDeliveryEnvelope(transport);
     }
   }

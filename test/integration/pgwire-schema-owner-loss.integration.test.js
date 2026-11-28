@@ -26,13 +26,13 @@ function settledListenerEndpoints(rows, operations, bound) {
     .filter(isTerminalSuccessfulCreateOperation);
   return rows.filter((row) => bound.some((listener) => listener.nodeId === row.node_id &&
     listener.port === Number(row.port) && created.some((op) =>
-      op.targetNodeId === listener.nodeId && op.replicaId === listener.replica)) &&
+    op.targetNodeId === listener.nodeId && op.replicaId === listener.replica)) &&
     !live.some((op) => op.target_node_id === row.node_id || op.source_node_id === row.node_id));
 }
 
 test('a published listener being replaced cannot satisfy the two-listener setup', async () => {
   const nodes = ['a', 'b'];
-  const rows = nodes.map((node_id, i) => ({node_id, port: 5000 + i}));
+  const rows = nodes.map((nodeId, i) => ({node_id: nodeId, port: 5000 + i}));
   const bound = nodes.map((nodeId, i) => ({nodeId, port: rows[i].port, replica: 'listener-' + nodeId}));
   const adds = nodes.map((node) => ({operation_id: 'add-' + node, type: 'ADD',
     target_node_id: node, replica_id: 'listener-' + node, status: 'active', workflow_step: 'ACTIVE'}));
@@ -76,8 +76,10 @@ function quorum(rows, id, required, excludedVoterNodeId) {
     row.voterReplicaIds.every((voter) => typeof voter === 'string' && voter.length > 0) &&
     new Set(row.voterReplicaIds).size === 3 && row.votersOutgoingReplicaIds.length === 0 &&
     row.voterReplicaIds.includes(row.replicaId));
-  for (const leader of local.filter((row) => row.isLeader && row.replicaId === row.leaderReplicaId)) {
-    const voters = local.filter((row) => row.nodeId !== excludedVoterNodeId && row.term === leader.term &&
+  for (const leader of local.filter((row) => row.isLeader &&
+      row.replicaId === row.leaderReplicaId)) {
+    const voters = local.filter((row) => row.nodeId !== excludedVoterNodeId &&
+        row.term === leader.term &&
       row.leaderReplicaId === leader.replicaId &&
       row.voterReplicaIds.every((replica) => leader.voterReplicaIds.includes(replica)));
     if (new Set(voters.map((row) => row.nodeId)).size >= required &&
@@ -130,7 +132,8 @@ test('a live RF3 schema job survives abrupt owner loss and a new owner completes
           const requestedAt = Date.now();
           try {
             const [trace, listener] = await Promise.all([observe(member, 'trace'), observe(member, 'closeProvenance')]);
-            t.comment(JSON.stringify({nodeId: member.nodeId, requestedAt, observedAt: Date.now(), trace, listener}));
+            t.comment(JSON.stringify({nodeId: member.nodeId, requestedAt, observedAt: Date.now(),
+              trace, listener}));
           } catch (observationError) {
             t.comment(JSON.stringify({nodeId: member.nodeId, requestedAt, observedAt: Date.now(),
               observedExit: member.channel.exitState(), error: observationError.message}));
@@ -173,7 +176,8 @@ async function proveOwnerLoss(t, cluster) {
   }, (state) => new Set(state.endpoints.map((row) => row.node_id)).size >= 2);
   const [endpoint] = endpoints;
   const second = endpoints.find((row) => row.node_id !== endpoint.node_id);
-  assert.notDeepEqual([endpoint.address, Number(endpoint.port)], [second.address, Number(second.port)]);
+  assert.notDeepEqual([endpoint.address, Number(endpoint.port)],
+    [second.address, Number(second.port)]);
   const probe = await cluster.createPgClient({host: second.address, port: Number(second.port)});
   await probe.end();
   t.comment(JSON.stringify({publishedBefore: endpoints}));
@@ -182,7 +186,8 @@ async function proveOwnerLoss(t, cluster) {
     await Promise.allSettled(members.filter((member) => !member.channel.exitState())
       .map((member) => observe(member, 'release')));
   });
-  const client = await cluster.createPgClient({host: endpoint.address, port: Number(endpoint.port)});
+  const client = await cluster.createPgClient({host: endpoint.address,
+    port: Number(endpoint.port)});
   // The single submitting socket can disappear with its server.
   client.on('error', (error) => t.comment(`original socket: ${error.message}`));
   const submitted = client.query(createSql)
@@ -193,11 +198,14 @@ async function proveOwnerLoss(t, cluster) {
   const barrierPoll = new AbortController();
   const entered = await Promise.race([
     until(t, 'owner entered provisioning after catalog commit',
-      () => traces(members), (rows) => rows.some((row) => row.barrier), undefined, barrierPoll.signal),
+      () => traces(members), (rows) => rows.some((row) => row.barrier), undefined,
+      barrierPoll.signal),
     submitted.then((reply) => {
       if (barrierPoll.signal.aborted) return;
-      const socketObservation = {reply, capturedAt: Date.now(), submittingEndpoint: endpoint, clientPort,
-        children: members.map((member) => ({nodeId: member.nodeId, observedExit: member.channel.exitState()}))};
+      const socketObservation = {reply, capturedAt: Date.now(), submittingEndpoint: endpoint,
+        clientPort,
+        children: members.map((member) =>
+          ({nodeId: member.nodeId, observedExit: member.channel.exitState()}))};
       barrierPoll.abort();
       throw Object.assign(new Error(`CREATE socket settled before observed barrier: ${JSON.stringify(reply)}`),
         {socketObservation});
@@ -243,7 +251,8 @@ async function proveOwnerLoss(t, cluster) {
     const prior = quorum(before, id, 2, owner.nodeId);
     const current = quorum(after, id, 2);
     t.comment(JSON.stringify({partitionId: id, leaderChanged: prior.replicaId !== current.replicaId,
-      priorLeader: prior.replicaId, priorTerm: prior.term, leader: current.replicaId, term: current.term}));
+      priorLeader: prior.replicaId, priorTerm: prior.term, leader: current.replicaId,
+      term: current.term}));
   }
   const reportTimeout = async (error) => {
     t.comment(JSON.stringify({lostNode: owner.nodeId,
@@ -254,9 +263,11 @@ async function proveOwnerLoss(t, cluster) {
     await Promise.all(survivors.map(async (member) => {
       try {
         const reports = await observe(member, 'releaseObservation');
-        t.comment(JSON.stringify({nodeId: member.nodeId, observedAt: Date.now(), releaseReports: reports}));
+        t.comment(JSON.stringify({nodeId: member.nodeId, observedAt: Date.now(),
+          releaseReports: reports}));
       } catch (readError) {
-        t.comment(JSON.stringify({nodeId: member.nodeId, releaseReadUnavailable: readError.message}));
+        t.comment(JSON.stringify({nodeId: member.nodeId,
+          releaseReadUnavailable: readError.message}));
       }
     }));
     await Promise.all(survivors.map(async (member) => {
@@ -264,7 +275,8 @@ async function proveOwnerLoss(t, cluster) {
         const ledger = await observe(member, 'retirementRecords', {createdPartitionId: partitionId});
         t.comment(JSON.stringify({nodeId: member.nodeId, observedAt: Date.now(), ledger}));
       } catch (readError) {
-        t.comment(JSON.stringify({nodeId: member.nodeId, retirementReadUnavailable: readError.message}));
+        t.comment(JSON.stringify({nodeId: member.nodeId,
+          retirementReadUnavailable: readError.message}));
       }
     }));
     throw error;
@@ -276,7 +288,8 @@ async function proveOwnerLoss(t, cluster) {
   assert.deepEqual([next.jobId, next.tableId, next.key], [jobId, tableId, grant.key]);
   assert.notEqual(next.ownerId, ownerId);
   assert.ok(next.fence > running.fence && next.at >= running.lease);
-  const claim = successor.claims.find((entry) => entry.fence === next.fence && entry.ownerId === next.ownerId);
+  const claim = successor.claims.find((entry) => entry.fence === next.fence &&
+      entry.ownerId === next.ownerId);
   assert.ok(claim && claim.at >= running.lease && claim.lease > claim.at);
   t.comment(JSON.stringify({successorNode: successor.nodeId, next, claim}));
   const finished = await until(t, 'successor committed terminal transition',
@@ -303,13 +316,15 @@ async function proveOwnerLoss(t, cluster) {
   const {rows: publishedRows} = await readUntil(t, observer, session, endpointSql, endpointParams,
     (rows) => rows.some(liveEndpoint));
   const published = publishedRows.find(liveEndpoint);
-  const fresh = await cluster.createPgClient({host: published.address, port: Number(published.port)});
+  const fresh = await cluster.createPgClient({host: published.address,
+    port: Number(published.port)});
   const jobs = await fresh.query('SELECT job_id, table_id, status FROM schema_operations WHERE table_name = $1',
     [tableName]);
   assert.deepEqual(jobs.rows, [{job_id: jobId, table_id: tableId, status: 'SUCCEEDED'}]);
   const partitionRows = await fresh.query(
     'SELECT partition_id, replica_count FROM partitions WHERE table_id = $1', [tableId]);
-  assert.deepEqual(partitionRows.rows.map((row) => [row.partition_id, Number(row.replica_count)]), [[partitionId, 3]]);
+  assert.deepEqual(partitionRows.rows.map((row) => [row.partition_id, Number(row.replica_count)]),
+    [[partitionId, 3]]);
   assert.equal((await fresh.query(`INSERT INTO ${tableName} (id, payload) VALUES ($1, $2)`,
     ['after', 'owner loss'])).rowCount, 1);
   assert.deepEqual((await fresh.query(`SELECT payload FROM ${tableName} WHERE id = $1`,

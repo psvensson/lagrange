@@ -433,7 +433,8 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     if (!operationId) {
       return;
     }
-    this.directDispatchWakeupsInFlight.set(operationId, {row: this.cloneDeferredOperationDispatchRow(row), validatedReplay});
+    this.directDispatchWakeupsInFlight.set(operationId,
+      {row: this.cloneDeferredOperationDispatchRow(row), validatedReplay});
   }
 
   /**

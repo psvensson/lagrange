@@ -283,7 +283,9 @@ class PartitionServiceSourceReplicationStartMethods {
       }
       const started = await acknowledgeCommittedStart(
         () => this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED),
-        () => workflow.confirmSplitReplicationStart(metadata, this.tableId, this.tableName, {requireExecutable: true}),
+        () =>
+          workflow.confirmSplitReplicationStart(metadata, this.tableId, this.tableName,
+            {requireExecutable: true}),
       );
       if (!started || this.isShutdown ||
           this.role !== RaftRole.LEADER || this.splitReplication !== handle) {
@@ -319,7 +321,8 @@ class PartitionServiceSourceReplicationStartMethods {
   async waitForSplitReplicationStart(handle, requireLive = false) {
     const response = handle.startPromise ? await handle.startPromise : null;
     return response?.success === true && handle.authorized === true &&
-      handle.runPromise && this.splitReplication === handle && (!requireLive || acceptsSourceWork(handle)) &&
+      handle.runPromise && this.splitReplication === handle &&
+      (!requireLive || acceptsSourceWork(handle)) &&
       this.isShutdown !== true && this.role === RaftRole.LEADER ? response :
       rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
   }
@@ -390,7 +393,9 @@ class PartitionServiceSourceReplicationStartMethods {
       }
       const started = await acknowledgeCommittedStart(
         () => this.emitMergeSourceAck(metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED),
-        () => workflow.confirmMergeReplicationStart(this.partitionId, metadata, this.tableId, this.tableName, {requireExecutable: true}),
+        () =>
+          workflow.confirmMergeReplicationStart(this.partitionId, metadata, this.tableId,
+            this.tableName, {requireExecutable: true}),
       );
       if (!started || this.isShutdown ||
           this.role !== RaftRole.LEADER || this.mergeReplication !== handle) {
@@ -420,7 +425,8 @@ class PartitionServiceSourceReplicationStartMethods {
   async waitForMergeReplicationStart(handle, requireLive = false) {
     const response = handle.startPromise ? await handle.startPromise : null;
     return response?.success === true && handle.authorized === true &&
-      handle.runPromise && this.mergeReplication === handle && (!requireLive || acceptsSourceWork(handle)) &&
+      handle.runPromise && this.mergeReplication === handle &&
+      (!requireLive || acceptsSourceWork(handle)) &&
       this.isShutdown !== true && this.role === RAFT_ROLE.LEADER ? response :
       rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
   }
@@ -471,7 +477,9 @@ class PartitionServiceSourceReplicationStartMethods {
     const split = custody.family === REPLICATION_FAMILY.SPLIT;
     const slot = split ? 'splitReplication' : 'mergeReplication';
     const handle = this[slot];
-    if (!handle || !canAssumeMirrorCustody({...handle.metadata, family: custody.family}, custody)) return;
+    if (!handle || !canAssumeMirrorCustody({...handle.metadata, family: custody.family}, custody)) {
+      return;
+    }
     handle.terminal = true;
     await this.quiesceSourceReplicationHandle(handle);
     await Promise.allSettled([handle.runPromise]);

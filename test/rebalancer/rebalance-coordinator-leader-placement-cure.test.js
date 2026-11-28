@@ -63,6 +63,7 @@ function selectNonSeedNonPriorityIds(state, count) {
 
 function buildCoordinatorFixture(state, partitionIds, options = {}) {
   const emitter = new EventEmitter();
+  const late = {coordinator: null};
   const admitted = [];
   const attempted = [];
   let nowMs = options.startNowMs ?? NOW_MS;
@@ -75,10 +76,10 @@ function buildCoordinatorFixture(state, partitionIds, options = {}) {
       requestLeadershipTransfer(request, admitExecution) {
         attempted.push(partitionId);
         return pendingTurn((async () => {
-          await coordinator.beforeAdmission(partitionId);
+          await late.coordinator.beforeAdmission(partitionId);
           if (!admitExecution()) return {outcome: 'CORE_REFUSED', reason: 'transfer-placement-withdrawn'};
           admitted.push(partitionId);
-          await coordinator.afterAdmission(partitionId, request);
+          await late.coordinator.afterAdmission(partitionId, request);
           return {outcome: 'CORE_OK', reason: 'transfer-requested'};
         })());
       },
@@ -123,6 +124,7 @@ function buildCoordinatorFixture(state, partitionIds, options = {}) {
         state.serviceRows.filter((row) => row.partition_id === partitionId),
     },
   });
+  late.coordinator = coordinator;
   return coordinator;
 }
 
@@ -134,7 +136,7 @@ test('rotating cursor prevents early failing services from monopolizing the per-
 
     // First two services always fail handoff and remain leaders on node-1.
     const alwaysFailingIds = new Set(candidateIds.slice(0, 2));
-    coordinator.afterAdmission = partitionId => {
+    coordinator.afterAdmission = (partitionId) => {
       if (alwaysFailingIds.has(partitionId)) throw new Error('injected unknown answer');
     };
 
@@ -174,7 +176,7 @@ test('mid-pass coordinator leadership loss stops subsequent handoffs after await
 
     await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
 
-    coordinator.afterAdmission = partitionId => {
+    coordinator.afterAdmission = (partitionId) => {
       if (partitionId === candidateIds[0]) coordinator.isLeader = false;
     };
 
@@ -194,7 +196,7 @@ test('mid-pass service role change, service shutdown, and new in-flight operatio
 
     await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
 
-    coordinator.afterAdmission = partitionId => {
+    coordinator.afterAdmission = (partitionId) => {
       if (partitionId === candidateIds[0]) {
         // While candidate 0's handoff was pending:
         // - candidate 1 stepped down (role became follower)
@@ -262,11 +264,13 @@ test('a new in-flight operation blocks a queued source transfer', async (t) => {
   const ids = selectNonSeedNonPriorityIds(state, 2);
   const coordinator = buildCoordinatorFixture(state, ids);
   await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
-  coordinator.beforeAdmission = partitionId => {
-    if (partitionId === ids[0]) state.operationRows.push({
-      entity_id: partitionId, partition_id: partitionId, operation_id: 'mid-handoff',
-      status: 'syncing', type: 'GROWTH_PROMOTE', workflow_step: 'SYNCING',
-    });
+  coordinator.beforeAdmission = (partitionId) => {
+    if (partitionId === ids[0]) {
+      state.operationRows.push({
+        entity_id: partitionId, partition_id: partitionId, operation_id: 'mid-handoff',
+        status: 'syncing', type: 'GROWTH_PROMOTE', workflow_step: 'SYNCING',
+      });
+    }
   };
   await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
   t.same(coordinator.attempted, ids);
@@ -279,7 +283,7 @@ test('a target becoming a learner blocks a queued source transfer', async (t) =>
   const ids = selectNonSeedNonPriorityIds(state, 1);
   const coordinator = buildCoordinatorFixture(state, ids);
   await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
-  coordinator.beforeAdmission = partitionId => {
+  coordinator.beforeAdmission = (partitionId) => {
     for (const row of state.serviceRows) {
       if (row.partition_id === partitionId && row.node_id !== NODE_1) {
         row.raft_role = RAFT_ROLE.LEARNER;
@@ -314,7 +318,7 @@ async (t) => {
   );
   t.ok(siblingRow, 'found settled sibling partition in cohort');
 
-  coordinator.afterAdmission = partitionId => {
+  coordinator.afterAdmission = (partitionId) => {
     if (partitionId === candidateIds[0]) siblingRow.state = 'splitting';
   };
 

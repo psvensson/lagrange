@@ -408,7 +408,8 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       const pendingDigest = pendingOwnerDigestOf(this.pendingWriteOutcomes.get(entryId));
       if ((isSplitDescriptorDigest(pendingDigest) || isSplitDescriptorDigest(commandDigest)) &&
           pendingDigest !== commandDigest) {
-        return this.proposalQueue.resolve(entryId, descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.COLLISION));
+        return this.proposalQueue.resolve(entryId,
+          descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.COLLISION));
       }
     }
     const resolvedResult = {

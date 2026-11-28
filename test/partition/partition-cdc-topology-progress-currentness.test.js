@@ -1,5 +1,6 @@
 // Real source ledger/subscriber and topology owners, controlled recipient
 // semantics and projection changes. Native commit/publication proof is separate.
+import {performance} from 'node:perf_hooks';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
 import {setImmediate as nextTurn} from 'node:timers/promises';
@@ -377,7 +378,8 @@ test('full CDC continuation path across overlapping tables, held recipient, tenu
     };
 
     await installPartitionPipeline(services, TABLES.SERVICES, {service_id: 'svc-1', value: 'val-svc-1'});
-    await installPartitionPipeline(partitions, TABLES.PARTITIONS, seedPartitionRow(CONFIG_SCHEMA, SOURCE_NODE, 1000));
+    await installPartitionPipeline(partitions, TABLES.PARTITIONS,
+      seedPartitionRow(CONFIG_SCHEMA, SOURCE_NODE, 1000));
     await installPartitionPipeline(nodes, TABLES.NODES, {node_id: 'node-1', node_address: 'ws://127.0.0.1:8082',
       host_id: 'fixture-host', cpu_cores: 2, memory_mb: 4096, disk_gb: 32, boot_incarnation: 1,
       last_heartbeat: 1000, created_at: 1000});
@@ -431,249 +433,260 @@ test('full CDC continuation path across overlapping tables, held recipient, tenu
   });
 
 async function measureLoopbackRanges(t, arm) {
-    const native = await recipientFixture(t, 'loopback', {replicaCount: 1, groupId: TARGET_GROUP});
-    const [recipient] = native.services;
-    const receiver = native.router;
-    receiver.wsHost = '127.0.0.1';
-    receiver.wsPort = 0;
-    await receiver.startServer();
-    const sender = new MessageRouter({nodeId: SOURCE_NODE, bootIncarnation: 1});
-    t.after(() => sender.shutdown());
-    await sender.initialize({startServer: false});
-    const port = receiver.server.address().port;
-    const signal = AbortSignal.timeout(5000);
-    await Promise.all([once(receiver, TRANSPORT_EVENT.NODE_CONNECTED, {signal}),
-      sender.connectToNode(receiver.nodeId, `ws://127.0.0.1:${port}`, {autoReconnect: false})]);
-    const ws = sender.nodeConnections.get(receiver.nodeId).ws;
-    const tcp = ws._socket;
-    assert.equal(tcp.remotePort, port);
-    const route = {...createMessageGroupServiceRow(recipient.replicaId, receiver.nodeId,
-      recipient.unifiedAddress, RAFT_ROLE.LEADER, TARGET_GROUP), replica_id: recipient.replicaId,
-      created_at: 100, create_attempt_token: 'loopback-recipient-birth'};
-    const sourceGroup = createDurableSourceMessageGroupService(SOURCE_GROUP);
-    const topology = new CDCGroupPropagationService({
-      nodeId: SOURCE_NODE, messageRouter: sender,
-      systemTableCache: createTopologyCache({nodes: [
-        {node_id: SOURCE_NODE, latency_group_id: SOURCE_GROUP},
-        {node_id: receiver.nodeId, boot_incarnation: 1}], services: [route]}),
-      latencyTreeService: createStatedRoutingTree([SOURCE_GROUP, TARGET_GROUP]),
-      deliveryRetryMaxAttempts: ONE_ATTEMPT_PER_DRIVE,
-    });
-    topology.initialize();
-    topology.start();
-    t.after(() => topology.stop());
+  const native = await recipientFixture(t, 'loopback', {replicaCount: 1, groupId: TARGET_GROUP});
+  const [recipient] = native.services;
+  const receiver = native.router;
+  receiver.wsHost = '127.0.0.1';
+  receiver.wsPort = 0;
+  await receiver.startServer();
+  const sender = new MessageRouter({nodeId: SOURCE_NODE, bootIncarnation: 1});
+  t.after(() => sender.shutdown());
+  await sender.initialize({startServer: false});
+  const port = receiver.server.address().port;
+  const signal = globalThis.AbortSignal.timeout(5000);
+  await Promise.all([once(receiver, TRANSPORT_EVENT.NODE_CONNECTED, {signal}),
+    sender.connectToNode(receiver.nodeId, `ws://127.0.0.1:${port}`, {autoReconnect: false})]);
+  const ws = sender.nodeConnections.get(receiver.nodeId).ws;
+  const tcp = ws._socket;
+  assert.equal(tcp.remotePort, port);
+  const route = {...createMessageGroupServiceRow(recipient.replicaId, receiver.nodeId,
+    recipient.unifiedAddress, RAFT_ROLE.LEADER, TARGET_GROUP), replica_id: recipient.replicaId,
+  created_at: 100, create_attempt_token: 'loopback-recipient-birth'};
+  const sourceGroup = createDurableSourceMessageGroupService(SOURCE_GROUP);
+  const topology = new CDCGroupPropagationService({
+    nodeId: SOURCE_NODE, messageRouter: sender,
+    systemTableCache: createTopologyCache({nodes: [
+      {node_id: SOURCE_NODE, latency_group_id: SOURCE_GROUP},
+      {node_id: receiver.nodeId, boot_incarnation: 1}], services: [route]}),
+    latencyTreeService: createStatedRoutingTree([SOURCE_GROUP, TARGET_GROUP]),
+    deliveryRetryMaxAttempts: ONE_ATTEMPT_PER_DRIVE,
+  });
+  topology.initialize();
+  topology.start();
+  t.after(() => topology.stop());
 
-    const samples = new Map();
-    const sends = new Map();
-    const grants = new Set();
-    const tcpWrites = [];
-    const now = () => performance.now();
-    let firstCheck;
-    const lanes = [];
-    const pending = [];
-    const flushes = [];
-    const wireOrder = [];
-    let immediate, timer, expires, probe, withdrawn;
-    const flush = (reason) => {
-      if (!pending.length) return;
-      clearImmediate(immediate);
-      clearTimeout(timer);
-      const batch = pending.splice(0);
-      flushes.push({reason, count: batch.length});
-      tcp.cork();
-      try {
-        for (const item of batch) {
-          try {
-            assert.equal(sender.nodeConnections.get(receiver.nodeId)?.ws, ws);
-            item.resolve(item.submit());
-          } catch (error) {
-            item.reject(error);
-          }
-        }
-      } finally {
-        tcp.uncork();
-      }
-    };
-    t.after(() => {
-      clearImmediate(immediate);
-      clearTimeout(timer);
-      for (const item of pending.splice(0)) item.reject(new Error('experiment closed'));
-    });
-    const acknowledge = sender.handleAcknowledgment;
-    t.mock.method(sender, 'handleAcknowledgment', function(message) {
-      const sample = sends.get(message.messageId);
-      if (sample && message.acknowledged) sample.acks++;
-      return acknowledge.call(this, message);
-    });
-    const respond = sender.handleServiceResponse;
-    t.mock.method(sender, 'handleServiceResponse', function(message) {
-      const sample = sends.get(message.messageId);
-      if (sample && isCommittedCdcOutcome(message.result, sample.events, TARGET_GROUP)) {
-        sample.nativeAt = now();
-        sample.receipts = message.result.cdcCommitted;
-        if (arm === 'lost-answer' && sample === sends.values().next().value) {
-          withdrawn = sample.events[0].sourcePartition;
-          lanes.find((lane) => lane.partitionId === withdrawn).controllablePort.setRole(RAFT_ROLE.FOLLOWER);
-          return;
+  const samples = new Map();
+  const sends = new Map();
+  const grants = new Set();
+  const tcpWrites = [];
+  const now = () => performance.now();
+  let firstCheck;
+  const lanes = [];
+  const pending = [];
+  const flushes = [];
+  const wireOrder = [];
+  let immediate; let timer; let expires; let probe; let withdrawn;
+  const flush = (reason) => {
+    if (!pending.length) return;
+    clearImmediate(immediate);
+    clearTimeout(timer);
+    const batch = pending.splice(0);
+    flushes.push({reason, count: batch.length});
+    tcp.cork();
+    try {
+      for (const item of batch) {
+        try {
+          assert.equal(sender.nodeConnections.get(receiver.nodeId)?.ws, ws);
+          item.resolve(item.submit());
+        } catch (error) {
+          item.reject(error);
         }
       }
-      return respond.call(this, message);
-    });
-    const raw = sender.sendRaw;
-    t.mock.method(sender, 'sendRaw', function(socket, message, ...args) {
-      if (socket === ws && message.type === ROUTER_MESSAGE_TYPE.PING) flush('urgent');
-      return raw.call(this, socket, message, ...args);
-    });
-    const enqueue = sender.enqueueOutbound;
-    t.mock.method(sender, 'enqueueOutbound', function(node, run, options) {
-      if (options.targetAddress === recipient.unifiedAddress) {
-        const [event] = deliveredEventsOf(options.message);
-        assert.ok(!samples.has(event.sourcePartition), 'each range enters the destination queue once');
-        samples.set(event.sourcePartition, {queued: now()});
-      }
-      return enqueue.call(this, node, run, options);
-    });
-    const send = sender.sendMessage;
-    t.mock.method(sender, 'sendMessage', function(connection, address, id, payload, ...rest) {
-      if (address === recipient.unifiedAddress) {
-        assert.equal(connection.ws, ws);
-        const sample = samples.get(deliveredEventsOf(payload)[0].sourcePartition);
-        sample.admitted = now();
-        sample.events = deliveredEventsOf(payload);
-        sample.acks = 0;
-        sample.messageId = id;
-        sends.set(id, sample);
-        firstCheck ??= nextTurn().then(() => ({admitted: sends.size, elapsedMs: now() - sample.admitted}));
-        if (arm !== 'immediate') {
-          if (pending.length && now() >= expires) flush('window');
-          const submitted = new Promise((resolve, reject) => {
-            pending.push({resolve, reject, submit: () => {
-              sample.released = now();
-              return send.call(this, connection, address, id, payload, ...rest);
-            }});
-          });
-          if (pending.length === 2) flush('pair');
-          else {
-            expires = now() + 12;
-            immediate = setImmediate(() => flush('check'));
-            timer = setTimeout(() => flush('window'), 12);
-            if (arm === 'urgent' && !probe) probe = sender.pingNode(receiver.nodeId);
-          }
-          return submitted;
-        }
-        sample.released = now();
-      }
-      return send.call(this, connection, address, id, payload, ...rest);
-    });
-    // net.Socket's concrete Writable dispatches count write/writev submissions
-    // below ws framing. They do not count TCP packets or kernel syscalls.
-    for (const method of ['_write', '_writev']) {
-      const write = tcp[method];
-      t.mock.method(tcp, method, function(...args) {
-        tcpWrites.push({method, at: now()});
-        return write.apply(this, args);
-      });
+    } finally {
+      tcp.uncork();
     }
-    const sendFrame = ws.send;
-    t.mock.method(ws, 'send', function(bytes, ...options) {
-      const at = now();
-      const result = sendFrame.call(this, bytes, ...options);
-      const frame = JSON.parse(bytes);
-      wireOrder.push(frame.messageId ?? frame.type);
-      if (frame.type === ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE && frame.targetAddress === recipient.unifiedAddress) {
-        const sample = sends.get(frame.messageId);
-        assert.equal(sample.write, undefined);
-        sample.write = at;
-        sample.remainingMs = frame.payload.cdcDeliveryRemainingMs;
+  };
+  t.after(() => {
+    clearImmediate(immediate);
+    clearTimeout(timer);
+    for (const item of pending.splice(0)) item.reject(new Error('experiment closed'));
+  });
+  const acknowledge = sender.handleAcknowledgment;
+  t.mock.method(sender, 'handleAcknowledgment', function(message) {
+    const sample = sends.get(message.messageId);
+    if (sample && message.acknowledged) sample.acks++;
+    return acknowledge.call(this, message);
+  });
+  const respond = sender.handleServiceResponse;
+  t.mock.method(sender, 'handleServiceResponse', function(message) {
+    const sample = sends.get(message.messageId);
+    if (sample && isCommittedCdcOutcome(message.result, sample.events, TARGET_GROUP)) {
+      sample.nativeAt = now();
+      sample.receipts = message.result.cdcCommitted;
+      if (arm === 'lost-answer' && sample === sends.values().next().value) {
+        withdrawn = sample.events[0].sourcePartition;
+        lanes.find((lane) => lane.partitionId === withdrawn).controllablePort
+          .setRole(RAFT_ROLE.FOLLOWER);
+        return;
       }
+    }
+    return respond.call(this, message);
+  });
+  const raw = sender.sendRaw;
+  t.mock.method(sender, 'sendRaw', function(socket, message, ...args) {
+    if (socket === ws && message.type === ROUTER_MESSAGE_TYPE.PING) flush('urgent');
+    return raw.call(this, socket, message, ...args);
+  });
+  const enqueue = sender.enqueueOutbound;
+  t.mock.method(sender, 'enqueueOutbound', function(node, run, options) {
+    if (options.targetAddress === recipient.unifiedAddress) {
+      const [event] = deliveredEventsOf(options.message);
+      assert.ok(!samples.has(event.sourcePartition), 'each range enters the destination queue once');
+      samples.set(event.sourcePartition, {queued: now()});
+    }
+    return enqueue.call(this, node, run, options);
+  });
+  const send = sender.sendMessage;
+  t.mock.method(sender, 'sendMessage', function(connection, address, id, payload, ...rest) {
+    if (address === recipient.unifiedAddress) {
+      assert.equal(connection.ws, ws);
+      const sample = samples.get(deliveredEventsOf(payload)[0].sourcePartition);
+      sample.admitted = now();
+      sample.events = deliveredEventsOf(payload);
+      sample.acks = 0;
+      sample.messageId = id;
+      sends.set(id, sample);
+      firstCheck ??= nextTurn()
+        .then(() => ({admitted: sends.size, elapsedMs: now() - sample.admitted}));
+      if (arm !== 'immediate') {
+        if (pending.length && now() >= expires) flush('window');
+        const submitted = new Promise((resolve, reject) => {
+          pending.push({resolve, reject, submit: () => {
+            sample.released = now();
+            return send.call(this, connection, address, id, payload, ...rest);
+          }});
+        });
+        if (pending.length === 2) flush('pair');
+        else {
+          expires = now() + 12;
+          immediate = setImmediate(() => flush('check'));
+          timer = setTimeout(() => flush('window'), 12);
+          if (arm === 'urgent' && !probe) probe = sender.pingNode(receiver.nodeId);
+        }
+        return submitted;
+      }
+      sample.released = now();
+    }
+    return send.call(this, connection, address, id, payload, ...rest);
+  });
+  // net.Socket's concrete Writable dispatches count write/writev submissions
+  // below ws framing. They do not count TCP packets or kernel syscalls.
+  for (const method of ['_write', '_writev']) {
+    const write = tcp[method];
+    t.mock.method(tcp, method, function(...args) {
+      tcpWrites.push({method, at: now()});
+      return write.apply(this, args);
+    });
+  }
+  const sendFrame = ws.send;
+  t.mock.method(ws, 'send', function(bytes, ...options) {
+    const at = now();
+    const result = sendFrame.call(this, bytes, ...options);
+    const frame = JSON.parse(bytes);
+    wireOrder.push(frame.messageId ?? frame.type);
+    if (frame.type === ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE &&
+        frame.targetAddress === recipient.unifiedAddress) {
+      const sample = sends.get(frame.messageId);
+      assert.equal(sample.write, undefined);
+      sample.write = at;
+      sample.remainingMs = frame.payload.cdcDeliveryRemainingMs;
+    }
+    return result;
+  });
+  const deliver = sender.deliver;
+  t.mock.method(sender, 'deliver', async function(address, payload, options) {
+    const events = deliveredEventsOf(payload);
+    grants.add(options.deliveryContext);
+    const result = await deliver.call(this, address, payload, options);
+    if (withdrawn === events[0].sourcePartition) {
+      assert.ok(!isCommittedCdcOutcome(result.answer, events, TARGET_GROUP));
       return result;
-    });
-    const deliver = sender.deliver;
-    t.mock.method(sender, 'deliver', async function(address, payload, options) {
-      const events = deliveredEventsOf(payload);
-      grants.add(options.deliveryContext);
-      const result = await deliver.call(this, address, payload, options);
-      if (withdrawn === events[0].sourcePartition) {
-        assert.ok(!isCommittedCdcOutcome(result.answer, events, TARGET_GROUP));
-        return result;
-      }
-      assert.ok(isCommittedCdcOutcome(result.answer, events, TARGET_GROUP));
-      const sample = samples.get(events[0].sourcePartition);
-      sample.answered = now();
-      sample.events = events;
-      sample.receipts = result.answer.cdcCommitted;
-      assert.equal(result.transport.messageId, sample.messageId);
-      return result;
-    });
+    }
+    assert.ok(isCommittedCdcOutcome(result.answer, events, TARGET_GROUP));
+    const sample = samples.get(events[0].sourcePartition);
+    sample.answered = now();
+    sample.events = events;
+    sample.receipts = result.answer.cdcCommitted;
+    assert.equal(result.transport.messageId, sample.messageId);
+    return result;
+  });
 
-    for (const partitionId of ['config-loopback-a', 'config-loopback-b']) {
-      const {leader} = await startLeader({tableName: TABLES.CONFIG, schema: CONFIG_SCHEMA,
-        replicaId: partitionId + '-r1', timeSource: new RealTimeSource()}, partitionId);
-      t.after(() => shutdownAll(leader));
-      leader.controllablePort.setProposeHandler(async (entry) => {
-        assert.equal(applyCommitted(leader, entry), null);
-      });
-      const selected = {ready: true, service: sourceGroup};
-      const subscriber = buildPartitionCdcPropagationSubscriber({tableName: TABLES.CONFIG,
-        partitionId, replicaId: leader.replicaId, resolveOperationalMessageGroupSelection: () => selected,
-        resolveOperationalMessageGroupSelectionAsync: async () => selected,
-        buildMessageGroupOwnerNotReadyError: () => new Error('source group unavailable'),
-        propagatePartitionCDCEvent: (_group, events, context) => topology.propagateCDCEvent({
-          events, sourceMessageGroupService: sourceGroup, deliveryContext: context})});
-      await leader.subscribeToCDCWithHandshake(subscriber, {subscriberId: 'loopback-' + partitionId});
-      lanes.push(leader);
-    }
+  for (const partitionId of ['config-loopback-a', 'config-loopback-b']) {
+    const {leader} = await startLeader({tableName: TABLES.CONFIG, schema: CONFIG_SCHEMA,
+      replicaId: partitionId + '-r1', timeSource: new RealTimeSource()}, partitionId);
+    t.after(() => shutdownAll(leader));
+    leader.controllablePort.setProposeHandler(async (entry) => {
+      assert.equal(applyCommitted(leader, entry), null);
+    });
+    const selected = {ready: true, service: sourceGroup};
+    const subscriber = buildPartitionCdcPropagationSubscriber({tableName: TABLES.CONFIG,
+      partitionId, replicaId: leader.replicaId,
+      resolveOperationalMessageGroupSelection: () => selected,
+      resolveOperationalMessageGroupSelectionAsync: async () => selected,
+      buildMessageGroupOwnerNotReadyError: () => new Error('source group unavailable'),
+      propagatePartitionCDCEvent: (_group, events, context) => topology.propagateCDCEvent({
+        events, sourceMessageGroupService: sourceGroup, deliveryContext: context})});
+    await leader.subscribeToCDCWithHandshake(subscriber, {subscriberId: 'loopback-' + partitionId});
+    lanes.push(leader);
+  }
 
-    // Independent Node callbacks each commit one two-row source transaction
-    // and let committed.afterCommit start the ordinary source drive.
-    await Promise.all(lanes.map(async (leader) => {
-      await nextTurn();
-      const id = leader.partitionId;
-      const tx = identityOf('loopback-' + id, {partitionId: id});
-      const operations = [0, 1].map((ordinal) => ({entryId: id + '-' + ordinal,
-        sql: 'INSERT INTO config (config_key,config_value,value_type,default_value,created_at) VALUES (?,?,?,?,?)',
-        params: [id + '-' + ordinal, 'sample', 'string', 'sample', 1000]}));
-      const prepare = prepareCommandOf(tx, operations, generationOf(leader), id);
-      assert.equal(applyCommitted(leader, prepare), null);
-      const commit = commitDecision(tx, prepare);
-      commit.timestamp = new HLCTimestamp(1000, 0, id).toString();
-      assert.equal(applyCommitted(leader, commit), null);
-      await Promise.all([...leader.pendingCDCEventDeliveries]);
-      await leader.cdcDelivery.flushCdcAcknowledgements(PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY);
-      assert.deepEqual(countCdcObligations(leader.db), id === withdrawn ? {owed: 2, delivered: 0} : {owed: 0, delivered: 2});
-    }));
-    assert.equal(grants.size, 2);
-    assert.equal(sends.size, 2);
-    const record = RaftRsDurableStore.readDurableRecordIn(recipient.db, TARGET_GROUP);
-    const ranges = [];
-    for (const [partitionId, sample] of samples) {
-      assert.ok(sample.remainingMs > 0 && sample.nativeAt >= sample.write && sample.write >= sample.admitted);
-      assert.equal(sample.acks, 1);
-      assert.equal(Number.isFinite(sample.answered), partitionId !== withdrawn);
-      assert.deepEqual(sample.events.map((event) => event.sourceOrdinal), [0, 1]);
-      for (const receipt of sample.receipts) {
-        const entry = record.entries.find((item) => BigInt(item.index) === BigInt(receipt.logIndex));
-        assert.ok(entry && BigInt(entry.term) === BigInt(receipt.term));
-        assert.ok(BigInt(record.appliedIndex) >= BigInt(entry.index));
-        const command = JSON.parse(Buffer.from(entry.data, 'base64').toString());
-        assert.ok(command.events.some((event) => event.eventKey === receipt.eventKey));
-      }
-      ranges.push({partitionId, messageId: sample.messageId, queueMs: sample.admitted - sample.queued,
-        admissionToWriteMs: sample.write - sample.admitted, collectionMs: sample.released - sample.admitted, writeToNativeReceiptMs: sample.nativeAt - sample.write,
-        remainingMs: sample.remainingMs, receipts: sample.receipts});
+  // Independent Node callbacks each commit one two-row source transaction
+  // and let committed.afterCommit start the ordinary source drive.
+  await Promise.all(lanes.map(async (leader) => {
+    await nextTurn();
+    const id = leader.partitionId;
+    const tx = identityOf('loopback-' + id, {partitionId: id});
+    const operations = [0, 1].map((ordinal) => ({entryId: id + '-' + ordinal,
+      sql: 'INSERT INTO config (config_key,config_value,value_type,default_value,created_at) VALUES (?,?,?,?,?)',
+      params: [id + '-' + ordinal, 'sample', 'string', 'sample', 1000]}));
+    const prepare = prepareCommandOf(tx, operations, generationOf(leader), id);
+    assert.equal(applyCommitted(leader, prepare), null);
+    const commit = commitDecision(tx, prepare);
+    commit.timestamp = new HLCTimestamp(1000, 0, id).toString();
+    assert.equal(applyCommitted(leader, commit), null);
+    await Promise.all([...leader.pendingCDCEventDeliveries]);
+    await leader.cdcDelivery.flushCdcAcknowledgements(
+      PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY);
+    assert.deepEqual(countCdcObligations(leader.db),
+      id === withdrawn ? {owed: 2, delivered: 0} : {owed: 0, delivered: 2});
+  }));
+  assert.equal(grants.size, 2);
+  assert.equal(sends.size, 2);
+  const record = RaftRsDurableStore.readDurableRecordIn(recipient.db, TARGET_GROUP);
+  const ranges = [];
+  for (const [partitionId, sample] of samples) {
+    assert.ok(sample.remainingMs > 0 && sample.nativeAt >= sample.write &&
+        sample.write >= sample.admitted);
+    assert.equal(sample.acks, 1);
+    assert.equal(Number.isFinite(sample.answered), partitionId !== withdrawn);
+    assert.deepEqual(sample.events.map((event) => event.sourceOrdinal), [0, 1]);
+    for (const receipt of sample.receipts) {
+      const entry = record.entries.find((item) => BigInt(item.index) === BigInt(receipt.logIndex));
+      assert.ok(entry && BigInt(entry.term) === BigInt(receipt.term));
+      assert.ok(BigInt(record.appliedIndex) >= BigInt(entry.index));
+      const command = JSON.parse(Buffer.from(entry.data, 'base64').toString());
+      assert.ok(command.events.some((event) => event.eventKey === receipt.eventKey));
     }
-    assert.ok(tcpWrites.length > 0);
-    const first = sends.values().next().value;
-    assert.deepEqual(wireOrder.filter((id) => sends.has(id)), [...sends.keys()]);
-    if (arm === 'urgent') {
-      assert.equal(await probe, true);
-      assert.equal(flushes[0].reason, 'urgent');
-      assert.equal(wireOrder.indexOf(ROUTER_MESSAGE_TYPE.PING), wireOrder.indexOf(first.messageId) + 1);
-    }
-    if (arm === 'lost-answer') assert.equal(withdrawn, first.events[0].sourcePartition);
-    return {arm, firstCheck: await firstCheck, ranges, flushes, wsRequestFrames: sends.size,
-      firstAdmissionToFirstNativeReceiptMs: Math.min(...[...sends.values()].map(s => s.nativeAt)) - first.admitted,
-      tcpStreamWrites: tcpWrites};
+    ranges.push({partitionId, messageId: sample.messageId, queueMs: sample.admitted - sample.queued,
+      admissionToWriteMs: sample.write - sample.admitted,
+      collectionMs: sample.released - sample.admitted,
+      writeToNativeReceiptMs: sample.nativeAt - sample.write,
+      remainingMs: sample.remainingMs, receipts: sample.receipts});
+  }
+  assert.ok(tcpWrites.length > 0);
+  const first = sends.values().next().value;
+  assert.deepEqual(wireOrder.filter((id) => sends.has(id)), [...sends.keys()]);
+  if (arm === 'urgent') {
+    assert.equal(await probe, true);
+    assert.equal(flushes[0].reason, 'urgent');
+    assert.equal(wireOrder.indexOf(ROUTER_MESSAGE_TYPE.PING),
+      wireOrder.indexOf(first.messageId) + 1);
+  }
+  if (arm === 'lost-answer') assert.equal(withdrawn, first.events[0].sourcePartition);
+  return {arm, firstCheck: await firstCheck, ranges, flushes, wsRequestFrames: sends.size,
+    firstAdmissionToFirstNativeReceiptMs: Math.min(...[...sends.values()].map((s) =>
+      s.nativeAt)) - first.admitted,
+    tcpStreamWrites: tcpWrites};
 }
 
 test('measure independent partition CDC ranges on one loopback recipient socket',

@@ -40,7 +40,8 @@ async function readRequiredPartitions(read, dataset) {
     assert.equal(found.length, entry.partition_count, `missing or extra partitions for ${entry.table_name}`);
   }
   assert.equal(new Set(rows.map((row) => row.partition_id)).size, rows.length, 'partition identities are distinct');
-  const dataTableIds = new Set(tables.filter((row) => row.table_name === table || row.table_name === dataset)
+  const dataTableIds = new Set(tables.filter((row) => row.table_name === table ||
+      row.table_name === dataset)
     .map((row) => row.table_id));
   return rows.map((row) => ({...row, requiresRf3: dataTableIds.has(row.table_id)}));
 }
@@ -63,7 +64,8 @@ function assertSurvivingMajority(rows, partitionId, ownerNodeId, requiresRf3) {
     Number.isSafeInteger(row.generation) && row.generation >= 0 &&
     typeof row.configurationKey === 'string' && row.configurationKey.length > 0 &&
     row.outgoingVoters.length === 0 && row.nextLearners.length === 0 &&
-    row.voterReplicaIds.length > 0 && new Set(row.voterReplicaIds).size === row.voterReplicaIds.length &&
+    row.voterReplicaIds.length > 0 &&
+    new Set(row.voterReplicaIds).size === row.voterReplicaIds.length &&
     row.voterReplicaIds.every((id) => typeof id === 'string' && id.length > 0) &&
     row.voterReplicaIds.includes(row.replicaId));
   const leaders = voters.filter((row) => row.leaderRead && row.replicaId === row.leaderReplicaId);
@@ -105,7 +107,8 @@ test('warm survivors backfill an existing global index after the schema finalize
     const deadline = Date.now() + testTimeoutMs;
     const cluster = createEmbeddedCluster(t);
     const seed = await cluster.startEmbeddedNode({workerPath, hostId: 'gsi-a',
-      configuration: {formation: {declaredHostCount: 4}, partition: {defaultReplicaCount: replicaCount}}});
+      configuration: {formation: {declaredHostCount: 4},
+        partition: {defaultReplicaCount: replicaCount}}});
     for (const hostId of ['gsi-b', 'gsi-c', 'gsi-d']) {
       await cluster.startEmbeddedNode({workerPath, role: 'joiner', hostId, seedRestPort: seed.restPort,
         configuration: {partition: {defaultReplicaCount: replicaCount}}});
@@ -218,8 +221,10 @@ test('warm survivors backfill an existing global index after the schema finalize
     await topology('post-kill membership and GSI services', survivors, gsiAfterKill);
     const final = await waitForTrace(t, 'post-kill: two-row terminal checkpoint', survivors, (rows) => {
       for (const row of rows) {
-        if (row.firstTerminalAttemptNs) assert.ok(BigInt(row.firstTerminalAttemptNs) > confirmedExitNs,
-          `terminal update on ${row.nodeId} raced the confirmed exit`);
+        if (row.firstTerminalAttemptNs) {
+          assert.ok(BigInt(row.firstTerminalAttemptNs) > confirmedExitNs,
+            `terminal update on ${row.nodeId} raced the confirmed exit`);
+        }
       }
       return rows.some((row) => row.completed);
     });

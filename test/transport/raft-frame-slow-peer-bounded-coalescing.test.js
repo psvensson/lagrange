@@ -258,7 +258,8 @@ test('each sender encodes one canonical wrapper across separate remote flushes',
         const expected = stringify({type: ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE,
           sourceNodeId: nodeId, envelopes: [{targetAddress, payload}]});
         const pending = router.deliver(targetAddress, payload);
-        assert.equal(router.getStats().consensusDelivery.pendingBatchBytes, Buffer.byteLength(expected));
+        assert.equal(router.getStats().consensusDelivery.pendingBatchBytes,
+          Buffer.byteLength(expected));
         assert.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await pending)));
         assert.equal(rawFrames.length, seq + 1);
         assert.equal(rawFrames[seq], expected);
@@ -300,8 +301,10 @@ test('successful socket flushes report admitted Raft item families and encoded e
     }
     await Promise.all(deliveries);
     const counts = evidence();
-    assert.deepEqual(counts, {singleItemFrames: 1, multiItemFrames: 1, items: cases.length, families: expected});
-    assert.deepEqual(socket.sentFrames.map((frame) => frame.envelopes.length), [1, cases.length - 1]);
+    assert.deepEqual(counts,
+      {singleItemFrames: 1, multiItemFrames: 1, items: cases.length, families: expected});
+    assert.deepEqual(socket.sentFrames.map((frame) => frame.envelopes.length),
+      [1, cases.length - 1]);
     refuseWrite = true;
     const failed = await router.deliver(targetAddress, buildEnvelope('g', 99));
     assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(failed)), false);
@@ -334,7 +337,8 @@ test('independent check callbacks share one heartbeat flush at the first eligibl
     assert.equal(await second, 0, 'first producer left the event loop free for the second');
     assert.deepEqual(await first, [2], 'second producer did not extend the first deadline');
     const results = await Promise.all(deliveries);
-    assert.ok(results.every((result) => isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result))));
+    assert.ok(results.every((result) =>
+      isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result))));
   } finally {
     await router.shutdown();
     resetRouterProcess();
@@ -385,9 +389,11 @@ test('one synchronous burst of 129 heartbeats splits at the 64-item frame bound'
     const deliveries = Array.from({length: 129}, (_, index) =>
       router.deliver('peer/partition/g-r2', buildEnvelope('g', index)));
     const results = await Promise.all(deliveries);
-    assert.ok(results.every((result) => isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result))));
+    assert.ok(results.every((result) =>
+      isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result))));
     assert.deepEqual(socket.sentFrames.map((frame) => frame.envelopes.length), [64, 64, 1]);
-    const order = socket.sentFrames.flatMap((frame) => frame.envelopes.map((entry) => entry.payload.message.index));
+    const order = socket.sentFrames.flatMap((frame) =>
+      frame.envelopes.map((entry) => entry.payload.message.index));
     assert.deepEqual(order, Array.from({length: 129}, (_, index) => String(index)));
     assert.equal(router.getStats().consensusDelivery.pendingBatchBytes, 0);
   } finally {

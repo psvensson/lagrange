@@ -412,7 +412,8 @@ class DistributedWriteCoordinator {
     return {
       success: true,
       operation: plan.statementType,
-      ...(participantResults.length === 1 ? splitDescriptorCommitFields(participantResults[0]) : {}),
+      ...(participantResults.length === 1 ? splitDescriptorCommitFields(participantResults[0]) :
+        {}),
       ...(unknownCount === undefined ? affectedRowsField(affectedRows) :
         {settledReplay: unknownCount.settledReplay}),
       rows,

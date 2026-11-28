@@ -21,11 +21,13 @@ const subject = Object.freeze({action: 'finalizeChild', tableId: 'tbl-users',
   partitionId: 'users-p-left', workflowId: 'split-users', workflowAttempt: 1});
 const optionsFor = (intent) => {
   const key = splitDescriptorWriteKey(intent);
-  return {splitDescriptorIntent: intent, idempotencyKey: key, entryId: deriveParticipantEntryId(key, partitionId)};
+  return {splitDescriptorIntent: intent, idempotencyKey: key,
+    entryId: deriveParticipantEntryId(key, partitionId)};
 };
 const paramsFor = (intent) => [intent.tableId, intent.workflowAttempt, intent.partitionId];
 const descriptorRow = (service) => service.db.prepare('SELECT * FROM partitions WHERE partition_id = ?').get(subject.partitionId);
-const record = (service, entryId) => readCommittedStatementOutcome(service, service.getCommittedEntryKey({entryId}));
+const record = (service, entryId) =>
+  readCommittedStatementOutcome(service, service.getCommittedEntryKey({entryId}));
 function effectCounts(service) {
   const {owed, delivered} = countCdcObligations(service.db);
   return {events: owed + delivered, generation: readPartitionWriteGeneration(service.db)};
@@ -35,7 +37,8 @@ function seed(service, attempt) {
   assert.equal(applyCommitted(service, {type: 'QUERY', entryId: 'seed-' + attempt,
     sql: 'INSERT INTO partitions (table_id, partition_id, split_descriptor_attempt, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
     params: [subject.tableId, subject.partitionId, attempt, 1, 1],
-    timestamp: service.hlcClock.now().toString(), proposedBy: service.replicaId, proposedAt: 0}), null);
+    timestamp: service.hlcClock.now().toString(), proposedBy: service.replicaId, proposedAt: 0}),
+  null);
 }
 
 async function holdProposal(service, proposed, intent) {
@@ -72,8 +75,9 @@ test('child finalization binds pending and settled answers, actual DELETE and co
     const {splitDescriptorIntent, ...stripped} = command;
     assert.deepEqual(splitDescriptorIntent, subject);
     assert.equal((await service.applyWrite(stripped)).failureCode, ERROR.BYTES);
-    assert.equal((await service.applyWrite({...command, params: [subject.tableId, 2, subject.partitionId]})).failureCode,
-      ERROR.BYTES);
+    assert.equal((await service.applyWrite({...command,
+      params: [subject.tableId, 2, subject.partitionId]})).failureCode,
+    ERROR.BYTES);
     assert.equal(proposed.filter((entry) => entry.entryId === options.entryId).length, 1);
     assert.equal(descriptorRow(service).split_descriptor_attempt, 1);
     assert.equal(applyCommitted(service, command), null);
@@ -83,7 +87,8 @@ test('child finalization binds pending and settled answers, actual DELETE and co
     assert.deepEqual(first.splitDescriptorReceipt, {...subject, disposition: 'deleted'});
     assert.deepEqual(await joined, first);
     assert.equal(descriptorRow(service), undefined);
-    assert.deepEqual(effectCounts(service), {events: before.events + 1, generation: before.generation + 1});
+    assert.deepEqual(effectCounts(service),
+      {events: before.events + 1, generation: before.generation + 1});
     const held = record(service, command.entryId);
     assert.deepEqual(JSON.parse(held.ownerResultText), first.splitDescriptorReceipt);
     assert.ok(held.commandDigest);
@@ -140,7 +145,8 @@ test('a committed ordinary entry cannot settle a pending protected caller under 
     // it first and deliver the new proposer's protected entry afterward.
     assert.equal(applyCommitted(service, {type: 'QUERY', entryId: command.entryId,
       sql: 'UPDATE partitions SET updated_at = ? WHERE partition_id = ?', params: [2, subject.partitionId],
-      timestamp: service.hlcClock.now().toString(), proposedBy: service.replicaId, proposedAt: 0}), null);
+      timestamp: service.hlcClock.now().toString(), proposedBy: service.replicaId, proposedAt: 0}),
+    null);
     assert.equal((await pending.promise).failureCode, ERROR.COLLISION);
     const ordinaryRecord = record(service, command.entryId);
     assert.equal(ordinaryRecord.commandDigest, undefined);
@@ -162,7 +168,8 @@ test('a protected commit cannot acknowledge an ordinary waiter under the same ID
     const beforeApply = await service.executeQuery(SQL, paramsFor(subject), options);
     assert.equal(beforeApply.failureCode, ERROR.COLLISION);
     assert.equal(applyCommitted(service, {type: 'QUERY', sql: SQL, params: paramsFor(subject),
-      ...options, proposedBy: service.replicaId, proposedAt: 0, timestamp: service.hlcClock.now().toString()}), null);
+      ...options, proposedBy: service.replicaId, proposedAt: 0,
+      timestamp: service.hlcClock.now().toString()}), null);
     assert.equal((await pending.promise).failureCode, ERROR.COLLISION);
     const held = record(service, options.entryId);
     assert.deepEqual(JSON.parse(held.ownerResultText), {...subject, disposition: 'deleted'});

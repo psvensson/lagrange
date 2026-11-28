@@ -10,7 +10,8 @@ import {
 import {ReadinessPlanningSemanticGenerationTracker} from './readiness-planning-semantic-generation.js';
 import {defineRecordValue} from './readiness-planning-publication-contract.js';
 import {
-  connectedFormationOwnerKey, isJoiningNodeRow, readFormationEpochKey, readOwnerKey, readSharedNodeRows,
+  connectedFormationOwnerKey, isJoiningNodeRow, readFormationEpochKey, readOwnerKey,
+  readSharedNodeRows,
 } from './readiness-planning-formation-source.js';
 import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
 import {ReadinessPlanningDiagnosticRetention} from './readiness-planning-diagnostic-retention.js';

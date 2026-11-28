@@ -19,7 +19,7 @@ test('placement cure hands leadership directly to its lagging selected voter', a
   driver.watchLeaderEvents(other);
   const transfers = [];
   const issuer = createPartitionServiceLeadershipTransferMethods();
-  const services = new Map(ids.map(replicaId => [replicaId, {partitionId, replicaId,
+  const services = new Map(ids.map((replicaId) => [replicaId, {partitionId, replicaId,
     raft: driver.port(replicaId),
     requestLeadershipTransfer(request, admit) {
       transfers.push({from: replicaId, successor: request.successor, to: request.replicaIdentity});
@@ -28,29 +28,34 @@ test('placement cure hands leadership directly to its lagging selected voter', a
   // The predecessor uses the routed STEP_DOWN owner. Drive that real handler's
   // tracked-role decision too so the same file can discriminate both builds.
   class Handler {
-    getTrackedService(id) { return services.get(id); }
-    getTrackedReplicaRole(id) { return driver.status(id).role; }
+    getTrackedService(id) {
+      return services.get(id);
+    }
+    getTrackedReplicaRole(id) {
+      return driver.status(id).role;
+    }
   }
   assignReplicaHandlerLeaderHandoffMethods(Handler);
   const handler = new Handler();
-  const rows = ['orders-p1', partitionId].map(id => ({partition_id: id, table_id: 'orders',
+  const rows = ['orders-p1', partitionId].map((id) => ({partition_id: id, table_id: 'orders',
     state: 'normal', leader_node_id: 'node-1', replica_count: 3}));
-  const voters = rows.flatMap(row => ids.map((id, i) => ({partition_id: row.partition_id,
+  const voters = rows.flatMap((row) => ids.map((id, i) => ({partition_id: row.partition_id,
     service_id: row.partition_id === partitionId ? id : row.partition_id + '-' + id,
     node_id: 'node-' + (i + 1), status: 'active', service_type: 'partition',
     raft_role: i === 0 ? 'leader' : 'follower'})));
   const routes = [];
-  const byPartition = id => voters.filter(row => row.partition_id === id);
+  const byPartition = (id) => voters.filter((row) => row.partition_id === id);
   const placement = {entityId: partitionId, entityType: 'partition', nodeId: 'node-1',
     replicaId: source, isLeader: true, isStabilized: () => true,
     cdcIntegrationService: {partitionServicesProvider: () => services},
     logger: {info() {}, warn() {}}, getCurrentReplicas: () => byPartition(partitionId),
-    systemTableCache: {get: (_, id) => rows.find(row => row.partition_id === id),
+    systemTableCache: {get: (_, id) => rows.find((row) => row.partition_id === id),
       servicesForPartition: byPartition,
       filter: (table, predicate) => (table === 'partitions' ? rows : table === 'services' ? voters : []).filter(predicate)},
     messageRouter: {async deliver(address, request) {
       routes.push(address);
-      const result = await handler.requestTrackedPartitionLeaderHandoff(request.replicaId, request.reason);
+      const result = await handler.requestTrackedPartitionLeaderHandoff(request.replicaId,
+        request.reason);
       driver.deliver();
       return {answer: {status: result.state, handoffBranch: result.branch}};
     }}};
@@ -70,5 +75,5 @@ test('placement cure hands leadership directly to its lagging selected voter', a
   assert.equal(result.term, before + 1);
   const command = {after: 'placement-transfer'};
   assert.equal(turnChainValue(driver.propose(selected, command)).outcome, 'CORE_OK');
-  assert.ok(ids.every(id => driver.applied(id, command)));
+  assert.ok(ids.every((id) => driver.applied(id, command)));
 });

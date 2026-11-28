@@ -3,7 +3,8 @@ import {readParticipantTransactionRow} from '../../../src/partition/partition-pa
 import {createLagrangeSession} from '../../distributed/reference-client/lagrange-oltp-adapter.js';
 
 function tableLeader(services, name) {
-  const leaders = [...services.values()].filter((service) => service.isLeader && service.tableName === name);
+  const leaders = [...services.values()].filter((service) => service.isLeader &&
+      service.tableName === name);
   assert.equal(leaders.length, 1, name);
   return leaders[0];
 }
@@ -13,7 +14,8 @@ function wireFailure(error) {
     causeCode: error?.cause?.code, causeMessage: error?.cause?.message};
 }
 
-export async function witnessPgwireRollbackRecovery({client, engine, partitionServices}, mark, evidence) {
+export async function witnessPgwireRollbackRecovery({client, engine, partitionServices}, mark,
+  evidence) {
   const tables = ['rollback_left', 'rollback_right'];
   for (const table of tables) {
     await client.query('CREATE TABLE ' + table + ' (id INTEGER PRIMARY KEY)');

@@ -230,7 +230,8 @@ function routedCreateRequest(row) {
 }
 
 async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
-  gatewayOptions, authorityFor, timeSource, executorOutcomeEmitter, tableId, tableName, schema} = {}) {
+  gatewayOptions, authorityFor, timeSource, executorOutcomeEmitter, tableId, tableName,
+  schema} = {}) {
   const cache = createCache([targetRow, ...additionalTargetRows],
     {partitionId: row.partition_id, tableId, tableName, schema});
   const authority = authorityFor ? authorityFor(cache) :

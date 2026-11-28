@@ -232,7 +232,8 @@ function renderRoutedMutation(executor, renderer, ast, params, options) {
   if (ast.rawSql !== expected.sql || params.length !== expected.params.length ||
       params.some((value, i) => !Object.is(value, expected.params[i])) ||
       rendered !== renderer.call(executor, canonicalAst, [...expected.params])) {
-    throw Object.assign(new Error(SPLIT_DESCRIPTOR_ERROR.BYTES), {code: SPLIT_DESCRIPTOR_ERROR.BYTES});
+    throw Object.assign(new Error(SPLIT_DESCRIPTOR_ERROR.BYTES),
+      {code: SPLIT_DESCRIPTOR_ERROR.BYTES});
   }
   return expected.sql;
 }
@@ -277,7 +278,8 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeInsert(ast, partitionId, params = [], executionOptions = {}) {
     const targetParams = [...params];
-    const sql = renderRoutedMutation(this, this.buildInsertSQL, ast, targetParams, executionOptions);
+    const sql = renderRoutedMutation(this, this.buildInsertSQL, ast, targetParams,
+      executionOptions);
     this.logger.debug(QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_INSERT, {
       table: ast.table,
       partitionId,
@@ -442,7 +444,8 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeUpdate(ast, partitionIds, params = [], executionOptions = {}) {
     const targetParams = [...params];
-    const sql = renderRoutedMutation(this, this.buildUpdateSQL, ast, targetParams, executionOptions);
+    const sql = renderRoutedMutation(this, this.buildUpdateSQL, ast, targetParams,
+      executionOptions);
     return this.executeDistributedMutation(
       ast,
       partitionIds,
@@ -540,7 +543,8 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeDelete(ast, partitionIds, params = [], executionOptions = {}) {
     const targetParams = [...params];
-    const sql = renderRoutedMutation(this, this.buildDeleteSQL, ast, targetParams, executionOptions);
+    const sql = renderRoutedMutation(this, this.buildDeleteSQL, ast, targetParams,
+      executionOptions);
     return this.executeDistributedMutation(
       ast,
       partitionIds,

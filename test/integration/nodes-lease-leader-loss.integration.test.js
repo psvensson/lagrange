@@ -49,7 +49,8 @@ function remotePublisher(views, leader) {
   for (const view of views) {
     for (const hop of Object.values(view.trace.lastRenewalByNode)) {
       if (hop.normalPublisher && hop.originNodeId !== leader.nodeId &&
-          hop.commitWitness.term === leader.term && hop.commitWitness.leaderReplicaId === leader.replicaId &&
+          hop.commitWitness.term === leader.term &&
+          hop.commitWitness.leaderReplicaId === leader.replicaId &&
           hop.address === leader.nodeId + '/partition/' + leader.replicaId) return hop;
     }
   }
@@ -73,15 +74,19 @@ function confirmedRenewal(views, leader, row, restoredAt, requireRemote = false)
     const witness = write?.commitWitness;
     const hop = view.trace.lastRenewalByNode[row.node_id];
     return write?.normalPublisher && write.changes === 1 &&
-      (!requireRemote || (hop?.entryId === write.entryId && hop.idempotencyKey === write.idempotencyKey &&
+      (!requireRemote ||
+      (hop?.entryId === write.entryId && hop.idempotencyKey === write.idempotencyKey &&
         hop.originNodeId === write.originNodeId && write.originNodeId !== leader.nodeId &&
-        hop.commitWitness.term === witness.term && hop.commitWitness.logIndex === witness.logIndex &&
+        hop.commitWitness.term === witness.term &&
+        hop.commitWitness.logIndex === witness.logIndex &&
         hop.address === leader.nodeId + '/partition/' + leader.replicaId)) &&
       write.bootIncarnation === row.boot_incarnation && write.lastHeartbeat >= restoredAt &&
-      write.lastHeartbeat <= row.last_heartbeat && write.readyLeaseExpiresAt <= row.ready_lease_expires_at &&
+      write.lastHeartbeat <= row.last_heartbeat &&
+      write.readyLeaseExpiresAt <= row.ready_lease_expires_at &&
       write.entryId && write.idempotencyKey && witness?.entryId === write.entryId &&
       witness.partitionId === 'nodes-p1' && witness.leaderReplicaId === leader.replicaId &&
-      witness.term === leader.term && witness.logIndex > 0 && witness.logIndex <= leader.appliedIndex;
+      witness.term === leader.term && witness.logIndex > 0 &&
+      witness.logIndex <= leader.appliedIndex;
   });
 }
 
@@ -108,7 +113,8 @@ test('fresh NODES leader restores committed READY leases and warehouse access af
       'SELECT node_id, address, port FROM service_endpoints WHERE service_id = ? AND protocol = ?',
       ['sys-postgres-wire', 'postgresql']), (rows) => rows.some((row) => row.address && row.port));
     const endpoint = endpoints.find((row) => row.address && row.port);
-    const connect = () => cluster.createPgClient({host: endpoint.address, port: Number(endpoint.port)});
+    const connect = () =>
+      cluster.createPgClient({host: endpoint.address, port: Number(endpoint.port)});
     const client = await connect();
     await client.query('CREATE TABLE lease_probe_warehouse (id TEXT PRIMARY KEY, payload TEXT)');
     await client.query('INSERT INTO lease_probe_warehouse (id, payload) VALUES ($1, $2)', ['w1', 'committed']);
@@ -158,7 +164,8 @@ test('fresh NODES leader restores committed READY leases and warehouse access af
       assert.equal(receipt.originNodeId, publisher.originNodeId);
       assert.equal(receipt.address, publisher.address);
       assert.equal(receipt.changes, 1);
-      assert.equal(receipt.bootIncarnation, baseline.find((r) => r.node_id === lossSubject).boot_incarnation);
+      assert.equal(receipt.bootIncarnation,
+        baseline.find((r) => r.node_id === lossSubject).boot_incarnation);
       assert.ok(receipt.entryId && receipt.idempotencyKey);
       assert.equal(receipt.commitWitness.entryId, receipt.entryId);
       assert.equal(receipt.commitWitness.partitionId, 'nodes-p1');
@@ -176,7 +183,8 @@ test('fresh NODES leader restores committed READY leases and warehouse access af
           return leader && snapshot.some((v) => v.trace.lastGated?.leaderNodeId === leader.nodeId &&
               v.trace.lastGated.leaderTerm === leader.term) &&
             snapshot.some((v) => v.trace.withheldCount > 0) &&
-            leaseRows(leader, members).every((r, i) => r && r.boot_incarnation === baseline[i].boot_incarnation &&
+            leaseRows(leader,
+              members).every((r, i) => r && r.boot_incarnation === baseline[i].boot_incarnation &&
               Number(r.ready_lease_expires_at) > 0 &&
               Number(r.ready_lease_expires_at) <= Date.now());
         });
@@ -198,7 +206,8 @@ test('fresh NODES leader restores committed READY leases and warehouse access af
           assert.equal(failure.routingReasonCode, 'all_services_filtered_by_readiness');
           assert.equal(failure.routingReadinessDimension, 'serveEligible');
           assert.deepEqual(failure.routingDenialReasonCodes, ['ready_lease_expired']);
-          assert.deepEqual(Object.keys(failure.deniedByNodeId).sort(), members.map((m) => m.nodeId).sort());
+          assert.deepEqual(Object.keys(failure.deniedByNodeId).sort(),
+            members.map((m) => m.nodeId).sort());
           for (const {nodeId} of members) {
             const decision = failure.deniedByNodeId[nodeId].serveEligibility;
             assert.equal(decision.decision, 'not_eligible');

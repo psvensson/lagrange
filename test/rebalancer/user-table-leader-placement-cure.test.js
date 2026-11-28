@@ -146,7 +146,8 @@ function serviceRows() {
   );
 }
 
-const transferAccepted = {outcome: RAFT_OPERATION_OUTCOME.CORE_OK, reason: RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED};
+const transferAccepted = {outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+  reason: RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED};
 
 function localLeaderService(partitionId, replicaId, transfers) {
   const status = {groupId: partitionId, replicaIdentity: replicaId, role: 'leader', term: 1,
@@ -167,7 +168,8 @@ function localLeaderService(partitionId, replicaId, transfers) {
 function buildStubRebalancer(state) {
   const transfers = [];
   const services = new Map(state.serviceRows.filter((row) => row.raft_role === 'leader')
-    .map((row) => [row.service_id, localLeaderService(row.partition_id, row.service_id, transfers)]));
+    .map((row) =>
+      [row.service_id, localLeaderService(row.partition_id, row.service_id, transfers)]));
   return {
     transfers,
     cdcIntegrationService: {partitionServicesProvider: () => services},

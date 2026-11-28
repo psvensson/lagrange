@@ -461,7 +461,8 @@ async function executePartitionLeaderRedirectAttempt(context) {
   await candidateState.handleRedirectTransportNoHandler(
     redirectDelivery, nextServiceInfo, redirectAddress, candidateIndex);
   const failureStep = handleFailedRedirectResponse(
-    context, redirectAddress, redirectParticipantNodeId, redirectCompletion.response, unknownDecision,
+    context, redirectAddress, redirectParticipantNodeId, redirectCompletion.response,
+    unknownDecision,
     deliveryTransportOf(redirectDelivery));
   return {
     ...failureStep, address: redirectAddress,

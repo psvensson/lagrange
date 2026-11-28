@@ -196,7 +196,8 @@ test('creator validates staged bytes before publishing or replacing a generation
     t.equal(rejected.validation?.outcome, RAFT_CHECKPOINT_VALIDATION_OUTCOME.CORRUPT_PAYLOAD);
     t.same(rejected.reasons, [RAFT_RS_CHECKPOINT_REASON.PAYLOAD_TABLES]);
     t.same(fs.readdirSync(fixture.checkpointsRoot), [String(index)]);
-    const retained = readCheckpoint({checkpointDir: original.checkpointDir, expectedIdentity: IDENTITY});
+    const retained = readCheckpoint({checkpointDir: original.checkpointDir,
+      expectedIdentity: IDENTITY});
     t.equal(retained.outcome, RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID);
     t.same(retained.descriptor, original.descriptor, 'same-index refusal preserves the original manifest and payload');
   } finally {

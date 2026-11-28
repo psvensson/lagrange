@@ -71,7 +71,8 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constant('active'),
-          host_cpu_utilization_percent: fc.float({min: Math.fround(0), max: Math.fround(50), noNaN: true}),
+          host_cpu_utilization_percent: fc.float({min: Math.fround(0), max: Math.fround(50),
+            noNaN: true}),
           memory_usage_percent: fc.float({
             min: Math.fround(WARNING_THRESHOLDS.MEMORY_PERCENT + 1),
             max: Math.fround(100),
@@ -98,7 +99,8 @@ test('Property 6: Warning Highlighting', async (t) => {
           node_id: fc.string({minLength: 1, maxLength: 20}),
           node_address: fc.string({minLength: 5, maxLength: 30}),
           status: fc.constant('active'),
-          host_cpu_utilization_percent: fc.float({min: Math.fround(0), max: Math.fround(50), noNaN: true}),
+          host_cpu_utilization_percent: fc.float({min: Math.fround(0), max: Math.fround(50),
+            noNaN: true}),
           memory_usage_percent: fc.float({min: Math.fround(0), max: Math.fround(50), noNaN: true}),
           disk_usage_percent: fc.float({
             min: Math.fround(WARNING_THRESHOLDS.DISK_PERCENT + 1),

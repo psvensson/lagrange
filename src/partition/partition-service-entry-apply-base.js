@@ -100,7 +100,8 @@ function readDescriptorAnswer(service, intent) {
   const entryId = deriveParticipantEntryId(splitDescriptorWriteKey(intent), service.partitionId);
   const recorded = readCommittedStatementOutcome(service, committedStatementEntryKey({entryId}));
   if (recorded.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED) return null;
-  return retainedSplitDescriptorAnswer({intent, digest: splitDescriptorCommandDigest(intent)}, recorded);
+  return retainedSplitDescriptorAnswer({intent, digest: splitDescriptorCommandDigest(intent)},
+    recorded);
 }
 
 function withDescriptorReceipt(result, receipt) {
@@ -119,13 +120,16 @@ function applySplitDescriptorStatement(service, command, descriptor) {
   const opposite = readDescriptorAnswer(service, {...intent, action: promote ?
     SIBLING_DESCRIPTOR_ACTION.FINALIZE : SIBLING_DESCRIPTOR_ACTION.PROMOTE});
   if (opposite?.success === false) return {refusal: opposite};
-  if (promote && opposite !== null) return {refusal: descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.FINALIZED)};
+  if (promote && opposite !== null) {
+    return {refusal: descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.FINALIZED)};
+  }
   if (!promote && opposite === null) {
     return withDescriptorReceipt({changes: 0, lastInsertRowid: null},
       siblingDescriptorDispositionIn(service.db, intent, 0, true));
   }
   const result = runCommittedPartitionStatement(service, command);
-  return withDescriptorReceipt(result, siblingDescriptorDispositionIn(service.db, intent, result.changes, false));
+  return withDescriptorReceipt(result,
+    siblingDescriptorDispositionIn(service.db, intent, result.changes, false));
 }
 
 const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
@@ -599,7 +603,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       rollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK,
         effect)});
     const commandType = command.type;
-    const descriptor = usesSplitDescriptorIdentity(command) ? decodeSplitDescriptorCommand(this, command) : null;
+    const descriptor = usesSplitDescriptorIdentity(command) ?
+      decodeSplitDescriptorCommand(this, command) : null;
     if (usesSplitDescriptorIdentity(command) && descriptor === null) {
       const code = SPLIT_DESCRIPTOR_ERROR.BYTES;
       throw committedCommandRefusal(this, {command, index, rollback: (effect) =>
@@ -656,7 +661,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       if (lockConflict !== null) {
         if (descriptor) {
           afterCommit(() => this.resolveCommittedWrite(command.entryId,
-            {...lockConflict, success: false, failureCode: lockConflict.errorCode, retryable: true, deferRetry: true}));
+            {...lockConflict, success: false, failureCode: lockConflict.errorCode, retryable: true,
+              deferRetry: true}));
           return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
         }
         return settleLockingReadRefusedCommittedStatement(
@@ -678,7 +684,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         }
       } catch (error) {
         if (descriptor) {
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () => this.rejectCommittedWrite(command.entryId, error));
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK,
+            () => this.rejectCommittedWrite(command.entryId, error));
           throw error;
         }
         return settleFailedCommittedStatement(this, {
@@ -688,7 +695,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         });
       }
       recordCommittedStatementOutcome(this, {
-        ...(descriptor ? {ownerResultText: JSON.stringify(receipt), commandDigest: descriptor.digest} : {}),
+        ...(descriptor ?
+          {ownerResultText: JSON.stringify(receipt), commandDigest: descriptor.digest} : {}),
         entryKey,
         outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
         index,

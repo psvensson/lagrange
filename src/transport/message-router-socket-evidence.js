@@ -13,7 +13,8 @@ const maxIdLength = 96;
 const familyNames = Object.freeze(['controlRead', 'controlWrite', 'query', 'cdc',
   'replicaOperation', 'participantRelease', 'membershipProbe', 'other']);
 
-const replicaTypes = new Set([...Object.values(ReplicaOperationMessageType), MESSAGE_TYPE.REPLICA_OPERATION_DISPATCH]);
+const replicaTypes = new Set([...Object.values(ReplicaOperationMessageType),
+  MESSAGE_TYPE.REPLICA_OPERATION_DISPATCH]);
 const replicaSources = new Set([...replicaTypes].map((type) => 'message:' + type.toLowerCase()));
 replicaSources.add('replica_operation_dispatch');
 replicaSources.add('coordinator_created_remote_handoff');
@@ -88,14 +89,15 @@ function copyCounts(counts) {
 function socketState(ws) {
   let state = sockets.get(ws);
   if (!state) {
-    state = {socketId: ++nextSocketId, received: {}, sent: {}, consensusBatches: consensusBatchCounters(),
+    state = {socketId: ++nextSocketId, received: {}, sent: {},
+      consensusBatches: consensusBatchCounters(),
       families: {otherService: familyCounters(), serviceResponse: familyCounters()}, sendReturned: {
-      consensus: {frames: 0, bytes: 0},
-      cdcGrantService: {frames: 0, bytes: 0},
-      otherService: {frames: 0, bytes: 0},
-      serviceResponse: {frames: 0, bytes: 0},
-      routerControl: {frames: 0, bytes: 0},
-    }};
+        consensus: {frames: 0, bytes: 0},
+        cdcGrantService: {frames: 0, bytes: 0},
+        otherService: {frames: 0, bytes: 0},
+        serviceResponse: {frames: 0, bytes: 0},
+        routerControl: {frames: 0, bytes: 0},
+      }};
     sockets.set(ws, state);
   }
   return state;
@@ -116,8 +118,10 @@ export function observeParsedFrame(router, peer, ws, frame) {
     const fact = frameFact(router, frame);
     if (tracked.has(frame.type)) state.received[frame.type] = fact;
     const connection = router.nodeConnections.get(peer);
-    if (connection) peerInbound.set(connection, {socketId: state.socketId,
-      type: typeof frame.type === 'string' ? frame.type.slice(0, maxIdLength) : null, ...fact});
+    if (connection) {
+      peerInbound.set(connection, {socketId: state.socketId,
+        type: typeof frame.type === 'string' ? frame.type.slice(0, maxIdLength) : null, ...fact});
+    }
   } catch {
     // Observation cannot change delivery or recovery.
     return null;
@@ -153,8 +157,11 @@ export function observeServiceSendReturned(ws, encoded, hasCdcGrant, deliverySou
   try {
     const state = socketState(ws);
     const bytes = typeof encoded === 'string' ? Buffer.byteLength(encoded) : encoded.byteLength;
-    countReturned(hasCdcGrant ? state.sendReturned.cdcGrantService : state.sendReturned.otherService, bytes);
-    if (!hasCdcGrant) countReturned(state.families.otherService[deliveryFamily(deliverySource)], bytes);
+    countReturned(hasCdcGrant ? state.sendReturned.cdcGrantService :
+      state.sendReturned.otherService, bytes);
+    if (!hasCdcGrant) {
+      countReturned(state.families.otherService[deliveryFamily(deliverySource)], bytes);
+    }
   } catch {
     // Preserve write callback and ACK custody.
   }
@@ -165,9 +172,12 @@ export function observeRawSend(router, ws, frame, encoded, family = 'other') {
     const state = socketState(ws);
     const counts = state.sendReturned;
     const bytes = Buffer.byteLength(encoded);
-    countReturned(frame.type === FRAME.SERVICE_RESPONSE ? counts.serviceResponse : counts.routerControl,
-      bytes);
-    if (frame.type === FRAME.SERVICE_RESPONSE) countReturned(state.families.serviceResponse[family], bytes);
+    countReturned(frame.type === FRAME.SERVICE_RESPONSE ? counts.serviceResponse :
+      counts.routerControl,
+    bytes);
+    if (frame.type === FRAME.SERVICE_RESPONSE) {
+      countReturned(state.families.serviceResponse[family], bytes);
+    }
     if (tracked.has(frame.type)) state.sent[frame.type] = frameFact(router, frame);
   } catch {
     // Observation cannot change delivery or recovery.

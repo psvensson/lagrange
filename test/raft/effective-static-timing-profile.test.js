@@ -869,7 +869,9 @@ async function snapshotProfileBounds(t, profileName) {
   });
   const coordinator = new ParallelQueryCoordinator({
     nodeId: `bounds-${profileName}`,
-    partitionQueryExecutor: () => { throw new Error('timing inspection only'); },
+    partitionQueryExecutor: () => {
+      throw new Error('timing inspection only');
+    },
   });
 
   const recoveryExecutor = {

@@ -101,7 +101,8 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
   sendDirectDispatchWakeupFromRow(row) {
     const current = this.directDispatchWakeupsInFlight.get(row.operation_id);
     if (current?.validatedReplay && samePersistedWakeRow(row, current.row)) {
-      return Promise.resolve(this.coalesceActiveDirectDispatchWakeup(row.operation_id, current.row, true));
+      return Promise.resolve(this.coalesceActiveDirectDispatchWakeup(row.operation_id, current.row,
+        true));
     }
     return this.sendDirectDispatchWakeup(this.buildOperationFromRow(row), row);
   },
