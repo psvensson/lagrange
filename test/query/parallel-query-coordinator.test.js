@@ -627,7 +627,9 @@ function createDeniedPartitionExecutorFixture({
 test('fan-out cancellation before submission sends no write', async (t) => {
   const {executor} = createDeniedPartitionExecutorFixture();
   let deliveries = 0;
-  executor.messageRouter.deliver = () => { deliveries++; };
+  executor.messageRouter.deliver = () => {
+    deliveries++;
+  };
   const token = new CancellationToken();
   token.cancel('cancel before submission');
   await t.rejects(executor.parallelQueryCoordinator.executeParallel(
@@ -684,7 +686,8 @@ for (const redirect of [false, true]) {
 for (const loseReply of [false, true]) {
   test(`overlapping writes preserve success and ${loseReply ? 'unknown' : 'committed failure'} during route backoff`,
     async (t) => {
-      const {executor, systemCache, readinessService, deniedNodeId} = createDeniedPartitionExecutorFixture();
+      const {executor, systemCache, readinessService,
+        deniedNodeId} = createDeniedPartitionExecutorFixture();
       const coordinator = executor.parallelQueryCoordinator;
       coordinator.maxParallelPartitions = 3;
       systemCache.partitions.push({partition_id: 'p3', leader_node_id: 'node-live'});
@@ -714,8 +717,10 @@ for (const loseReply of [false, true]) {
             leader.controllablePort.commit(entry);
           });
         }
-        if (!loseReply) leaders.get('p3').db.prepare(
-          'INSERT INTO test_table (id, value) VALUES (?, ?)').run('key', 'original');
+        if (!loseReply) {
+          leaders.get('p3').db.prepare(
+            'INSERT INTO test_table (id, value) VALUES (?, ?)').run('key', 'original');
+        }
 
         executor.delay = async () => {
           backoff.resolve();
@@ -745,7 +750,9 @@ for (const loseReply of [false, true]) {
           ['p1', 'p2', 'p3'], ['key', 'written'], {forRead: false, cancellationToken: token,
             routingReadinessDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE, timeoutMs: 5000});
         await Promise.race([Promise.all([bothAnswered.promise, backoff.promise]),
-          running.then(() => { throw new Error('fanout settled before overlap'); })]);
+          running.then(() => {
+            throw new Error('fanout settled before overlap');
+          })]);
         t.equal(coordinator.activeConnections, 3);
         for (const [id, leader] of leaders) {
           const failed = id === 'p3' && !loseReply;

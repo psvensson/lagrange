@@ -73,7 +73,8 @@ function readTransactionSchemaInventory(database) {
         byName.get(column.name).type.toUpperCase() === column.type.toUpperCase());
     if (!shapeValid || missing.length > 0 ||
         (trigger !== null && trigger !== INITIAL_ROW_TRIGGER_SQL)) {
-      return {enforcement: enforcementResult(STATE.INCOMPATIBLE, columns, trigger, missing), byName};
+      return {enforcement: enforcementResult(STATE.INCOMPATIBLE, columns, trigger, missing),
+        byName};
     }
     return {enforcement: enforcementResult(trigger === INITIAL_ROW_TRIGGER_SQL ?
       STATE.ENFORCED : STATE.REQUIRED, columns, trigger, missing), byName};
@@ -133,7 +134,8 @@ function coordinatorTableSchemaRefusal(tableName) {
       error: MIGRATION_REFUSAL_MESSAGE}) : null;
 }
 
-export {readTransactionSchemaInventory, isCoordinatorTable, readTransactionSchemaEnforcement, installTransactionSchemaEnforcement,
+export {readTransactionSchemaInventory, isCoordinatorTable, readTransactionSchemaEnforcement,
+  installTransactionSchemaEnforcement,
   assertTransactionSchemaWriteEnforced, coordinatorTableSchemaRefusal,
   transactionSchemaWriteRefusal, TRANSACTION_SCHEMA_ENFORCEMENT_STATE,
   TRANSACTION_SCHEMA_ENFORCEMENT_ERROR};

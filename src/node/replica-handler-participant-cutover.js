@@ -30,8 +30,7 @@ import {TRANSACTION_RELEASE_CENSUS_STATE} from
 import {TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_PHASE as PHASE,
-  PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
+  PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 
@@ -123,12 +122,7 @@ async function resumeCohort(handler, service, request, release, attempt, census,
   fields = {}) {
   // Both first-origin and current-origin releases must re-establish control
   // authority after their own paused census, before any member can reopen.
-  const currentControlOwner = await releaseControlOwnerFirst(
-    handler,
-    service,
-    request,
-    PHASE.CONTROL_BEFORE_RESUME,
-  );
+  const currentControlOwner = await releaseControlOwnerFirst(handler, service, request);
   if (currentControlOwner !== null) return currentControlOwner;
   const followers = census.filter((facts) =>
     facts.generation.replicaId !== service.replicaId);
@@ -251,7 +245,7 @@ function alternateControlPeerNodeIds(handler, partitionId, excludedNodeId) {
   return nodeIds;
 }
 
-async function releaseControlOwnerFirst(handler, service, request, phase) {
+async function releaseControlOwnerFirst(handler, service, request) {
   if (service.tableName === TABLES.SQL_TRANSACTIONS) return null;
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
   let nodeId = currentControlNodeId(handler, service, partitionId);
@@ -266,7 +260,7 @@ async function releaseControlOwnerFirst(handler, service, request, phase) {
     TRIGGER.EXISTING_ORIGIN : request.trigger;
   let answer = await requestParticipantRelease(handler, {partitionId, nodeId,
     targetBuildDigest: request.targetBuildDigest, trigger,
-    deadlineAtMs: request.deadlineAtMs, authorization}, releaseTrace(request), phase);
+    deadlineAtMs: request.deadlineAtMs, authorization});
   if (answer?.outcome === OUTCOME.UNAVAILABLE &&
       answer?.missingFact === MISSING_FACT.REPLICA_RELEASE_REPLY &&
       !isNonEmptyString(answer?.inspectNodeId)) {
@@ -278,7 +272,7 @@ async function releaseControlOwnerFirst(handler, service, request, phase) {
         trigger,
         deadlineAtMs: request.deadlineAtMs,
         authorization,
-      }, releaseTrace(request), phase);
+      });
       if (controlReleaseAnswerValid(redirected, request.targetBuildDigest)) {
         answer = redirected;
         nodeId = candidateNodeId;
@@ -478,12 +472,7 @@ async function runCutoverAttempt(handler, request) {
   const localRefusal = request.trigger === TRIGGER.FRESH_CREATE ? null :
     await localReleaseRefusal(handler, service, request);
   if (localRefusal !== null) return localRefusal;
-  const controlOwner = await releaseControlOwnerFirst(
-    handler,
-    service,
-    request,
-    PHASE.CONTROL_BEFORE_PAUSE,
-  );
+  const controlOwner = await releaseControlOwnerFirst(handler, service, request);
   if (controlOwner !== null) return controlOwner;
   // Close the current leader before any awaited remote observation. A
   // missing member cannot leave reachable members open on a failed release.

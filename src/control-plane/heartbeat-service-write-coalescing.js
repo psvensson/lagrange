@@ -78,7 +78,8 @@ function heartbeatPlacementPressureReason(row) {
 
 function buildNodeHeartbeatUtilizationSignature(updateRow, options = {}) {
   return JSON.stringify({
-    cpuUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.host_cpu_utilization_percent, options),
+    cpuUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.host_cpu_utilization_percent,
+      options),
     memoryUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.memory_usage_percent, options),
     diskUsageBucket: bucketNodeHeartbeatUsagePercent(updateRow.disk_usage_percent, options),
   });
@@ -102,6 +103,15 @@ function resolveHeartbeatBudgetFields(cachedRow) {
     fields[COLUMN.STORAGE_BUDGET_UPDATED_AT] = Math.floor(budgetUpdatedAt);
   }
   return fields;
+}
+
+// Whether the last heartbeat publication failed in an escalated
+// (maintenance/recovery) mode.
+function isEscalatedPublicationFailureRetry(options) {
+  return options.heartbeatConsecutiveFailures > 0 &&
+    options.isHeartbeatEscalatedPublicationMode(
+      options.lastHeartbeatPublicationDecision?.publicationMode,
+    );
 }
 
 function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
@@ -130,12 +140,7 @@ function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
   // own cadence: lease maintenance is owned by the staleness bound below and
   // by the lifecycle owner's lease-recovery admission, never by turning
   // every failure into a standing critical lane.
-  if (
-    options.heartbeatConsecutiveFailures > 0 &&
-    options.isHeartbeatEscalatedPublicationMode(
-      options.lastHeartbeatPublicationDecision?.publicationMode,
-    )
-  ) {
+  if (isEscalatedPublicationFailureRetry(options)) {
     return Object.freeze({
       state: options.writeDecisionState.RECOVERY_FAILURE_RETRY,
       elapsedMs,

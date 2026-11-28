@@ -329,7 +329,9 @@ describe('readiness summary and canonical history outcome accounting', () => {
       const factsAttempts = [];
       const laneAttempts = [];
       ctx.budget.attempts = 10;
-      ctx.sleep = async () => { attempt++; };
+      ctx.sleep = async () => {
+        attempt++;
+      };
       ctx.sshRun = async (host, opts, command, timeoutMs) => {
         if (stringIncludes(command, '/management/v1/facts')) {
           factsAttempts.push(attempt);
@@ -366,7 +368,9 @@ describe('readiness summary and canonical history outcome accounting', () => {
     const batches = [];
     const lanes = [];
     Object.assign(ctx.budget, {attempts: 17, stablePolls: 3});
-    ctx.sleep = async () => { attempt++; };
+    ctx.sleep = async () => {
+      attempt++;
+    };
     ctx.sshRun = async (host, opts, command, timeout) => {
       if (command.includes('/management/v1/facts')) {
         facts.push(attempt);
@@ -396,7 +400,9 @@ describe('readiness summary and canonical history outcome accounting', () => {
     const {ctx, now, sshRun} = createStageObservationContext();
     let attempt = 1;
     ctx.budget.attempts = 6;
-    ctx.sleep = async () => { attempt++; };
+    ctx.sleep = async () => {
+      attempt++;
+    };
     ctx.sshRun = async (host, opts, command, timeoutMs) => {
       if (!stringIncludes(command, '/management/v1/facts')) {
         return sshRun(host, opts, command, timeoutMs);

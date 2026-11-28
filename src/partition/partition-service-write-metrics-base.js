@@ -1,4 +1,4 @@
-import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from
+import {carriesSplitDescriptorIntent, decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, SPLIT_DESCRIPTOR_ERROR, usesSplitDescriptorIdentity} from
   './partition-split-descriptor-command.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
@@ -60,9 +60,7 @@ const {
   WRITE_PHASE_FIELD_APPLY_WRITE_MS,
   WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
   WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
-  WRITE_PHASE_FIELD_LOG_APPEND_MS,
   WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-  WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
   buildPartitionWriteEntry,
   getSystemCachePrimaryKeyField,
@@ -79,7 +77,8 @@ function buildQueryOperation(sql, params, options) {
     operationId: options.operationId || null,
     idempotencyKey: options.idempotencyKey || null,
     splitMirrorOrigin: options.splitMirrorOrigin || null,
-    ...(Object.hasOwn(options, 'splitDescriptorIntent') ? {splitDescriptorIntent: options.splitDescriptorIntent} : {}),
+    ...(carriesSplitDescriptorIntent(options) ?
+      {splitDescriptorIntent: options.splitDescriptorIntent} : {}),
   };
 }
 
@@ -207,7 +206,8 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       // its outcome row by applyWrite (nothing is proposed), before any
       // admission rule or the ceiling pre-check: state that changed after the
       // write committed never turns its outcome into a refusal.
-      if (usesSplitDescriptorIdentity(operation) && !decodeSplitDescriptorCommand(this, operation)) {
+      if (usesSplitDescriptorIdentity(operation) &&
+          !decodeSplitDescriptorCommand(this, operation)) {
         return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
       }
       if (this.isSettledRedelivery(operation)) {
@@ -473,10 +473,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       [WRITE_PHASE_FIELD_ENTRY_BUILD_MS]: entryBuildMs,
       [WRITE_PHASE_FIELD_FORWARD_DELIVER_MS]:
         phaseTimings?.[WRITE_PHASE_FIELD_FORWARD_DELIVER_MS] || 0,
-      [WRITE_PHASE_FIELD_LOG_APPEND_MS]:
-        phaseTimings?.[WRITE_PHASE_FIELD_LOG_APPEND_MS] || 0,
-      [WRITE_PHASE_FIELD_SQLITE_RUN_MS]:
-        phaseTimings?.[WRITE_PHASE_FIELD_SQLITE_RUN_MS] || 0,
       [WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS]:
         phaseTimings?.[WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS] || 0,
       [WRITE_PHASE_FIELD_APPLY_WRITE_MS]:
@@ -729,7 +725,8 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       entryType: entry.type,
     });
     const entryKey = this.getCommittedEntryKey(entry);
-    const descriptor = usesSplitDescriptorIdentity(entry) ? decodeSplitDescriptorCommand(this, entry) : null;
+    const descriptor = usesSplitDescriptorIdentity(entry) ?
+      decodeSplitDescriptorCommand(this, entry) : null;
     if (usesSplitDescriptorIdentity(entry) && descriptor === null) {
       return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
     }

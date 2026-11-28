@@ -27,6 +27,7 @@ import {
   MERGE_ABORT_OUTCOME,
   PARTITION_TRANSITION_STATE,
   PRE_CUTOVER_MERGE_STATES,
+  WORKFLOW_FAMILY,
 } from './partition-constants.js';
 import {
   MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
@@ -145,7 +146,7 @@ class ManagedMergeWorkflowDissolutionMethods {
         )) {
       return false;
     }
-    const terminal = terminalMirrorIdentity(workflow, 'merge');
+    const terminal = terminalMirrorIdentity(workflow, WORKFLOW_FAMILY.MERGE);
     await this.persistTerminalTransitionClear(workflow);
     this.workflowCoordinator.removeWorkflow(workflowId);
     return terminal;

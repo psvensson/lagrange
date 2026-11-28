@@ -3,8 +3,7 @@ import {reconcileFailedMirrorCustody, redriveFailedMirrorRelease} from '../../sr
 import {readDurableMirrorRetentionCustodyIn, replicateSourceMirrorRetentionCustody} from '../../src/partition/partition-mirror-effect-retention.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {PARTITION_SERVICE_SHARED} from
-  '../../src/partition/partition-service-shared.js';
+import '../../src/partition/partition-service-shared.js';
 import {PARTITION_TRANSITION_STATE} from
   '../../src/partition/partition-constants.js';
 import {PARTITION_SERVICE_MESSAGE_TYPE} from
@@ -47,7 +46,6 @@ import {
 } from './workflow-record-sqlite-world.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
-const {RaftRole} = PARTITION_SERVICE_SHARED;
 const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 const NO_TIMERS = Object.freeze({setTimeout: () => null, clearTimeout() {}});
 const SOURCE = 'users-p1';
@@ -163,7 +161,8 @@ function buildOwner(store, source, startDelivery) {
   return workflow;
 }
 
-async function registerRealStartAuthorization(source, family, metadata, {children = [], recordStore} = {}) {
+async function registerRealStartAuthorization(source, family, metadata,
+  {children = [], recordStore} = {}) {
   const store = recordStore ?? openRecordStore({partitions: [
     {partition_id: SOURCE},
     {partition_id: 'users-p2'},
@@ -439,7 +438,7 @@ test('a stopped split replays the same durable checkpoint when the final child r
   await resumeFixtureParticipantAdmission(source);
   await resumeFixtureParticipantAdmission(target);
   const {workflow, store, metadata} = await registerRealStartAuthorization(source,
-    'split', plan, {children: plan.targetPartitionIds.map((partition_id) => ({partition_id, partition_version: 2}))});
+    'split', plan, {children: plan.targetPartitionIds.map((partitionId) => ({partition_id: partitionId, partition_version: 2}))});
   const project = () => source.systemTableCache.applySystemTableChange(
     'tables', 'UPDATE', store.tablesRow());
   project();
@@ -449,17 +448,21 @@ test('a stopped split replays the same durable checkpoint when the final child r
   let routeRestored = false;
   let denied = 0;
   workflow.resolveSplitChildLeaderRoutingEvidence = (id) => {
-    const finalCheck = store.tablesRow().partition_transition_state === PARTITION_TRANSITION_STATE.SPLIT_CATCHUP;
+    const finalCheck =
+      store.tablesRow().partition_transition_state === PARTITION_TRANSITION_STATE.SPLIT_CATCHUP;
     const routable = routeRestored || id !== right || !finalCheck;
     if (!routable) denied++;
     return {leaderNodeId: 'node-a', routableNodeIds: routable ? ['node-a'] : []};
   };
   let snapshots = 0;
   const openSnapshot = source.openSplitSnapshotDatabase.bind(source);
-  source.openSplitSnapshotDatabase = () => { snapshots++; return openSnapshot(); };
+  source.openSplitSnapshotDatabase = () => {
+    snapshots++; return openSnapshot();
+  };
   let releasedAfterReplay = false;
   const replayed = [];
-  source.sqlQueryEngine.queryExecutor = {executeOnPartition: async (id, sql, params, _r, _p, _g, options) => {
+  source.sqlQueryEngine.queryExecutor = {executeOnPartition: async (id, sql, params, _r, _p, _g,
+    options) => {
     t.equal(id, left, 'post-checkpoint write is routed to its actual child');
     t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken,
       metadata.workflowFenceToken, 'pin still held at replay delivery');
@@ -472,7 +475,8 @@ test('a stopped split replays the same durable checkpoint when the final child r
     if (raw?.mirrorCustodyGrants?.some((g) =>
       g.partitionId === SOURCE && g.fence === metadata.workflowFenceToken && g.release)) {
       releasedAfterReplay ||= replayed.length === 1 &&
-        readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken === metadata.workflowFenceToken;
+        readDurableMirrorRetentionCustodyIn(
+          source.db)?.workflowFenceToken === metadata.workflowFenceToken;
     }
   });
   const start = () => source.handleStartSplitReplication({tableId: source.tableId,
@@ -484,7 +488,8 @@ test('a stopped split replays the same durable checkpoint when the final child r
   t.ok(denied > 0, 'readiness refused inside the final cutover turn');
   t.equal(recordSnapshot(store).sourceStatus, SPLIT_ACK_STATUS.CATCHUP_READY);
   t.equal(recordSnapshot(store).state, PARTITION_TRANSITION_STATE.SPLIT_CATCHUP);
-  t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken, metadata.workflowFenceToken);
+  t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowFenceToken,
+    metadata.workflowFenceToken);
   t.equal((await source.executeQuery('INSERT INTO users (id) VALUES (?)', ['a'],
     {entryId: 'write-during-final-route-refusal'})).success, true);
   t.same(target.db.prepare('SELECT id FROM users').all(), []);
@@ -727,14 +732,14 @@ test('accepted START recovery and concurrent redelivery retain one physical ' +
     const authorizationGate = deferred();
     const owner = kind === 'split' ? {
       reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
-        acknowledgeSourceParticipant: async (_workflowId, ack) => {
+      acknowledgeSourceParticipant: async (_workflowId, ack) => {
         await authorizationGate.promise;
         return {result: 'accepted', splitCutoverApplied:
           ack.status === 'catchup_ready'};
       },
     } : {
       reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
-        acknowledgeMergeSourceParticipant: async (_workflowId, ack) => {
+      acknowledgeMergeSourceParticipant: async (_workflowId, ack) => {
         await authorizationGate.promise;
         return {result: 'accepted', mergeCutoverApplied:
           ack.status === 'catchup_ready'};
@@ -787,11 +792,11 @@ test('accepted START recovery and concurrent redelivery retain one physical ' +
     const restarted = await buildSource(t, restartedEvents);
     const duplicateOwner = kind === 'split' ? {
       reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
-        acknowledgeSourceParticipant: async () => ({result: 'duplicate',
+      acknowledgeSourceParticipant: async () => ({result: 'duplicate',
         splitCutoverApplied: false}),
     } : {
       reserveSourceMirrorCustody: sourceMirrorReservationFixture(),
-        acknowledgeMergeSourceParticipant: async () => ({result: 'duplicate',
+      acknowledgeMergeSourceParticipant: async () => ({result: 'duplicate',
         mergeCutoverApplied: false}),
     };
     restarted.sqlQueryEngine = kind === 'split' ?
@@ -931,8 +936,9 @@ test('terminal quiesced predecessors admit reset workflow numbering and a ' +
   t.equal(readDurableMirrorRetentionCustodyIn(source.db)?.workflowId, split.metadata.workflowId,
     'a failed local run still owes its original grant');
   await split.workflow.persistExecutionFailure(split.metadata.workflowId, new Error('split cancelled'));
-  const pendingClear = await rejectionOf(() => split.workflow.workflowCoordinator.clearWorkflowRecord(
-    split.metadata.workflowId, new Set([PARTITION_TRANSITION_STATE.FAILED])));
+  const pendingClear = await rejectionOf(() =>
+    split.workflow.workflowCoordinator.clearWorkflowRecord(
+      split.metadata.workflowId, new Set([PARTITION_TRANSITION_STATE.FAILED])));
   t.equal(pendingClear?.refusal?.reason, 'source-mirror-release-pending',
     'the exact terminal record still holds the predecessor until release');
   await reconcileFailedMirrorCustody(source);

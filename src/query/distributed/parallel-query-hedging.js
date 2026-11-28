@@ -39,7 +39,7 @@ function createHedgedFanoutState(partitionIds, executionOptions = {}) {
     const controller = new AbortController();
     controllers.set(partitionId, controller);
     signals.set(partitionId, executionOptions.signal ?
-      AbortSignal.any([executionOptions.signal, controller.signal]) : controller.signal);
+      globalThis.AbortSignal.any([executionOptions.signal, controller.signal]) : controller.signal);
   }
   const state = {
     controllers,

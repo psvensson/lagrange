@@ -1,7 +1,6 @@
 import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {socketEvidence} from '../../src/transport/message-router-socket-evidence.js';
 import {encodeDeliveryMessage} from '../../src/transport/message-router-delivery-encoding.js';
 import {withDeliveryLifetime} from '../../src/transport/message-router-delivery-lifetime.js';
 import {CDC_DELIVERY_REMAINING_MS, createCdcDeliveryBudget, prepareCdcDeliveryMessage} from
@@ -107,10 +106,6 @@ test('actual router debits final preparer work and preserves text-frame bytes',
     assert.deepEqual(write.frame.payload.events, input.events);
     assert.equal(write.options.binary, false);
     assert.equal(write.bytes.length, Buffer.byteLength(JSON.stringify(write.frame)));
-    const connection = f.router.nodeConnections.get(CDC_ROUTER_TEST.PEER);
-    const evidence = socketEvidence(f.router, CDC_ROUTER_TEST.PEER, connection, peer.accepted);
-    assert.deepEqual(evidence.applicationSendReturned.cdcGrantService,
-      {frames: 1, bytes: write.bytes.length}, 'receiver-local CDC grant counts the stamped UTF-8 view');
     peer.ack('prepared-duration', {transportProbe: 'encoding'});
     write.release();
     assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await result)), true);

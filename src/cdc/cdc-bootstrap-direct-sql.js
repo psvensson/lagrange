@@ -1,4 +1,5 @@
 import {splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
+import {carriesSplitDescriptorIntent} from '../partition/partition-split-descriptor-command.js';
 /**
  * The bootstrap-mode path of the CDC integration service (the seed's
  * registration window): reads on the local partition replica, writes through
@@ -49,11 +50,9 @@ function selectDirectSqlCandidates(services, tableName, targetPartitionId) {
   return candidates;
 }
 
-async function executeBootstrapDirectSql(service, sql, params = [], options = {}) {
-  if (!service.bootstrapMode || !service.localPartitionServices) {
-    throw new Error(CDC_LOG_MSG.BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL);
-  }
-
+// The local partition a bootstrap-mode statement runs on: its table's initial
+// partition, else the services declaring the table; the leader first.
+function resolveBootstrapDirectPartition(service, sql) {
   const tableNameResult = service.extractTableNameFromSQL(sql);
   if (
     tableNameResult.state !==
@@ -94,6 +93,15 @@ async function executeBootstrapDirectSql(service, sql, params = [], options = {}
         `Available partitions: ${availablePartitions.join(CDC_INTEGRATION_SERVICE_LITERAL.EMPTY_2)}`,
     );
   }
+  return {tableName, partitionService};
+}
+
+async function executeBootstrapDirectSql(service, sql, params = [], options = {}) {
+  if (!service.bootstrapMode || !service.localPartitionServices) {
+    throw new Error(CDC_LOG_MSG.BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL);
+  }
+
+  const {tableName, partitionService} = resolveBootstrapDirectPartition(service, sql);
   service.logger.debug(
     CDC_INTEGRATION_SERVICE_LITERAL.EXECUTING_SQL_DIRECTLY_ON_LOCAL_PARTITION_BOOTSTRAP_MODE,
     {
@@ -133,7 +141,7 @@ async function executeBootstrapDirectSql(service, sql, params = [], options = {}
   // twice (R11: no fallback).
   return normalizeLocalSystemTableWriteResult(
     await submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
-      () => Object.hasOwn(options, 'splitDescriptorIntent') ?
+      () => carriesSplitDescriptorIntent(options) ?
         partitionService.executeQuery(sql, params, {
           ...splitDescriptorIntentFields(options), idempotencyKey: options.idempotencyKey,
           entryId: deriveParticipantEntryId(options.idempotencyKey, partitionService.partitionId),

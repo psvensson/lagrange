@@ -900,6 +900,31 @@ test('liveness projections reuse the admitted shared row while time and source c
   t.end();
 });
 
+test('each liveness owner holds its own admitted snapshot of one shared frozen row', (t) => {
+  const first = buildOwnerFixture();
+  const second = buildOwnerFixture({timeSource: first.timeSource});
+  t.teardown(() => {
+    first.owner.shutdown();
+    second.owner.shutdown();
+  });
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, first.row);
+  const nodeId = first.row.node_id;
+  const project = (owner) => owner.projectNodeLivenessFromEvidence(
+    nodeId, {nodeRow: cache.getShared(TABLES.NODES, nodeId)}, first.timeSource.now());
+  t.equal(project(first.owner).readyNow, true);
+  t.equal(project(second.owner).readyNow, true);
+  const firstSnapshot = first.owner.projectedEvidenceRowByNodeId.get(nodeId);
+  const secondSnapshot = second.owner.projectedEvidenceRowByNodeId.get(nodeId);
+  t.same(secondSnapshot, firstSnapshot, 'both owners admit the same row contents');
+  t.not(secondSnapshot, firstSnapshot,
+    'an admitted snapshot is owner-held state, never shared between owners');
+  t.equal(project(first.owner).readyNow, true);
+  t.equal(first.owner.projectedEvidenceRowByNodeId.get(nodeId), firstSnapshot,
+    'the owner still reuses its own admitted snapshot');
+  t.end();
+});
+
 test('nested source rows are admitted before becoming the shared comparison snapshot', (t) => {
   const fixture = buildOwnerFixture();
   t.teardown(() => fixture.owner.shutdown());

@@ -201,8 +201,8 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
         description: 'Local seed-starvation gate: form five local nodes through schema admission and fail unless the formation verdict is PASS within the seed event-loop budget.',
       }),
       Object.freeze({
-        command: 'npm run health:formation -- [--gcp] [--summary]',
-        description: 'Record one formation-verdict trend record from a formation-only run (local or GCP) or print the recent trend and pass rate.',
+        command: 'npm run health:formation -- [--gcp --trend <file>] [--summary [--fetch]]',
+        description: 'Record one formation-verdict trend record from a formation-only run (local or GCP) into --trend <file>, or print the recent trend and pass rate from the data branch data/formation-health.',
       }),
       Object.freeze({
         command: 'npm run distributed:all',

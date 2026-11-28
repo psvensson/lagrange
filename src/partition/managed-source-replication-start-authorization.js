@@ -115,7 +115,9 @@ async function acknowledgeSourceStartAtRecordTurn(coordinator, workflowId, ack,
     return coordinator.acknowledgeParticipant(workflowId, ack);
   }
   return coordinator.authorizeParticipantStart(
-    workflowId, ack, buildAuthorization({...startContext.metadata, participantKey: ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY],
+    workflowId, ack,
+    buildAuthorization({...startContext.metadata,
+      participantKey: ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY],
       tableId: startContext.tableId, tableName: startContext.tableName},
     {confirmationOnly: startContext.confirmationOnly === true,
       requireExecutable: startContext.requireExecutable === true}));

@@ -9,8 +9,9 @@ import {SIBLING_DESCRIPTOR_ACTION,
 async function submitSplitSiblingDescriptor(owner, workflow, subject, action) {
   const {metadata} = workflow;
   const intent = siblingIntent(workflow.tableId, metadata, subject, action);
-  const issued = Array.isArray(metadata.splitIssuedSiblings) ? metadata.splitIssuedSiblings.map((row) =>
-    siblingIntent(workflow.tableId, metadata, row, action)) : [];
+  const issued = Array.isArray(metadata.splitIssuedSiblings) ?
+    metadata.splitIssuedSiblings.map((row) =>
+      siblingIntent(workflow.tableId, metadata, row, action)) : [];
   const byId = new Map(issued.map((candidate) => [candidate?.partitionId, candidate]));
   const retained = byId.get(intent?.partitionId);
   const state = action === SIBLING_DESCRIPTOR_ACTION.PROMOTE ?
@@ -18,7 +19,8 @@ async function submitSplitSiblingDescriptor(owner, workflow, subject, action) {
   // Workflow and epoch operands are fixed by the shared plan decoder. Only
   // the prior descriptor attempt can differ between two valid same-ID subjects.
   if (!intent || workflow.workflowId !== intent.workflowId || workflow.status !== state ||
-      byId.has(undefined) || byId.size !== issued.length || retained?.priorAttempt !== intent.priorAttempt) {
+      byId.has(undefined) || byId.size !== issued.length ||
+      retained?.priorAttempt !== intent.priorAttempt) {
     throw Object.assign(new Error('Sibling descriptor subject differs from the issued split plan'),
       {code: 'split_sibling_plan_mismatch'});
   }

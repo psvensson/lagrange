@@ -14,6 +14,10 @@ releases without a compatibility guarantee.
 
 Partition stores created with the 0.4.2 committed-statement outcome table cannot be opened in place by this candidate. The new table records which committed mutations require retained effects for split and merge replay. Opening a store with the earlier table definition returns `partition_statement_outcome_format_unsupported`. Use a separate, fresh data directory to evaluate this build and preserve the original directory for use with 0.4.2.
 
+### Changed
+
+- The nightly formation-health trend record moved from `data/formation-health/trend.ndjson` on main to the branch `data/formation-health`; `npm run health:formation` records with `--trend <file>` and reads the branch with `--summary`/`--metric` (`--fetch` fetches it first). The data-only pre-push path, `--verify-trend-push`, `--bot-commits` and the publisher's inert-data rebase are removed.
+
 ## [0.4.2] — 2026-11-24
 
 ### Fixed

@@ -1,4 +1,4 @@
-import {SPLIT_DESCRIPTOR_ERROR, descriptorRefusal, usesSplitDescriptorIdentity}
+import {SPLIT_DESCRIPTOR_ERROR, carriesSplitDescriptorIntent, descriptorRefusal, usesSplitDescriptorIdentity}
   from './partition-split-descriptor-command.js';
 import {splitDescriptorCommitFields, splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 // Remote QUERY routing preserves the partition's ordinary read/write gates and
@@ -71,7 +71,6 @@ const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
 });
 
 const DDL_STATEMENT_HEADS = new Set(['CREATE', 'ALTER', 'DROP']);
-const SPLIT_DESCRIPTOR_INTENT_FIELD = 'splitDescriptorIntent';
 const DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS = 15000; // ends-on: conflicting row-key holder settlement
 const DEFAULT_INITIAL_CONFLICT_WAIT_MS = 3000; // ends-on: conflicting row-key holder settlement
 const DEFAULT_HELD_WRITE_CONFLICT_WAIT_MS = 600; // ends-on: conflicting row-key holder settlement
@@ -635,7 +634,7 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
     }
     const isWriteOperation = this.isWriteQuery(sql);
     if (usesSplitDescriptorIdentity(payload) &&
-        (!Object.hasOwn(payload, SPLIT_DESCRIPTOR_INTENT_FIELD) || !isWriteOperation ||
+        (!carriesSplitDescriptorIntent(payload) || !isWriteOperation ||
          payload.transactionId != null ||
          payload[QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION] != null)) {
       return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);

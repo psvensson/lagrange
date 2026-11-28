@@ -235,9 +235,12 @@ lab. Do not invoke a default or fallback that violates the current work's runner
 restriction; inspect the installed route and record any capability gap with its
 existing owner.
 
-When origin/main advances only by inert data commits (the nightly formation
-trend), the publisher rebases local commits over them, refusing a dirty tracked
-tree or conflict. Direct non-`main` branch pushes are preservation actions: the
+The publisher publishes a fast-forward of origin/main only: when origin/main
+has moved, rebase or merge it into the work and publish again. The nightly
+formation trend is not on main; it lives on the branch `data/formation-health`
+(file `trend.ndjson`), pushed by the workflow, and the probes that read it use
+the local `origin/data/formation-health` ref (`npm run health:formation --
+--summary --fetch` fetches that one ref first). Direct non-`main` branch pushes are preservation actions: the
 hook skips the local proof gate so committed WIP can be retained remotely. That
 branch is not Quest-land, merge, release or publication approval.
 `LAGRANGE_PUSH_PROVE_BRANCH=1` requests the full branch push gate only where its
@@ -355,6 +358,65 @@ attempt its own identity, and keep every observed outcome. A combined receipt
 that hides an earlier required failure or missing invocation cannot establish
 acceptance. Record and repair any such enforcement gap through the existing
 proof/publication owner; a documentation revision does not repair that code.
+
+## Formation trend record (data branch)
+
+The nightly formation-health record (`trend.ndjson`, one JSON line per scheduled run) lives on the branch
+`data/formation-health`, pushed by `.github/workflows/formation-health.yml` into its own checkout of that
+branch. Nothing commits it to main: main requires status checks, which a workflow-token push cannot satisfy
+on a personal repository. This section is the successor policy for the storage path that the solved quest
+`formation-health-verdicts` fixed ("commits it to main with the workflow token"); that quest is sealed and is
+not edited.
+
+- **What moved, and what was preserved (WF6).** The branch was seeded from the last copy on main byte for byte;
+  rows the old workflow added between the seed and the merge are appended in one commit. The seed and the
+  reconciliation are steps of the landing and are not done until it lands; the landing record holds their
+  commands and the seed digest (`af945ec79dafa49739ef6e2ea4285b8d6c5c50140fe65e08e348cfc87c8bd4b0`, the
+  63-line copy at `ab347e962`). Failed runs, the
+  record schema (`schemaVersion` 1), the commit identity `formation-health` and the per-record workflow run
+  are unchanged. Retention is ordinary branch history, one commit per record, plus the workflow's artifact
+  upload. The 60 earlier commits stay on main as history.
+- **Retired control.** The bounded-bot-commit control of 2026-09-13 (`--bot-commits`, which held the
+  `formation-health` identity to one inert data file on main) is retired because its subject is gone: nothing
+  of that identity commits to main any more. The pre-push data-only path and the publisher's inert-data
+  rebase went with it; the publisher is fast-forward only.
+- **The reader owns validity.** `scripts/checks/formation-health.js` (`readDataBranchTrend`) counts the
+  last three LINES, not parsed records. A line counts as a measuring record only when it is exactly what the
+  writer writes (canonical JSON, schema 1, ISO time, a named head, verdict PASS or FAIL); every other line
+  (torn, glued, hand-made, another schema, a non-verdict) is unmeasured and is reported by line number. A file
+  that is not ndjson, an entry that is not a regular file, a ref that holds no `trend.ndjson`, a ref that is
+  not a commit, an absent ref, or git that cannot run is `unavailable` with its own reason, never an empty
+  trend. The ref is resolved once to a commit sha and every later git call names that sha.
+- **Probes read the local ref and never fetch.** `--metric`, `--summary` and the consolidation budget read
+  `refs/remotes/origin/data/formation-health`; only `--fetch` (an operator step, refused under
+  `LAGRANGE_PROBE=1`) fetches that one ref. The measurement names its input: the budget row, `--metric` and
+  `--summary` print the data-branch commit they read (a note line before the number; the solver reads the last
+  numeric line).
+- **Retained evidence for the probes (R27; the lead's ruling, 2026-11-28).** For the probes
+  `node scripts/checks/apparatus-release-consolidation-budget.js --metric` and
+  `node scripts/checks/formation-health.js --metric`, the retained evidence for the formation-trend input is
+  the commit of the branch `data/formation-health`, read from the local remote-tracking ref
+  `refs/remotes/origin/data/formation-health` without any fetch. The measurement names that commit where it has a
+  place for a note: `formation-health.js --metric` and `--summary` print it before the number, and the budget
+  prints it in its table and `--json` row (the budget's bare `--metric` prints only the number). Every
+  line that is not a whole canonical measuring record is unmeasured, and an unreadable trend is the typed
+  state `unavailable` and unmet. The fetch is an operator step that refuses under the probe mark. This
+  admits the named data-branch commit as retained evidence for that one input; it depends on the branch
+  being protected against deletion and non-fast-forward updates.
+- **Order around the nightly window.** Seed the branch immediately before the change merges, and reconcile
+  after the merge. Do none of the three (seed, merge, reconcile) between 03:15Z and the end of that night's
+  run (the cron is `17 3 * * *`; a run takes about 10 to 60 minutes): the old workflow could still be
+  appending to main, or the new one to the branch, while the copies are compared. Main's last copy is found
+  shape-independently (the largest copy any parent of a removing commit still holds), so it holds for rebase,
+  squash, merge commits, and main merged into the work then fast-forward published.
+- **Known limits of the workflow text test.** `test/scripts/formation-health.test.js` reads the workflow text;
+  six forms of a second push survive it: a line continuation (`git \` then `push ...`), an indirection
+  (`G=git; $G push ...`), a second push on the legitimate line, a local composite action (`uses: ./...`), a
+  helper script that pushes, and a push through a shell function. The real control is the protection on main
+  and on the data branch (below), not the text test.
+- **Owner actions after the merge** (GitHub settings, not code): a ruleset on exactly
+  `refs/heads/data/formation-health` with deletion and non-fast-forward protection (and no required-check
+  rule); and the required `gate` check scoped to the default branch only, so the branch is never covered by it.
 
 ## Partial clones (solve-v2 phase 1)
 

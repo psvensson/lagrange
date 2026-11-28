@@ -58,6 +58,16 @@ function assertReporterHeartbeatNotDeferred(reporterResult, reporterDiagnostics)
   throw deferredError;
 }
 
+// The resource sample a node heartbeat publishes: when it was taken and which
+// sample it is, then its encoded process columns.
+function resourceSampleHeartbeatColumns(sample) {
+  return {
+    [COLUMN.TELEMETRY_SAMPLED_AT]: sample?.timestamp ?? null,
+    [COLUMN.TELEMETRY_SAMPLE_ID]: sample?.sampleId ?? null,
+    ...encodeResourceSample(sample?.process),
+  };
+}
+
 class HeartbeatServicePublicationMethods {
   shouldTreatEndpointHeartbeatWriteAsDeferred(resultOrError, writeOptions) {
     if (writeOptions?.deferOnPressure !== true || !resultOrError) return false;
@@ -95,9 +105,7 @@ class HeartbeatServicePublicationMethods {
       capabilities: capabilities ?
         JSON.stringify(capabilities) : existing?.capabilities || STRING.EMPTY_JSON_ARRAY,
       last_heartbeat: now,
-      telemetry_sampled_at: sample?.timestamp ?? null,
-      telemetry_sample_id: sample?.sampleId ?? null,
-      ...encodeResourceSample(sample?.process),
+      ...resourceSampleHeartbeatColumns(sample),
       ...resolveHeartbeatBudgetFields(existing),
     };
     this.recordMemoryTrendSample(updateRow.memory_usage_percent, now);

@@ -185,7 +185,7 @@ test('NODES catalog requires the declared keys and indexes before creating any t
   ]) {
     assert.throws(() => createPartitionServiceTable({...nodesService(db), schema}),
       {code: NODES_SCHEMA_UNSUPPORTED, source: 'catalog'});
-    assert.equal(db.prepare("SELECT sql FROM sqlite_schema WHERE name = 'nodes'").get(), undefined);
+    assert.equal(db.prepare('SELECT sql FROM sqlite_schema WHERE name = \'nodes\'').get(), undefined);
   }
 });
 
@@ -195,8 +195,8 @@ test('NODES fresh creation rolls back when another table owns a required index n
   db.exec('CREATE TABLE unrelated(status TEXT); CREATE INDEX idx_nodes_status ON unrelated(status)');
   assert.throws(() => createPartitionServiceTable(nodesService(db)),
     {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
-  assert.equal(db.prepare("SELECT type FROM sqlite_schema WHERE name='nodes'").get(), undefined);
-  assert.equal(db.prepare("SELECT tbl_name FROM sqlite_schema WHERE name='idx_nodes_status'").get()
+  assert.equal(db.prepare('SELECT type FROM sqlite_schema WHERE name=\'nodes\'').get(), undefined);
+  assert.equal(db.prepare('SELECT tbl_name FROM sqlite_schema WHERE name=\'idx_nodes_status\'').get()
     .tbl_name, 'unrelated');
 });
 
@@ -232,7 +232,7 @@ test('NODES fresh partition enforces identity and replacement refuses a damaged 
     try {
       db.exec('DROP INDEX idx_nodes_address');
       await assert.rejects(open(replacement), {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});
-      assert.equal(db.prepare("SELECT name FROM sqlite_schema WHERE name='idx_nodes_address'").get(),
+      assert.equal(db.prepare('SELECT name FROM sqlite_schema WHERE name=\'idx_nodes_address\'').get(),
         undefined, 'the missing index is not recreated on reopen');
       db.exec('CREATE INDEX idx_nodes_address ON nodes(status)');
       await assert.rejects(open(replacement), {code: NODES_SCHEMA_UNSUPPORTED, source: 'sqlite'});

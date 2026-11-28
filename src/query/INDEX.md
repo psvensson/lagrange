@@ -83,7 +83,7 @@ documentClass: generated
 - [service-lifecycle-sql-contract.js](service-lifecycle-sql-contract.js) - Exact SQL ingress contract for service lifecycle control. (importers: many)
 - [service-partition-access-metrics.js](service-partition-access-metrics.js) - Service<->partition access attribution accumulator (service<->data affinity placement epic). (importers: few)
 - [service-partition-access-publisher.js](service-partition-access-publisher.js) - Publisher for the service<->partition access attribution feed (service<->data affinity placement epic). (importers: few)
-- [split-descriptor-delivery-fields.js](split-descriptor-delivery-fields.js) - Transport preserves the destination owner's receipt, including its original commit position on replay. (importers: many)
+- [split-descriptor-delivery-fields.js](split-descriptor-delivery-fields.js) - No leading comment; first export: splitDescriptorCommitFields. (importers: many)
 - [sql-adapter-constants.js](sql-adapter-constants.js) - Constants for the unified SQL adapter layer. (importers: many)
 - [sql-comment-scanner.js](sql-comment-scanner.js) - The one SQL comment scanner: `--` line comments and nested `/* *\/` block comments (PostgreSQL nests block... (importers: few)
 - [sql-execution-guard.js](sql-execution-guard.js) - SQL Execution Guard - fail-fast enforcement for single-engine policy. (importers: few)

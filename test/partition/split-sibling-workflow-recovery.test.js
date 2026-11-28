@@ -17,7 +17,8 @@ test('a lost sibling restore reply is owned through restart with no child descri
   const options = (name) => ({
     workflowOwnerId: name, cdcIntegrationService: store.cdcFor(name), now: () => now,
     getTableInfo: () => store.tablesRow(), listTableInfos: () => [store.tablesRow()],
-    getPartitionInfo: store.partitionRow, listTablePartitionRows: () => store.partitionIds().map(store.partitionRow),
+    getPartitionInfo: store.partitionRow,
+    listTablePartitionRows: () => store.partitionIds().map(store.partitionRow),
     topologyAdapter: null, parsePartitionTransition, groupRetirementScheduler: NO_TIMERS,
     groupRetirementLeaseScheduler: NO_TIMERS,
   });
@@ -67,8 +68,10 @@ test('a lost sibling restore reply is owned through restart with no child descri
   };
   t.equal((await send(SPLIT_ACK_STATUS.SNAPSHOT_STARTED)).result, 'accepted');
   await send(SPLIT_ACK_STATUS.CATCHUP_READY);
-  if (!await store.waitFor(() => submitted)) throw new Error('split did not reach sibling cleanup: ' +
+  if (!await store.waitFor(() => submitted)) {
+    throw new Error('split did not reach sibling cleanup: ' +
     JSON.stringify({record: store.tablesRow(), sibling: store.partitionRow(SIBLING)}));
+  }
   t.equal(store.tablesRow().partition_transition_state, PARTITION_TRANSITION_STATE.FAILED);
   t.same(targetPartitionIds.map(store.partitionRow), [null, null]);
   t.same(store.metadata().splitDescriptorCleanup.pendingChildren, []);
@@ -96,11 +99,13 @@ test('a lost sibling restore reply is owned through restart with no child descri
     if (id === SIBLING) replay = answer;
     return checkpoint(record, id, answer);
   };
-  if (!await store.waitFor(() => store.metadata().splitDescriptorCleanup.pendingSiblings.length === 0)) {
+  if (!await store.waitFor(() =>
+    store.metadata().splitDescriptorCleanup.pendingSiblings.length === 0)) {
     throw new Error('startup failed to redrive isolated sibling: ' + JSON.stringify(store.metadata()));
   }
   t.ok(store.metadata().workflowFenceToken > workflowFenceToken);
-  t.same(store.metadata().splitDescriptorCleanup.receipts.find((receipt) => receipt.partitionId === SIBLING), firstReceipt.splitDescriptorReceipt);
+  t.same(store.metadata().splitDescriptorCleanup.receipts.find((receipt) =>
+    receipt.partitionId === SIBLING), firstReceipt.splitDescriptorReceipt);
   t.same([replay?.logIndex, replay?.term, replay?.splitDescriptorReceipt],
     [firstReceipt.logIndex, firstReceipt.term, firstReceipt.splitDescriptorReceipt],
     'the destination returned its original committed position on lease takeover');

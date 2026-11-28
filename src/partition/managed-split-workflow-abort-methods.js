@@ -1,11 +1,11 @@
 import {sameSourceFailure} from './managed-split-descriptor-cleanup.js';
-import {refuseRecordChange} from './managed-workflow-record-store.js';
+import {RECORD_CHANGE_REFUSAL, refuseRecordChange} from './managed-workflow-record-store.js';
 import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
-  RECORD_CHANGE_REFUSAL, abortChange,
+  abortChange,
   refusedStepAs,
 } from './managed-workflow-record-changes.js';
 import {
@@ -54,7 +54,8 @@ class ManagedSplitWorkflowAbortMethods {
         !sameSourceFailure(authorization, workflow.metadata?.splitSourceFailure)) {
       return false;
     }
-    if (workflow.status !== PARTITION_TRANSITION_STATE.FAILED && !PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
+    if (workflow.status !== PARTITION_TRANSITION_STATE.FAILED &&
+        !PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
       this.logger.error(
         MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
         {workflowId, status: workflow.status, ackStatus},
@@ -106,7 +107,9 @@ class ManagedSplitWorkflowAbortMethods {
       stepName: PARTITION_TRANSITION_STATE.FAILED,
       execute: async ({workflow: currentWorkflow}) =>
         this.buildSplitAbortStepResult(workflowId, ackStatus, currentWorkflow, {
-          authorization, ownership: await this.renewSplitWorkflowOwnership(workflowId, authorization.workflowAttempt),
+          authorization,
+          ownership: await this.renewSplitWorkflowOwnership(workflowId,
+            authorization.workflowAttempt),
         }),
     }).catch(refusedStepAs(SPLIT_ABORT_OUTCOME.REFUSED_POST_CUTOVER));
 
@@ -167,7 +170,8 @@ class ManagedSplitWorkflowAbortMethods {
       ownerId: options.ownership?.ownerId,
       // Re-checked on the record at the change's turn: FAILED already is
       // unchanged; a cutover that landed first refuses the abort.
-      change: (record) => sameSourceFailure(record.metadata.splitSourceFailure, options.authorization) &&
+      change: (record) => sameSourceFailure(record.metadata.splitSourceFailure,
+        options.authorization) &&
         record.participants.get(options.authorization.participantKey)?.status === ackStatus ?
         abort(record) : refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED),
       result: SPLIT_ABORT_OUTCOME.ABORTED,

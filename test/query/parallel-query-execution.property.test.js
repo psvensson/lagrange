@@ -72,7 +72,8 @@ test('Property 70: Parallel Query Execution', async (t) => {
           }
 
           const coordinator = new ParallelQueryCoordinator({
-            partitionQueryExecutor: (sql, id, params) => partitions.get(id).executeQuery(sql, params),
+            partitionQueryExecutor: (sql, id, params) =>
+              partitions.get(id).executeQuery(sql, params),
           });
           // Disable speculative execution for cleaner test
           coordinator.speculativeExecutionEnabled = false;
@@ -113,7 +114,8 @@ test('Property 70: Parallel Query Execution', async (t) => {
           }
 
           const coordinator = new ParallelQueryCoordinator({
-            partitionQueryExecutor: (sql, id, params) => partitions.get(id).executeQuery(sql, params),
+            partitionQueryExecutor: (sql, id, params) =>
+              partitions.get(id).executeQuery(sql, params),
           });
           coordinator.speculativeExecutionEnabled = false;
 
@@ -153,7 +155,8 @@ test('Property 70: Parallel Query Execution', async (t) => {
           }
 
           const coordinator = new ParallelQueryCoordinator({
-            partitionQueryExecutor: (sql, id, params) => partitions.get(id).executeQuery(sql, params),
+            partitionQueryExecutor: (sql, id, params) =>
+              partitions.get(id).executeQuery(sql, params),
           });
           coordinator.speculativeExecutionEnabled = false;
 
@@ -192,7 +195,8 @@ test('Property 70: Parallel Query Execution', async (t) => {
           }
 
           const coordinator = new ParallelQueryCoordinator({
-            partitionQueryExecutor: (sql, id, params) => partitions.get(id).executeQuery(sql, params),
+            partitionQueryExecutor: (sql, id, params) =>
+              partitions.get(id).executeQuery(sql, params),
           });
           coordinator.speculativeExecutionEnabled = false;
 

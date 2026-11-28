@@ -233,6 +233,23 @@ function partitionCandidatesByLiveness(allRows, livenessOptions) {
   return {inFlightCandidates, terminalCandidates};
 }
 
+// Whether two adjacent history entries are NOT a copy phase handing over to a
+// different next step through the owner's previousStep link.
+function isNotCopyPhaseHandoff(start, end) {
+  return !COPY_PHASE_WORKFLOW_STEPS.has(start?.step) || end?.previousStep !== start.step ||
+    typeof end.step !== 'string' || !end.step || end.step === start.step;
+}
+
+// Whether a history entry names an owner other than the row's operation.
+function isForeignOwnerEntry(entry, row) {
+  return entry.ownerKey && entry.ownerKey !== row.operationId;
+}
+
+function hasUnorderedTimestamps(start, end) {
+  return !Number.isFinite(start.timestamp) || !Number.isFinite(end.timestamp) ||
+    end.timestamp < start.timestamp;
+}
+
 // Report the most recent completed visit to each copy phase in this operation.
 // Adjacency and the owner's previousStep link are both required.
 function completedCopyStages(row) {
@@ -243,12 +260,10 @@ function completedCopyStages(row) {
   for (let index = 1; index < history.length; index += 1) {
     const start = history[index - 1];
     const end = history[index];
-    if (!COPY_PHASE_WORKFLOW_STEPS.has(start?.step) || end?.previousStep !== start.step ||
-        typeof end.step !== 'string' || !end.step || end.step === start.step ||
-        (start.ownerKey && start.ownerKey !== row.operationId) ||
-        (end.ownerKey && end.ownerKey !== row.operationId) ||
-        !Number.isFinite(start.timestamp) || !Number.isFinite(end.timestamp) ||
-        end.timestamp < start.timestamp) continue;
+    if (isNotCopyPhaseHandoff(start, end) ||
+        isForeignOwnerEntry(start, row) ||
+        isForeignOwnerEntry(end, row) ||
+        hasUnorderedTimestamps(start, end)) continue;
     stages[start.step] = {
       startedAtMs: start.timestamp, endedAtMs: end.timestamp, nextStep: end.step,
       durationMs: end.timestamp - start.timestamp,

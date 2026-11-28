@@ -1,4 +1,3 @@
-import {RESUME_TRIGGER} from './group-retirement-resume.js';
 import {PRESSURE_GOVERNOR_ACTION, PRESSURE_WORK_CLASS, PressureGovernor} from
   '../control-plane/pressure-governor.js';
 import {PARTICIPANT_ACK_FIELD, PARTICIPANT_ACK_RESULT} from
@@ -14,6 +13,7 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   PRE_CUTOVER_MERGE_STATES,
+  RESUME_TRIGGER,
 } from './partition-constants.js';
 import {
   MERGE_ACK_CATCHUP_SATISFIED_STATUSES,

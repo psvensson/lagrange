@@ -1,10 +1,11 @@
+import fs from 'node:fs';
 import {effectiveCpuCores} from '../../src/diagnostics/resource-cpu-capacity.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ResourceDiagnosticsSampler} from
   '../../src/diagnostics/resource-diagnostics-sampler.js';
-import {sampleNodeHostStatistics} from
+import {readLinuxMemAvailableBytes, sampleNodeHostStatistics} from
   '../../src/node/node-host-statistics-sampler.js';
 
 function setup() {
@@ -225,6 +226,10 @@ test('sampleNodeHostStatistics computes CPU usage from interval deltas rather th
   t.end();
 });
 
+function errnoError(code) {
+  return Object.assign(new Error(code), {code});
+}
+
 test('effective capacity intersects affinity and visible ancestor quotas', (t) => {
   if (process.platform !== 'linux') return t.end();
   const files = new Map([
@@ -235,18 +240,167 @@ test('effective capacity intersects affinity and visible ancestor quotas', (t) =
     ['/sys/fs/cgroup/cpu.max', 'max 100000'],
   ]);
   const read = (path) => {
-    if (!files.has(path)) throw new Error('unavailable');
+    if (!files.has(path)) throw errnoError('ENOENT');
     return files.get(path);
   };
-  t.equal(effectiveCpuCores(read), 1.5);
+  t.strictSame(effectiveCpuCores(read), {cores: 1.5});
   files.set('/sys/fs/cgroup/service/cpu.max', 'max 100000');
-  t.equal(effectiveCpuCores(read), 5);
+  t.strictSame(effectiveCpuCores(read), {cores: 5});
   files.delete('/sys/fs/cgroup/service/cpu.max');
-  t.equal(effectiveCpuCores(read), null);
+  t.strictSame(effectiveCpuCores(read), {refusal: 'file_unreadable', code: 'ENOENT'});
   files.set('/proc/self/cgroup', '0::/');
   files.set('/sys/fs/cgroup/cpu.max', '200000 100000');
-  t.equal(effectiveCpuCores(read), 2);
+  t.strictSame(effectiveCpuCores(read), {cores: 2});
   files.set('/sys/fs/cgroup/cpu.max', '100000 100000');
-  t.equal(effectiveCpuCores(read), 1);
+  t.strictSame(effectiveCpuCores(read), {cores: 1});
+  t.end();
+});
+
+test('effective capacity refuses with a typed reason when capacity cannot be proven', (t) => {
+  if (process.platform !== 'linux') return t.end();
+  const status = 'Cpus_allowed_list:\t0-3';
+  const reader = (overrides) => (path) => {
+    if (path in overrides) {
+      const value = overrides[path];
+      if (value instanceof Error) throw value;
+      return value;
+    }
+    throw errnoError('ENOENT');
+  };
+  t.strictSame(effectiveCpuCores(reader({'/proc/self/cgroup': errnoError('EACCES')})),
+    {refusal: 'file_unreadable', code: 'EACCES'});
+  t.strictSame(effectiveCpuCores(reader({'/proc/self/cgroup': '1:name=x:/y'})),
+    {refusal: 'cgroup_v2_membership_absent'});
+  t.strictSame(effectiveCpuCores(reader({'/proc/self/cgroup': '0::/../x'})),
+    {refusal: 'cgroup_outside_hierarchy'});
+  t.strictSame(effectiveCpuCores(reader({'/proc/self/cgroup': '0::/', '/proc/self/status': 'none'})),
+    {refusal: 'affinity_list_absent'});
+  t.strictSame(effectiveCpuCores(reader({
+    '/proc/self/cgroup': '0::/', '/proc/self/status': 'Cpus_allowed_list:\t4-2',
+  })), {refusal: 'affinity_list_malformed'});
+  t.strictSame(effectiveCpuCores(reader({
+    '/proc/self/cgroup': '0::/', '/proc/self/status': status, '/sys/fs/cgroup/cpu.max': 'abc def',
+  })), {refusal: 'quota_malformed'});
+  t.end();
+});
+
+test('effective capacity continues past a level without cpu.max and refuses unreadable quotas', (t) => {
+  if (process.platform !== 'linux') return t.end();
+  const files = {
+    '/proc/self/cgroup': '0::/svc',
+    '/proc/self/status': 'Cpus_allowed_list:\t0-3',
+    '/sys/fs/cgroup/svc/cgroup.controllers': 'cpu',
+    '/sys/fs/cgroup/cpu.max': '200000 100000',
+  };
+  const reader = (extra) => (path) => {
+    const all = {...files, ...extra};
+    if (!(path in all)) throw errnoError('ENOENT');
+    if (all[path] instanceof Error) throw all[path];
+    return all[path];
+  };
+  t.strictSame(effectiveCpuCores(reader({})), {cores: 2});
+  t.strictSame(effectiveCpuCores(reader({'/sys/fs/cgroup/svc/cpu.max': errnoError('EACCES')})),
+    {refusal: 'file_unreadable', code: 'EACCES'});
+  t.end();
+});
+
+test('a reader that returns null for cpu.max is not an absent file', (t) => {
+  if (process.platform !== 'linux') return t.end();
+  const result = effectiveCpuCores((path) => {
+    if (path === '/proc/self/cgroup') return '0::/';
+    if (path === '/proc/self/status') return 'Cpus_allowed_list:\t0-3';
+    return null;
+  });
+  t.equal(result.refusal, 'unexpected_error');
+  t.equal(result.cores, undefined, 'published as unavailable, as before');
+  t.end();
+});
+
+test('thrown non-errors are refusals, never an exception from the capacity read', (t) => {
+  if (process.platform !== 'linux') return t.end();
+  const odd = [null, undefined, 'text', Object.assign(new Error('x'), {code: Symbol('c')})];
+  for (const thrown of odd) {
+    for (const stage of ['/proc/self/cgroup', '/proc/self/status', '/sys/fs/cgroup/cpu.max']) {
+      const result = effectiveCpuCores((path) => {
+        if (path === stage) throw thrown;
+        if (path === '/proc/self/cgroup') return '0::/';
+        return 'Cpus_allowed_list:\t0-3';
+      });
+      t.equal(result.refusal, 'unexpected_error', `${String(stage)} throwing ${String(thrown?.message ?? thrown)}`);
+      t.ok(Object.hasOwn(result, 'error'));
+      t.equal(result.error, thrown);
+    }
+  }
+  t.end();
+});
+
+test('sampler logs every kind of thrown non-error once and publishes NULL', async (t) => {
+  setup();
+  for (const thrown of [null, undefined, 'text']) {
+    const errors = [];
+    const sampler = new ResourceDiagnosticsSampler({
+      nodeId: 'diag-node-1',
+      cpuCapacityFn: () => ({refusal: 'unexpected_error', error: thrown}),
+      eventLoopDelayProvider: () => 1,
+    });
+    sampler.logger = {error: (message, data) => errors.push([message, data])};
+    t.equal(sampler.collect().process.effectiveCpuCores, null);
+    sampler.collect();
+    t.equal(errors.length, 1, `logged once for ${String(thrown)}`);
+  }
+  teardown();
+  t.end();
+});
+
+test('effective capacity names an unexpected error instead of hiding it as unavailable', (t) => {
+  if (process.platform !== 'linux') return t.end();
+  const bug = new TypeError('read returned a non-string');
+  const result = effectiveCpuCores((path) => {
+    if (path === '/proc/self/cgroup') return '0::/';
+    throw bug;
+  });
+  t.equal(result.refusal, 'unexpected_error');
+  t.equal(result.error, bug);
+  t.end();
+});
+
+test('sampler publishes NULL for a refused capacity and logs an unexpected error once', async (t) => {
+  setup();
+  const bug = new TypeError('read returned a non-string');
+  const errors = [];
+  let capacity = {refusal: 'unexpected_error', error: bug};
+  const sampler = new ResourceDiagnosticsSampler({
+    nodeId: 'diag-node-1',
+    cpuCapacityFn: () => capacity,
+    eventLoopDelayProvider: () => 1,
+  });
+  sampler.logger = {error: (message, data) => errors.push([message, data])};
+  t.equal(sampler.collect().process.effectiveCpuCores, null);
+  t.equal(sampler.collect().process.effectiveCpuCores, null);
+  t.equal(errors.length, 1, 'one error-level log for repeated unexpected errors');
+  t.equal(errors[0][1].error, 'read returned a non-string');
+  t.equal(errors[0][1].stack, bug.stack);
+  capacity = {refusal: 'file_unreadable', code: 'EACCES'};
+  t.equal(sampler.collect().process.effectiveCpuCores, null);
+  t.equal(errors.length, 1, 'an expected refusal is not logged as an error');
+  capacity = {cores: 2.5};
+  t.equal(sampler.collect().process.effectiveCpuCores, 2.5);
+  teardown();
+  t.end();
+});
+
+test('readLinuxMemAvailableBytes reads meminfo as text, not as a Buffer', (t) => {
+  const reads = [];
+  const original = fs.readFileSync;
+  fs.readFileSync = (file, encoding) => {
+    reads.push([file, encoding]);
+    return 'MemAvailable:     2048 kB\n';
+  };
+  try {
+    t.equal(readLinuxMemAvailableBytes(10_000_000, 5), 2_097_152);
+  } finally {
+    fs.readFileSync = original;
+  }
+  t.same(reads, [['/proc/meminfo', 'utf8']]);
   t.end();
 });

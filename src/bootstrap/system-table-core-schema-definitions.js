@@ -71,7 +71,7 @@ const PARTITIONS_SCHEMA = {
     },
     {
       name: 'split_descriptor_attempt', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0,
-      checkSql: "typeof(split_descriptor_attempt) = 'integer' AND " +
+      checkSql: 'typeof(split_descriptor_attempt) = \'integer\' AND ' +
         `split_descriptor_attempt BETWEEN 0 AND ${Number.MAX_SAFE_INTEGER}`,
     },
     {name: 'replica_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 3},

@@ -1,7 +1,10 @@
 import {splitDescriptorIntentFields} from '../query/split-descriptor-delivery-fields.js';
 import {mintControlPlaneWriteKey} from
   '../control-plane/control-plane-write-identity.js';
-import {createRoutedWriteUncertainty} from './cdc-routed-write-uncertainty.js';
+import {
+  createRoutedMutationSpentLatch,
+  createRoutedWriteUncertainty,
+} from './cdc-routed-write-uncertainty.js';
 import {deriveParticipantEntryId} from
   '../query/distributed/distributed-write-coordinator.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
@@ -26,7 +29,6 @@ import {
 import {
   buildControlPlaneWorkloadProfile,
 } from '../control-plane/control-plane-workload-profile.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   CDC_DEFAULTS,
@@ -50,7 +52,6 @@ const {
   annotateSystemTableMutationError,
   buildPressureAdmissionFailure,
   buildSystemTableMutationError,
-  getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
@@ -69,64 +70,6 @@ const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
 const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
 const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';
 const ROUTED_MUTATION_BUDGET_SPENT_BEFORE_ATTEMPT = 'budget_spent_before_attempt';
-const ROUTED_MUTATION_RETRY_BUDGET_WAIT = Object.freeze({
-  wait: 'cdc_routed_mutation_retry_budget',
-  awaited: 'routed system-table mutation accepted within the per-call ' +
-    'query execution budget',
-});
-const ROUTED_MUTATION_ATTEMPTS_WAIT = Object.freeze({
-  wait: 'CDC_DEFAULTS.RETRY_MAX_ATTEMPTS',
-  awaited: 'routed system-table mutation accepted by the engine',
-});
-
-/**
- * The spent-wait latch of one routed write. The per-call budget can be
- * found spent by the delay gate and again by the catch its throw lands in,
- * and a spent budget can coincide with the last attempt: one write reports
- * one line.
- * @param {Object} service - The CDC integration service.
- * @param {Object} write - {tableName, maxAttempts, budgetMs, readElapsedMs}.
- * @return {{budgetSpent: Function, attemptsSpent: Function}} Reporters,
- *   called on the expiry branches only.
- */
-function createRoutedMutationSpentLatch(service, write) {
-  let reported = false;
-  const scope = {nodeId: service.nodeId, tableName: write.tableName};
-  return {
-    budgetSpent(lastObserved) {
-      if (reported) {
-        return;
-      }
-      reported = true;
-      reportWaitBoundSpent(service.logger, {
-        ...ROUTED_MUTATION_RETRY_BUDGET_WAIT,
-        boundMs: write.budgetMs,
-        elapsedMs: write.readElapsedMs(),
-        lastObserved,
-        scope,
-      });
-    },
-    attemptsSpent(attempt, error) {
-      if (reported) {
-        return;
-      }
-      reported = true;
-      reportWaitBoundSpent(service.logger, {
-        ...ROUTED_MUTATION_ATTEMPTS_WAIT,
-        boundMs: null,
-        elapsedMs: write.readElapsedMs(),
-        lastObserved: () => ({
-          attempts: attempt,
-          maxAttempts: write.maxAttempts,
-          errorCode: getControlPlaneErrorCode(error) || null,
-          retryAfterMs: getControlPlaneRetryAfterMs(error),
-        }),
-        scope,
-      });
-    },
-  };
-}
-
 // The local-leader leg of a routed write is the same entry as its engine
 // attempts: its entryId is derived from the write's key and the partition
 // exactly as the engine's write plan derives it.
@@ -140,6 +83,12 @@ function localLegWriteIdentity(idempotencyKey, partitionService) {
     entryId: deriveParticipantEntryId(idempotencyKey,
       partitionService.partitionId),
   };
+}
+
+// Whether the leg's answer names the entryId the leg carried.
+function carriesLegEntryId(legIdentity, result) {
+  return typeof legIdentity.entryId === 'string' &&
+    result?.entryId === legIdentity.entryId;
 }
 
 class CDCRoutedMutationReadiness {
@@ -212,8 +161,7 @@ class CDCRoutedMutationReadiness {
           issued.answer);
         const result = this.normalizeLocalSystemTableWriteResult(localResult);
         if (this.isLocalSystemTableWriteRoutedOn(result, {
-          carriesEntryId: typeof legIdentity.entryId === 'string' &&
-            result?.entryId === legIdentity.entryId,
+          carriesEntryId: carriesLegEntryId(legIdentity, result),
         })) {
           issued.answer = result;
           continue;

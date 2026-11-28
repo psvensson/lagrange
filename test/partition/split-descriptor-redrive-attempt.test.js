@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from '../../src/test-helpers/tap.js';
-import {RESUME_TRIGGER} from '../../src/partition/group-retirement-resume.js';
-import {PARTITION_TRANSITION_STATE} from '../../src/partition/partition-constants.js';
+import {PARTITION_TRANSITION_STATE, RESUME_TRIGGER} from '../../src/partition/partition-constants.js';
 import {SPLIT_ACK_STATUS, SPLIT_PARTICIPANT_PREFIX} from '../../src/partition/split-ack-constants.js';
-import {RECORD_CHANGE_REFUSAL} from '../../src/partition/managed-workflow-record-changes.js';
+import {RECORD_CHANGE_REFUSAL} from '../../src/partition/managed-workflow-record-store.js';
 import {buildWorkflow} from './managed-split-workflow-test-helpers.js';
 import {
   openDescriptorRecordStore, parsePartitionTransition, readAuthoritativelyFrom,

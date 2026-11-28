@@ -1,4 +1,3 @@
-import {observeParsedFrame, responseRequestFamily} from './message-router-socket-evidence.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
 import {
@@ -72,7 +71,6 @@ class MessageRouterInboundDispatch {
     try {
       const message = JSON.parse(data.toString());
       this.recordNodeInboundActivity(connectionId);
-      observeParsedFrame(this, connectionId, ws, message);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
         type: message.type,
@@ -485,7 +483,6 @@ class MessageRouterInboundDispatch {
    */
   handleServiceMessage(ws, message, delivery = null) {
     const {targetAddress, messageId, payload} = message;
-    const family = responseRequestFamily(message);
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_MESSAGE_HANDLING, {
       messageId,
       targetAddress,
@@ -514,7 +511,7 @@ class MessageRouterInboundDispatch {
         sourceAddress: message.sourceAddress,
         noHandler: true,
         error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
-      }, family);
+      });
       return;
     }
     const envelope = {
@@ -538,7 +535,7 @@ class MessageRouterInboundDispatch {
           messageId,
           sourceAddress: message.sourceAddress,
           result,
-        }, family);
+        });
       })
       .catch((error) => {
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_ERROR, {
@@ -551,7 +548,7 @@ class MessageRouterInboundDispatch {
           messageId,
           sourceAddress: message.sourceAddress,
           error: error.message,
-        }, family);
+        });
       });
   }
   /**

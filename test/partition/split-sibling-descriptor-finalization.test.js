@@ -38,13 +38,15 @@ test('a restored sibling keeps a later MERGE epoch on redelivery of the old comm
     const row = () => selectRows(dbPath, 'SELECT * FROM partitions WHERE partition_id = ?', [sibling.partitionId])[0];
     assert.equal((await gateway.insertSystemTableRow(TABLE, seed)).success, true);
     const owner = {getControlPlaneSystemTableGateway: () => gateway,
-      buildManagedSplitMutationOptions: ManagedSplitWorkflowExecutionGateMethods.prototype.buildManagedSplitMutationOptions};
+      buildManagedSplitMutationOptions:
+        ManagedSplitWorkflowExecutionGateMethods.prototype.buildManagedSplitMutationOptions};
     const running = workflow(PARTITION_TRANSITION_STATE.SPLIT_CATCHUP);
     const failed = workflow(PARTITION_TRANSITION_STATE.FAILED);
     const beforeSubmission = deliveries.length;
     const extra = {...sibling, workflowId: 'foreign-workflow'};
     const another = {...sibling, partitionId: 'invoices-other-sibling'};
-    const withIssued = (subjects) => ({...running, metadata: {...running.metadata, splitIssuedSiblings: subjects}});
+    const withIssued = (subjects) =>
+      ({...running, metadata: {...running.metadata, splitIssuedSiblings: subjects}});
     for (const [record, offered] of [
       [running, extra], [withIssued([extra]), sibling], [withIssued([sibling, sibling]), sibling],
       [withIssued([sibling, another, another]), sibling], [running, {...sibling, priorAttempt: 1}],
@@ -65,7 +67,8 @@ test('a restored sibling keeps a later MERGE epoch on redelivery of the old comm
     // complete SQL predicate of the delayed restore, including A's tag.
     await ManagedMergeWorkflowPersistenceMethods.prototype.promoteSiblingPartitionVersion.call({
       getControlPlaneSystemTableGateway: () => gateway, now: () => 1234, logger: {info() {}},
-      buildManagedMergeMutationOptions: ManagedMergeWorkflowExecutionGateMethods.prototype.buildManagedMergeMutationOptions,
+      buildManagedMergeMutationOptions:
+        ManagedMergeWorkflowExecutionGateMethods.prototype.buildManagedMergeMutationOptions,
     }, sibling.partitionId, sibling.targetVersion);
     const newer = row();
     assert.equal(newer.partition_version, sibling.targetVersion);
@@ -76,7 +79,8 @@ test('a restored sibling keeps a later MERGE epoch on redelivery of the old comm
     assert.equal(replay.logIndex, restore.logIndex);
     assert.equal(replay.term, restore.term);
     assert.deepEqual(row(), newer);
-    const finalizeId = deriveParticipantEntryId(splitDescriptorWriteKey(intent(ACTION.FINALIZE)), DESTINATION);
+    const finalizeId = deriveParticipantEntryId(splitDescriptorWriteKey(intent(ACTION.FINALIZE)),
+      DESTINATION);
     assert.equal(deliveries.filter((request) => request.entryId === finalizeId).length, 2);
   }, {cdc: true}));
 
@@ -134,11 +138,13 @@ async function withControlledDestination(body) {
 }
 
 test('first application of a delayed promotion cannot revive a finalized attempt on a same-ID replacement',
-  () => withControlledDestination(async ({entry, command, apply, applyRefused, record, row, effects}) => {
+  () => withControlledDestination(async ({entry, command, apply, applyRefused, record, row,
+    effects}) => {
     const seedRow = (entryId, created) => apply(entry({entryId,
       sql: 'INSERT INTO partitions (partition_id, table_id, partition_version, split_descriptor_attempt, ' +
         'created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-      params: [sibling.partitionId, tableId, sibling.priorVersion, sibling.priorAttempt, created, created]}));
+      params: [sibling.partitionId, tableId, sibling.priorVersion, sibling.priorAttempt, created,
+        created]}));
     seedRow('first-descriptor', 1);
     // The original packet exists, but has not reached this Raft log.
     const delayed = command(ACTION.PROMOTE);
@@ -167,7 +173,8 @@ test('first application of a delayed promotion cannot revive a finalized attempt
   }));
 
 test('finalize cannot restore an apparent matching attempt without the committed promotion',
-  () => withControlledDestination(async ({entry, command, apply, applyRefused, record, row, effects}) => {
+  () => withControlledDestination(async ({entry, command, apply, applyRefused, record, row,
+    effects}) => {
     apply(entry({entryId: 'unrelated-row', sql: 'INSERT INTO partitions ' +
       '(partition_id, table_id, partition_version, split_descriptor_attempt, created_at, updated_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?)', params: [sibling.partitionId, tableId, sibling.targetVersion, workflowAttempt, 4, 4]}));
@@ -196,7 +203,8 @@ test('finalize cannot restore an apparent matching attempt without the committed
   }));
 
 test('the original plan binds both stage keys even when a changed preimage renders identical restore SQL',
-  () => withControlledDestination(async ({entry, command, apply, applyRefused, record, row, effects}) => {
+  () => withControlledDestination(async ({entry, command, apply, applyRefused, record, row,
+    effects}) => {
     apply(entry({entryId: 'original-sibling', sql: 'INSERT INTO partitions ' +
       '(partition_id, table_id, partition_version, split_descriptor_attempt, created_at, updated_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?)', params: [sibling.partitionId, tableId, sibling.priorVersion, sibling.priorAttempt, 1, 1]}));

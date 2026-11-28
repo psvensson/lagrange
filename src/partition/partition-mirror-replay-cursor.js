@@ -87,7 +87,8 @@ function buildReplayCursorCheckpoint(
 
 function appendAppliedDeltaAtLogIndex(service, command, logIndex, previousIndex, deltas) {
   const recorded = readCommittedStatementOutcome(service, committedStatementEntryKey(command));
-  assertAppliedMirrorEffect(command, logIndex, previousIndex, recorded.affectedRows?.length, recorded);
+  assertAppliedMirrorEffect(command, logIndex, previousIndex, recorded.affectedRows?.length,
+    recorded);
   deltas.push({
     ...command,
     ...(command?.typedParams ?

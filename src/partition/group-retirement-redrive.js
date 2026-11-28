@@ -72,7 +72,7 @@
  */
 
 import {wasNodeRecordReadyWhenWritten} from '../node/node-readiness-policy.js';
-import {RECORD_CHANGE_REFUSAL} from './managed-workflow-record-changes.js';
+import {RECORD_CHANGE_REFUSAL} from './managed-workflow-record-store.js';
 import {claimWorkflowOwnershipCore} from './managed-workflow-ownership-core.js';
 import {
   readWaitClock,

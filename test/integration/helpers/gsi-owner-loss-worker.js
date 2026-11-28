@@ -34,7 +34,8 @@ SchemaProvisioningJobOwner.prototype.readNonterminalRows = async function(...arg
 // Retain the last observation at each handoff; trace requests only read it.
 const progress = {};
 const findIntent = SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent;
-SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = async function(dataset, generation) {
+SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = async function(dataset,
+  generation) {
   if (!target || dataset !== target.dataset || generation !== target.generation) {
     return findIntent.call(this, dataset, generation);
   }
@@ -66,14 +67,19 @@ GlobalIndexLifecycleCoordinator.prototype.completeRecoveredProvisioning = async 
 };
 
 function matchesTarget(index) {
-  return Boolean(target && index?.tableName === target.tableName && index.indexName === target.indexName &&
+  return Boolean(target && index?.tableName === target.tableName &&
+      index.indexName === target.indexName &&
     index.indexId === target.indexId && index.generation === target.generation);
 }
 
 const finalize = SchemaProvisioningJobOwner.prototype.completeExecutedJob;
-SchemaProvisioningJobOwner.prototype.completeExecutedJob = function(intent, owned, result, options) {
-  if (!matchesTarget(intent.globalIndex)) return finalize.call(this, intent, owned, result, options);
-  const scope = {intent, result, repository: this.repository, ownerId: this.ownerId, fenceToken: owned.fenceToken};
+SchemaProvisioningJobOwner.prototype.completeExecutedJob = function(intent, owned, result,
+  options) {
+  if (!matchesTarget(intent.globalIndex)) {
+    return finalize.call(this, intent, owned, result, options);
+  }
+  const scope = {intent, result, repository: this.repository, ownerId: this.ownerId,
+    fenceToken: owned.fenceToken};
   return finalization.run(scope, () => finalize.call(this, intent, owned, result, options));
 };
 
@@ -141,19 +147,24 @@ function describeAcceptedWrite(scope, candidate, context, accepted, before, row)
   }
   return {status: row.status, previousStatus: before.status, jobId: row.job_id,
     workflowId: row.workflow_id, dataset: row.table_id, partitions: persisted.partitions,
-    result: {tableId: result.tableId, partitionId: result.partitionId, contractState: result.contractState,
+    result: {tableId: result.tableId, partitionId: result.partitionId,
+      contractState: result.contractState,
       requested: summary.requestedReplicaCount, nextAction: result.nextAction,
       converged: summary.fullReplicaCountConverged, routable: summary.routableReplicaCount,
-      committed: summary.committedReplicaCount}, resultSha256, indexId: persisted.globalIndex.indexId,
+      committed: summary.committedReplicaCount}, resultSha256,
+    indexId: persisted.globalIndex.indexId,
     generation: persisted.globalIndex.generation, ownerId, fenceToken, previousRowVersion: version,
     rowVersion: accepted.workflow.rowVersion, expiresNs: target.expiresNs.toString()};
 }
 
 const persist = SchemaProvisioningJobRepository.prototype.persistWorkflowCandidate;
-SchemaProvisioningJobRepository.prototype.persistWorkflowCandidate = async function(candidate, context) {
+SchemaProvisioningJobRepository.prototype.persistWorkflowCandidate = async function(candidate,
+  context) {
   const scope = finalization.getStore();
   if (cut || this !== scope?.repository || candidate.status !== 'SUCCEEDED' ||
-      candidate.workflowId !== scope.intent.workflowId) return persist.call(this, candidate, context);
+      candidate.workflowId !== scope.intent.workflowId) {
+    return persist.call(this, candidate, context);
+  }
   const before = this.rowsByJobId.get(candidate.workflowId);
   const accepted = await persist.call(this, candidate, context);
   if (accepted.accepted !== true) return accepted;
@@ -178,21 +189,27 @@ SchemaProvisioningJobRepository.prototype.persistWorkflowCandidate = async funct
 const update = GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord;
 GlobalIndexLifecycleCoordinator.prototype._updateCatalogRecord = async function(checkpoint) {
   const record = this.catalog.get(target?.indexName);
+  const attempt = terminalAttemptOf(record, checkpoint);
+  if (attempt) firstTerminalAttemptNs ??= attempt.startedNs;
+  const result = await update.call(this, checkpoint);
+  if (completesBackfillFirst(attempt)) completed = attempt;
+  return result;
+};
+
+function terminalAttemptOf(record, checkpoint) {
   const sameIndex = record && target && record.table_name === target.tableName &&
     record.index_id === target.indexId && record.index_generation === target.generation &&
     record.index_id === checkpoint.indexId;
-  const attempt = sameIndex && checkpoint.state === 'READ_WRITE' ?
+  return sameIndex && checkpoint.state === 'READ_WRITE' ?
     {indexId: record.index_id, generation: record.index_generation,
       priorState: record.state, rows: checkpoint.backfill_total_rows,
       startedNs: process.hrtime.bigint().toString()} : null;
-  if (attempt) firstTerminalAttemptNs ??= attempt.startedNs;
-  const result = await update.call(this, checkpoint);
-  if (attempt?.priorState === 'BACKFILLING' && attempt.rows === 2 &&
-      (!completed || BigInt(attempt.startedNs) < BigInt(completed.startedNs))) {
-    completed = attempt;
-  }
-  return result;
-};
+}
+
+function completesBackfillFirst(attempt) {
+  return attempt?.priorState === 'BACKFILLING' && attempt.rows === 2 &&
+    (!completed || BigInt(attempt.startedNs) < BigInt(completed.startedNs));
+}
 
 async function observeMembership(replica) {
   // The leader's read also refuses an unapplied configuration change. Each

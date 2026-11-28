@@ -267,7 +267,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         createCommittedStatementOutcomeTable(this.db, this.partitionId, this.tableName);
         openParticipantTransactionStore(this.db);
         ensureMembershipRecoveryTables(this.db);
-        if (this.schema || this.tableName === SYSTEM_TABLE_NAME.NODES || this.tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
+        if (this.schema || this.tableName === SYSTEM_TABLE_NAME.NODES ||
+            this.tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
           this.createTable();
         }
       } catch (error) {

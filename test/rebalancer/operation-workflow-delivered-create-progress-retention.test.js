@@ -437,14 +437,17 @@ test('CREATE delivery receipts bind the live target boot and exact granted attem
   const reply = {status: ReplicaOperationResponseStatus.INITIATED, nodeId: TARGET_NODE_ID,
     operationId: operation.operationId, replicaId: operation.replicaId};
   const worker = () => ({
-    operationId: request.operationId, operationType: request.operationType, entityType: request.entityType,
+    operationId: request.operationId, operationType: request.operationType,
+    entityType: request.entityType,
     entityId: request.entityId, partitionId: request.partitionId, replicaId: request.replicaId,
     targetNodeId: TARGET_NODE_ID, admissionToken: request.createAdmissionToken,
-    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq,
+    attemptToken: request.createAdmissionAttemptToken,
+    attemptSeq: request.createAdmissionAttemptSeq,
     workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt, ownerIncarnation: boot,
     replicaCreatedAt: operation.createAdmissionReplicaCreatedAt,
   });
-  const confirmed = () => buildDeliveryEnvelope({acknowledged: true}, {...reply, createWorkerReceipt: worker()});
+  const confirmed = () =>
+    buildDeliveryEnvelope({acknowledged: true}, {...reply, createWorkerReceipt: worker()});
   let deliver = confirmed;
   let endpointAhead = false;
   const originalGet = owner.repository.systemTableCache.get.bind(owner.repository.systemTableCache);

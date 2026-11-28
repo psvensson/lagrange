@@ -79,9 +79,12 @@ function normalizedTransferRequest(request, registry, admitExecution) {
     return {refusal: transferRefusal(RUNTIME_REASON.TARGET_UNRESERVED)};
   }
   if (sourceNamed) {
-    const {term, configurationKey, membershipGenerationIndex, lifecycleIncarnation, runtimeGeneration} = request;
-    if (!Number.isSafeInteger(term) || term <= 0 || !Number.isSafeInteger(membershipGenerationIndex) ||
-        membershipGenerationIndex < 0 || !Number.isSafeInteger(runtimeGeneration) || runtimeGeneration < 0 ||
+    const {term, configurationKey, membershipGenerationIndex, lifecycleIncarnation,
+      runtimeGeneration} = request;
+    if (!Number.isSafeInteger(term) || term <= 0 ||
+        !Number.isSafeInteger(membershipGenerationIndex) ||
+        membershipGenerationIndex < 0 || !Number.isSafeInteger(runtimeGeneration) ||
+        runtimeGeneration < 0 ||
         typeof lifecycleIncarnation !== 'string' || !lifecycleIncarnation ||
         typeof configurationKey !== 'string' || !configurationKey || typeof admitExecution !== 'function') {
       return {refusal: transferRefusal(RUNTIME_REASON.SOURCE_CHANGED)};
@@ -165,7 +168,8 @@ function decideLeadershipTransfer(peerId, observation, command) {
         confState.votersOutgoing.length > 0 || !observation.participation.gateOpen) {
       return {answer: transferRefusal(RUNTIME_REASON.SOURCE_CHANGED, true)};
     }
-    if (!confState.voters.includes(command.target) || confState.learnersNext.includes(command.target)) {
+    if (!confState.voters.includes(command.target) ||
+        confState.learnersNext.includes(command.target)) {
       return {answer: transferRefusal(RUNTIME_REASON.TARGET_NOT_VOTER)};
     }
     return decideNamedTransfer(observation, command.target);

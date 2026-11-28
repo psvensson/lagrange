@@ -3,13 +3,13 @@ import {COLUMN} from '../constants/columns.js';
 // Placement pressure is interval evidence. Host tick share, thread time and
 // aggregate process time have distinct denominators.
 export const PLACEMENT_RESOURCE_COLUMNS = Object.freeze({
-  sampleIntervalMs: 'resource_sample_interval_ms',
-  mainThreadCpuPercent: 'main_thread_cpu_percent',
-  processCpuCores: 'process_cpu_cores',
-  effectiveCpuCores: 'effective_cpu_cores',
+  sampleIntervalMs: COLUMN.RESOURCE_SAMPLE_INTERVAL_MS,
+  mainThreadCpuPercent: COLUMN.MAIN_THREAD_CPU_PERCENT,
+  processCpuCores: COLUMN.PROCESS_CPU_CORES,
+  effectiveCpuCores: COLUMN.EFFECTIVE_CPU_CORES,
   hostCpuUtilizationPercent: COLUMN.HOST_CPU_UTILIZATION_PERCENT,
-  eventLoopUtilizationPercent: 'event_loop_utilization_percent',
-  eventLoopDelayMs: 'event_loop_delay_ms',
+  eventLoopUtilizationPercent: COLUMN.EVENT_LOOP_UTILIZATION_PERCENT,
+  eventLoopDelayMs: COLUMN.EVENT_LOOP_DELAY_MS,
 });
 
 export function resourceSampleFields(source) {

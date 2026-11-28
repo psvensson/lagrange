@@ -8,7 +8,8 @@ function buildReplacementServiceOptions(service) {
   return Object.freeze({partitionId: service.partitionId, tableId: service.tableId,
     tableName: service.tableName, replicaId: service.replicaId, replicaIds: service.replicaIds,
     bootstrapMembership: durableRecordBootstrap(), nodeId: service.nodeId, dbPath: service.dbPath,
-    ...([TABLES.NODES, TABLES.PARTITIONS].includes(service.tableName) ? {schema: service.schema} : {})});
+    ...([TABLES.NODES, TABLES.PARTITIONS].includes(service.tableName) ? {schema: service.schema} :
+      {})});
 }
 
 export {buildReplacementServiceOptions};

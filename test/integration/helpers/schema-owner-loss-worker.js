@@ -49,11 +49,22 @@ function retain(history, entry) {
 
 function describe(value) {
   const summary = value?.provisioningSummary ?? value;
+  return {...describeOutcome(value), ...describeReasons(value, summary),
+    ...describeReplicaCounts(summary)};
+}
+
+function describeOutcome(value) {
   return {state: value?.contractState, nextAction: value?.nextAction,
-    code: value?.code ?? value?.errorCode, message: value?.message ?? value?.error,
-    reasons: value?.detail?.reasons ?? summary?.reasonCodes,
-    admissionReason: value?.placementResult?.reason, entryId: value?.entryId,
-    requested: summary?.requestedReplicaCount, committed: summary?.committedReplicaCount,
+    code: value?.code ?? value?.errorCode, message: value?.message ?? value?.error};
+}
+
+function describeReasons(value, summary) {
+  return {reasons: value?.detail?.reasons ?? summary?.reasonCodes,
+    admissionReason: value?.placementResult?.reason, entryId: value?.entryId};
+}
+
+function describeReplicaCounts(summary) {
+  return {requested: summary?.requestedReplicaCount, committed: summary?.committedReplicaCount,
     routable: summary?.routableReplicaCount, minimum: summary?.minimumRoutableReplicaCount};
 }
 const release = Promise.withResolvers();
@@ -90,7 +101,8 @@ SchemaProvisioningJobOwner.prototype.executeJob = function(intent, executor, opt
 };
 
 const perform = TableCreationService.prototype.executeDurableSchemaProvisioningJob;
-TableCreationService.prototype.executeDurableSchemaProvisioningJob = async function(ast, job, ...args) {
+TableCreationService.prototype.executeDurableSchemaProvisioningJob = async function(ast, job,
+  ...args) {
   if (job.tableName !== target) return perform.call(this, ast, job, ...args);
   const grant = {ownerId: this.schemaProvisioningJobOwner.ownerId, jobId: job.jobId,
     tableId: job.tableId, key: job.tableIdentityKey, fence: job.ownerFenceToken, at: Date.now()};
@@ -110,7 +122,8 @@ TableCreationService.prototype.executeDurableSchemaProvisioningJob = async funct
 };
 
 const defer = SchemaProvisioningJobOwner.prototype.transitionPendingForRetry;
-SchemaProvisioningJobOwner.prototype.transitionPendingForRetry = async function(intent, executor, workflow, error) {
+SchemaProvisioningJobOwner.prototype.transitionPendingForRetry = async function(intent, executor,
+  workflow, error) {
   if (intent.tableName !== target) return defer.call(this, intent, executor, workflow, error);
   const observation = {fence: workflow.fenceToken, at: Date.now(), cause: describe(error)};
   retain(pending, observation);
@@ -139,7 +152,8 @@ TableCreationService.prototype.provisionInitialPartition = async function(contex
 };
 
 const terminal = SchemaProvisioningJobOwner.prototype.transitionTerminal;
-SchemaProvisioningJobOwner.prototype.transitionTerminal = async function(intent, workflow, options) {
+SchemaProvisioningJobOwner.prototype.transitionTerminal = async function(intent, workflow,
+  options) {
   const result = await terminal.call(this, intent, workflow, options);
   if (intent.tableName === target) {
     completed = {jobId: intent.workflowId, tableId: intent.tableId, ownerId: this.ownerId,
@@ -160,16 +174,19 @@ function retirementRecords({createdPartitionId}) {
       const rows = service.db.prepare(`SELECT * FROM replica_operations WHERE partition_id = ?
         AND (type IN ('REPLACE','REMOVE') OR (partition_id = ? AND type = 'ADD'))
         ORDER BY updated_at DESC, operation_id LIMIT ?`).all(partitionId, createdPartitionId, limit + 1);
-      return {partitionId, truncated: rows.length > limit, operations: rows.slice(0, limit).map((row) => {
-        const op = decodeReplicaOperationRow(row);
-        const intent = replaceIntentEntryOf(op);
-        return {operationId: op.operationId, type: op.type, replicaId: op.replicaId,
-          sourceReplicaId: op.sourceReplicaId, sourceNodeId: op.sourceNodeId, targetNodeId: op.targetNodeId,
-          workflowStep: op.workflowStep, status: op.status, updatedAt: op.updatedAt,
-          voterRetirement: op.stepsHistory[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION]?.voterRetirement ?? null,
-          removalIntent: intent && Object.fromEntries(Object.values(REPLACE_INTENT_FIELD)
-            .map((field) => [field, intent[field]]))};
-      })};
+      return {partitionId, truncated: rows.length > limit,
+        operations: rows.slice(0, limit).map((row) => {
+          const op = decodeReplicaOperationRow(row);
+          const intent = replaceIntentEntryOf(op);
+          return {operationId: op.operationId, type: op.type, replicaId: op.replicaId,
+            sourceReplicaId: op.sourceReplicaId, sourceNodeId: op.sourceNodeId,
+            targetNodeId: op.targetNodeId,
+            workflowStep: op.workflowStep, status: op.status, updatedAt: op.updatedAt,
+            voterRetirement: op.stepsHistory[0]?.[
+              OPERATION_METADATA_KEY.PLACEMENT_ADMISSION]?.voterRetirement ?? null,
+            removalIntent: intent && Object.fromEntries(Object.values(REPLACE_INTENT_FIELD)
+              .map((field) => [field, intent[field]]))};
+        })};
     });
     snapshots.push({replicaId: service.replicaId, term: status.term, isLeader: status.isLeader,
       appliedIndex: readPartitionAppliedIndex(service), subjects});
@@ -178,10 +195,15 @@ function retirementRecords({createdPartitionId}) {
 }
 
 registerEmbeddedWorkerOperations({
-  arm: ({tableName, sql}) => { target = tableName; armListenerObservation(sql); },
-  trace: () => ({grants, claims, barrier, completed, attemptCount, attempts, pending, provisioning}),
+  arm: ({tableName, sql}) => {
+    target = tableName; armListenerObservation(sql);
+  },
+  trace: () =>
+    ({grants, claims, barrier, completed, attemptCount, attempts, pending, provisioning}),
   retirementRecords,
-  armReleaseObservation: () => { observeRelease = true; },
+  armReleaseObservation: () => {
+    observeRelease = true;
+  },
   releaseObservation: () => [...releaseReports.values()].flat(),
   boundListeners: boundListenerReplicas,
   closeProvenance: listenerObservation,

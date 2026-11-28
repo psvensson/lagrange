@@ -4,7 +4,9 @@
 # derives the formation verdict (seed event-loop gaps inside the formation
 # window, ready-lease waits, critical spread, schema admission) and appends
 # one record to the formation trend. The report and trend are uploaded as
-# artifacts; `npm run health:formation -- --summary` renders the local trend.
+# artifacts and the trend record is pushed to the branch `data/formation-health`
+# (never to main: main requires status checks that a workflow token push cannot
+# satisfy); `npm run health:formation -- --summary --fetch` renders it.
 # Scheduled nightly and runnable on demand. The GCP runner VM is woken keylessly
 # exactly as release.yml does; the demo provisions its five hosts through the
 # harness's GCP provider with the runner's own credentials.
@@ -59,16 +61,30 @@ jobs:
     runs-on: [self-hosted, gcp]
     timeout-minutes: 60
     permissions:
-      # The trend record is committed to main below.
+      # The trend record is pushed to the data branch below, never to main.
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # The commit step below pushes with the workflow token; a token
-          # push starts no other workflow, so a nightly record costs no run.
-          persist-credentials: true
+          persist-credentials: false
           fetch-depth: 0
+
+      # The trend record's one home. The branch is seeded once by the owner;
+      # a missing branch fails this step loudly (no create-if-missing path).
+      # The checkout keeps the workflow token for the record push below; a
+      # token push starts no other workflow, so a nightly record costs no run.
+      - name: Checkout the trend data branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: data/formation-health
+          path: trend-data
+          persist-credentials: true
+          # The tip is enough: the step appends one line and commits on it, and
+          # the retry's `git pull --rebase` fetches whatever the branch gained and
+          # connects it to this shallow tip. (The main checkout keeps depth 0 for
+          # the run's `head`; fetching the whole repository twice is not needed.)
+          fetch-depth: 1
 
       - name: Set up Node 22
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -110,21 +126,18 @@ jobs:
         # The step's exit code is the formation verdict, so a red formation
         # is a red run; an UNKNOWN verdict records nothing and is red too.
         # The evidence upload and the trend commit below run regardless.
-        run: npm run health:formation -- --gcp
+        run: npm run health:formation -- --gcp --trend trend-data/trend.ndjson
 
-      # data/formation-health/trend.ndjson is committed evidence, one record
-      # per scheduled run, so the release notes, the README claim and the
+      # trend.ndjson on the branch data/formation-health is committed
+      # evidence, one record per scheduled run, so the release notes and the
       # consolidation budget read the same file. Only a measuring verdict
       # appends a record; a red measurement is committed like a green one.
-      - name: Commit the trend record to main
+      - name: Commit the trend record to the data branch
         if: always()
-        # The push asks for the data-only path: the pre-push hook has the
-        # trend's owner prove it only appends records, or refuses it.
-        env:
-          LAGRANGE_PUSH_DATA_ONLY: formation-trend
+        working-directory: trend-data
         run: |
           set -euo pipefail
-          git add data/formation-health/trend.ndjson
+          git add trend.ndjson
           if git diff --cached --quiet; then
             echo "no new trend record to commit"
             exit 0
@@ -133,7 +146,7 @@ jobs:
           git config user.email "formation-health@users.noreply.github.com"
           git commit -m "formation-health: trend record $(date -u +%Y-%m-%dT%H:%MZ) at ${GITHUB_SHA::9}"
           for attempt in 1 2 3; do
-            if git pull --rebase origin main && git push origin HEAD:main; then
+            if git pull --rebase origin data/formation-health && git push origin HEAD:data/formation-health; then
               exit 0
             fi
             sleep 20
@@ -149,5 +162,5 @@ jobs:
           if-no-files-found: warn
           path: |
             test-output/reports/movielens-lagrange-formation-only-live-*.report.json
-            data/formation-health/trend.ndjson
+            trend-data/trend.ndjson
             data/examples/service-data-affinity-demo/node-*.log

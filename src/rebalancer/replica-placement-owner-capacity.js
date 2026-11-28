@@ -664,7 +664,8 @@ function createPlacementDecisionDiagnostics(pass, evaluatedAtMs) {
     recordWindow(nodeId, role, sample, demand, decision) {
       const inputs = sample ? Object.fromEntries(SAMPLE_FIELDS.filter((key) =>
         Object.hasOwn(sample, key)).map((key) => [key, sample[key]])) : null;
-      const {action, reason, previousLimit, limit, hardAdmissionAllowed, observationState} = decision;
+      const {action, reason, previousLimit, limit, hardAdmissionAllowed,
+        observationState} = decision;
       node(nodeId)[role] = {
         sample: inputs, demand, action, reason, previousLimit, limit, hardAdmissionAllowed,
         observationState,
@@ -678,10 +679,12 @@ function createPlacementDecisionDiagnostics(pass, evaluatedAtMs) {
     },
     recordCopyCheck(check) {
       const partition = partitions[check.partitionId];
-      if (partition) Object.assign(partition, {
-        copyCheck: check, sourceNodeId: check.sourceNodeId, targetNodeId: check.targetNodeId,
-        disposition: check.allowed ? 'capacity_allowed' : 'capacity_denied',
-      });
+      if (partition) {
+        Object.assign(partition, {
+          copyCheck: check, sourceNodeId: check.sourceNodeId, targetNodeId: check.targetNodeId,
+          disposition: check.allowed ? 'capacity_allowed' : 'capacity_denied',
+        });
+      }
       const checks = node(check.sourceNodeId).copyChecks;
       const byRepair = checks[check.placementClass] ??= Object.create(null);
       byRepair[check.repair ? 'repair' : 'ordinary'] = check;

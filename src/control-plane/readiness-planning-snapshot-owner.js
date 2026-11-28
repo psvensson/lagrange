@@ -10,7 +10,8 @@ import {
 import {ReadinessPlanningSemanticGenerationTracker} from './readiness-planning-semantic-generation.js';
 import {defineRecordValue} from './readiness-planning-publication-contract.js';
 import {
-  connectedFormationOwnerKey, isJoiningNodeRow, readFormationEpochKey, readOwnerKey, readSharedNodeRows,
+  connectedFormationOwnerKey, isJoiningNodeRow, readFormationEpochKey, readOwnerKey,
+  readSharedNodeRows,
 } from './readiness-planning-formation-source.js';
 import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
 import {ReadinessPlanningDiagnosticRetention} from './readiness-planning-diagnostic-retention.js';
@@ -132,6 +133,21 @@ function createPlanningQueue(owner, options) {
       maxAttempts: READINESS_PLANNING_MAX_RETRY_ATTEMPTS,
     },
   });
+}
+
+// The listed owner keys with the connected formation owner first, when there
+// is one and it is listed; the same list otherwise.
+function prioritizeFormationOwnerKey(ownerKeys, formationOwnerKey) {
+  if (!formationOwnerKey || !arrayIncludes(ownerKeys, formationOwnerKey)) {
+    return ownerKeys;
+  }
+  const prioritizedOwnerKeys = [formationOwnerKey];
+  for (let index = 0; index < ownerKeys.length; index++) {
+    if (ownerKeys[index] !== formationOwnerKey) {
+      appendArrayValue(prioritizedOwnerKeys, ownerKeys[index]);
+    }
+  }
+  return prioritizedOwnerKeys;
 }
 
 function subscribeNodeLivenessChanges(owner) {
@@ -330,16 +346,7 @@ class ReadinessPlanningSnapshotOwner {
     }
     const formationOwnerKey =
       connectedFormationOwnerKey(this.service, joiningOwnerKeys);
-    if (!formationOwnerKey || !arrayIncludes(ownerKeys, formationOwnerKey)) {
-      return ownerKeys;
-    }
-    const prioritizedOwnerKeys = [formationOwnerKey];
-    for (let index = 0; index < ownerKeys.length; index++) {
-      if (ownerKeys[index] !== formationOwnerKey) {
-        appendArrayValue(prioritizedOwnerKeys, ownerKeys[index]);
-      }
-    }
-    return prioritizedOwnerKeys;
+    return prioritizeFormationOwnerKey(ownerKeys, formationOwnerKey);
   }
 
   readSharedNodeRowsForEnqueue() {

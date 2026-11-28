@@ -43,7 +43,7 @@ async function resumeStoppedSplit(service, previous) {
   const metadata = service.normalizeSplitTransitionMetadata(raw);
   if (!service.isSameSplitReplication(previous.metadata, metadata) ||
       raw.mirrorExecutionEnded || !raw.mirrorCustodyGrants?.some((grant) =>
-        grant.partitionId === service.partitionId && grant.fence === metadata.workflowFenceToken &&
+    grant.partitionId === service.partitionId && grant.fence === metadata.workflowFenceToken &&
         grant.acquired && !grant.release)) return false;
   // The participant checkpoint can land before the phase advance. In either
   // case replay starts at the committed cursor, including writes made while stopped.
@@ -150,7 +150,7 @@ class PartitionServiceSplitMirrorQueueMethods {
    */
   resumeDurableMirrorReplicationWorkers() {
     const resumers = [
-      function reconcileCustody() { return reconcileFailedMirrorCustody(this); },
+      () => reconcileFailedMirrorCustody(this),
       this.startOrResumeSplitReplicationFromDurable,
       this.startOrResumeMergeReplicationFromDurable,
     ];
@@ -185,7 +185,9 @@ class PartitionServiceSplitMirrorQueueMethods {
     if (previous) {
       if (isStoppedSplitWorker(previous)) {
         previous.resumePromise ??= resumeStoppedSplit(this, previous)
-          .finally(() => { previous.resumePromise = null; });
+          .finally(() => {
+            previous.resumePromise = null;
+          });
         return previous.resumePromise;
       }
       if (previous.terminal || previous.quiescing ||

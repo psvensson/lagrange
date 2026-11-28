@@ -94,7 +94,8 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
       await readUntil(t, node, beforeStop,
         'SELECT node_id, status, raft_role FROM services WHERE partition_id = ?',
         ['services-p1'], (rows) => survivorIds.every((id) => rows.some((row) =>
-          row.node_id === id && row.status === ReplicaStatus.ACTIVE && isVoterRaftRole(row.raft_role))));
+          row.node_id === id && row.status === ReplicaStatus.ACTIVE &&
+          isVoterRaftRole(row.raft_role))));
       const identitySql = 'SELECT config_value FROM config WHERE config_key = ?';
       const clusterKey = ['cluster_id'];
       const [{config_value: clusterId}] = await cluster.seedQueryRows(identitySql, clusterKey);
@@ -108,12 +109,14 @@ test('PG-wire CREATE deadline leaves its durable job owned after disconnect and 
         nodeId: node.nodeId, hostId: node.hostId,
         listenerPorts,
       });
-      assert.deepEqual(await reopened.seedQueryRows(identitySql, clusterKey), [{config_value: clusterId}]);
+      assert.deepEqual(await reopened.seedQueryRows(identitySql, clusterKey),
+        [{config_value: clusterId}]);
       const session = await restored.openApplicationDatabase('wire-deadline-reopen');
       const {rows: [listener]} = await readUntil(t, restored, session,
         'SELECT address, port FROM service_endpoints WHERE protocol = ? AND service_id = ?',
         ['postgresql', 'sys-postgres-wire'], (rows) => rows.length === 1);
-      const reader = await reopened.createPgClient({host: listener.address, port: Number(listener.port)});
+      const reader = await reopened.createPgClient({host: listener.address,
+        port: Number(listener.port)});
       await checkCompletedJob(reader, identity.jobId, identity.tableId);
       assert.deepEqual((await reader.query(select, ['first'])).rows, expectedRows);
     } finally {

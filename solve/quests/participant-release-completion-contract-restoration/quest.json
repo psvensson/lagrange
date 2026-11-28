@@ -1,0 +1,39 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-completion-contract-restoration",
+  "class": "fix",
+  "statement": "The participant-release completion matches its sealed contract again: completeParticipantRelease calls requestParticipantRelease(owner, intent), and requestParticipantRelease is the two-parameter primitive of one attempt plus at most one redirect. The sealed structural audit (scripts/participant-release-completion-audit.js, unchanged) then reports no violation, so the decision-boundary check stops failing for every staged JavaScript file. The per-hop release trace that 3ed2d6969 threaded through the completion, and that has had no producer at the completion since b14641752, is removed together with every argument, field and log member it leaves unfed. Release attempts, answers, deadlines, redirects and retries are unchanged. This repairs one red of main at ab347e962; it is not a claim about the other reds of that head.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/participant-release-completion-contract-probe.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "sealed-contract-unchanged",
+      "statement": "The audit script, its sealed test test/scripts/participant-release-completion-owner.test.js, the sealed quest participant-release-completion-owner and architecture/ are not modified. The completion and the primitive return to the audit's OWNER_CONTRACT and REQUEST_CONTRACT fragments exactly; no audit refresh and no contract revision."
+    },
+    {
+      "id": "behaviour-identical",
+      "statement": "Attempts, answers, deadlines, redirects and retries of the bounded completion, the operator request and the receiver's control-owner-first requests are identical to the sealed contract. No flag, mode, fallback or compatibility parameter. Redirect hop records are not recreated by duplicating the redirect logic."
+    },
+    {
+      "id": "no-unfed-plumbing",
+      "statement": "Nothing that no producer feeds survives as a parameter, field or log member: clock.trace, the trace and phase parameters of requestParticipantRelease, the trace arguments the receiver passes through it, work.releaseTrace with the trace option passed to releaseFreshCreate, the releaseHops log member, and the phase parameter of askParticipantRelease once no caller supplies it. askParticipantRelease keeps the trace parameter that the receiver's cohort requests still feed and that the slow-response log and joined runs read. The census of every reader is evidence/trace-reader-census.md."
+    },
+    {
+      "id": "witnesses",
+      "statement": "Unmodified and green on the repaired tree: test/scripts/participant-release-completion-owner.test.js; node scripts/check-guideline-decision-boundaries.js exits 0 for an unrelated file and for src/node/participant-release-client.js (no local_retry_loop); test/bootstrap/seed-participant-release-failure-projection.test.js; test/partition/participant-release-protocol.test.js; every other test that references a changed file, run on the lab from a snapshot. Tests that assert the removed trace are reported with their origin before they are changed. The scoped complexity check reports whether askParticipantRelease and traceCreateWorker leave the ratchet; no baseline is raised."
+    }
+  ],
+  "verificationTemplates": [
+    "retry-loops",
+    "transport-delivery",
+    "owner-interaction",
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "sealedAt": "d7a1bd42f38af267bef9bc29a97f8d2ca6b31c40"
+}

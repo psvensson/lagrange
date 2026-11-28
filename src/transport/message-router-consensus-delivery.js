@@ -30,7 +30,6 @@ import {
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
 } from './transport-error-codes.js';
-import {consensusItemFamily, observeConsensusSendReturned} from './message-router-socket-evidence.js';
 import {buildDeliveryEnvelope} from './transport-semantic-outcome.js';
 
 const {
@@ -90,6 +89,17 @@ function buildConsensusBatchFrame(sourceNodeId, envelopes) {
 // The last field of the canonical frame is its envelopes array. Keep the
 // encoded wrapper and fill it with the same JSON fragments admitted below.
 const CONSENSUS_FRAME_END = ']}';
+// Separates two admitted entries inside that array; every entry after the
+// first adds exactly these bytes to the frame.
+const CONSENSUS_FRAME_ENTRY_SEPARATOR = ',';
+const CONSENSUS_FRAME_ENTRY_SEPARATOR_BYTES = Buffer.byteLength(CONSENSUS_FRAME_ENTRY_SEPARATOR);
+// The raft-rs envelope's message and the JsMessageOut fields the flush
+// policy reads, as own data properties of the value already serialized.
+const NATIVE_MESSAGE_FIELD = Object.freeze({
+  MESSAGE: 'message',
+  MSG_TYPE: 'msgType',
+  CONTEXT: 'context',
+});
 
 function socketBufferedBytes(connection) {
   const amount = connection?.ws?.bufferedAmount;
@@ -216,7 +226,7 @@ function flushPendingConsensusBatch(router, batch) {
   }
   detachPendingBatch(router, batch);
   const items = batch.items.splice(TRANSPORT_NUM.ZERO);
-  const entries = items.map((item) => item.encodedEntry).join(',');
+  const entries = items.map((item) => item.encodedEntry).join(CONSENSUS_FRAME_ENTRY_SEPARATOR);
   const frame = batch.framePrefix + entries + CONSENSUS_FRAME_END;
   let sendError = null;
   try {
@@ -234,7 +244,6 @@ function flushPendingConsensusBatch(router, batch) {
     }
     return;
   }
-  observeConsensusSendReturned(batch.ws, batch.byteLength, items);
   router.consensusDelivery.written += items.length;
   router.consensusDelivery.framesWritten += TRANSPORT_NUM.ONE;
   for (const item of items) {
@@ -284,25 +293,25 @@ function inspectBatchBufferBounds(router, targetNodeId, connection, batch, added
 
 // JsMessageOut omits context for an empty native buffer. Context-bearing
 // heartbeats carry protocol work (including read-index) and stay urgent.
+// The caller classifies before it touches any batch state: an envelope this
+// cannot read fails its delivery as an unserializable one does.
 function isOrdinaryHeartbeat(payload) {
-  try {
-    const message = Object.getOwnPropertyDescriptor(payload, 'message')?.value;
-    const type = message && Object.getOwnPropertyDescriptor(message, 'msgType')?.value;
-    return (type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT || type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE) &&
-      !('context' in message);
-  } catch {
-    return false;
-  }
+  const message = Object.getOwnPropertyDescriptor(payload, NATIVE_MESSAGE_FIELD.MESSAGE)?.value;
+  const type = message &&
+    Object.getOwnPropertyDescriptor(message, NATIVE_MESSAGE_FIELD.MSG_TYPE)?.value;
+  return (type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT ||
+      type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE) &&
+    !(NATIVE_MESSAGE_FIELD.CONTEXT in message);
 }
 
-function scheduleBatchFlush(router, batch, payload) {
+function scheduleBatchFlush(router, batch, ordinaryHeartbeat) {
   if (batch.items.length === MAX_CONSENSUS_BATCH_ITEMS) {
     flushPendingConsensusBatch(router, batch);
     return;
   }
   const first = batch.items.length === 1;
   if (!first && batch.checkFlush === null) return; // Urgent flush already queued.
-  if (isOrdinaryHeartbeat(payload)) {
+  if (ordinaryHeartbeat) {
     if (first) batch.checkFlush = setImmediate(() => flushPendingConsensusBatch(router, batch));
     return;
   }
@@ -314,10 +323,11 @@ function scheduleBatchFlush(router, batch, payload) {
 function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry) {
   const encodedEntry = JSON.stringify(entry);
   const entryBytes = Buffer.byteLength(encodedEntry);
+  const ordinaryHeartbeat = isOrdinaryHeartbeat(entry.payload);
   let batch = activeBatchForConnection(router, targetNodeId, connection);
   const {frameEncoding} = router.consensusDelivery;
   const addedBytes = entryBytes + (batch === null ?
-    frameEncoding.emptyBytes : TRANSPORT_NUM.ONE);
+    frameEncoding.emptyBytes : CONSENSUS_FRAME_ENTRY_SEPARATOR_BYTES);
   const bufferRefusal = inspectBatchBufferBounds(
     router, targetNodeId, connection, batch, addedBytes);
   if (bufferRefusal !== null) {
@@ -349,8 +359,8 @@ function enqueueRemoteConsensusEnvelope(router, targetNodeId, connection, entry)
   batch.byteLength += addedBytes;
   router.consensusDelivery.pendingBatchBytes += addedBytes;
   return new Promise((resolve) => {
-    batch.items.push({encodedEntry, entryBytes, family: consensusItemFamily(entry.payload), resolve});
-    scheduleBatchFlush(router, batch, entry.payload);
+    batch.items.push({encodedEntry, resolve});
+    scheduleBatchFlush(router, batch, ordinaryHeartbeat);
   });
 }
 

@@ -1,0 +1,14 @@
+{
+  "schema": "solve-quest/2",
+  "id": "telemetry-unproduced-field-removal",
+  "class": "fix",
+  "statement": "Every field of the partition write-phase timing payload has a producer. logAppendMs and sqliteRunMs, which have had none since the rs-raft cutover, are removed together with their consumers, so no consumer reads a default zero as a measurement.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-write-phase-field-producer-census.js --metric",
+      "target": 0
+    }
+  },
+  "sealedAt": "6d79362f99791e35b48868c026d88ddacc5a8e56"
+}

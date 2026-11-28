@@ -1,5 +1,5 @@
 import {splitDescriptorIntentFields} from './split-descriptor-delivery-fields.js';
-import {SPLIT_DESCRIPTOR_ERROR, descriptorRefusal} from '../partition/partition-split-descriptor-command.js';
+import {SPLIT_DESCRIPTOR_ERROR, carriesSplitDescriptorIntent, descriptorRefusal} from '../partition/partition-split-descriptor-command.js';
 import {
   STATEMENT_INGRESS_FIELD,
   resolveStatementIngress,
@@ -597,7 +597,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
    * @private
    */
   async runOwnedWriteStatementAttempt(statement, attempt, firstAttemptState) {
-    if (Object.hasOwn(statement.queryOptions, 'splitDescriptorIntent') &&
+    if (carriesSplitDescriptorIntent(statement.queryOptions) &&
         (statement.writePlan.partitionStatements.size !== 1 ||
          this.resolveWriteTransactionOwnership(statement.sessionId, statement.writePlan) !==
            WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT)) {

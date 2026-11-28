@@ -1,6 +1,5 @@
-import {RECORD_CHANGE_REFUSAL} from './managed-workflow-record-changes.js';
-import {storedTransitionOf} from './managed-workflow-record-store.js';
-import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
+import {RECORD_CHANGE_REFUSAL, storedTransitionOf} from './managed-workflow-record-store.js';
+import {PARTITION_TRANSITION_STATE, RESUME_TRIGGER, WORKFLOW_FAMILY} from './partition-constants.js';
 import {PRE_CUTOVER_SPLIT_STATES, cleanupRecord} from './managed-split-descriptor-cleanup.js';
 /**
  * Owner contract:
@@ -37,7 +36,7 @@ import {PRE_CUTOVER_SPLIT_STATES, cleanupRecord} from './managed-split-descripto
  * decides retirement (group-retirement-evidence.js does) or completes a
  * step (the workflow's own finalize/teardown does).
  */
-import {WORKFLOW_FAMILY, retiringWorkflowOf} from
+import {retiringWorkflowOf} from
   './group-retirement-evidence.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
 import {
@@ -47,14 +46,6 @@ import {
 
 const TABLES_TABLE = 'tables';
 const DELETE_OPERATION = 'DELETE';
-const RESUME_TRIGGER = Object.freeze({
-  OWNER_START: 'owner-start',
-  RECORD_CHANGED: 'record-changed',
-  LEASE_EXPIRED: 'lease-expired',
-  // The owner's own start of the workflow was refused (claim before
-  // register): the record it read is handed here.
-  START_REFUSED: 'start-refused',
-});
 const RESUME_LOG_MSG = Object.freeze({
   RESUMED: 'Group retirement resumed from the durable record by the ' +
     'workflow owner',
@@ -99,13 +90,17 @@ function attachGroupRetirementResume(owner, spec) {
       const record = storedTransitionOf(row);
       const metadata = record?.metadata;
       if (metadata?.sourcePartitionId && record.state === PARTITION_TRANSITION_STATE.FAILED) {
-        const {pendingChildren, pendingSiblings, decisionFence} = cleanupRecord(metadata, row.table_id);
-        return {retiring: pendingChildren.length + pendingSiblings.length > 0, family: spec.family, aborted: true,
-          workflowId: metadata.workflowId, attempt: metadata.workflowAttempt, decisionFence, retiringPartitionIds: [...pendingChildren, ...pendingSiblings], manifest: true};
+        const {pendingChildren, pendingSiblings, decisionFence} = cleanupRecord(metadata,
+          row.table_id);
+        return {retiring: pendingChildren.length + pendingSiblings.length > 0, family: spec.family,
+          aborted: true,
+          workflowId: metadata.workflowId, attempt: metadata.workflowAttempt, decisionFence,
+          retiringPartitionIds: [...pendingChildren, ...pendingSiblings], manifest: true};
       }
       if (metadata?.splitSourceFailure && PRE_CUTOVER_SPLIT_STATES.has(record.state)) {
         return {retiring: true, family: spec.family, workflowId: metadata.workflowId,
-          retiringPartitionIds: [], attempt: metadata.workflowAttempt, failure: metadata.splitSourceFailure};
+          retiringPartitionIds: [], attempt: metadata.workflowAttempt,
+          failure: metadata.splitSourceFailure};
       }
     }
     return retiringWorkflowOf(row);
@@ -182,7 +177,8 @@ function attachGroupRetirementResume(owner, spec) {
     if (!workflow?.workflowId) {
       return false;
     }
-    if (ownsLiveLease(owner, workflow) && (attempt === undefined || workflow.metadata?.workflowAttempt === attempt)) {
+    if (ownsLiveLease(owner, workflow) &&
+        (attempt === undefined || workflow.metadata?.workflowAttempt === attempt)) {
       return true;
     }
     // The claim itself refuses a live foreign lease without writing
@@ -238,7 +234,9 @@ function attachGroupRetirementResume(owner, spec) {
         if (retiring.failure) return owner.abortSplitOnSourceFailure(workflowId, retiring.failure);
         if (retiring.manifest && (workflow?.status !== PARTITION_TRANSITION_STATE.FAILED ||
             workflow.metadata.workflowAttempt !== retiring.attempt ||
-            workflow.metadata.splitDescriptorCleanup?.decisionFence !== retiring.decisionFence)) return false;
+            workflow.metadata.splitDescriptorCleanup?.decisionFence !== retiring.decisionFence)) {
+          return false;
+        }
         return retiring.aborted ? spec.teardown(workflowId, workflow) : spec.finalize(workflowId);
       }, {attempt: retiring.attempt});
     } finally {
@@ -301,4 +299,4 @@ function currentRecord(owner, tablesRow) {
     String(row?.table_id || '') === tableId) || tablesRow;
 }
 
-export {RESUME_TRIGGER, WORKFLOW_FAMILY, attachGroupRetirementResume};
+export {attachGroupRetirementResume};

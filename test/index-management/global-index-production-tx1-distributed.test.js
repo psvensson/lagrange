@@ -1453,7 +1453,8 @@ test('Post-SUCCEEDED unavailable participant retains active state, skips histori
   const restart = createRestartCacheAndGatewayFromGateway(env.gateway, env.partitionServices);
   const recoveredCalls = [];
   const findIntent = SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent;
-  SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = function(dataset, generation) {
+  SchemaProvisioningJobOwner.prototype.findSucceededGlobalIndexIntent = function(dataset,
+    generation) {
     recoveredCalls.push(dataset);
     return findIntent.call(this, dataset, generation);
   };

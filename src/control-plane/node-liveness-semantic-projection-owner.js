@@ -27,6 +27,10 @@ const numberMaxSafeInteger = Number.MAX_SAFE_INTEGER;
 const numberIsFinite = Number.isFinite;
 const objectCreate = Object.create;
 const objectFreeze = Object.freeze;
+const objectIsFrozen = Object.isFrozen;
+const WeakMapConstructor = WeakMap;
+const weakMapGet = Function.call.bind(WeakMap.prototype.get);
+const weakMapSet = Function.call.bind(WeakMap.prototype.set);
 const setPrototypeAdd = Function.call.bind(Set.prototype.add);
 const setPrototypeClear = Function.call.bind(Set.prototype.clear);
 const setPrototypeDelete = Function.call.bind(Set.prototype.delete);
@@ -46,19 +50,34 @@ function nextGeneration(previousGeneration) {
     previousGeneration + 1 : numberMaxSafeInteger;
 }
 
+// The owner reuses only the shallow descriptor snapshot it admitted, held in
+// its own field. A frozen input cannot change its own keys, descriptors or
+// value references; a mutable row is admitted again on every ingress. Live
+// evidence and decisions are evaluated separately on every projection.
+function ownerNodeRowSnapshot(owner, row) {
+  const admitted = weakMapGet(owner.admittedNodeRows, row);
+  if (admitted) return admitted;
+  const snapshot = snapshotNodeLivenessRow(row);
+  if (!snapshot) return null;
+  weakMapSet(owner.admittedNodeRows, snapshot, snapshot);
+  // Strict admission rejects proxies before any integrity-level inspection.
+  if (objectIsFrozen(row)) weakMapSet(owner.admittedNodeRows, row, snapshot);
+  return snapshot;
+}
+
 // Snapshot the nested row at both evidence ingresses before any watermark
 // comparison or row-fact read. A rejected caller row answers that caller only;
 // it cannot execute an accessor or become the shared evidence identity.
-function copyNodeEvidence(evidence) {
+function copyNodeEvidence(owner, evidence) {
   const source = copyStrictOwnDataRecord(evidence) || objectCreate(null);
-  return objectFreeze({...source, nodeRow: snapshotNodeLivenessRow(source.nodeRow)});
+  return objectFreeze({...source, nodeRow: ownerNodeRowSnapshot(owner, source.nodeRow)});
 }
 
 function readProjectionEvidence(owner, nodeId) {
   const recorded = mapPrototypeGet(owner.sourceEvidenceByNodeId, nodeId);
   const rawEvidence = recorded || owner.readNodeEvidence(nodeId) ||
     EMPTY_EVIDENCE;
-  return copyNodeEvidence(rawEvidence);
+  return copyNodeEvidence(owner, rawEvidence);
 }
 
 function nodeLivenessRowFactsEqual(left, right) {
@@ -158,6 +177,7 @@ class NodeLivenessSemanticProjectionOwner {
     this.recordsByNodeId = new MapConstructor();
     this.sourceEvidenceByNodeId = new MapConstructor();
     this.projectedEvidenceRowByNodeId = new MapConstructor();
+    this.admittedNodeRows = new WeakMapConstructor();
     this.transportGraceEvidenceByNodeId = new MapConstructor();
     this.provisioningTrustEvidenceByNodeId = new MapConstructor();
     this.pendingSemanticChangesBySequence = new MapConstructor();
@@ -205,7 +225,7 @@ class NodeLivenessSemanticProjectionOwner {
   ) {
     if (this.stopped) return null;
     const key = normalizeNodeId(nodeId);
-    const source = copyNodeEvidence(evidence);
+    const source = copyNodeEvidence(this, evidence);
     const normalizedNowMs = normalizeSemanticNowMs(nowMs);
     // The shared projection (the planning identity's liveness input) moves
     // forward only: evidence older than, or absent against, the row it last

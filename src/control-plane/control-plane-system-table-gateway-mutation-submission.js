@@ -1,4 +1,4 @@
-import {SPLIT_DESCRIPTOR_ERROR, canonicalSplitDescriptorIntent, splitDescriptorCommandDigest, splitDescriptorStatement,
+import {SPLIT_DESCRIPTOR_ERROR, canonicalSplitDescriptorIntent, carriesSplitDescriptorIntent, splitDescriptorCommandDigest, splitDescriptorStatement,
   descriptorRefusal, isSplitDescriptorReceiptFor, splitDescriptorWriteKey} from
   '../partition/partition-split-descriptor-command.js';
 import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
@@ -88,6 +88,39 @@ function applyReplicaOperationMutationCoalescingFallback(
     coalescingKey,
     replacePendingKey: coalescingKey,
   };
+}
+
+// Whether a split descriptor mutation deviates from the statement and key the
+// descriptor owner derives from its intent: other SQL or parameters, an
+// ignore-existing write, or a caller key other than the descriptor's.
+function deviatesFromSplitDescriptorStatement(plan, expected, options, key) {
+  return plan.sql !== expected.sql || plan.params.length !== expected.params.length ||
+    plan.params.some((value, i) => !Object.is(value, expected.params[i])) ||
+    options.ignoreExisting === true ||
+    (options.idempotencyKey !== undefined && options.idempotencyKey !== key);
+}
+
+// The startup SQL phase executes a mutation of its own phase scope directly,
+// except a control-plane publication.
+function executesStartupSqlMutation(gateway, mutationOptions, tableName) {
+  return gateway.startupSqlMutationPhase !== null &&
+    normalizePhaseScope(mutationOptions.phaseScope) === gateway.startupSqlMutationPhase &&
+    tableName !== SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS;
+}
+
+// The write options carrying a resolved recovery candidate selection key; the
+// same options object when none was resolved.
+function withRecoveryCandidateSelectionKey(writeOptions, recoveryCandidateSelectionKey) {
+  if (
+    typeof recoveryCandidateSelectionKey === 'string' &&
+    recoveryCandidateSelectionKey.length > 0
+  ) {
+    return {
+      ...writeOptions,
+      recoveryCandidateSelectionKey,
+    };
+  }
+  return writeOptions;
 }
 
 const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
@@ -201,17 +234,14 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       operation,
       tableName,
     );
-    const hasDescriptor = Object.hasOwn(options, 'splitDescriptorIntent');
+    const hasDescriptor = carriesSplitDescriptorIntent(options);
     if (hasDescriptor) {
       const intent = canonicalSplitDescriptorIntent(options.splitDescriptorIntent);
       if (!intent) return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
       const key = splitDescriptorWriteKey(intent);
       const plan = this.buildSqlMutationPlan(normalizedMutation);
       const expected = splitDescriptorStatement(intent);
-      if (plan.sql !== expected.sql || plan.params.length !== expected.params.length ||
-          plan.params.some((value, i) => !Object.is(value, expected.params[i])) ||
-          options.ignoreExisting === true ||
-          (options.idempotencyKey !== undefined && options.idempotencyKey !== key)) {
+      if (deviatesFromSplitDescriptorStatement(plan, expected, options, key)) {
         return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
       }
       options = {...options, splitDescriptorIntent: intent,
@@ -235,15 +265,10 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
         requestKey,
         writeOptions,
       );
-    if (
-      typeof recoveryCandidateSelectionKey === 'string' &&
-      recoveryCandidateSelectionKey.length > 0
-    ) {
-      writeOptions = {
-        ...writeOptions,
-        recoveryCandidateSelectionKey,
-      };
-    }
+    writeOptions = withRecoveryCandidateSelectionKey(
+      writeOptions,
+      recoveryCandidateSelectionKey,
+    );
     const telemetryContext = {
       startedAtMs: this.now(),
       owner: mutation?.owner || options?.owner || null,
@@ -283,9 +308,8 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       this.recordMutationTelemetry(telemetryContext, mutationReadinessFailure);
       return mutationReadinessFailure;
     }
-    const executesStartupSql = this.startupSqlMutationPhase !== null &&
-      normalizePhaseScope(mutationOptions.phaseScope) === this.startupSqlMutationPhase &&
-      tableName !== SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS;
+    const executesStartupSql =
+      executesStartupSqlMutation(this, mutationOptions, tableName);
     const executeIntent = async (command, idempotencyKey, timeoutBudget) => {
       const {mutation: retained, ignoreExisting, sessionId} = command;
       const operation = retained.operation;
@@ -400,8 +424,10 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       const result = await deliverMutation();
       if (result?.success !== true) return result;
       const answer = executesStartupSql ? result : result.partitionResult;
-      if (!isSplitDescriptorReceiptFor(answer?.splitDescriptorReceipt, mutationOptions.splitDescriptorIntent) ||
-          answer.committed !== true || !Number.isSafeInteger(answer.logIndex) || answer.logIndex < 1 ||
+      if (!isSplitDescriptorReceiptFor(answer?.splitDescriptorReceipt,
+        mutationOptions.splitDescriptorIntent) ||
+          answer.committed !== true || !Number.isSafeInteger(answer.logIndex) ||
+          answer.logIndex < 1 ||
           !Number.isSafeInteger(answer.term) || answer.term < 1) {
         return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.RECEIPT, true);
       }

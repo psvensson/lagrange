@@ -58,8 +58,9 @@ function buildReentryNormalizedNodeRow(nodeRow, now, bootIncarnation, hostId) {
       persistedStatus;
   return {
     ...nodeRow,
-    ...(normalizeKnownNodeBootIncarnation(readObservedBootIncarnation(nodeRow)) === bootIncarnation ?
-      {} : EMPTY_BOOT_RESOURCE_SAMPLE),
+    ...(
+      normalizeKnownNodeBootIncarnation(readObservedBootIncarnation(nodeRow)) === bootIncarnation ?
+        {} : EMPTY_BOOT_RESOURCE_SAMPLE),
     [COLUMN.STATUS]: reusableStatus || NODE_STATE.JOINING,
     [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
     [COLUMN.LAST_HEARTBEAT]: now,

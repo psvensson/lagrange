@@ -371,6 +371,18 @@ function nodeLogDigest(node) {
     participantFailures.slice(-LOG_DIGEST.LAST_ERRORS).join(' || ');
 }
 
+// Keeps the node's startup log beside the cluster root and names it in the failure.
+function startupFailure(error, node, retained) {
+  let evidence;
+  try {
+    copyFileSync(node.logPath, retained);
+    evidence = `startup log: ${retained}`;
+  } catch (copyError) {
+    evidence = `startup log copy failed: ${copyError.message}`;
+  }
+  return new Error(`${error.message}\n${evidence}\n${nodeLogDigest(node)}`, {cause: error});
+}
+
 /**
  * Create a multi-process embedded cluster owned by a tap test.
  * @param {object} t - tap test (owns every process, client and directory)
@@ -437,15 +449,7 @@ function createEmbeddedCluster(t, options = {}) {
         nodeOptions.startBudgetMs ?? EMBEDDED_CLUSTER_BUDGET_MS.NODE_START,
       ), `start ${role} ${nodeId}`);
     } catch (error) {
-      const retained = `${rootDir}-node-${nodes.indexOf(node)}-startup.log`;
-      let evidence;
-      try {
-        copyFileSync(node.logPath, retained);
-        evidence = `startup log: ${retained}`;
-      } catch (copyError) {
-        evidence = `startup log copy failed: ${copyError.message}`;
-      }
-      throw new Error(`${error.message}\n${evidence}\n${nodeLogDigest(node)}`, {cause: error});
+      throw startupFailure(error, node, `${rootDir}-node-${nodes.indexOf(node)}-startup.log`);
     }
     node.startMs = Date.now() - startedAt;
     node.stop = () => stopNode(t, node, true);

@@ -502,7 +502,8 @@ async function withGroupSurface({partitionId, table, tempPrefix}, body) {
       deliver.call(network, address, envelope, ...rest);
   };
   try {
-    const {tableRow, partitionRow} = surfaceDescriptors(table, partitionId, members[0][1], members.length);
+    const {tableRow, partitionRow} = surfaceDescriptors(table, partitionId, members[0][1],
+      members.length);
     const systemCache = new SystemTableCache();
     systemCache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT, tableRow);
     systemCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, partitionRow);
@@ -510,7 +511,8 @@ async function withGroupSurface({partitionId, table, tempPrefix}, body) {
     // descriptor to each receiver that validates the engine's epoch.
     for (const service of services) {
       service.systemTableCache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT, tableRow);
-      service.systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.UPDATE, partitionRow);
+      service.systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.UPDATE,
+        partitionRow);
       systemCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
         service_id: service.replicaId, service_type: 'partition', partition_id: partitionId,
         node_id: service.nodeId, address: addressOf([service.replicaId, service.nodeId]),

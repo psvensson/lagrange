@@ -3,17 +3,20 @@
 // compares that exact preimage at commit. Restart always uses the issued plan.
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
-import {RECORD_UNCHANGED, refuseRecordChange} from './managed-workflow-record-store.js';
+import {RECORD_CHANGE_REFUSAL, RECORD_UNCHANGED, refuseRecordChange} from './managed-workflow-record-store.js';
 import {SIBLING_DESCRIPTOR_ACTION, canonicalSiblingDescriptorIntent} from './partition-sibling-descriptor-effect.js';
 
 function siblingIntent(tableId, metadata, subject, action) {
   const fields = copyStrictOwnDataRecord(subject);
   if (!fields || Object.keys(fields).length !== 4) return null;
   const {partitionId, priorAttempt, priorVersion, targetVersion} = fields;
-  if (!Array.isArray(metadata.targetPartitionIds) || metadata.targetPartitionIds.includes(partitionId) ||
-      partitionId === metadata.sourcePartitionId || targetVersion !== metadata.targetPartitionVersion ||
+  if (!Array.isArray(metadata.targetPartitionIds) ||
+      metadata.targetPartitionIds.includes(partitionId) ||
+      partitionId === metadata.sourcePartitionId ||
+      targetVersion !== metadata.targetPartitionVersion ||
       priorVersion !== metadata.splitDescriptorBaseVersion) return null;
-  return canonicalSiblingDescriptorIntent({workflowId: metadata.workflowId, tableId, workflowAttempt: metadata.workflowAttempt, action,
+  return canonicalSiblingDescriptorIntent({workflowId: metadata.workflowId, tableId,
+    workflowAttempt: metadata.workflowAttempt, action,
     partitionId, priorAttempt, priorVersion, targetVersion});
 }
 
@@ -30,14 +33,18 @@ function sameIssuedSiblingPlan(workflow, expected) {
   if (!Array.isArray(issued)) return false;
   for (const subject of issued) validateSubject(workflow, subject);
   return issued.length === expected.length && issued.every((item, i) =>
-    item.partitionId === expected[i].partitionId && item.priorAttempt === expected[i].priorAttempt &&
-    item.priorVersion === expected[i].priorVersion && item.targetVersion === expected[i].targetVersion);
+    item.partitionId === expected[i].partitionId &&
+    item.priorAttempt === expected[i].priorAttempt &&
+    item.priorVersion === expected[i].priorVersion &&
+    item.targetVersion === expected[i].targetVersion);
 }
 
 async function issueSplitSiblingPlan(owner, workflow) {
   const prior = workflow.metadata.splitIssuedSiblings;
-  if (!Array.isArray(prior)) throw Object.assign(new Error('Missing split sibling plan'), {
-    code: 'split-sibling-plan-invalid'});
+  if (!Array.isArray(prior)) {
+    throw Object.assign(new Error('Missing split sibling plan'), {
+      code: 'split-sibling-plan-invalid'});
+  }
   const subjects = new Map();
   for (const subject of prior) {
     validateSubject(workflow, subject);
@@ -60,12 +67,19 @@ async function issueSplitSiblingPlan(owner, workflow) {
     subjects.set(partitionId, subject);
   }
   return owner.workflowCoordinator.updateWorkflow(workflow.workflowId, (current, stored) => {
-    if (current.status !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP || current.metadata.splitSourceFailure ||
-        current.metadata.workflowAttempt !== workflow.metadata.workflowAttempt || current.fenceToken !== workflow.fenceToken ||
-        stored.row.active_partition_version !== activeVersion || !owner.isSplitCutoverAdmissible(current)) return refuseRecordChange('state-not-expected');
+    if (current.status !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP ||
+        current.metadata.splitSourceFailure ||
+        current.metadata.workflowAttempt !== workflow.metadata.workflowAttempt ||
+        current.fenceToken !== workflow.fenceToken ||
+        stored.row.active_partition_version !== activeVersion ||
+        !owner.isSplitCutoverAdmissible(current)) {
+      return refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED);
+    }
     // A parallel issuer may have recorded additional subjects. Re-read its
     // plan before sending anything. A stale calculation may not replace it.
-    if (!sameIssuedSiblingPlan(current, prior)) return refuseRecordChange('state-not-expected');
+    if (!sameIssuedSiblingPlan(current, prior)) {
+      return refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED);
+    }
     for (const subject of subjects.values()) validateSubject(current, subject);
     return subjects.size === prior.length ? RECORD_UNCHANGED : {...current, metadata: {
       ...current.metadata, splitIssuedSiblings: [...subjects.values()]}};

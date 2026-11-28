@@ -17,7 +17,8 @@ function currentBoot(owner, targetNodeId) {
   if (!cache || !targetNodeId) return null;
   const nodeBoot = cache.get('nodes', targetNodeId)?.boot_incarnation;
   const endpointBoot = cache.get('node_endpoints', `ep-${targetNodeId}-ws`)?.boot_incarnation;
-  return Number.isSafeInteger(nodeBoot) && nodeBoot > 0 && nodeBoot === endpointBoot ? nodeBoot : null;
+  return Number.isSafeInteger(nodeBoot) && nodeBoot > 0 && nodeBoot === endpointBoot ? nodeBoot :
+    null;
 }
 
 function workerMatchesRequest(worker, request, targetNodeId, boot) {
@@ -28,8 +29,10 @@ function workerMatchesRequest(worker, request, targetNodeId, boot) {
     operationId: request.operationId, operationType: request.operationType,
     entityType: request.entityType, entityId: request.entityId, partitionId: request.partitionId,
     replicaId: request.replicaId, targetNodeId, admissionToken: request.createAdmissionToken,
-    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq,
-    workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt, replicaCreatedAt: worker.replicaCreatedAt,
+    attemptToken: request.createAdmissionAttemptToken,
+    attemptSeq: request.createAdmissionAttemptSeq,
+    workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt,
+    replicaCreatedAt: worker.replicaCreatedAt,
   });
 }
 
@@ -45,7 +48,8 @@ function grantMatchesWorker(operation, worker) {
     operation.createAdmissionWorkflowUpdatedAt === worker.workflowUpdatedAt;
 }
 
-async function deliverCreateWithReceipt(owner, operation, targetNodeId, request, routineWake, send) {
+async function deliverCreateWithReceipt(owner, operation, targetNodeId, request, routineWake,
+  send) {
   if (request.type !== ReplicaOperationMessageType.CREATE_REPLICA) return send();
   const boot = currentBoot(owner, targetNodeId);
   const prior = owner.acknowledgedCreateByOperationId?.get(request.operationId);
@@ -62,22 +66,26 @@ async function deliverCreateWithReceipt(owner, operation, targetNodeId, request,
   clearAcknowledgedCreateInFlight(owner, request.operationId);
   const delivery = await send({
     routineWake, createPending, grantMatches, receiptMatches, targetBootIncarnation: boot,
-    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq,
+    attemptToken: request.createAdmissionAttemptToken,
+    attemptSeq: request.createAdmissionAttemptSeq,
     grantState: operation.createAdmissionState ?? null,
     grantOwnerIncarnation: operation.createAdmissionOwnerIncarnation ?? null,
     priorReceiptStatus: prior ? deliveryAnswerOf(prior.delivery).status : null,
   });
   const reply = deliveryAnswerOf(delivery);
-  if (isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) && reply?.success !== false &&
+  if (isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
+      reply?.success !== false &&
       (reply?.status === ReplicaOperationResponseStatus.INITIATED ||
        reply?.status === ReplicaOperationResponseStatus.IN_PROGRESS) &&
       reply.operationId === request.operationId && reply.replicaId === request.replicaId &&
-      reply.nodeId === targetNodeId && workerMatchesRequest(reply.createWorkerReceipt, request, targetNodeId, boot) &&
+      reply.nodeId === targetNodeId &&
+      workerMatchesRequest(reply.createWorkerReceipt, request, targetNodeId, boot) &&
       currentBoot(owner, targetNodeId) === boot) {
     owner.acknowledgedCreateByOperationId ??= new Map();
     owner.acknowledgedCreateByOperationId.set(request.operationId, {
       worker: Object.freeze({...reply.createWorkerReceipt}), delivery,
-      sourceNodeId: request.sourceNodeId, membershipPublicationEpoch: request.membershipPublicationEpoch,
+      sourceNodeId: request.sourceNodeId,
+      membershipPublicationEpoch: request.membershipPublicationEpoch,
     });
   }
   return delivery;

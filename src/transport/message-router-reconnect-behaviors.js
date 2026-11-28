@@ -1,4 +1,3 @@
-import {socketEvidence} from './message-router-socket-evidence.js';
 import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 import {createPeerConnectionRecord} from './message-router-connection-record.js';
@@ -666,8 +665,6 @@ export function quarantineConnectionAfterAckTimeout(
   router.logger.warn(
     MESSAGE_ROUTER_LITERAL.STRING_QUARANTINING_TARGET_CONNECTION_AFTER_ACK_TIMEOUT,
     {
-      outboundSocketWedged, livenessWindowMs,
-      beforeRecovery: socketEvidence(router, targetNodeId, activeConnection, activeConnection.ws),
       messageId,
       targetAddress,
       targetNodeId,

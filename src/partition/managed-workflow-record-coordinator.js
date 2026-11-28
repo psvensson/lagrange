@@ -26,6 +26,7 @@ import {
 import {
   RECORD_CHANGE_KIND,
   RECORD_CHANGE_OUTCOME,
+  RECORD_CHANGE_REFUSAL,
   applyRecordChange,
   forgetWorkflowRecord,
   recordBytesOf,
@@ -33,7 +34,6 @@ import {
   refuseRecordChange,
 } from './managed-workflow-record-store.js';
 import {
-  RECORD_CHANGE_REFUSAL,
   acknowledgementChange,
   clearChange,
   executionOutcomeChange,
@@ -345,7 +345,8 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
       freshClaimChange(this.recordOwner, this.isTerminalWorkflow);
     const guarded = (current, stored) => current && claim.attempt !== undefined &&
       workflowAttemptOf(current.metadata) !== claim.attempt ?
-      refuseRecordChange(RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH, {superseded: true}) : change(current, stored);
+      refuseRecordChange(RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH, {superseded: true}) :
+      change(current, stored);
     const write = await this.applyLiveChange(workflowId, guarded, RECORD_CHANGE_KIND.CLAIM);
     if (write.accepted) {
       return {accepted: true, result: WORKFLOW_CLAIM_RESULT.ACCEPTED,
@@ -382,7 +383,8 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
     if (write.outcome === RECORD_CHANGE_OUTCOME.ACCEPTED) {
       const failure = write.workflow?.metadata?.splitSourceFailure;
       return {result: PARTICIPANT_ACK_RESULT.ACCEPTED, participantKey: key,
-        ...(failure?.participantKey === key && failure.status === ack[PARTICIPANT_ACK_FIELD.STATUS] ?
+        ...(failure?.participantKey === key &&
+        failure.status === ack[PARTICIPANT_ACK_FIELD.STATUS] ?
           {splitSourceFailure: failure} : {}),
         acknowledgedAt: write.workflow?.participants?.get(key)
           ?.acknowledgedAt ?? this.now()};

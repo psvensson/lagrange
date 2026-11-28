@@ -157,9 +157,11 @@ function hasValidPayloadStatementOutcomeEffectsTable(payloadDb, tables) {
 
 function scrubRaftRsCheckpointPayload(copyDb, entityKind, entityId) {
   if (entityKind === ENTITY_TYPE.PARTITION && entityId === SYSTEM_TABLE_NAME.PARTITIONS &&
-      (!partitionDescriptorsAreCurrentIn(copyDb) || detectCommittedStatementOutcomeFormat(copyDb).outcome !==
+      (!partitionDescriptorsAreCurrentIn(copyDb) ||
+      detectCommittedStatementOutcomeFormat(copyDb).outcome !==
         PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT)) {
-    throw Object.assign(new Error(PARTITIONS_SCHEMA_UNSUPPORTED), {code: PARTITIONS_SCHEMA_UNSUPPORTED});
+    throw Object.assign(new Error(PARTITIONS_SCHEMA_UNSUPPORTED),
+      {code: PARTITIONS_SCHEMA_UNSUPPORTED});
   }
   const raftTables = copyDb.prepare(SELECT_RAFT_LOCAL_TABLES_SQL)
     .all()
@@ -198,7 +200,8 @@ function validateRaftRsPayloadTables(payloadDb, descriptor) {
   if (descriptor.entity?.kind === ENTITY_TYPE.PARTITION) {
     const outcomeFormat = detectCommittedStatementOutcomeFormat(payloadDb).outcome;
     if (descriptor.entity.id === SYSTEM_TABLE_NAME.PARTITIONS &&
-        (!partitionDescriptorsAreCurrentIn(payloadDb) || outcomeFormat !== PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT)) {
+        (!partitionDescriptorsAreCurrentIn(payloadDb) ||
+        outcomeFormat !== PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT)) {
       return false;
     }
     if (!tables.includes(RAFT_RS_PEER_TABLE) ||

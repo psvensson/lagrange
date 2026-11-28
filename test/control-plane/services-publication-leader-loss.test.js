@@ -34,8 +34,12 @@ test('services publication recovers its submitted entry after the projected lead
   };
   const cache = {
     getAll: (type) => metadata[type] || [],
-    filter(type, predicate) { return this.getAll(type).filter(predicate); },
-    find(type, predicate) { return this.getAll(type).find(predicate); },
+    filter(type, predicate) {
+      return this.getAll(type).filter(predicate);
+    },
+    find(type, predicate) {
+      return this.getAll(type).find(predicate);
+    },
     get(type, key) {
       const field = {tables: 'table_id', partitions: 'partition_id', services: 'service_id'}[type];
       return this.find(type, (row) => row[field] === key);
@@ -59,7 +63,8 @@ test('services publication recovers its submitted entry after the projected lead
             error: 'Connection to node old closed', deferRetry: true,
             recoverableBeforeSend: false, retryAfterMs: 60000});
         }
-        if (address !== live.address || electedTerm !== 3 || !stored || request.entryId !== stored.entry ||
+        if (address !== live.address || electedTerm !== 3 || !stored ||
+            request.entryId !== stored.entry ||
             request.idempotencyKey !== stored.key) throw new Error('unexpected publication delivery');
         return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1,
           rows: [], durableCommitWitness: {partitionId, entryId: stored.entry,
@@ -70,7 +75,8 @@ test('services publication recovers its submitted entry after the projected lead
   });
   const cdc = new CDCIntegrationService({nodeId: live.node_id, sqlQueryEngine: engine});
   cdc.initialize();
-  const gateway = new ControlPlaneSystemTableGateway({nodeId: live.node_id, cdcIntegrationService: cdc});
+  const gateway = new ControlPlaneSystemTableGateway({nodeId: live.node_id,
+    cdcIntegrationService: cdc});
   const result = await gateway.submitMutation({
     tableName: 'services', operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
     row: {service_id: serviceId, service_type: 'partition', status: 'pending',

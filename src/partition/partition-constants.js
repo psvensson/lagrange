@@ -227,6 +227,20 @@ const MERGE_ABORT_OUTCOME = Object.freeze({
   UNRESOLVED: 'unresolved',
 });
 
+const WORKFLOW_FAMILY = Object.freeze({SPLIT: 'split', MERGE: 'merge'});
+
+const RESUME_TRIGGER = Object.freeze({
+  OWNER_START: 'owner-start',
+  RECORD_CHANGED: 'record-changed',
+  LEASE_EXPIRED: 'lease-expired',
+  // The owner's own start of the workflow was refused (claim before
+  // register): the record it read is handed here.
+  START_REFUSED: 'start-refused',
+  // A source's committed mirror custody release was acknowledged on the
+  // workflow record.
+  SOURCE_CUSTODY_RELEASED: 'source-custody-released',
+});
+
 const RETRYABLE_PARTITION_TRANSITION_STATES = Object.freeze(new Set([
   PARTITION_TRANSITION_STATE.BLOCKED,
   PARTITION_TRANSITION_STATE.DEFERRED,
@@ -759,6 +773,8 @@ export {
   MERGE_OWNER_MANAGED_PHASES,
   PRE_CUTOVER_MERGE_STATES,
   MERGE_ABORT_OUTCOME,
+  RESUME_TRIGGER,
+  WORKFLOW_FAMILY,
   buildPartitionTransitionProjection,
   isDeferredPartitionTransitionOutcome,
   isRetryablePartitionTransitionState,
@@ -766,6 +782,7 @@ export {
 };
 
 export function endsSourceExecutionAttempt(state) {
-  return state === PARTITION_TRANSITION_STATE.FAILED || state === PARTITION_TRANSITION_STATE.DEFERRED ||
+  return state === PARTITION_TRANSITION_STATE.FAILED ||
+      state === PARTITION_TRANSITION_STATE.DEFERRED ||
     state === PARTITION_TRANSITION_STATE.BLOCKED;
 }

@@ -29,7 +29,8 @@ async function attachReceiver(f, nodeId, bootIncarnation, admitted, frames) {
   await router.initialize({startServer: true});
   const service = createService({nodeId, messageRouter: router, cdcIntegrationService: {}});
   // Stop at the real handler's admission of the whole row, after its subject check.
-  service.operationDispatchQueue.enqueue = (id, reason, context) => admitted.push({id, reason, ...context});
+  service.operationDispatchQueue.enqueue = (id, reason, context) =>
+    admitted.push({id, reason, ...context});
   let closed = false;
   async function close() {
     if (closed) return;
@@ -58,7 +59,8 @@ async function exercise(t, record, reference) {
   const admitted = [];
   const initial = inputRow(record);
   const id = initial.operation_id;
-  const advanced = {...initial, membership_publication_epoch: 4, updated_at: initial.updated_at + 1};
+  const advanced = {...initial, membership_publication_epoch: 4,
+    updated_at: initial.updated_at + 1};
   const advancedHistory = JSON.parse(initial.steps_history);
   advancedHistory.push({step: initial.workflow_step, timestamp: advanced.updated_at,
     previousStep: initial.workflow_step, targetNodeBootIncarnation: 2});
@@ -72,8 +74,10 @@ async function exercise(t, record, reference) {
 
   // Run the exact former replay expression for the reference. Both variants
   // enter dispatchOperationRow for the remote owner and use the same transport.
-  if (reference) sender.sendDirectDispatchWakeupFromRow = (row) =>
-    sender.sendDirectDispatchWakeup(sender.buildOperationFromRow(row));
+  if (reference) {
+    sender.sendDirectDispatchWakeupFromRow = (row) =>
+      sender.sendDirectDispatchWakeup(sender.buildOperationFromRow(row));
+  }
 
   let builds = 0;
   let historyBytes = 0;
@@ -87,16 +91,16 @@ async function exercise(t, record, reference) {
   const ackHeld = Promise.withResolvers();
   const replyDropped = Promise.withResolvers();
   const sendRaw = receiver.router.sendRaw.bind(receiver.router);
-  receiver.router.sendRaw = (ws, frame, family) => {
+  receiver.router.sendRaw = (ws, frame) => {
     if (frame.type === FRAME.ACK) {
-      ackHeld.resolve(() => sendRaw(ws, frame, family));
+      ackHeld.resolve(() => sendRaw(ws, frame));
       return;
     }
     if (frame.type === FRAME.SERVICE_RESPONSE) {
       replyDropped.resolve();
       return;
     }
-    return sendRaw(ws, frame, family);
+    return sendRaw(ws, frame);
   };
 
   const first = sender.dispatchOperationRow(initial);
@@ -144,7 +148,8 @@ async function exercise(t, record, reference) {
   assert.equal(builds, reference ? 5 : 3);
   const initialBytes = Buffer.byteLength(initial.steps_history);
   const advancedBytes = Buffer.byteLength(advanced.steps_history);
-  assert.equal(historyBytes, reference ? 2 * initialBytes + 3 * advancedBytes : initialBytes + 2 * advancedBytes);
+  assert.equal(historyBytes,
+    reference ? 2 * initialBytes + 3 * advancedBytes : initialBytes + 2 * advancedBytes);
   assert.equal(frames.length, 2);
   for (const [i, row] of [initial, advanced].entries()) {
     const {frame, bytes} = frames[i];
@@ -176,7 +181,8 @@ test('coordinator-originated in-flight custody never authorizes persisted replay
   initEnv();
   const held = Promise.withResolvers();
   const row = inputRow(retainedDispatchOperations[0]);
-  const service = createService({cdcIntegrationService: {}, messageRouter: {deliver: () => held.promise},
+  const service = createService({cdcIntegrationService: {},
+    messageRouter: {deliver: () => held.promise},
     rebalanceCoordinator: {resolveOperationOwnerNodeId: () => row.source_node_id}});
   const op = {...service.buildOperationFromRow(row), membershipPublicationEpoch: -1};
   const run = service.sendDirectDispatchWakeup(op);

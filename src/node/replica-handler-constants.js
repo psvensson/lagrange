@@ -59,6 +59,7 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   ASYNC_CREATE_FAILED: 'Async replica creation failed',
   CREATE_COMPLETED: 'Replica creation completed',
   CREATE_FAILED: 'Replica creation failed',
+  CREATE_PHYSICAL_WORKER: 'Replica CREATE physical worker',
   REMOVE_REQUEST: 'Handling REMOVE_REPLICA request',
   REMOVE_MISSING_FIELDS: 'REMOVE_REPLICA missing required fields',
   REMOVE_NOT_FOUND: 'Replica not found for removal',
@@ -210,6 +211,30 @@ const REPLICA_HANDLER_PARTICIPANT_RELEASE_DISPATCH_KIND = Object.freeze({
   RELEASE: 'release',
 });
 
+// Boundary and outcome names of the `Replica CREATE physical worker` record
+// written by traceCreateWorker (replica-handler-create-work.js).
+const REPLICA_HANDLER_CREATE_WORKER_BOUNDARY = Object.freeze({
+  QUEUED_CALLBACK: 'queued_callback',
+  REVALIDATE: 'revalidate',
+  POST_REVALIDATION: 'post_revalidation',
+  CREATE_REPLICA_ASYNC: 'createReplicaAsync',
+  VOTER_READINESS: 'voter_readiness',
+  PARTICIPANT_RELEASE: 'participant_release',
+  ACTIVATION_WORKER_REVALIDATION: 'activation_worker_revalidation',
+});
+
+const REPLICA_HANDLER_CREATE_WORKER_OUTCOME = Object.freeze({
+  ENTERED: 'entered',
+  STARTED: 'started',
+  SETTLED: 'settled',
+  REFUSED: 'refused',
+  ERROR: 'error',
+  CURRENT: 'current',
+  SUPERSEDED: 'superseded',
+  SHUTDOWN: 'shutdown',
+  NOT_REQUIRED: 'not_required',
+});
+
 const REPLICA_HANDLER_ERRNO = Object.freeze({
   ENOENT: ERRNO.ENOENT,
 });
@@ -227,6 +252,8 @@ const REPLICA_HANDLER_NUM = Object.freeze({
 export {
   REPLICA_HANDLER_ADDRESS,
   REPLICA_HANDLER_CREATE_DECISION,
+  REPLICA_HANDLER_CREATE_WORKER_BOUNDARY,
+  REPLICA_HANDLER_CREATE_WORKER_OUTCOME,
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_ERRNO,

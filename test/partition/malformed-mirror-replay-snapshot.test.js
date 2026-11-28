@@ -34,7 +34,8 @@ test('pinned snapshot and source replay reject a malformed retained statement ef
     const removed = db.prepare(command.sql + ' RETURNING id').raw().all(...command.params);
     recordCommittedStatementOutcome(service, {
       command, entryKey, index: 2, term: 1, outcome,
-      result: {changes: removed.length, lastInsertRowid: null, mutationKind: PARTITION_SERVICE_OPERATION.DELETE,
+      result: {changes: removed.length, lastInsertRowid: null,
+        mutationKind: PARTITION_SERVICE_OPERATION.DELETE,
         typedEffects: encodeTypedRowSet(['id'], removed)},
     });
     db.prepare('INSERT INTO _partition_statement_outcome_effects VALUES (?, 0, ?, ?)').run(
@@ -69,7 +70,7 @@ test('pinned snapshot and source replay reject a malformed retained statement ef
       change('$.command.entryId', 'wrong-key'),
       change('$.command.sql', 'SELECT id FROM orders'),
       () => db.exec('DELETE FROM _partition_statement_outcomes'),
-      () => db.exec("UPDATE _partition_statement_outcomes SET outcome = 'STATEMENT_FAILED'"),
+      () => db.exec('UPDATE _partition_statement_outcomes SET outcome = \'STATEMENT_FAILED\''),
       () => db.exec('UPDATE _partition_statement_outcomes SET log_index = 3'),
       () => db.exec('UPDATE _partition_statement_outcomes SET changes = 2'),
     ];
@@ -87,7 +88,7 @@ test('pinned snapshot and source replay reject a malformed retained statement ef
     // need no delta, even when an internal operation reports a change.
     db.prepare('DELETE FROM _partition_statement_outcome_effects WHERE entry_key = ?').run(entryKey);
     db.prepare('UPDATE _partition_statement_outcome_effects SET typed_effects_json = ' +
-      "json_set(typed_effects_json, '$.barrierIndex', 2) WHERE entry_key = ?")
+      'json_set(typed_effects_json, \'$.barrierIndex\', 2) WHERE entry_key = ?')
       .run(MIRROR_RETENTION_BARRIER_ENTRY_KEY);
     const settled = {term: 1, outcome};
     recordCommittedStatementOutcome(service, {...settled, entryKey: 'entry:failed', index: 3,
@@ -103,7 +104,8 @@ test('pinned snapshot and source replay reject a malformed retained statement ef
     const noRows = db.prepare(empty.sql + ' RETURNING id').raw().all(...empty.params);
     recordCommittedStatementOutcome(service, {...settled, command: empty,
       entryKey: committedStatementEntryKey(empty), index: 7,
-      result: {changes: noRows.length, lastInsertRowid: null, mutationKind: PARTITION_SERVICE_OPERATION.DELETE,
+      result: {changes: noRows.length, lastInsertRowid: null,
+        mutationKind: PARTITION_SERVICE_OPERATION.DELETE,
         typedEffects: encodeTypedRowSet(['id'], noRows)}});
     assert.deepEqual(loadDurableDeltasBehindWatermark(service, 2)[0].affectedRows, []);
     scrubRaftRsCheckpointPayload(db, ENTITY_TYPE.PARTITION);

@@ -77,7 +77,9 @@ function siblingDescriptorDispositionIn(db, intent, changes, forwardUnsettled) {
   } else if (!promote && changes === 0) {
     const row = db.prepare('SELECT table_id, partition_version, split_descriptor_attempt ' +
       'FROM partitions WHERE partition_id = ?').get(intent.partitionId);
-    if (row?.table_id !== intent.tableId || !Number.isSafeInteger(row.split_descriptor_attempt)) return null;
+    if (row?.table_id !== intent.tableId || !Number.isSafeInteger(row.split_descriptor_attempt)) {
+      return null;
+    }
     if (row.split_descriptor_attempt > intent.workflowAttempt) {
       disposition = DISPOSITION.SUPERSEDED;
     } else if (forwardUnsettled === true && row.split_descriptor_attempt === intent.priorAttempt &&
@@ -95,12 +97,15 @@ function isSiblingDescriptorReceiptFor(value, expected) {
       !SUBJECT_FIELDS.every((field) => receipt[field] === intent[field])) return false;
   return intent.action === SIBLING_DESCRIPTOR_ACTION.PROMOTE ?
     receipt.disposition === DISPOSITION.PROMOTED :
-    [DISPOSITION.RESTORED, DISPOSITION.CANCELLED, DISPOSITION.SUPERSEDED].includes(receipt.disposition);
+    [DISPOSITION.RESTORED, DISPOSITION.CANCELLED,
+      DISPOSITION.SUPERSEDED].includes(receipt.disposition);
 }
 
 function siblingDescriptorChangeCount(receipt) {
-  return receipt.disposition === DISPOSITION.PROMOTED || receipt.disposition === DISPOSITION.RESTORED ? 1 : 0;
+  return receipt.disposition === DISPOSITION.PROMOTED ||
+      receipt.disposition === DISPOSITION.RESTORED ? 1 : 0;
 }
 
 export {SIBLING_DESCRIPTOR_ACTION, canonicalSiblingDescriptorIntent, isSiblingDescriptorReceiptFor,
-  siblingDescriptorChangeCount, siblingDescriptorDispositionIn, siblingDescriptorMutation, siblingDescriptorStatement};
+  siblingDescriptorChangeCount, siblingDescriptorDispositionIn, siblingDescriptorMutation,
+  siblingDescriptorStatement};

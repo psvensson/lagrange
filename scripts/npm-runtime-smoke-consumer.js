@@ -18,6 +18,39 @@ const NODE_ID = '550e8400-e29b-41d4-a716-446655440037';
 const HOST_ID = 'npm-runtime-smoke-host';
 const ERROR_EVENT = 'error';
 const CLEANUP_FAILURE = 'cleanup failure';
+const READYZ_PATH = '/readyz';
+const HEALTH_PATH = '/health';
+const CONNECTION_REFUSED_CODE = 'ECONNREFUSED';
+const HTTP_STATUS_OK = 200;
+const HTTP_STATUS_SERVICE_UNAVAILABLE = 503;
+const READINESS_POLL_MS = 250;
+const HEALTH_IDENTITY_MISMATCH = 'foreground health did not identify the installed seed';
+const SOCKET_NODE_MISMATCH = 'SQL socket must belong to the fresh foreground seed';
+const SIGINT_NOT_DELIVERED = 'foreground CLI did not receive SIGINT';
+const LOG_SQL_SUBMITTING = 'Installed foreground SQL submitting';
+const LOG_SQL_RESULT = 'Installed foreground SQL result';
+const LOG_CLI_VERIFIED =
+  'Installed foreground CLI verified CREATE/INSERT/SELECT and exited 0 after SIGINT';
+const SQL_CREATE_TABLE = 'CREATE TABLE npm_smoke (id INTEGER PRIMARY KEY, value TEXT)';
+const SQL_SELECT_ROW = 'SELECT id, value FROM npm_smoke WHERE id = 1';
+const ADMIN_MESSAGE = Object.freeze({
+  QUERY: 'query',
+  ERROR: 'error',
+  // The first frame the admin stream sends; it carries the serving node's id. The product
+  // names this message type ADMIN_MESSAGE_TYPE.CACHE_DUMP (src/admin/admin-constants.js).
+  INITIAL_STATE: 'cache_dump',
+  QUERY_RESULT: 'query_result',
+});
+const DATA_DIR_PREFIX = 'single-node-data-';
+const SINGLE_NODE_REPLICA_COUNT = '1';
+const NODE_MODULES_DIR = 'node_modules';
+const BIN_DIR = '.bin';
+const LAGRANGE_BIN_NAME = 'lagrange';
+const DATA_DIR_FLAG = '--data-dir';
+const STDIO_INHERIT = 'inherit';
+const CLOSE_EVENT = 'close';
+const SIGNAL_INTERRUPT = 'SIGINT';
+const SIGNAL_KILL = 'SIGKILL';
 const config = JSON.parse(process.argv[CONFIG_ARGUMENT]);
 const reservations = [];
 let runtime;
@@ -55,41 +88,41 @@ async function waitForCliReadiness(baseUrl, nodeId, signal) {
   for (;;) {
     let response;
     try {
-      response = await fetch(baseUrl + '/readyz', {signal});
+      response = await fetch(baseUrl + READYZ_PATH, {signal});
     } catch (error) {
-      if (error.cause?.code !== 'ECONNREFUSED') throw error;
+      if (error.cause?.code !== CONNECTION_REFUSED_CODE) throw error;
     }
     if (response) {
       const state = await response.json();
-      if (response.status === 200 && state.ready === true) {
-        const health = await fetch(baseUrl + '/health', {signal});
+      if (response.status === HTTP_STATUS_OK && state.ready === true) {
+        const health = await fetch(baseUrl + HEALTH_PATH, {signal});
         const identity = await health.json();
         if (!health.ok || identity.nodeId !== nodeId || identity.ready !== true) {
-          throw new Error('foreground health did not identify the installed seed');
+          throw new Error(HEALTH_IDENTITY_MISMATCH);
         }
         return;
       }
-      if (response.status !== 503 || state.ready !== false) {
+      if (response.status !== HTTP_STATUS_SERVICE_UNAVAILABLE || state.ready !== false) {
         throw new Error(`unexpected foreground readiness response: ${response.status}`);
       }
     }
-    await delay(250, undefined, {signal});
+    await delay(READINESS_POLL_MS, undefined, {signal});
   }
 }
 
 async function verifyForegroundSql(adminPort, nodeId) {
-  const socket = new WebSocket(`ws://${LOOPBACK}:${adminPort}/api/admin/stream`);
+  const socket = new globalThis.WebSocket(`ws://${LOOPBACK}:${adminPort}/api/admin/stream`);
   const statements = [
-    'CREATE TABLE npm_smoke (id INTEGER PRIMARY KEY, value TEXT)',
+    SQL_CREATE_TABLE,
     `INSERT INTO npm_smoke (id, value) VALUES (1, '${nodeId}')`,
-    'SELECT id, value FROM npm_smoke WHERE id = 1',
+    SQL_SELECT_ROW,
   ];
   let index = -1;
   let queryId;
   function submit() {
     queryId = randomUUID();
-    console.log('Installed foreground SQL submitting', statements[index]);
-    socket.send(JSON.stringify({type: 'query', queryId, sql: statements[index]}));
+    console.log(LOG_SQL_SUBMITTING, statements[index]);
+    socket.send(JSON.stringify({type: ADMIN_MESSAGE.QUERY, queryId, sql: statements[index]}));
   }
   try {
     await new Promise((resolve, reject) => {
@@ -98,13 +131,14 @@ async function verifyForegroundSql(adminPort, nodeId) {
       socket.onmessage = ({data}) => {
         try {
           const message = JSON.parse(data);
-          if (message.type === 'error') throw new Error(JSON.stringify(message));
-          if (index === -1 && message.type === 'cache_dump') {
-            assert.equal(message.nodeId, nodeId, 'SQL socket must belong to the fresh foreground seed');
+          if (message.type === ADMIN_MESSAGE.ERROR) throw new Error(JSON.stringify(message));
+          if (index === -1 && message.type === ADMIN_MESSAGE.INITIAL_STATE) {
+            assert.equal(message.nodeId, nodeId, SOCKET_NODE_MISMATCH);
             index++;
             submit();
-          } else if (message.type === 'query_result' && message.queryId === queryId && index >= 0) {
-            console.log('Installed foreground SQL result', JSON.stringify(message));
+          } else if (message.type === ADMIN_MESSAGE.QUERY_RESULT &&
+              message.queryId === queryId && index >= 0) {
+            console.log(LOG_SQL_RESULT, JSON.stringify(message));
             if (message.error || message.errorCode) throw new Error(JSON.stringify(message));
             if (index === 1) assert.equal(message.affectedRows, 1);
             if (index === 2) {
@@ -126,18 +160,19 @@ async function verifyForegroundSql(adminPort, nodeId) {
 }
 
 async function verifyForegroundCli() {
-  const dataDir = await mkdtemp(join(process.cwd(), 'single-node-data-'));
+  const dataDir = await mkdtemp(join(process.cwd(), DATA_DIR_PREFIX));
   const nodeId = randomUUID();
   const [rest, admin, transport] = await freshListenerPorts();
   const env = {...process.env, NODE_ID: nodeId, NODE_HOST_ID: HOST_ID,
-    PARTITION_DEFAULT_REPLICA_COUNT: '1',
-    REST_API_PORT: String(rest), ADMIN_WS_PORT: String(admin), TRANSPORT_WS_PORT: String(transport)};
+    PARTITION_DEFAULT_REPLICA_COUNT: SINGLE_NODE_REPLICA_COUNT,
+    REST_API_PORT: String(rest), ADMIN_WS_PORT: String(admin),
+    TRANSPORT_WS_PORT: String(transport)};
   delete env.SEED_NODE_ADDRESS;
   // Inherit the smoke owner's process group, output budget and deadline.
-  const child = spawn(join(process.cwd(), 'node_modules', '.bin', 'lagrange'),
-    ['--data-dir', dataDir], {env, stdio: 'inherit'});
+  const child = spawn(join(process.cwd(), NODE_MODULES_DIR, BIN_DIR, LAGRANGE_BIN_NAME),
+    [DATA_DIR_FLAG, dataDir], {env, stdio: STDIO_INHERIT});
   const stopProbe = new AbortController();
-  const closed = once(child, 'close');
+  const closed = once(child, CLOSE_EVENT);
   const earlyExit = closed.then(([code, signal]) => {
     throw new Error(`foreground CLI exited before completing public SQL: ${code} (${signal})`);
   });
@@ -145,16 +180,16 @@ async function verifyForegroundCli() {
     await Promise.race([earlyExit, waitForCliReadiness(
       `http://${LOOPBACK}:${rest}`, nodeId, stopProbe.signal)]);
     await Promise.race([earlyExit, verifyForegroundSql(admin, nodeId)]);
-    if (!child.kill('SIGINT')) throw new Error('foreground CLI did not receive SIGINT');
+    if (!child.kill(SIGNAL_INTERRUPT)) throw new Error(SIGINT_NOT_DELIVERED);
     const [code, signal] = await closed;
     if (code !== 0 || signal !== null) {
       throw new Error(`foreground CLI did not shut down cleanly: ${code} (${signal})`);
     }
-    console.log('Installed foreground CLI verified CREATE/INSERT/SELECT and exited 0 after SIGINT');
+    console.log(LOG_CLI_VERIFIED);
   } finally {
     stopProbe.abort();
     if (child.exitCode === null && child.signalCode === null && child.pid) {
-      child.kill('SIGKILL');
+      child.kill(SIGNAL_KILL);
       await closed;
     }
   }

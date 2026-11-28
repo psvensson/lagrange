@@ -184,7 +184,8 @@ async function openCutoverWorld(t) {
   const {workflow} = buildWorkflow({topologyAdapter: null,
     cdcIntegrationService: store.cdcFor('owner'), getTableInfo: store.tablesRow,
     listTableInfos: () => [store.tablesRow()], getPartitionInfo: store.partitionRow,
-    listTablePartitionRows: () => store.partitionIds().map(store.partitionRow), parsePartitionTransition});
+    listTablePartitionRows: () => store.partitionIds().map(store.partitionRow),
+    parsePartitionTransition});
   readAuthoritativelyFrom(workflow, store);
   const record = buildCutoverWorkflowRecord('split-cutover-partition-count');
   const live = await registerFromRecordAsRead(workflow, record);
@@ -198,7 +199,8 @@ async function openCutoverWorld(t) {
 
 test('recovered split cannot promote an out-of-plan sibling or epoch', async (t) => {
   const {workflow, store, workflowId} = await openCutoverWorld(t);
-  const subject = {partitionId: FIXTURE_SIBLING_PARTITION_ID, priorVersion: 1, priorAttempt: 0, targetVersion: 2};
+  const subject = {partitionId: FIXTURE_SIBLING_PARTITION_ID, priorVersion: 1, priorAttempt: 0,
+    targetVersion: 2};
   const invalid = [{...subject, partitionId: 'users-p1'}, {...subject, partitionId: 'users-p-left'},
     {...subject, targetVersion: 3}, {...subject, priorVersion: 2, targetVersion: 3}, {...subject, action: 'promoteSibling'}];
   for (const forged of invalid) {
@@ -212,8 +214,10 @@ test('recovered split cannot promote an out-of-plan sibling or epoch', async (t)
   await workflow.workflowCoordinator.updateWorkflow(workflowId, (current) => ({...current,
     metadata: {...current.metadata, splitIssuedSiblings: [], siblingPartitionIds: ['users-p1']}}));
   await t.rejects(workflow.applySplitCutoverIfReady(workflowId), {code: 'split-sibling-preimage-invalid'});
-  const updated = await workflow.workflowCoordinator.updateWorkflow(workflowId, (current) => ({...current,
-    metadata: {...current.metadata, splitIssuedSiblings: [subject], siblingPartitionIds: [subject.partitionId]}}));
+  const updated = await workflow.workflowCoordinator.updateWorkflow(workflowId,
+    (current) => ({...current,
+      metadata: {...current.metadata, splitIssuedSiblings: [subject],
+        siblingPartitionIds: [subject.partitionId]}}));
   const asRead = {...updated, metadata: {...updated.metadata, splitIssuedSiblings: [{...subject}]}};
   await workflow.workflowCoordinator.updateWorkflow(workflowId, (current) => ({...current,
     metadata: {...current.metadata, splitIssuedSiblings: [{...subject, foreign: 'same known fields'}]}}));
@@ -347,13 +351,13 @@ test('split retry adopts a matching child and inserts only its missing peer', as
       state: 'NORMAL',
     },
   };
-  let cachedLeft;
+  const late = {cachedLeft: null};
   const acquisitions = [];
   const insertCalls = [];
   const {workflow} = buildWorkflow({
     transactionCoordinator: createTransactionCoordinator(),
-    getPartitionInfo: (partitionId) => partitionId === 'users-p-left' && cachedLeft ?
-      cachedLeft : partitionInfos[partitionId] || null,
+    getPartitionInfo: (partitionId) => partitionId === 'users-p-left' && late.cachedLeft ?
+      late.cachedLeft : partitionInfos[partitionId] || null,
     cdcIntegrationService: {
       async updateSystemTableRow(_tableName, where, data) {
         acquisitions.push({where, data});
@@ -405,7 +409,7 @@ test('split retry adopts a matching child and inserts only its missing peer', as
     rightPartitionMetadata: {...childRow('users-p-right', 'm', null), split_descriptor_attempt: 4},
   }), {code: 'split_child_descriptor_owner_invalid'});
   t.equal(acquisitions.length, 1, 'an old attempt cannot acquire the successor row');
-  cachedLeft = {...partitionInfos['users-p-left']};
+  late.cachedLeft = {...partitionInfos['users-p-left']};
   partitionInfos['users-p-left'].partition_key_end = 'z';
   await t.rejects(workflow.ensureChildPartitionMetadata({
     leftPartitionMetadata: childRow('users-p-left', null, 'm'),

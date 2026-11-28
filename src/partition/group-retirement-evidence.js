@@ -33,6 +33,7 @@ import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  WORKFLOW_FAMILY,
   workflowAttemptOf,
 } from './partition-constants.js';
 import {
@@ -77,7 +78,6 @@ const RECORD_EVIDENCE_STATE = Object.freeze({
 
 const RECORD_SQL = 'SELECT * FROM tables WHERE table_id = ?';
 
-const WORKFLOW_FAMILY = Object.freeze({SPLIT: 'split', MERGE: 'merge'});
 const RETIRING_KINDS_BY_FAMILY = Object.freeze({
   [WORKFLOW_FAMILY.SPLIT]: Object.freeze([
     GROUP_RETIREMENT_KIND.SPLIT_SOURCE,
@@ -499,7 +499,6 @@ export {
   GROUP_RETIREMENT_REASON,
   GROUP_RETIREMENT_REFUSAL,
   RECORD_EVIDENCE_STATE,
-  WORKFLOW_FAMILY,
   buildGroupRetirementEvidence,
   decideGroupRetirement,
   groupRetirementEvidenceFromRecord,

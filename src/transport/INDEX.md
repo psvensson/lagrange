@@ -36,7 +36,6 @@ documentClass: generated
 - [message-router-server-lifecycle.js](message-router-server-lifecycle.js) - Server and self-connection lifecycle for the message router: initialize, start the WebSocket (or in-process) server,... (importers: one)
 - [message-router-shared-vocabulary.js](message-router-shared-vocabulary.js) - No leading comment; first export: CONNECTION_CLOSE_DISPOSITION. (importers: many)
 - [message-router-shared.js](message-router-shared.js) - Owner contract: Owner: MessageRouterShared owns transport vocabulary and shared routing helpers. (importers: many)
-- [message-router-socket-evidence.js](message-router-socket-evidence.js) - No leading comment; first export: consensusItemFamily. (importers: many)
 - [message-router-stats-shutdown.js](message-router-stats-shutdown.js) - Await the terminated sockets' close events within the shutdown bound; when the bound wins, one wait_bound_spent... (importers: one)
 - [message-router.js](message-router.js) - Owner contract: Owner: MessageRouter owns transport connection, queue, ACK, and reconnect behavior. (importers: hub)
 - [node-address-resolution.js](node-address-resolution.js) - No leading comment; first export: NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY. (importers: many)

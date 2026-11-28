@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 123,
+    "admin-diagnostics": 124,
     "architecture-governance": 21,
     "bootstrap-membership": 358,
     "cdc-metadata": 81,
     "cli-tooling": 99,
-    "control-plane": 246,
+    "control-plane": 247,
     "convergence-topology": 88,
     "distributed-harness": 226,
     "examples-e2e": 8,
@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 267,
     "storage-raft": 166,
-    "test-infrastructure": 173,
+    "test-infrastructure": 175,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2847,
-  "digest": "fnv1a32-ac0ff69e",
+  "censusSize": 2851,
+  "digest": "fnv1a32-8b03b849",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f0d394a1",
+  "observationDigest": "fnv1a32-9fba03c6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -73,6 +73,7 @@
     "test/admin/admin-query-result-envelope-participant-failures.test.js": "admin-diagnostics",
     "test/admin/admin-query-result-message-envelope.test.js": "admin-diagnostics",
     "test/admin/admin-quota-enforcer.test.js": "admin-diagnostics",
+    "test/admin/admin-replica-operation-summary-compaction.test.js": "admin-diagnostics",
     "test/admin/admin-runtime-service-views.test.js": "admin-diagnostics",
     "test/admin/admin-service-diagnostics.test.js": "admin-diagnostics",
     "test/admin/admin-service-discovery.test.js": "admin-diagnostics",
@@ -621,6 +622,7 @@
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "control-plane",
     "test/control-plane/heartbeat-memory-trend.test.js": "control-plane",
     "test/control-plane/heartbeat-periodic-writes.property.test.js": "control-plane",
+    "test/control-plane/heartbeat-service-write-coalescing.test.js": "control-plane",
     "test/control-plane/heartbeat-storage-budget-preservation.test.js": "control-plane",
     "test/control-plane/heartbeat-terminal-node-row-endpoint.test.js": "control-plane",
     "test/control-plane/heartbeat-wait-bound-spent.test.js": "control-plane",
@@ -2547,7 +2549,9 @@
     "test/scripts/npm-runtime-process.test.js": "test-infrastructure",
     "test/scripts/npm-runtime-smoke.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
+    "test/scripts/participant-release-completion-contract-probe.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
+    "test/scripts/partition-write-phase-field-producer-census.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
     "test/scripts/pre-push-stage-manifest.test.js": "test-infrastructure",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "test-infrastructure",
@@ -3026,6 +3030,11 @@
     "test/admin/admin-query-result-message-envelope.test.js": {
       "files": [
         "src/admin/admin-websocket-api-shared.js"
+      ]
+    },
+    "test/admin/admin-replica-operation-summary-compaction.test.js": {
+      "files": [
+        "src/admin/admin-replica-operation-summary-compaction.js"
       ]
     },
     "test/admin/admin-runtime-service-views.test.js": {
@@ -5858,6 +5867,22 @@
         "src/config/configuration-manager.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/heartbeat-service-constants.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-write-coordinator.js",
+        "src/query/query-execution-budget.js",
+        "src/query/query-executor-partition-failure.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/control-plane/heartbeat-service-write-coalescing.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/partition/partition-committed-statement-outcome.js",
@@ -16032,7 +16057,6 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
-        "src/partition/partition-service-shared.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -26884,7 +26908,6 @@
       "files": [
         ".githooks/pre-push",
         "Dockerfile",
-        "data/formation-health/trend.ndjson",
         "package-lock.json",
         "package.json",
         "scripts/action-authority.js",
@@ -26942,7 +26965,6 @@
         "AGENTS.md",
         "Dockerfile",
         "README.md",
-        "data/formation-health/trend.ndjson",
         "dependency-cruiser.config.cjs",
         "docs/development/agent-tooling.md",
         "docs/development/quest-artifacts.md",
@@ -27082,7 +27104,6 @@
         "CHANGELOG.md",
         "CLAUDE.md",
         "README.md",
-        "data/formation-health/trend.ndjson",
         "data/releases/v0.2.5.json",
         "docs/dockerhub-overview.md",
         "examples/service-data-affinity/run-affinity-demo.js",
@@ -28353,25 +28374,19 @@
     },
     "test/scripts/formation-health.test.js": {
       "files": [
-        ".githooks/pre-push",
         ".github/workflows/formation-health.yml",
-        "data/formation-health/trend.ndjson",
-        "examples/service-data-affinity/formation-verdict.js",
         "examples/service-data-affinity/run-affinity-demo.js",
         "package.json",
-        "scripts/checks/formation-health.js",
-        "scripts/checks/git-invocation.js",
         "scripts/checks/wait-for-thermal-headroom.js",
-        "scripts/test-machine-factor.js",
-        "src/diagnostics/formation-diagnostics-contract.js",
-        "src/test-helpers/probe-guard.js",
         "test/distributed/config/convergence-sealed-bars.json",
-        "test/distributed/harness/certification-evidence-statement.js",
-        "test/distributed/harness/gcp-provisioner.js",
-        "test/shards/impact-graph-seal.json"
+        "test/distributed/harness/gcp-provisioner.js"
       ],
       "directories": [
-        "src"
+        "data"
+      ],
+      "env": [
+        "LAGRANGE_PROBE",
+        "PATH"
       ]
     },
     "test/scripts/gen-solve-commands-index.test.js": {
@@ -28841,7 +28856,6 @@
         ".githooks/pre-push",
         ".github/workflows/full-corpus-canary.yml",
         ".gitignore",
-        "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
         "package.json",
@@ -29155,6 +29169,24 @@
         "OTHER_THING"
       ]
     },
+    "test/scripts/participant-release-completion-contract-probe.test.js": {
+      "files": [
+        "scripts/checks/participant-release-completion-contract-probe.js",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/constants/index.js",
+        "src/diagnostics/runtime-build-provenance.js",
+        "src/node/participant-release-client.js",
+        "src/node/participant-release-diagnostic-observation.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test"
+      ]
+    },
     "test/scripts/participant-release-completion-owner.test.js": {
       "files": [
         "scripts/check-guideline-decision-boundaries-baseline.json",
@@ -29175,6 +29207,13 @@
         "test"
       ]
     },
+    "test/scripts/partition-write-phase-field-producer-census.test.js": {
+      "files": [
+        "scripts/checks/partition-write-phase-field-producer-census.js",
+        "src/partition/partition-service-shared.js",
+        "src/partition/partition-service-write-metrics-base.js"
+      ]
+    },
     "test/scripts/pre-push-hook-control-flow.test.js": {
       "files": [
         ".githooks/pre-push",
@@ -29182,7 +29221,6 @@
         "package.json",
         "scripts/check-circular-dependencies.js",
         "scripts/check-unused-exports.js",
-        "scripts/checks/formation-health.js",
         "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/checks/wait-for-thermal-headroom.js"
@@ -29192,9 +29230,7 @@
         "LAGRANGE_GATE_PUSHED_REF",
         "LAGRANGE_WORKSPACE_INJECTIONS",
         "PRE_PUSH_FLOW_CALLS",
-        "PRE_PUSH_FLOW_GH_SAYS",
-        "PRE_PUSH_FLOW_STATUS_TREND",
-        "PRE_PUSH_FLOW_TREND_SAYS"
+        "PRE_PUSH_FLOW_GH_SAYS"
       ]
     },
     "test/scripts/pre-push-stage-manifest.test.js": {
@@ -29310,7 +29346,6 @@
     "test/scripts/publish-head-workspace-links.test.js": {
       "files": [
         ".githooks/pre-push",
-        "data/formation-health/trend.ndjson",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/proof-authority.js",
@@ -29329,7 +29364,6 @@
         ".githooks/pre-push",
         ".gitignore",
         "CHANGELOG.md",
-        "data/formation-health/trend.ndjson",
         "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
@@ -29343,7 +29377,6 @@
       "directories": [
         ".githooks",
         "data",
-        "data/formation-health",
         "data/releases",
         "solve",
         "test"
@@ -29678,7 +29711,6 @@
     "test/scripts/scenario-certification-consumers.test.js": {
       "files": [
         "Dockerfile",
-        "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/run-affinity-demo.js",
         "package-lock.json",
         "package.json",

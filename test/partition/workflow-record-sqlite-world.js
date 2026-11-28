@@ -95,7 +95,8 @@ function descriptorSubmitter(store, leader) {
   return async (writer, sql, params, options) => {
     const entryId = deriveParticipantEntryId(options.idempotencyKey, leader.partitionId);
     const prior = readCommittedStatementOutcome(leader, leader.getCommittedEntryKey({entryId}));
-    const first = !writers.has(entryId) && prior.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED;
+    const first = !writers.has(entryId) &&
+        prior.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED;
     if (first) writers.set(entryId, writer);
     try {
       return await leader.executeQuery(sql, params, {...options, entryId});

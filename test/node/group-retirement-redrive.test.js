@@ -563,7 +563,9 @@ test('necessity: a member services-row change re-runs the retirement step ' +
 test('overlapping retirement trigger preserves the successful clear receipt', async (t) => {
   const {redrive} = observedRedrive();
   let finish;
-  const pending = new Promise((resolve) => { finish = resolve; });
+  const pending = new Promise((resolve) => {
+    finish = resolve;
+  });
   const receipt = {workflowId: 'retired', attempt: 2, fence: 3};
   let calls = 0;
   const step = async () => ++calls === 1 ? pending : false;

@@ -1,4 +1,4 @@
-import {decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, retainedSplitDescriptorAnswer,
+import {carriesSplitDescriptorIntent, decodeSplitDescriptorCommand, descriptorRefusal, isSplitDescriptorDigest, retainedSplitDescriptorAnswer,
   SPLIT_DESCRIPTOR_ERROR} from './partition-split-descriptor-command.js';
 // The terminal outcome of every committed statement: the one owner of what a
 // committed statement's result is, for the partition's committed-entry
@@ -145,7 +145,8 @@ function createCommittedStatementOutcomeTable(db, partitionId = null, tableName 
     throw committedStatementOutcomeFormatError(format, partitionId);
   }
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT) {
-    if (tableName === SYSTEM_TABLE_NAME.PARTITIONS && RaftRsDurableStore.hasDurableRecordIn(db, partitionId)) {
+    if (tableName === SYSTEM_TABLE_NAME.PARTITIONS &&
+        RaftRsDurableStore.hasDurableRecordIn(db, partitionId)) {
       throw committedStatementOutcomeFormatError(format, partitionId);
     }
     db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
@@ -321,7 +322,8 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
   command = null}) {
   assertOwnerIdentity(entryKey, ownerResultText, commandDigest);
   const state = sqliteConnectionState(service.db);
-  const captureEffects = Boolean(result?.typedEffects) && partitionOwesDurableMirrorEffects(service);
+  const captureEffects = Boolean(result?.typedEffects) &&
+      partitionOwesDurableMirrorEffects(service);
   const insert = state.statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
   insert.run(
     entryKey, outcome, index, term,
@@ -450,7 +452,7 @@ function lockingReadReplayFieldsOf(failureCode) {
 
 function answerSettledStatement(service, {recorded, command}) {
   let descriptorFields;
-  if (Object.hasOwn(command, 'splitDescriptorIntent')) {
+  if (carriesSplitDescriptorIntent(command)) {
     const descriptor = decodeSplitDescriptorCommand(service, command);
     if (!descriptor) return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
     descriptorFields = retainedSplitDescriptorAnswer(descriptor, recorded);

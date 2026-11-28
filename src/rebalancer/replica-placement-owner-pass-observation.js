@@ -49,12 +49,14 @@ const increment = (counts, key, by = 1) => {
 };
 
 function createPlacementObservation() {
-  const counts = Object.fromEntries(Object.values(PLACEMENT_TRIGGER).map((trigger) => [trigger, 0]));
-  return {passSequence: 0, triggerNotifications: {...counts}, passesByTrigger: counts, totals: {passes: 0, completed: 0, waits: {}, staleStops: {},
-    leadershipStartDrivesJoined: 0, constructions: 0, evaluated: 0, candidates: 0,
-    capacityChecks: 0, proposals: 0, fenced: 0, admitted: 0, released: 0, refused: {},
-    outcomeUnknown: 0, failedPasses: 0, failedCandidates: 0, leadershipStartDriveFailures: 0,
-    localFailuresAfterAdmission: 0, uncertainCandidates: 0}};
+  const counts = Object.fromEntries(Object.values(PLACEMENT_TRIGGER).map((trigger) =>
+    [trigger, 0]));
+  return {passSequence: 0, triggerNotifications: {...counts}, passesByTrigger: counts,
+    totals: {passes: 0, completed: 0, waits: {}, staleStops: {},
+      leadershipStartDrivesJoined: 0, constructions: 0, evaluated: 0, candidates: 0,
+      capacityChecks: 0, proposals: 0, fenced: 0, admitted: 0, released: 0, refused: {},
+      outcomeUnknown: 0, failedPasses: 0, failedCandidates: 0, leadershipStartDriveFailures: 0,
+      localFailuresAfterAdmission: 0, uncertainCandidates: 0}};
 }
 
 function newPassRecord(observation, custody, sequence, triggers) {

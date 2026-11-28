@@ -349,9 +349,9 @@ export const INERT_PATH_RULES = Object.freeze([
   /^LICENSE$/,
   /^docs\//,
   /^solve\//,
-  // Committed evidence written by the release and formation-health workflows
-  // (data/releases/<tag>.json, data/formation-health/trend.ndjson): read by
-  // quest probes and budget scripts, never by the behaviour under test.
+  // Committed evidence written by the release workflow
+  // (data/releases/<tag>.json): read by quest probes and budget scripts,
+  // never by the behaviour under test.
   /^data\//,
   /^architecture\/(?!models\/|contracts\/invariants\.json$)/,
   /\.md$/,

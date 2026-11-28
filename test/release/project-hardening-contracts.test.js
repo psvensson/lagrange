@@ -598,8 +598,11 @@ describe('prerelease publication contract', () => {
     const ignore = await readFile('.gitignore', UTF8);
     assert.match(ignore, /^!\/data\/releases\/\*\.json$/mu,
       'data/releases/*.json must be un-ignored, or the receipt can never land');
-    assert.match(ignore, /^!\/data\/formation-health\/trend\.ndjson$/mu,
-      'the formation-health trend is committed evidence in the same shape');
+    // The nightly trend lives on the branch data/formation-health, never in
+    // the main tree: nothing un-ignores it here, and the bare data/ rule below
+    // keeps a local scratch copy out of every commit.
+    assert.doesNotMatch(ignore, /formation-health/u,
+      'the formation-health trend is not committed evidence on main');
     assert.match(ignore, /^data$/mu,
       'every nested data/ directory stays ignored by the bare pattern');
   });

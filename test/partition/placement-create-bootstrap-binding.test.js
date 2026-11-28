@@ -214,20 +214,26 @@ test('native ADD dispatch bootstrap is durable and reused by a fresh workflow', 
               outcomes.push(fields);
               throw new Error('outcome sink unavailable');
             }
-            if (message === REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION) sendLogs.push({level, fields});
+            if (message === REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION) {
+              sendLogs.push({level, fields});
+            }
           };
         }
-        const dispatchWake = {reasons: [RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY], handoffMode: null};
+        const dispatchWake = {reasons: [RECONCILE_REASON.DISPATCH_VISIBILITY_RETRY],
+          handoffMode: null};
         for (let send = 0; send < 3; send++) {
           const operation = reconstructed.repository.rowToOperation(sending);
-          const result = await owner.advanceReservationClearedDispatch(operation.operationId, operation,
+          const result = await owner.advanceReservationClearedDispatch(operation.operationId,
+            operation,
             {routineCreateRearmWake: true, dispatchWake});
           assert.equal(result.reason, REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING);
         }
         assert.equal(emittedRequests.length, 3, 'a deferred CREATE response leaves the next send eligible');
         assert.deepEqual(sendLogs.map(({level}) => level), ['info', 'info', 'debug']);
-        assert.deepEqual(sendLogs.map(({fields}) => fields.firstRepeatCreate), [false, true, false]);
-        assert.deepEqual(sendLogs.map(({fields}) => fields.firstAttemptForStep), [true, false, false]);
+        assert.deepEqual(sendLogs.map(({fields}) => fields.firstRepeatCreate),
+          [false, true, false]);
+        assert.deepEqual(sendLogs.map(({fields}) => fields.firstAttemptForStep),
+          [true, false, false]);
         assert.deepEqual(sendLogs[1].fields.dispatchWake, dispatchWake);
         assert.equal(sendLogs[1].fields.workflowStep, WORKFLOW_STEP.SENDING);
         assert.equal(sendLogs[1].fields.createReceipt.priorReceiptStatus, null);
@@ -278,7 +284,8 @@ function targetAdmissionOnLedger(leader) {
 function claimIssuedCreate(target, request) {
   return target.claim({...request, admissionToken: request.createAdmissionToken,
     workflowUpdatedAt: request.createAdmissionWorkflowUpdatedAt,
-    attemptToken: request.createAdmissionAttemptToken, attemptSeq: request.createAdmissionAttemptSeq});
+    attemptToken: request.createAdmissionAttemptToken,
+    attemptSeq: request.createAdmissionAttemptSeq});
 }
 
 test('lost native placement CREATE preserves first claim and fences stale progress', async () => {
@@ -328,7 +335,8 @@ test('lost native placement CREATE preserves first claim and fences stale progre
       assert.equal(load().workflowStep, WORKFLOW_STEP.SENDING);
       await dispatch();
       assert.equal(requests.length, 2);
-      assert.equal(requests[1].createAdmissionAttemptToken, requests[0].createAdmissionAttemptToken);
+      assert.equal(requests[1].createAdmissionAttemptToken,
+        requests[0].createAdmissionAttemptToken);
       const retained = load();
       assert.equal(retained.workflowStep, WORKFLOW_STEP.CREATING);
       assert.equal(retained.createAdmissionState, CREATE_ADMISSION_STATE.ADMITTED);
@@ -628,7 +636,8 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         assert.equal(progress.workflow_step, WORKFLOW_STEP.CREATING);
         assert.equal(progress.completed_at, null);
         assert.equal(progress.create_admission_state, CREATE_ADMISSION_STATE.ADMITTED);
-        assert.equal(progress.create_admission_attempt_token, requests[0].createAdmissionAttemptToken);
+        assert.equal(progress.create_admission_attempt_token,
+          requests[0].createAdmissionAttemptToken);
         assert.deepEqual(reservationOptions,
           [{allowCreate: false}, {allowCreate: false}, {allowCreate: false}]);
       } finally {

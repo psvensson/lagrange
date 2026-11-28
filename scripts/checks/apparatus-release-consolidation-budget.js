@@ -10,8 +10,13 @@
  * measurements.
  *
  * Budgets that need evidence from outside the tree read the compact text
- * files their quests commit: data/releases/<tag>.json (publication receipt)
- * and data/formation-health/trend.ndjson (one record per scheduled run).
+ * their quests commit: data/releases/<tag>.json (publication receipt) and
+ * the formation trend (one record per scheduled run), which lives on the
+ * branch data/formation-health and is read from the local remote-tracking
+ * ref without a fetch (a probe never acts). The row prints the data-branch
+ * commit it read; when the trend cannot be read its cell is the typed
+ * `unavailable: <reason>` and the row is unmet (formation-health.js,
+ * readDataBranchTrend).
  *
  * Change a number here and in the epic table together, never in one place.
  *
@@ -31,7 +36,9 @@ import {observationDrift} from './test-subsystem-classification.js';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {isMeasuringVerdict} from './formation-health.js';
+import {
+  METRIC_WINDOW as TREND_WINDOW, TREND_AVAILABLE, measuringInWindow, readDataBranchTrend,
+} from './formation-health.js';
 import {receiptVerdicts} from './release-publication-receipt.js';
 
 const stringReplaceAll = Function.call.bind(String.prototype.replaceAll);
@@ -53,7 +60,6 @@ const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const TREND_WINDOW = 3;
 
 const BUDGET = Object.freeze({
   LOOSE_SCRIPTS: 80,
@@ -72,6 +78,8 @@ const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
 const EMPTY_TEXT = '';
 const ARGV_OFFSET = 2;
+const NUMBER_TYPE = 'number';
+const DATA_BRANCH_LABEL = 'data/formation-health @';
 const JSON_FLAG = '--json';
 const ROWS_FLAG = '--rows';
 // proof-authority-integrity rows: the gate's declared stage manifest, the
@@ -176,7 +184,6 @@ const SCRIPTS_DIR = 'scripts';
 const CHECKS_DIR = 'scripts/checks';
 const WORKFLOWS_DIR = '.github/workflows';
 const SRC_DIR = 'src';
-const TREND_FILE = 'data/formation-health/trend.ndjson';
 const RELEASE_WORKFLOW = '.github/workflows/release.yml';
 const FAST_STATIC_SCRIPT = 'scripts/check-fast-static.js';
 const PACKAGE_MANIFEST = 'package.json';
@@ -597,20 +604,14 @@ function releaseReceipt(root) {
   };
 }
 
-function measuringTrendRecords(root) {
-  if (!exists(root, TREND_FILE)) return 0;
-  const lines = arrayFilter(
-    stringSplit(read(root, TREND_FILE), LINE_SEPARATOR),
-    (line) => stringTrim(line).length > 0);
-  const records = arrayMap(lines.slice(-TREND_WINDOW), (line) => {
-    try {
-      return JSON.parse(line);
-    } catch {
-      return null;
-    }
-  });
-  return arrayFilter(records, (record) => record &&
-    isMeasuringVerdict(record.verdict)).length;
+// The row's measured cell and its input: the count of whole measuring lines in
+// the trend's last window together with the commit of the data branch that was
+// read (the measurement names its input), or - when the trend could not be
+// read - the typed state with the reader's reason, which is never met.
+function measuringTrend(root) {
+  const trend = readDataBranchTrend(root);
+  if (trend.state !== TREND_AVAILABLE) return {value: `${trend.state}: ${trend.reason}`};
+  return {value: measuringInWindow(trend.lines), source: `${DATA_BRANCH_LABEL} ${trend.commit}`};
 }
 
 function claudeMdIsPointer(root) {
@@ -678,18 +679,19 @@ const BUDGET_ROW_NAME = Object.freeze({
 /**
  * Measure every budget row against one tree.
  * @param {string} root absolute path to the tree to measure
- * @returns {Array<{name: string, value: number, budget: number, met: boolean}>}
+ * @returns {Array<{name: string, value: number|string, budget: number, met: boolean, source?: string}>}
  *   one row per budget, in the sealed table's order
  */
 function measureConsolidationBudget(root = REPO_ROOT) {
   const release = releaseReceipt(root);
   const receipt = release.receipt;
   const epics = epicStats(root);
+  const trend = measuringTrend(root);
   const rows = [
     [BUDGET_ROW_NAME.RELEASE_ARTIFACTS_PUBLISHED,
       release.published, release.artifacts, atLeast],
     [BUDGET_ROW_NAME.FORMATION_TREND_MEASURING,
-      measuringTrendRecords(root), TREND_WINDOW, atLeast],
+      trend.value, TREND_WINDOW, atLeast, trend.source],
     [BUDGET_ROW_NAME.README_OFFENCES, readmeOffences(root, receipt), 0, atMost],
     [BUDGET_ROW_NAME.RELEASE_NPM_NEXT_LAGS, nextLagging(receipt), 0, atMost],
     [BUDGET_ROW_NAME.SCRIPTS_LOOSE_FILES,
@@ -733,7 +735,9 @@ function measureConsolidationBudget(root = REPO_ROOT) {
     [BUDGET_ROW_NAME.CANARY_AFTER_FULL_CORPUS, canaryAfterFullCorpus(root), 0, atMost],
   ];
   return arrayMap(rows,
-    ([name, value, budget, ok]) => ({name, value, budget, met: ok(value, budget)}));
+    ([name, value, budget, ok, source]) => ({name, value, budget,
+      met: typeof value === NUMBER_TYPE && ok(value, budget),
+      ...(source === undefined ? {} : {source})}));
 }
 
 function renderTable(rows) {
@@ -743,7 +747,8 @@ function renderTable(rows) {
     const mark = row.met ? MET_MARK : UNMET_MARK;
     const value = stringPadStart(String(row.value), VALUE_COLUMN_WIDTH);
     text += `${mark} ${stringPadEnd(row.name, width)}${COLUMN_GAP}` +
-      `${value}${BUDGET_SEPARATOR}${row.budget}${LINE_SEPARATOR}`;
+      `${value}${BUDGET_SEPARATOR}${row.budget}` +
+      `${row.source === undefined ? EMPTY_TEXT : `${COLUMN_GAP}(${row.source})`}${LINE_SEPARATOR}`;
   }
   return text;
 }

@@ -95,9 +95,11 @@ function createExhaustedCompletionError(state, cause) {
 }
 
 function rejectExhaustedCompletionWaiter(waiter, state) {
-  if (waiter) settleCompletionWaiter(
-    waiter, COMPLETION_WAITER_METHOD.REJECT, createExhaustedCompletionError(state),
-  );
+  if (waiter) {
+    settleCompletionWaiter(
+      waiter, COMPLETION_WAITER_METHOD.REJECT, createExhaustedCompletionError(state),
+    );
+  }
 }
 
 function rejectStaleFenceCompletionWaiter(waiter) {

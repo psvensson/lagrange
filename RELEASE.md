@@ -18,7 +18,7 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | --- | --- | --- |
 | PR / push to `main` | `.github/workflows/ci.yml` | `npm ci` → `npm run check`: fast static analysis over the changed paths, then the safety spine plus the subsystems this change obliges. It proves the change, not the corpus, and fails closed — an unclassifiable change refuses with `MODULAR PROOF NOT SAFE` rather than proving a convenient subset. The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
 | Push to `main` | `.github/workflows/ci.yml` (health steps) | Whole-repository structural analysis (`test:owner-debt:prepare` → `test:static` → `model:contracts`). **Not** a required check: structural debt on `main` is work to schedule, not a reason unrelated changes cannot land. |
-| Nightly / manual | `.github/workflows/formation-health.yml` | `npm run health:formation -- --gcp`: the MovieLens formation-only phase with one node per GCP VM, its formation verdict appended to the trend and uploaded with the node logs. A standing signal, never a gate. |
+| Nightly / manual | `.github/workflows/formation-health.yml` | `npm run health:formation -- --gcp --trend trend-data/trend.ndjson` (the checkout of the data branch): the MovieLens formation-only phase with one node per GCP VM, its formation verdict appended to the trend on the branch `data/formation-health` (never on main) and uploaded with the node logs. A standing signal, never a gate. |
 | Push of `release-publishability/**` | `.github/workflows/release.yml` | Fast GitHub-hosted, non-publishing preflight. It checks current npm package/version state, GitHub OIDC claims for npm trusted publishing, and the current Docker Hub pull+push credential scope. These are freshness-bound external facts and are deliberately **not** permanent proof receipts. |
 | Manual / `release-proof/**` branch | `.github/workflows/full-gate.yml` | The fallback when no local machine can prove the release (step 4 proves it locally first). It asks the durable proof authority whether `release-full-v1` already proves this exact SHA. If yes, GCP is not woken and the proof is reused. If not, the controlled GCP runner executes the complete release proof once; after success a separate GitHub-hosted recorder persists the proof receipt. |
 | Manual only | `.github/workflows/full-corpus-canary.yml` | The whole corpus on a hosted runner, by hand only. After every publish whose gate proved a cone, the publisher proves the rest of the corpus locally (placed across the lab machines) and records the whole-corpus receipt; the next publish reports a red one first. |
@@ -70,7 +70,7 @@ instead of frozen. A patch release for one fix follows the same steps.
    `src/constants/entrypoint.js` (kept as literals so the SEA binary, which
    has no `package.json` on disk, reports the right version; the guard in
    `test/release/version-single-source.test.js` enforces agreement); quote
-   the current `npm run health:formation -- --summary` line in the notes.
+   the current `npm run health:formation -- --summary --fetch` line in the notes.
    Keep the _Known limitations_ section honest about convergence (below).
 3. **Land it through the ordinary publish gate** (`npm run publish`). Then
    point `release-publishability/<version>` at that exact main SHA. This fast
@@ -212,11 +212,15 @@ Five-node cold formation is a standing signal, not a release gate.
   formation window stays within the hardware-relative budget
   (`LAGRANGE_TEST_MACHINE_FACTOR`). Run it before landing a control-plane
   change (readiness, rebalancer, membership, raft, transport).
-- `npm run health:formation -- --gcp` runs the same phase with one node per
-  GCP VM and appends one record to `data/formation-health/trend.ndjson`;
-  `npm run health:formation -- --summary` prints the recent records and the
-  pass rate. The scheduled `formation-health.yml` workflow runs it nightly on
-  the GCP runner and uploads the report, the trend and the node logs.
+- `npm run health:formation -- --gcp --trend <file>` runs the same phase with
+  one node per GCP VM and appends one record to that file. The record's home is
+  the branch `data/formation-health` (file `trend.ndjson`), not the main tree:
+  `npm run health:formation -- --summary --fetch` fetches that branch and prints
+  the recent records and the pass rate; without `--fetch` it reads the local
+  `origin/data/formation-health` ref and reports `unavailable` when it is absent.
+  The scheduled `formation-health.yml` workflow runs it nightly on the GCP runner,
+  pushes the record to the data branch and uploads the report, the trend and the
+  node logs.
 - Every live demo report carries `formationVerdict`: the seed's event-loop
   gaps inside the formation window with the hottest tagged sites, the
   ready-lease settle waits and their unready sets, the last observed

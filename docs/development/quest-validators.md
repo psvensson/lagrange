@@ -41,6 +41,11 @@ needs its public scenario proof. `scenario-harness` is terminal evidence only
 under a certification epic. These levels must not be exchanged to force a
 green result.
 
+A `script` probe reads the tree or retained evidence and never acts (R27). The formation-trend probes read the
+named commit of the branch `data/formation-health` from the local remote-tracking ref, never fetching; the
+admission is recorded in the
+[runbook](solver-runbook.md#formation-trend-record-data-branch).
+
 ## Evidence Applicability And Review
 
 An agent's assertion, an artifact's presence, or a green result from another

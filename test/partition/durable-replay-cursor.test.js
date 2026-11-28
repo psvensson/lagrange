@@ -169,7 +169,8 @@ async () => {
     // The restarted source itself, with the snapshot/backfill/transport
     // collaborators replaced: the barrier is read from its own durable log.
     const context = Object.assign(Object.create(source.restarted), {
-      sqlQueryEngine: {managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()}},
+      sqlQueryEngine: {
+        managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()}},
       logger: buildLogger(),
       splitReplication: {
         metadata: {
@@ -405,7 +406,8 @@ test('accepted recovery refreshes writes committed while START waits and ' +
         family: scenario.family, barrierIndex: watermark,
       });
       Object.assign(source.restarted, {
-        sqlQueryEngine: {managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()},
+        sqlQueryEngine: {
+          managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()},
           managedMergeWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()}},
         splitReplication: isSplit ? handle : null,
         mergeReplication: isSplit ? null : handle,
@@ -547,7 +549,8 @@ test('leader activation on a restarted source resumes the split ' +
     });
     const workerCalls = [];
     const context = Object.assign(Object.create(source.restarted), {
-      sqlQueryEngine: {managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()}},
+      sqlQueryEngine: {
+        managedSplitWorkflow: {reserveSourceMirrorCustody: sourceMirrorReservationFixture()}},
       role: RAFT_ROLE.LEADER,
       splitReplication: null,
       mergeReplication: null,

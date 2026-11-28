@@ -25,6 +25,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 import {newestReleaseReceipt, nextLagsLatest, reobserveNext} from '../../scripts/checks/release-publication-receipt.js';
 import {
   selectedRows,
@@ -40,9 +41,11 @@ const SCRIPT = 'scripts/checks/apparatus-release-consolidation-budget.js';
 // name is the row identity, so a renamed row is as loud as a moved number.
 //
 //                                      name, budget, met value, offending value
+const TREND_ROW = 'formation trend: measuring verdicts in last 3';
 const SEALED_TABLE = Object.freeze([
   ['release receipt: artifacts published', 4, 4, 0],
-  ['formation trend: measuring verdicts in last 3', 3, 3, 0],
+  ['formation trend: measuring verdicts in last 3', 3, 3,
+    'unavailable: git could not read the repository: exit 128'],
   ['README offences', 0, 0, 1],
   ['release receipt: npm next lags latest', 0, 0, 1],
   ['scripts/ loose top-level files', 80, 1, 0],
@@ -99,6 +102,23 @@ function write(root, relative, text) {
   fs.writeFileSync(file, text, UTF8);
 }
 
+// The formation trend lives on the branch data/formation-health, read from the
+// local remote-tracking ref: build a repository whose ref holds the file, by
+// plumbing only (no worktree, no network).
+function seedDataBranch(root, text) {
+  const git = (args, input) => {
+    const result = spawnGit(['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+      {cwd: root, encoding: UTF8, input});
+    assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  git(['init', '-q']);
+  const blob = git(['hash-object', '-w', '--stdin'], text);
+  const tree = git(['mktree'], `100644 blob ${blob}\ttrend.ndjson\n`);
+  const commit = git(['commit-tree', tree, '-m', 'trend']);
+  git(['update-ref', 'refs/remotes/origin/data/formation-health', commit]);
+}
+
 function makeRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'consolidation-budget-'));
 }
@@ -112,8 +132,9 @@ function metFixture() {
     tag: 'v9.9.9',
     published: {npm: true, docker: true, helm: true, github: true},
   })}\n`);
-  const measuring = `${JSON.stringify({verdict: 'PASS', seedStarved: false})}\n`;
-  write(root, 'data/formation-health/trend.ndjson', measuring.repeat(3));
+  const measuring = `${JSON.stringify({schemaVersion: 1, at: '2026-09-15T03:59:00.000Z',
+    head: 'h', verdict: 'PASS', seedStarved: false})}\n`;
+  seedDataBranch(root, measuring.repeat(3));
   write(root, 'README.md',
     'npm install --global lagrange-server\nlagrange-server@9.9.9\n');
   write(root, 'CLAUDE.md', 'See AGENTS.md\n');
@@ -190,7 +211,7 @@ function metFixture() {
 }
 
 // The same rows against a tree that offends instead: no publication receipt,
-// no formation trend, a cluster claim with no dated verdict, gate chains that
+// the data branch absent (the formation trend is unavailable), a cluster claim with no dated verdict, gate chains that
 // still name the checkers the epic wants off them, two undated legacy epics,
 // the retired consensus dependency, and no CLAUDE.md pointer.
 const RETIRED_DEPENDENCY_NAME = ['life', 'raft'].join('');
@@ -317,6 +338,11 @@ test('every budget row is measured from the tree it is given', () => {
       `${name} must measure ${metValue} on the satisfying tree`);
     assert.equal(offendingRows.get(name).value, offendingValue,
       `${name} must measure ${offendingValue} on the offending tree`);
+    if (name === TREND_ROW) {
+      assert.equal(offendingRows.get(name).met, false,
+        'an unreadable trend is an unmet row, never a measured zero');
+      assert.equal(typeof offendingRows.get(name).value, 'string');
+    }
     assert.notEqual(metValue, offendingValue,
       `${name} reads the same value from both fixtures, so this test would ` +
       'not notice it reading a default instead of the tree');
@@ -449,4 +475,29 @@ test('pre-commit refreshes generated test metadata as one owned unit', () => {
     'pre-commit regenerates the src directory indexes after the graph refresh');
   assert.ok(hook.indexOf('git add -A -- \':(glob)src/**/INDEX.md\'', indexRefresh) > 0,
     'pre-commit stages every src directory index, deletions included');
+});
+
+test('the trend row says why an unreadable trend is unmet, in the table and the JSON', () => {
+  const REF = 'refs/remotes/origin/data/formation-health';
+  const trendOf = (root) => measureConsolidationBudget(root).find((row) => row.name === TREND_ROW);
+  const root = metFixture();
+  const git = (args, input) => spawnGit(['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+    {cwd: root, encoding: UTF8, input}).stdout.trim();
+  assert.equal(trendOf(root).value, 3, 'the readable trend is a count');
+  const tip = git(['rev-parse', REF]);
+  assert.equal(trendOf(root).source, `data/formation-health @ ${tip}`, 'the row names the commit it read');
+  // Hand-made lines are lines, not measuring records: a measured 0, with its source.
+  const fake = git(['hash-object', '-w', '--stdin'], '{"verdict":"PASS"}\n'.repeat(3));
+  git(['update-ref', REF, git(['commit-tree', git(['mktree'], `100644 blob ${fake}\ttrend.ndjson\n`), '-m', 'f'])]);
+  assert.equal(trendOf(root).value, 0);
+  assert.equal(trendOf(root).met, false);
+  // A ref that holds no trend.ndjson.
+  git(['update-ref', REF, git(['commit-tree', git(['mktree'], ''), '-m', 'x'])]);
+  assert.deepEqual(trendOf(root), {name: TREND_ROW, budget: 3, met: false,
+    value: `unavailable: ${REF} holds no trend.ndjson`});
+  // No ref at all.
+  git(['update-ref', '-d', REF]);
+  assert.deepEqual(trendOf(root), {name: TREND_ROW, budget: 3, met: false,
+    value: `unavailable: ${REF} is absent (run with --fetch)`});
+  // The cell is the row's value, so the table and the JSON print the same typed state.
 });
