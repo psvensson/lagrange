@@ -28,6 +28,8 @@ import {
 import {deriveTenantPackageId} from
   '../../src/control-plane/owners/service-install-catalog-contract.js';
 import {SD_COL} from '../../src/wasm-service/wasm-service-models.js';
+import {buildRuntimeServiceReplicaHandle} from
+  './runtime-service-replica-handle.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   HEALTH_STATUS,
@@ -341,10 +343,14 @@ function createBindingCompilationKit(config) {
     lifecycle.setStateProjectionWriter(async (_serviceId, projection) => {
       projections.push(projection);
     });
-    const replica = {definition, nodeId: config.replicaNodeId(sourceKind)};
+    const replica = buildRuntimeServiceReplicaHandle(definition, {
+      entityId: definition.service_id,
+      nodeId: config.replicaNodeId(sourceKind),
+      replicaId: `${definition.service_id}-r1`,
+    });
 
     assert.equal(
-      (await lifecycle.prepare(definition, {})).status,
+      (await lifecycle.prepare(replica, {})).status,
       PREPARE_STATUS.READY,
     );
     assert.equal(

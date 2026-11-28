@@ -41,6 +41,8 @@ import {
   STARTUP_WITNESS_CELL_BUDGETS,
   STARTUP_WITNESS_COMPONENT_BYTES,
 } from './wasi-component-startup-witness-fixture.js';
+import {buildRuntimeServiceReplicaHandle} from
+  '../wasm-service/runtime-service-replica-handle.js';
 
 const SELF_PATH = fileURLToPath(import.meta.url);
 const CHILD_MODE_RUNTIME_STOP = 'child-runtime-stop';
@@ -59,6 +61,7 @@ const SINGLE_SPAWNED_GENERATION_COUNTER = 2;
 const ERROR_CODE = Object.freeze({
   UNAVAILABLE: 'request_cell_component_unavailable',
 });
+const NODE_ID = 'derivation-node-a';
 const SERVICE_ID = Object.freeze({
   ALPHA: 'service-a',
   BETA: 'service-b',
@@ -140,7 +143,7 @@ function createDriverFixture(bytes = STARTUP_WITNESS_COMPONENT_BYTES) {
     }),
     componentRuntime: runtime,
   });
-  const definitionFor = (serviceId) => ({
+  const definitionFor = (serviceId) => buildRuntimeServiceReplicaHandle({
     binding_digest: BINDING_DIGEST,
     binding_projection: JSON.stringify({
       binding_digest: BINDING_DIGEST,
@@ -156,6 +159,10 @@ function createDriverFixture(bytes = STARTUP_WITNESS_COMPONENT_BYTES) {
       `registry.example.test/acme/derivation-witness:1.0.0@${ARTIFACT_DIGEST}`,
     service_id: serviceId,
     tenantId: TENANT_ID,
+  }, {
+    entityId: serviceId,
+    nodeId: NODE_ID,
+    replicaId: serviceId,
   });
   return {definitionFor, driver, runtime};
 }

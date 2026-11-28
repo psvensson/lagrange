@@ -63,6 +63,8 @@ import {
   TOP_N,
   composeTwoNodeDeployment,
 } from './call-cell-two-node-deployment-fixture.js';
+import {buildRuntimeServiceReplicaHandle} from
+  '../wasm-service/runtime-service-replica-handle.js';
 
 const AUTHORING_WORLD = 'service-cell';
 const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
@@ -349,10 +351,12 @@ async function composeRequestCell(testContext, componentBytes) {
     }),
   }));
   lifecycle.setStateProjectionWriter(async () => {});
-  const replica = {
-    definition: requestDefinition(manifestDigest),
+  const definition = requestDefinition(manifestDigest);
+  const replica = buildRuntimeServiceReplicaHandle(definition, {
+    entityId: definition.service_id,
     nodeId: NODE_A,
-  };
+    replicaId: `${definition.service_id}-r1`,
+  });
   testContext.after(async () => {
     await lifecycle.stop(replica).catch(() => undefined);
     journal.close();
@@ -453,7 +457,7 @@ describe('HTTP-to-call composition across two production nodes', () => {
       wasmComponentDriver: driver,
     });
 
-    const prepared = await lifecycle.prepare(replica.definition, {});
+    const prepared = await lifecycle.prepare(replica, {});
     assert.equal(prepared.status, 'ready', prepared.error);
     const started = await lifecycle.start(replica);
     assert.equal(started.status, 'running', started.error);

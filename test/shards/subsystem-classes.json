@@ -28,7 +28,7 @@
   "censusSize": 2851,
   "digest": "fnv1a32-8b03b849",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9fba03c6",
+  "observationDigest": "fnv1a32-e04ceff3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11272,10 +11272,13 @@
         "src/config/configuration-manager.js",
         "src/control-plane/owners/service-install-catalog-contract.js",
         "src/function/function-constants.js",
+        "src/node/runtime-service-generic-replica.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
-        "src/runtime/wasm-component-driver.js"
+        "src/runtime/wasm-component-driver.js",
+        "test/wasm-service/runtime-service-replica-handle.js"
       ]
     },
     "test/helm/lagrange-node-admin-default-deny.test.js": {
@@ -11885,13 +11888,16 @@
         "src/control-plane/owners/deployment-binding-contract.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/node/runtime-service-generic-replica.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
         "src/runtime/call-cell-driver-invoke.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
         "src/runtime/wasm-component-driver.js",
         "src/service/external-service-manifest.js",
-        "test/wasm-service/fixtures/call-cell-world/guest.js"
+        "test/wasm-service/fixtures/call-cell-world/guest.js",
+        "test/wasm-service/runtime-service-replica-handle.js"
       ],
       "directories": [
         "wit"
@@ -26867,7 +26873,10 @@
     },
     "test/runtime/wasi-component-derivation.test.js": {
       "files": [
-        "src/runtime/wasi-component-cell-runtime.js"
+        "src/node/runtime-service-generic-replica.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "test/wasm-service/runtime-service-replica-handle.js"
       ]
     },
     "test/runtime/wasi-component-startup-budget.test.js": {
@@ -31455,10 +31464,13 @@
         "src/config/configuration-manager.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/control-plane/owners/service-install-catalog-contract.js",
+        "src/node/runtime-service-generic-replica.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
-        "src/runtime/wasm-component-driver.js"
+        "src/runtime/wasm-component-driver.js",
+        "test/wasm-service/runtime-service-replica-handle.js"
       ]
     },
     "test/wasm-service/read-router.property.test.js": {
@@ -31510,10 +31522,13 @@
         "src/config/configuration-manager.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/control-plane/owners/service-install-catalog-contract.js",
+        "src/node/runtime-service-generic-replica.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
-        "src/runtime/wasm-component-driver.js"
+        "src/runtime/wasm-component-driver.js",
+        "test/wasm-service/runtime-service-replica-handle.js"
       ]
     },
     "test/wasm-service/wasm-creation-bound-native.test.js": {
