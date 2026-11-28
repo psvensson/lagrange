@@ -12,6 +12,7 @@ import {
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
 import {
+  acceptsSourceWork,
   beginSourceReplicationActivityForService,
   finishSourceReplicationActivityForService,
   startSplitReplicationHandleForService,
@@ -32,27 +33,39 @@ const {
   PARTITION_SPLIT_MIRROR_ORIGIN,
 } = PARTITION_SERVICE_SHARED;
 
+function isStoppedSplitSuperseded(service, previous, row, transition) {
+  return service.isShutdown || service.role !== RaftRole.LEADER ||
+      service.splitReplication !== previous || service.mergeReplication ||
+      row?.table_id !== service.tableId || !transition;
+}
+
+function hasStoppedSplitLostCustody(service, previous, raw, metadata) {
+  return !service.isSameSplitReplication(previous.metadata, metadata) ||
+      raw.mirrorExecutionEnded || !raw.mirrorCustodyGrants?.some((grant) =>
+    grant.partitionId === service.partitionId && grant.fence === metadata.workflowFenceToken &&
+        grant.acquired && !grant.release);
+}
+
+// The participant checkpoint can land before the phase advance. In either
+// case replay starts at the committed cursor, including writes made while stopped.
+function isStoppedSplitCheckpointUnresumable(raw, metadata) {
+  const participant = raw.participants?.[SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION];
+  return participant?.fenceToken !== metadata.workflowFenceToken ||
+      (participant.status !== SPLIT_ACK_STATUS.CATCHUP_READY &&
+       participant.status !== SPLIT_ACK_STATUS.CUTOVER_APPLIED) ||
+      !Number.isSafeInteger(metadata.snapshotBarrierIndex) ||
+      !Number.isSafeInteger(metadata.replayWatermarkIndex);
+}
+
 async function resumeStoppedSplit(service, previous) {
   const owner = service.sqlQueryEngine.managedSplitWorkflow;
   const row = await authoritativeRecordOf(owner, service.tableId);
   const transition = parseTablePartitionTransition(row);
-  if (service.isShutdown || service.role !== RaftRole.LEADER ||
-      service.splitReplication !== previous || service.mergeReplication ||
-      row?.table_id !== service.tableId || !transition) return false;
+  if (isStoppedSplitSuperseded(service, previous, row, transition)) return false;
   const raw = transition.metadata;
   const metadata = service.normalizeSplitTransitionMetadata(raw);
-  if (!service.isSameSplitReplication(previous.metadata, metadata) ||
-      raw.mirrorExecutionEnded || !raw.mirrorCustodyGrants?.some((grant) =>
-    grant.partitionId === service.partitionId && grant.fence === metadata.workflowFenceToken &&
-        grant.acquired && !grant.release)) return false;
-  // The participant checkpoint can land before the phase advance. In either
-  // case replay starts at the committed cursor, including writes made while stopped.
-  const participant = raw.participants?.[SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION];
-  if (participant?.fenceToken !== metadata.workflowFenceToken ||
-      (participant.status !== SPLIT_ACK_STATUS.CATCHUP_READY &&
-       participant.status !== SPLIT_ACK_STATUS.CUTOVER_APPLIED) ||
-      !Number.isSafeInteger(metadata.snapshotBarrierIndex) ||
-      !Number.isSafeInteger(metadata.replayWatermarkIndex)) return false;
+  if (hasStoppedSplitLostCustody(service, previous, raw, metadata)) return false;
+  if (isStoppedSplitCheckpointUnresumable(raw, metadata)) return false;
   const phase = transition.state === PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING ?
     PARTITION_TRANSITION_STATE.SPLIT_CATCHUP : transition.state;
   if (phase !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP &&
@@ -190,8 +203,7 @@ class PartitionServiceSplitMirrorQueueMethods {
           });
         return previous.resumePromise;
       }
-      if (previous.terminal || previous.quiescing ||
-          previous.phase === PARTITION_TRANSITION_STATE.FAILED) return false;
+      if (!acceptsSourceWork(previous)) return false;
       return (await this.waitForSplitReplicationStart(previous, true)).success === true;
     }
     const transition = findDurableMirrorTransitionForService(this, {

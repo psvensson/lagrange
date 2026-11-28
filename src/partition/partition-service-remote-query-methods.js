@@ -418,6 +418,18 @@ function leaderRedirectOf(service) {
   }
 }
 
+// A descriptor-keyed query is a plain autocommit write that carries its intent.
+function isMalformedSplitDescriptorQuery(payload, isWriteOperation) {
+  return usesSplitDescriptorIdentity(payload) &&
+    (!carriesSplitDescriptorIntent(payload) || !isWriteOperation ||
+     payload.transactionId != null ||
+     payload[QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION] != null);
+}
+
+function requiresLeaderRoutedQuery(payload, isWriteOperation) {
+  return isWriteOperation || Boolean(payload?.transactionId);
+}
+
 function requestsLeaderQualifiedRead(payload, isWriteOperation) {
   return !isWriteOperation && payload[LEADER_READ_REQUEST_FIELD] !== undefined;
 }
@@ -633,14 +645,10 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       };
     }
     const isWriteOperation = this.isWriteQuery(sql);
-    if (usesSplitDescriptorIdentity(payload) &&
-        (!carriesSplitDescriptorIntent(payload) || !isWriteOperation ||
-         payload.transactionId != null ||
-         payload[QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION] != null)) {
+    if (isMalformedSplitDescriptorQuery(payload, isWriteOperation)) {
       return descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.BYTES);
     }
-    const requiresLeaderRouting =
-      isWriteOperation || Boolean(payload?.transactionId);
+    const requiresLeaderRouting = requiresLeaderRoutedQuery(payload, isWriteOperation);
     const routingRefusal = writeRoutingRefusal(
       this,
       payload,

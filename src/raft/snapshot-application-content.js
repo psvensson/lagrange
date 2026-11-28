@@ -11,8 +11,10 @@ import {MIRROR_RETENTION_BARRIER_ENTRY_KEY, PARTITION_COMMITTED_STATEMENT_FORMAT
 // (which carry only `raft_rs_peer_identity`), and enforces the
 // `PREPARED_TRANSACTIONS_PENDING` gate and HLC non-regression across compaction.
 
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schema-shared-constants.js';
-import {PARTITIONS_SCHEMA_UNSUPPORTED, partitionDescriptorsAreCurrentIn} from '../partition/partition-service-table-bootstrap.js';
+import {
+  PARTITIONS_SCHEMA_UNSUPPORTED, SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schema-shared-constants.js';
+import {partitionDescriptorsAreCurrentIn} from '../partition/partition-service-table-bootstrap.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';

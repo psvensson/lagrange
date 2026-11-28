@@ -20,6 +20,7 @@ const COLUMN = Object.freeze({
   LEADER_CLAIM_RAFT_TERM: 'leader_claim_raft_term',
   LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT: 'leader_claim_minted_against_updated_at',
   TABLE_ID: 'table_id',
+  SPLIT_DESCRIPTOR_ATTEMPT: 'split_descriptor_attempt',
   SERVICE_ID: 'service_id',
   OPERATION_ID: 'operation_id',
   RESERVATION_ID: 'reservation_id',

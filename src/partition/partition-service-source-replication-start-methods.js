@@ -171,7 +171,7 @@ async function acquireSourceCustody(service, handle, family, recoveredPhases) {
     const custody = readDurableMirrorRetentionCustodyIn(service.db);
     if (!custody || !canAssumeMirrorCustody(custody, {...handle.metadata, family}) ||
         custody.barrierIndex > handle.replayWatermarkIndex) {
-      throw new Error('Recovered mirror checkpoint lacks matching committed custody');
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.RECOVERED_MIRROR_CUSTODY_MISMATCH);
     }
     if (custody.workflowFenceToken === handle.metadata.workflowFenceToken) return;
   } else {
@@ -474,15 +474,15 @@ class PartitionServiceSourceReplicationStartMethods {
 
   async retireReleasedMirrorHandle(custody) {
     const split = custody.family === WORKFLOW_FAMILY.SPLIT;
-    const slot = split ? 'splitReplication' : 'mergeReplication';
-    const handle = this[slot];
+    const handle = split ? this.splitReplication : this.mergeReplication;
     if (!handle || !canAssumeMirrorCustody({...handle.metadata, family: custody.family}, custody)) {
       return;
     }
     handle.terminal = true;
     await this.quiesceSourceReplicationHandle(handle);
     await Promise.allSettled([handle.runPromise]);
-    if (this[slot] === handle) this[slot] = null;
+    if (split && this.splitReplication === handle) this.splitReplication = null;
+    if (!split && this.mergeReplication === handle) this.mergeReplication = null;
   }
 
   async quiesceSourceReplicationHandle(handle) {
@@ -527,6 +527,7 @@ function finishSourceReplicationActivityForService(service, handle, activity) {
 }
 
 export {
+  acceptsSourceWork,
   beginSourceReplicationActivityForService,
   createPartitionServiceSourceReplicationStartMethods,
   finishSourceReplicationActivityForService,

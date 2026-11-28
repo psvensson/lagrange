@@ -113,6 +113,59 @@ function hydratePartitionCdcEvent(envelope, data, options = {}) {
   return event;
 }
 
+// Row data of a raw SQL QUERY entry whose own fields gave none: the bound params
+// or the literal values of an INSERT.
+function queryEntryValueCdcDataOf(generator, entry, entryType, tableName, cdcData) {
+  // For parameterized queries (SQL with ? placeholders), build data from params
+  const hasParams = entry.params && entry.params.length > 0;
+  const hasPlaceholders = hasSqlParameterPlaceholders(entry.sql);
+
+  if (hasParams && hasPlaceholders && Object.keys(cdcData).length === 0) {
+    cdcData = generator.extractDataFromParameterizedSQL(
+      entry.sql, entry.params, tableName, entryType,
+    );
+  }
+
+  // For INSERT queries without params, parse literal values from SQL
+  if (!hasPlaceholders && (entryType === PARTITION_SERVICE_OPERATION.INSERT ||
+    entryType === PARTITION_SERVICE_OPERATION.UPSERT) &&
+      Object.keys(cdcData).length === 0) {
+    cdcData = generator.extractInsertDataFromSQL(entry.sql, tableName);
+  }
+  return cdcData;
+}
+
+// Row data of a raw SQL UPDATE or DELETE whose earlier sources gave none: its
+// WHERE clause.
+function queryEntryWhereCdcDataOf(generator, entry, entryType, tableName, cdcData) {
+  // For UPDATE queries, try to extract the WHERE clause to query updated row
+  if (entryType === PARTITION_SERVICE_OPERATION.UPDATE &&
+    Object.keys(cdcData).length === 0) {
+    cdcData = generator.extractUpdateDataFromSQL(entry.sql, tableName);
+  }
+
+  // For DELETE queries, extract the WHERE clause
+  if (entryType === PARTITION_SERVICE_OPERATION.DELETE &&
+    Object.keys(cdcData).length === 0) {
+    cdcData = generator.extractDeleteDataFromSQL(entry.sql);
+  }
+  return cdcData;
+}
+
+// The WHERE clause of an UPDATE as it reads after the write: a key the update
+// itself sets takes its new value.
+function postUpdateWhereOf(entry) {
+  const postUpdateWhere = {...entry.whereClause};
+  if (entry.data && typeof entry.data === 'object') {
+    for (const key of Object.keys(postUpdateWhere)) {
+      if (Object.prototype.hasOwnProperty.call(entry.data, key)) {
+        postUpdateWhere[key] = entry.data[key];
+      }
+    }
+  }
+  return postUpdateWhere;
+}
+
 /**
  * Generates CDC events for partition write operations.
  * @class
@@ -409,46 +462,12 @@ class PartitionCDCGenerator {
 
     // For raw SQL queries, extract data from SQL
     if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
-      // For parameterized queries (SQL with ? placeholders), build data from params
-      const hasParams = entry.params && entry.params.length > 0;
-      const hasPlaceholders = hasSqlParameterPlaceholders(entry.sql);
-
-      if (hasParams && hasPlaceholders && Object.keys(cdcData).length === 0) {
-        cdcData = this.extractDataFromParameterizedSQL(
-          entry.sql, entry.params, tableName, entryType,
-        );
-      }
-
-      // For INSERT queries without params, parse literal values from SQL
-      if (!hasPlaceholders && (entryType === PARTITION_SERVICE_OPERATION.INSERT ||
-        entryType === PARTITION_SERVICE_OPERATION.UPSERT) &&
-          Object.keys(cdcData).length === 0) {
-        cdcData = this.extractInsertDataFromSQL(entry.sql, tableName);
-      }
-
-      // For UPDATE queries, try to extract the WHERE clause to query updated row
-      if (entryType === PARTITION_SERVICE_OPERATION.UPDATE &&
-        Object.keys(cdcData).length === 0) {
-        cdcData = this.extractUpdateDataFromSQL(entry.sql, tableName);
-      }
-
-      // For DELETE queries, extract the WHERE clause
-      if (entryType === PARTITION_SERVICE_OPERATION.DELETE &&
-        Object.keys(cdcData).length === 0) {
-        cdcData = this.extractDeleteDataFromSQL(entry.sql);
-      }
+      cdcData = queryEntryValueCdcDataOf(this, entry, entryType, tableName, cdcData);
+      cdcData = queryEntryWhereCdcDataOf(this, entry, entryType, tableName, cdcData);
     }
 
     if (isUpdateOperation && entry.whereClause) {
-      const postUpdateWhere = {...entry.whereClause};
-      if (entry.data && typeof entry.data === 'object') {
-        for (const key of Object.keys(postUpdateWhere)) {
-          if (Object.prototype.hasOwnProperty.call(entry.data, key)) {
-            postUpdateWhere[key] = entry.data[key];
-          }
-        }
-      }
-      const authoritativeRow = this.fetchUpdatedRow(tableName, postUpdateWhere);
+      const authoritativeRow = this.fetchUpdatedRow(tableName, postUpdateWhereOf(entry));
       if (authoritativeRow) {
         return authoritativeRow;
       }

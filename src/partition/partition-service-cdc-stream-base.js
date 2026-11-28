@@ -14,7 +14,7 @@ import {
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from './proposal-queue-constants.js';
 import {releaseJoinedWriteOfEndedTenure} from './partition-service-raft-write-commit.js';
 import {committedStatementEntryKey, pendingOwnerDigestOf} from './partition-committed-statement-outcome.js';
-import {descriptorRefusal, isSplitDescriptorDigest, SPLIT_DESCRIPTOR_ERROR} from
+import {descriptorRefusal, isSplitDescriptorDigestCollision, SPLIT_DESCRIPTOR_ERROR} from
   './partition-split-descriptor-command.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 
@@ -81,6 +81,19 @@ function reportCommitDeadlineSpent(service, pending, deadline) {
     }),
     scope: {partitionId: service.partitionId, entryId: pending.entryId},
   });
+}
+
+// The answer a committed write resolves with: the pending fields, the
+// committed result's fields, and the pending log index when the result has none.
+function committedWriteAnswerOf(pending, result) {
+  const resolvedResult = {
+    ...(pending.result && typeof pending.result === 'object' ? pending.result : {}),
+    ...(result && typeof result === 'object' ? result : {}),
+  };
+  if (!Number.isFinite(resolvedResult.logIndex) && Number.isFinite(pending.logIndex)) {
+    resolvedResult.logIndex = pending.logIndex;
+  }
+  return resolvedResult;
 }
 
 class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
@@ -406,25 +419,12 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     // this local waiter. It settles its own effect, never the other's success.
     if (result?.success === true) {
       const pendingDigest = pendingOwnerDigestOf(this.pendingWriteOutcomes.get(entryId));
-      if ((isSplitDescriptorDigest(pendingDigest) || isSplitDescriptorDigest(commandDigest)) &&
-          pendingDigest !== commandDigest) {
+      if (isSplitDescriptorDigestCollision(pendingDigest, commandDigest)) {
         return this.proposalQueue.resolve(entryId,
           descriptorRefusal(SPLIT_DESCRIPTOR_ERROR.COLLISION));
       }
     }
-    const resolvedResult = {
-      ...(pending.result && typeof pending.result === 'object' ?
-        pending.result :
-        {}),
-      ...(result && typeof result === 'object' ? result : {}),
-    };
-    if (
-      !Number.isFinite(resolvedResult.logIndex) &&
-      Number.isFinite(pending.logIndex)
-    ) {
-      resolvedResult.logIndex = pending.logIndex;
-    }
-    return this.proposalQueue.resolve(entryId, resolvedResult);
+    return this.proposalQueue.resolve(entryId, committedWriteAnswerOf(pending, result));
   }
   rejectCommittedWrite(entryId, error) {
     if (typeof entryId !== 'string' || entryId.length === 0) {

@@ -12,6 +12,16 @@ const SIBLING_DESCRIPTOR_ACTION = Object.freeze({
 const DISPOSITION = Object.freeze({
   PROMOTED: 'promoted', RESTORED: 'restored', CANCELLED: 'cancelled', SUPERSEDED: 'superseded',
 });
+// Refusals inside the apply transaction; each rolls the whole application back.
+const SIBLING_DESCRIPTOR_ERROR = Object.freeze({
+  RESTORE_MISSING_PROMOTION: 'split_sibling_restore_missing_promotion',
+});
+const SIBLING_DESCRIPTOR_ERROR_MSG = Object.freeze({
+  UNEXPECTED_CHANGES: 'Unexpected affected rows for sibling descriptor',
+  RESTORE_MISSING_PROMOTION: 'Sibling restore lacks its committed promotion',
+});
+const SIBLING_DESCRIPTOR_ROW_SQL = 'SELECT table_id, partition_version, split_descriptor_attempt ' +
+  'FROM partitions WHERE partition_id = ?';
 const SUBJECT_FIELDS = Object.freeze([
   'action', 'tableId', 'partitionId', 'workflowId', 'workflowAttempt',
   'priorAttempt', 'priorVersion', 'targetVersion',
@@ -56,6 +66,27 @@ function siblingDescriptorStatement(intent) {
     params: [...update.values, ...where.values]};
 }
 
+// A changed descriptor without matching forward proof must roll back the
+// entire apply transaction. A retryable zero-answer cannot undo it.
+function changedSiblingDisposition(promote, forwardUnsettled) {
+  if (!promote && forwardUnsettled !== false) {
+    throw Object.assign(new Error(SIBLING_DESCRIPTOR_ERROR_MSG.RESTORE_MISSING_PROMOTION),
+      {code: SIBLING_DESCRIPTOR_ERROR.RESTORE_MISSING_PROMOTION});
+  }
+  return promote ? DISPOSITION.PROMOTED : DISPOSITION.RESTORED;
+}
+
+function unchangedRestoreDisposition(db, intent, forwardUnsettled) {
+  const row = db.prepare(SIBLING_DESCRIPTOR_ROW_SQL).get(intent.partitionId);
+  if (row?.table_id !== intent.tableId || !Number.isSafeInteger(row.split_descriptor_attempt)) {
+    return undefined;
+  }
+  if (row.split_descriptor_attempt > intent.workflowAttempt) return DISPOSITION.SUPERSEDED;
+  if (forwardUnsettled === true && row.split_descriptor_attempt === intent.priorAttempt &&
+      row.partition_version === intent.priorVersion) return DISPOSITION.CANCELLED;
+  return undefined;
+}
+
 // Called in the transaction applying the guarded UPDATE. An unchanged original
 // preimage can retire an unexecuted promotion only while its forward entry is
 // unsettled. That terminal receipt must then be consulted before the first
@@ -64,28 +95,12 @@ function siblingDescriptorDispositionIn(db, intent, changes, forwardUnsettled) {
   const promote = intent.action === SIBLING_DESCRIPTOR_ACTION.PROMOTE;
   let disposition;
   if (changes !== 0 && changes !== 1) {
-    throw new Error('Unexpected affected rows for sibling descriptor');
+    throw new Error(SIBLING_DESCRIPTOR_ERROR_MSG.UNEXPECTED_CHANGES);
   }
   if (changes === 1) {
-    // A changed descriptor without matching forward proof must roll back
-    // the entire apply transaction. A retryable zero-answer cannot undo it.
-    if (!promote && forwardUnsettled !== false) {
-      throw Object.assign(new Error('Sibling restore lacks its committed promotion'),
-        {code: 'split_sibling_restore_missing_promotion'});
-    }
-    disposition = promote ? DISPOSITION.PROMOTED : DISPOSITION.RESTORED;
+    disposition = changedSiblingDisposition(promote, forwardUnsettled);
   } else if (!promote && changes === 0) {
-    const row = db.prepare('SELECT table_id, partition_version, split_descriptor_attempt ' +
-      'FROM partitions WHERE partition_id = ?').get(intent.partitionId);
-    if (row?.table_id !== intent.tableId || !Number.isSafeInteger(row.split_descriptor_attempt)) {
-      return null;
-    }
-    if (row.split_descriptor_attempt > intent.workflowAttempt) {
-      disposition = DISPOSITION.SUPERSEDED;
-    } else if (forwardUnsettled === true && row.split_descriptor_attempt === intent.priorAttempt &&
-        row.partition_version === intent.priorVersion) {
-      disposition = DISPOSITION.CANCELLED;
-    }
+    disposition = unchangedRestoreDisposition(db, intent, forwardUnsettled);
   }
   return disposition === undefined ? null : Object.freeze({...intent, disposition});
 }

@@ -1,8 +1,8 @@
 import {SIBLING_DESCRIPTOR_ACTION, siblingDescriptorDispositionIn} from './partition-sibling-descriptor-effect.js';
-import {decodeSplitDescriptorCommand, deriveParticipantEntryId, descriptorRefusal,
+import {claimedSplitDescriptorOf, deriveParticipantEntryId, descriptorRefusal,
   finalizeChildReceipt, isSiblingDescriptorAction, retainedSplitDescriptorAnswer,
   SPLIT_DESCRIPTOR_ERROR, splitDescriptorCommandDigest, splitDescriptorWriteKey,
-  usesSplitDescriptorIdentity} from './partition-split-descriptor-command.js';
+} from './partition-split-descriptor-command.js';
 import {requestPlacementRepairPreparation} from './partition-placement-repair-preparation.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
@@ -249,6 +249,92 @@ function buildAppliedStatementResolutionAnswer(info, identity) {
     ...(Array.isArray(info.affectedRows) ? {affectedRows: info.affectedRows} : {}),
     ...identity,
   };
+}
+
+// A committed command claiming split-descriptor identity that does not decode
+// as one fails the application closed.
+function committedSplitDescriptorOf(service, command, index, rollback) {
+  const claim = claimedSplitDescriptorOf(service, command);
+  if (claim.refused) {
+    const code = SPLIT_DESCRIPTOR_ERROR.BYTES;
+    throw committedCommandRefusal(service, {command, index, rollback},
+      {message: code, code, outcome: code, reason: code});
+  }
+  return claim.descriptor;
+}
+
+function committedStatementLockCheckOf(command) {
+  return {
+    operations: [buildSingleStatementLockCheckOperation(command)],
+    transactionId: command.transactionId ?? null,
+    deterministic: true,
+  };
+}
+
+// A descriptor entry refused by a locking read is answered retryable and
+// recorded only; any other entry settles through the locking-read owner.
+function settleCommittedLockConflict(service, descriptor, settlement) {
+  const {lockConflict, command, afterCommit} = settlement;
+  if (descriptor) {
+    afterCommit(() => service.resolveCommittedWrite(command.entryId,
+      {...lockConflict, success: false, failureCode: lockConflict.errorCode, retryable: true,
+        deferRetry: true}));
+    return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
+  }
+  return settleLockingReadRefusedCommittedStatement(service, settlement);
+}
+
+// A failed descriptor statement rejects its waiter on rollback and fails the
+// application; any other failed statement settles as a recorded failure.
+function settleCommittedStatementFailure(service, descriptor, failure) {
+  if (descriptor) {
+    failure.afterRollback(() =>
+      service.rejectCommittedWrite(failure.command.entryId, failure.error));
+    throw failure.error;
+  }
+  return settleFailedCommittedStatement(service, failure);
+}
+
+// Everything an applied statement records, inside the apply transaction, and
+// the effects it defers to commit or rollback.
+function recordAppliedCommittedStatement(service, applied) {
+  const {command, index, term, entryKey, identity, info, receipt, descriptor,
+    afterCommit, scheduleEffect} = applied;
+  recordCommittedStatementOutcome(service, {
+    ...(descriptor ?
+      {ownerResultText: JSON.stringify(receipt), commandDigest: descriptor.digest} : {}),
+    entryKey,
+    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
+    index,
+    term,
+    result: info,
+    command,
+  });
+  if (!descriptor || info.changes > 0) {
+    recordCommittedStatementCdc(service, {command, index, term, afterCommit},
+      {entryKey, result: info});
+    advancePartitionWriteGeneration(service.db);
+    const committedGeneration = readPartitionWriteGeneration(service.db);
+    recordCommittedAutocommitRowKeys(service, command, committedGeneration);
+    scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
+      resetParticipantRowKeyHistory(service));
+    recordCommittedWriteTraffic(service, afterCommit, 1);
+  }
+  if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||
+      /^\s*(?:CREATE|DROP)\s+TABLE\b/iu.test(String(command.sql || ''))) {
+    afterCommit(() => invalidateParticipantDeterminismSelfCheck(service.db));
+  }
+  if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
+    afterCommit(() => service.registerMigrationDefaultFromAlterSql(command.sql));
+  }
+  afterCommit(() => {
+    service.resolveCommittedWrite(
+      command.entryId,
+      {...buildAppliedStatementResolutionAnswer(info, identity),
+        ...(receipt ? {splitDescriptorReceipt: receipt, committed: true, term} : {})},
+      descriptor?.digest,
+    );
+  });
 }
 
 class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
@@ -599,18 +685,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         }
       });
     };
-    committedCommandGate(this, {command, index,
-      rollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK,
-        effect)});
+    const rollback = (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect);
+    committedCommandGate(this, {command, index, rollback});
     const commandType = command.type;
-    const descriptor = usesSplitDescriptorIdentity(command) ?
-      decodeSplitDescriptorCommand(this, command) : null;
-    if (usesSplitDescriptorIdentity(command) && descriptor === null) {
-      const code = SPLIT_DESCRIPTOR_ERROR.BYTES;
-      throw committedCommandRefusal(this, {command, index, rollback: (effect) =>
-        scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)},
-      {message: code, code, outcome: code, reason: code});
-    }
+    const descriptor = committedSplitDescriptorOf(this, command, index, rollback);
     // Witness the committed entry's HLC on EVERY replica (leader and follower),
     // before any branch/early-return, so this clock advances past every entry it
     // applies. Without this, a new leader whose wall clock lags the old leader
@@ -653,82 +731,32 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
       if (cdcAdmission.state === PARTITION_CDC_ADMISSION_STATE.REFUSED) {
         return settleCdcOwedRefusal(this, {command, afterCommit}, cdcAdmission.answer);
       }
-      const lockConflict = checkOperationsLockingReadConflict(this, {
-        operations: [buildSingleStatementLockCheckOperation(command)],
-        transactionId: command.transactionId ?? null,
-        deterministic: true,
-      });
+      const lockConflict = checkOperationsLockingReadConflict(this,
+        committedStatementLockCheckOf(command));
       if (lockConflict !== null) {
-        if (descriptor) {
-          afterCommit(() => this.resolveCommittedWrite(command.entryId,
-            {...lockConflict, success: false, failureCode: lockConflict.errorCode, retryable: true,
-              deferRetry: true}));
-          return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
-        }
-        return settleLockingReadRefusedCommittedStatement(
-          this, {lockConflict, command, entryKey, index, term, identity, afterCommit});
+        return settleCommittedLockConflict(this, descriptor,
+          {lockConflict, command, entryKey, index, term, identity, afterCommit});
       }
       let info;
       let receipt;
       try {
-        if (descriptor) {
-          const effect = applySplitDescriptorStatement(this, command, descriptor);
-          if (effect.refusal) {
-            afterCommit(() => this.resolveCommittedWrite(command.entryId, effect.refusal));
-            return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
-          }
-          info = effect.result;
-          receipt = effect.receipt;
-        } else {
-          info = runCommittedPartitionStatement(this, command);
+        const effect = descriptor ? applySplitDescriptorStatement(this, command, descriptor) :
+          {result: runCommittedPartitionStatement(this, command)};
+        if (effect.refusal) {
+          afterCommit(() => this.resolveCommittedWrite(command.entryId, effect.refusal));
+          return PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
         }
+        info = effect.result;
+        receipt = effect.receipt;
       } catch (error) {
-        if (descriptor) {
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK,
-            () => this.rejectCommittedWrite(command.entryId, error));
-          throw error;
-        }
-        return settleFailedCommittedStatement(this, {
+        return settleCommittedStatementFailure(this, descriptor, {
           error, command, entryKey, index, term, identity, afterCommit,
           afterRollback: (effect) =>
             scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect),
         });
       }
-      recordCommittedStatementOutcome(this, {
-        ...(descriptor ?
-          {ownerResultText: JSON.stringify(receipt), commandDigest: descriptor.digest} : {}),
-        entryKey,
-        outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
-        index,
-        term,
-        result: info,
-        command,
-      });
-      if (!descriptor || info.changes > 0) {
-        recordCommittedStatementCdc(this, {command, index, term, afterCommit},
-          {entryKey, result: info});
-        advancePartitionWriteGeneration(this.db);
-        const committedGeneration = readPartitionWriteGeneration(this.db);
-        recordCommittedAutocommitRowKeys(this, command, committedGeneration);
-        scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
-          resetParticipantRowKeyHistory(this));
-        recordCommittedWriteTraffic(this, afterCommit, 1);
-      }
-      if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||
-          /^\s*(?:CREATE|DROP)\s+TABLE\b/iu.test(String(command.sql || ''))) {
-        afterCommit(() => invalidateParticipantDeterminismSelfCheck(this.db));
-      }
-      if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
-        afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
-      }
-      afterCommit(() => {
-        this.resolveCommittedWrite(
-          command.entryId,
-          {...buildAppliedStatementResolutionAnswer(info, identity),
-            ...(receipt ? {splitDescriptorReceipt: receipt, committed: true, term} : {})},
-          descriptor?.digest,
-        );
-      });
+      recordAppliedCommittedStatement(this, {command, index, term, entryKey, identity, info,
+        receipt, descriptor, afterCommit, scheduleEffect});
     }
     scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
       this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {

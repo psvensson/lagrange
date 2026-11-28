@@ -75,6 +75,8 @@ import {
 } from './partition-participant-transaction-store.js';
 import {SQLParser} from '../query/sql-parser.js';
 import {extractStatementWriteFootprint} from './partition-write-footprint-contract.js';
+import {findIdempotentStagedWriteAnswer, recordStagedWriteResult} from
+  './partition-participant-staged-write-redelivery.js';
 
 const {
   PARTITION_SERVICE_OPERATION,
@@ -498,18 +500,11 @@ function computeIncrementalStagedBytes(session, operationBytes) {
 }
 
 function appendValidatedOperationToSession(
-  service, session, operation, operationText, nextBytes, classifiedStmt, validationState, ranOutcome,
+  service, session, operation, operationText, nextBytes, classifiedStmt, validationState,
+  ranOutcome,
 ) {
   session.operations.push(operation);
-  if (session.stagedResultsByEntryId instanceof Map &&
-      typeof operation.entryId === 'string' && operation.entryId.length > ZERO) {
-    session.stagedResultsByEntryId.set(operation.entryId, Object.freeze({
-      sql: operation.sql,
-      params: operation.params,
-      changes: ranOutcome.changes,
-      lastInsertRowid: ranOutcome.lastInsertRowid,
-    }));
-  }
+  recordStagedWriteResult(session, operation, ranOutcome);
   if (Array.isArray(session.encodedOperations)) {
     session.encodedOperations.push(operationText);
   }
@@ -520,32 +515,6 @@ function appendValidatedOperationToSession(
   session.lastValidatedGeneration = validationState.generation;
   session.lastValidatedSchemaVersion = validationState.schemaVersion;
   session.bytes = nextBytes;
-}
-
-function sameStagedParams(left, right) {
-  return Array.isArray(left) && Array.isArray(right) &&
-    left.length === right.length &&
-    left.every((value, index) => Object.is(value, right[index]));
-}
-
-function findIdempotentStagedWriteAnswer(session, request, params) {
-  const suppliedEntryId = request[QUERY_PAYLOAD_FIELD_ENTRY_ID];
-  if (typeof suppliedEntryId !== 'string' || suppliedEntryId.length === ZERO ||
-      !(session.stagedResultsByEntryId instanceof Map)) {
-    return null;
-  }
-  const prior = session.stagedResultsByEntryId.get(suppliedEntryId);
-  if (prior === undefined || prior.sql !== request.sql ||
-      !sameStagedParams(prior.params, params)) {
-    return null;
-  }
-  return {
-    success: true,
-    provisional: true,
-    idempotent: true,
-    changes: prior.changes,
-    lastInsertRowid: prior.lastInsertRowid,
-  };
 }
 
 function createSequentialLockCheckRunner(service, session, operation) {

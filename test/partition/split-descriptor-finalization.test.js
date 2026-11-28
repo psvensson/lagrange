@@ -11,10 +11,11 @@ import {
   splitDescriptorWriteKey,
 } from '../../src/partition/partition-split-descriptor-command.js';
 import {readCommittedStatementOutcome} from '../../src/partition/partition-committed-statement-outcome.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-service-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {readPartitionWriteGeneration} from '../../src/partition/partition-participant-transaction-store.js';
-import {applyCommitted, awaitProposal, clearFixtureSingletons, resetFixtureSingletons,
-  shutdownAll, startLeader, track} from '../test-helpers/participant-transaction-fixture.js';
+import {applyCommitted, awaitProposal, clearFixtureSingletons, REPLICAS, resetFixtureSingletons,
+  shutdownAll, startLeader, startReplica, track} from '../test-helpers/participant-transaction-fixture.js';
 
 const partitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
 const subject = Object.freeze({action: 'finalizeChild', tableId: 'tbl-users',
@@ -58,6 +59,32 @@ async function onPartitions(body) {
     await shutdownAll(leader);
   }
 }
+
+// A replica of the PARTITIONS owner partition that is not its leader and has
+// no transport: a write it cannot refuse itself fails as having no leader.
+async function onPartitionsFollower(body) {
+  const follower = await startReplica(REPLICAS[1], {tableName: SYSTEM_TABLE_NAME.PARTITIONS,
+    schema: PARTITIONS_SCHEMA}, partitionId);
+  try {
+    await body(follower);
+  } finally {
+    await shutdownAll(follower);
+  }
+}
+
+// Two claims of descriptor identity that do not decode as a descriptor: the
+// key of the subject without its intent, and the intent with another attempt.
+function malformedClaimsOf(intent) {
+  const {splitDescriptorIntent, ...keyOnly} = optionsFor(intent);
+  assert.deepEqual(splitDescriptorIntent, intent);
+  return [
+    {options: keyOnly, params: paramsFor(intent)},
+    {options: optionsFor(intent), params: [intent.tableId, 2, intent.partitionId]},
+  ];
+}
+
+const BYTES_REFUSAL = Object.freeze({success: false, error: ERROR.BYTES, errorCode: ERROR.BYTES,
+  failureCode: ERROR.BYTES, retryable: false, deferRetry: false});
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -107,6 +134,60 @@ test('child finalization binds pending and settled answers, actual DELETE and co
     assert.deepEqual(descriptorRow(service), successor);
     assert.deepEqual(effectCounts(service), successorEffects);
     assert.deepEqual(record(service, command.entryId), held);
+  }));
+
+test('committed apply refuses a descriptor claim that does not decode and applies nothing of it',
+  () => onPartitions(async (service, proposed) => {
+    seed(service, 1);
+    const before = effectCounts(service);
+    const {command, pending} = await holdProposal(service, proposed, subject);
+    const {splitDescriptorIntent, ...stripped} = command;
+    assert.deepEqual(splitDescriptorIntent, subject);
+    // Every replica applying either committed entry refuses it typed (the
+    // application fails closed) instead of running its DELETE as an ordinary
+    // statement: the descriptor row, the generation, the CDC ledger and the
+    // entry's outcome record stay as they were.
+    const otherAttempt = {...command, params: [subject.tableId, 2, subject.partitionId]};
+    for (const malformed of [stripped, otherAttempt]) {
+      assert.equal(applyCommitted(service, malformed), ERROR.BYTES);
+      assert.equal(descriptorRow(service).split_descriptor_attempt, 1);
+      assert.deepEqual(effectCounts(service), before);
+      assert.equal(record(service, command.entryId).state, 'unsettled');
+    }
+    // The proposer's waiter of that entry learns of the failed application:
+    // its outcome is unknown (only a retry under its entryId is idempotent),
+    // caused by the refusal.
+    const answer = await pending.promise;
+    assert.equal(answer.success, false);
+    assert.equal(answer.failureCode, PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN);
+    assert.equal(answer.entryId, command.entryId);
+    assert.equal(answer.cause.failureCode, ERROR.BYTES);
+  }));
+
+test('submission refuses a descriptor claim that does not decode before it is proposed',
+  () => onPartitionsFollower(async (follower) => {
+    for (const {options, params} of malformedClaimsOf(subject)) {
+      // Refused where it is submitted: a follower that cannot reach a leader
+      // answers the typed refusal, not a failure to find a leader.
+      assert.deepEqual(await follower.executeQuery(SQL, params, options), BYTES_REFUSAL);
+    }
+  }));
+
+test('a remote query with a descriptor claim it does not carry as a plain write is refused at ingress',
+  () => onPartitionsFollower(async (follower) => {
+    const [{options: keyOnly}] = malformedClaimsOf(subject);
+    const options = optionsFor(subject);
+    const write = {type: 'QUERY', sql: SQL, params: paramsFor(subject)};
+    for (const payload of [
+      {...write, ...keyOnly},
+      {...write, ...options, migrationOperation: 'ALTER_TABLE'},
+      {type: 'QUERY', sql: 'SELECT * FROM partitions WHERE partition_id = ?',
+        params: [subject.partitionId], ...options},
+    ]) {
+      // Refused before routing: a follower answers the typed refusal, not a
+      // redirect to its leader or a missing-leader refusal.
+      assert.deepEqual(await follower.handleRemoteQuery(payload), BYTES_REFUSAL);
+    }
   }));
 
 test('zero-row child finalization distinguishes absence, supersession and unresolved ownership',

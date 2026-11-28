@@ -6,10 +6,14 @@
 import {isDeepStrictEqual} from 'node:util';
 import {BOOTSTRAP_MEMBERSHIP_SOURCE} from '../raft/raft-committed-membership-constants.js';
 import {PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_SQL_FRAGMENT} from './partition-service-constants.js';
+import {COLUMN} from '../constants/columns.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
 import {
   generateCreateIndexSQL,
 } from '../bootstrap/system-table-schema-sql.js';
+import {
+  NODES_SCHEMA_UNSUPPORTED, PARTITIONS_SCHEMA_UNSUPPORTED, SYSTEM_TABLE_SCHEMA_REFUSAL_SOURCE,
+} from '../bootstrap/system-table-schema-shared-constants.js';
 import {
   SYSTEM_TABLE_NAME, PARTITIONS_SCHEMA, getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
@@ -21,6 +25,7 @@ const PARTITION_TABLE_OBSERVATION = Object.freeze({
   COMPLETE: 'complete', UNAVAILABLE: 'unavailable', CONTRARY: 'contrary',
 });
 const IDEMPOTENT_SQL = ' IF NOT EXISTS';
+const NAMED_SCHEMA_OBJECT_SQL = 'SELECT 1 FROM sqlite_schema WHERE name = ? COLLATE NOCASE';
 const SCHEMA_OBJECTS_SQL =
   'SELECT type, name, sql FROM sqlite_schema WHERE tbl_name = ? ORDER BY type, name';
 
@@ -76,10 +81,8 @@ function quoteSqliteIdentifier(identifier) {
     PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE;
 }
 
-export const NODES_SCHEMA_UNSUPPORTED = 'NODES_SCHEMA_UNSUPPORTED';
-
-export const PARTITIONS_SCHEMA_UNSUPPORTED = 'PARTITIONS_SCHEMA_UNSUPPORTED';
-const attemptDomain = PARTITIONS_SCHEMA.columns.find(({name}) => name === 'split_descriptor_attempt').checkSql;
+const attemptDomain = PARTITIONS_SCHEMA.columns.find(({name}) =>
+  name === COLUMN.SPLIT_DESCRIPTOR_ATTEMPT).checkSql;
 
 // The declared format includes the domain of every retained attempt. Check data as
 // well as DDL: SQLite can read an image written with ignore_check_constraints.
@@ -106,23 +109,23 @@ function openCurrentSystemTable(service) {
   const descriptorTable = current === PARTITIONS_SCHEMA;
   const refuse = descriptorTable ? refusePartitionsSchema : refuseNodesSchema;
   const declared = service.schema;
-  if (!isDeepStrictEqual(declared, current)) refuse('catalog');
+  if (!isDeepStrictEqual(declared, current)) refuse(SYSTEM_TABLE_SCHEMA_REFUSAL_SOURCE.CATALOG);
 
   service.db.transaction(() => {
-    const existing = service.db.prepare('SELECT 1 FROM sqlite_schema WHERE name = ? COLLATE NOCASE')
+    const existing = service.db.prepare(NAMED_SCHEMA_OBJECT_SQL)
       .get(current.tableName);
     if (!existing) {
       if (service.bootstrapMembership?.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD ||
           (descriptorTable &&
           RaftRsDurableStore.hasDurableRecordIn(service.db, service.partitionId))) {
-        refuse('sqlite');
+        refuse(SYSTEM_TABLE_SCHEMA_REFUSAL_SOURCE.SQLITE);
       }
       createTableAndIndexes(service);
     }
     const valid = descriptorTable ? partitionDescriptorsAreCurrentIn(service.db) :
       readPartitionServiceTableSchemaIn(service.db,
         current).state === PARTITION_TABLE_OBSERVATION.COMPLETE;
-    if (!valid) refuse('sqlite');
+    if (!valid) refuse(SYSTEM_TABLE_SCHEMA_REFUSAL_SOURCE.SQLITE);
   }).immediate();
 }
 

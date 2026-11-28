@@ -23,6 +23,10 @@ import {
   findParticipantSession,
 } from '../../src/partition/partition-participant-transaction-session.js';
 import {
+  readPartitionWriteGeneration,
+  readPartitionWriteGenerationHistoryRange,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {
   canDoomSessionOnLocalWaitCycle,
   enqueueBoundedRowKeyWaiter,
   hasRowKeyWaitForCycle,
@@ -900,5 +904,30 @@ test('Finding 5B: read-pinned session whose readRowKeys were invalidated by an e
     assert.equal((await rollbackParticipantTx(leader, readerA)).success, true);
     await commitParticipantTx(leader, proposed, holderC);
     assert.equal(readRowValue(leader, 'rk-d'), 'v2');
+  });
+});
+
+test('a committed autocommit write records its row keys at the generation its commit advanced to', async () => {
+  await onLeader(async (leader) => {
+    setupRowKeyLeader(leader);
+    const base = readPartitionWriteGeneration(leader.db);
+    for (const [entryId, id] of [['auto-rk-g1', 'rk-g1'], ['auto-rk-g2', 'rk-g2']]) {
+      assert.equal(applyCommitted(leader, {type: PARTITION_SERVICE_OPERATION.QUERY, entryId,
+        sql: INSERT_SQL, params: [id, 'v'], timestamp: leader.hlcClock.now().toString(),
+        proposedBy: leader.replicaId, proposedAt: 0}), null);
+    }
+    assert.equal(readPartitionWriteGeneration(leader.db), base + 2);
+    // What a session validating across these generations reads from the
+    // committed row-key history: each generation is scoped and carries exactly
+    // the row key its own statement wrote. Keys recorded at the generation
+    // before the advance would leave the newest generation unscoped (a disjoint
+    // session is refused) and file a key under an earlier statement's generation.
+    const history = readPartitionWriteGenerationHistoryRange(leader.db, base, base + 2)
+      .map((row) => ({generation: Number(row.generation), scoped: Number(row.scoped),
+        rowKeys: JSON.parse(row.row_keys_text)}));
+    assert.deepEqual(history.map(({generation, scoped, rowKeys}) =>
+      [generation, scoped, rowKeys.length]), [[base + 1, 1, 1], [base + 2, 1, 1]]);
+    assert.match(history[0].rowKeys[0], /rk-g1/);
+    assert.match(history[1].rowKeys[0], /rk-g2/);
   });
 });

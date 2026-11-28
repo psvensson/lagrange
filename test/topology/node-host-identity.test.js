@@ -25,8 +25,8 @@ import {
   generateCreateTableSQL,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {NODES_SCHEMA_UNSUPPORTED} from '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {
-  NODES_SCHEMA_UNSUPPORTED,
   PARTITION_TABLE_OBSERVATION,
   createPartitionServiceTable,
   readPartitionServiceTableSchemaIn,

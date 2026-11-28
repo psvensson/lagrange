@@ -24,6 +24,8 @@ function deriveParticipantEntryId(idempotencyKey, partitionId) {
 
 const SPLIT_DESCRIPTOR_FINALIZE_SQL = 'DELETE FROM partitions WHERE table_id = ? AND ' +
   'split_descriptor_attempt = ? AND partition_id = ?';
+const SPLIT_DESCRIPTOR_ROW_SQL =
+  'SELECT table_id, split_descriptor_attempt FROM partitions WHERE partition_id = ?';
 const SPLIT_DESCRIPTOR_ERROR = Object.freeze({
   BYTES: 'split_descriptor_command_invalid',
   COLLISION: 'split_descriptor_entry_collision',
@@ -31,7 +33,7 @@ const SPLIT_DESCRIPTOR_ERROR = Object.freeze({
   RECEIPT: 'split_descriptor_receipt_invalid',
   FINALIZED: 'split_descriptor_attempt_finalized',
 });
-const DISPOSITION = Object.freeze({
+const SPLIT_DESCRIPTOR_DISPOSITION = Object.freeze({
   DELETED: 'deleted', ABSENT: 'absent', SUPERSEDED: 'superseded',
 });
 const KIND = 'splitDescriptor';
@@ -54,7 +56,7 @@ function isSiblingDescriptorAction(action) {
       action === SIBLING_DESCRIPTOR_ACTION.PROMOTE;
 }
 
-function canonicalIntent(value) {
+function canonicalSplitDescriptorIntent(value) {
   const intent = copyStrictOwnDataRecord(value);
   if (isSiblingDescriptorAction(intent?.action)) return canonicalSiblingDescriptorIntent(intent);
   if (intent === null || Object.keys(intent).length !== FIELDS.length ||
@@ -66,7 +68,7 @@ function canonicalIntent(value) {
 }
 
 function splitDescriptorWriteKey(value) {
-  const intent = canonicalIntent(value);
+  const intent = canonicalSplitDescriptorIntent(value);
   if (!intent) {
     throw Object.assign(new Error(SPLIT_DESCRIPTOR_ERROR.BYTES),
       {code: SPLIT_DESCRIPTOR_ERROR.BYTES});
@@ -81,7 +83,7 @@ function statementOf(intent) {
 }
 
 function splitDescriptorStatement(value) {
-  const intent = canonicalIntent(value);
+  const intent = canonicalSplitDescriptorIntent(value);
   if (!intent) {
     throw Object.assign(new Error(SPLIT_DESCRIPTOR_ERROR.BYTES),
       {code: SPLIT_DESCRIPTOR_ERROR.BYTES});
@@ -98,25 +100,31 @@ function digestOf(intent, key, statement) {
 }
 
 function splitDescriptorCommandDigest(value) {
-  const intent = canonicalIntent(value);
+  const intent = canonicalSplitDescriptorIntent(value);
   const key = splitDescriptorWriteKey(intent);
   return digestOf(intent, key, statementOf(intent));
 }
 
 function isSplitDescriptorReceiptFor(value, expected) {
   const receipt = copyStrictOwnDataRecord(value);
-  const intent = canonicalIntent(expected);
+  const intent = canonicalSplitDescriptorIntent(expected);
   if (isSiblingDescriptorAction(intent?.action)) {
     return isSiblingDescriptorReceiptFor(receipt, intent);
   }
   return intent !== null && receipt !== null &&
     Object.keys(receipt).length === FIELDS.length + 1 &&
     FIELDS.every((field) => receipt[field] === intent[field]) &&
-    Object.values(DISPOSITION).includes(receipt.disposition);
+    Object.values(SPLIT_DESCRIPTOR_DISPOSITION).includes(receipt.disposition);
 }
 
 function isSplitDescriptorDigest(value) {
   return typeof value === 'string' && value.startsWith(DIGEST_PREFIX);
+}
+
+// Two committed-command digests collide when either names a split descriptor
+// and they differ: one entry's answer never settles the other's waiter.
+function isSplitDescriptorDigestCollision(left, right) {
+  return (isSplitDescriptorDigest(left) || isSplitDescriptorDigest(right)) && left !== right;
 }
 
 function descriptorRefusal(code, retryable = false) {
@@ -139,25 +147,31 @@ function usesSplitDescriptorIdentity(command) {
     (typeof command.idempotencyKey === 'string' && command.idempotencyKey.startsWith(KEY_PREFIX));
 }
 
-function decodeSplitDescriptorCommand(service, command) {
-  const record = copyStrictOwnDataRecord(command);
-  const intent = canonicalIntent(record?.splitDescriptorIntent);
-  if (!intent || service.tableName !== SYSTEM_TABLE_NAME.PARTITIONS ||
+// Only the PARTITIONS owner partition applies a descriptor, and only as a plain
+// QUERY entry made of the declared command fields.
+function isForeignSplitDescriptorEnvelope(service, record, intent) {
+  return !intent || service.tableName !== SYSTEM_TABLE_NAME.PARTITIONS ||
       service.partitionId !== INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS] ||
       Object.keys(record).some((field) => !commandFields.has(field)) ||
       record.type !== PARTITION_SERVICE_OPERATION.QUERY ||
-      record.splitMirrorOrigin != null) {
-    return null;
-  }
+      record.splitMirrorOrigin != null;
+}
+
+function isMismatchedSplitDescriptorStatement(record, statement, mutationKind) {
+  return record.sql !== statement.sql ||
+      (record.mutationKind !== undefined && record.mutationKind !== mutationKind) ||
+      !Array.isArray(record.params) || record.params.length !== statement.params.length;
+}
+
+function decodeSplitDescriptorCommand(service, command) {
+  const record = copyStrictOwnDataRecord(command);
+  const intent = canonicalSplitDescriptorIntent(record?.splitDescriptorIntent);
+  if (isForeignSplitDescriptorEnvelope(service, record, intent)) return null;
   const statement = statementOf(intent);
   const mutationKind = isSiblingDescriptorAction(intent.action) ?
     PARTITION_SERVICE_OPERATION.UPDATE :
     PARTITION_SERVICE_OPERATION.DELETE;
-  if (record.sql !== statement.sql ||
-      (record.mutationKind !== undefined && record.mutationKind !== mutationKind) ||
-      !Array.isArray(record.params) || record.params.length !== statement.params.length) {
-    return null;
-  }
+  if (isMismatchedSplitDescriptorStatement(record, statement, mutationKind)) return null;
   const params = copyDenseOwnDataArray(record.params);
   const key = splitDescriptorWriteKey(intent);
   if (params === null || !params.every((param, index) => param === statement.params[index]) ||
@@ -168,22 +182,47 @@ function decodeSplitDescriptorCommand(service, command) {
   return {intent, digest: digestOf(intent, key, statement)};
 }
 
+// A command claiming split-descriptor identity must decode as one, at submission
+// and at committed apply: its descriptor, or refused when it does not decode. Any
+// other command has no descriptor.
+function claimedSplitDescriptorOf(service, command) {
+  if (!usesSplitDescriptorIdentity(command)) return {descriptor: null, refused: false};
+  const descriptor = decodeSplitDescriptorCommand(service, command);
+  return {descriptor, refused: descriptor === null};
+}
+
 // Inspect only a zero-row DELETE in the same SQLite application transaction.
 // A smaller/untagged generation or a row belonging to another table cannot
 // prove this attempt's effect was completed.
 function finalizeChildReceipt(db, intent, changes) {
   let disposition;
-  if (changes === 1) disposition = DISPOSITION.DELETED;
+  if (changes === 1) disposition = SPLIT_DESCRIPTOR_DISPOSITION.DELETED;
   else if (changes === 0) {
-    const row = db.prepare('SELECT table_id, split_descriptor_attempt FROM partitions ' +
-      'WHERE partition_id = ?').get(intent.partitionId);
-    if (row === undefined) disposition = DISPOSITION.ABSENT;
+    const row = db.prepare(SPLIT_DESCRIPTOR_ROW_SQL).get(intent.partitionId);
+    if (row === undefined) disposition = SPLIT_DESCRIPTOR_DISPOSITION.ABSENT;
     else if (row.table_id === intent.tableId &&
         Number.isSafeInteger(row.split_descriptor_attempt) &&
-        row.split_descriptor_attempt > intent.workflowAttempt) disposition = DISPOSITION.SUPERSEDED;
-    else return null;
+        row.split_descriptor_attempt > intent.workflowAttempt) {
+      disposition = SPLIT_DESCRIPTOR_DISPOSITION.SUPERSEDED;
+    } else return null;
   } else throw new Error(SPLIT_DESCRIPTOR_ERROR.RECEIPT);
   return Object.freeze({...intent, disposition});
+}
+
+// A retained descriptor row other than an applied statement at a committed
+// position with no failure and no rowid.
+function isUnappliedDescriptorRecord(recorded) {
+  return !Number.isSafeInteger(recorded.term) || recorded.term < 1 ||
+      !Number.isSafeInteger(recorded.logIndex) || recorded.logIndex < 1 ||
+      recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED ||
+      recorded.failureCode !== null || recorded.failureMessage !== null ||
+      recorded.lastInsertRowid !== null;
+}
+
+function descriptorReceiptChangeCount(intent, receipt) {
+  return isSiblingDescriptorAction(intent.action) ?
+    siblingDescriptorChangeCount(receipt) :
+    Number(receipt.disposition === SPLIT_DESCRIPTOR_DISPOSITION.DELETED);
 }
 
 function retainedSplitDescriptorAnswer(descriptor, recorded) {
@@ -197,26 +236,21 @@ function retainedSplitDescriptorAnswer(descriptor, recorded) {
     throw Object.assign(new Error(SPLIT_DESCRIPTOR_ERROR.RECEIPT),
       {code: SPLIT_DESCRIPTOR_ERROR.RECEIPT});
   }
-  if (!Number.isSafeInteger(recorded.term) || recorded.term < 1 ||
-      !Number.isSafeInteger(recorded.logIndex) || recorded.logIndex < 1 ||
-      recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED ||
-      recorded.failureCode !== null || recorded.failureMessage !== null ||
-      recorded.lastInsertRowid !== null ||
+  if (isUnappliedDescriptorRecord(recorded) ||
       !isSplitDescriptorReceiptFor(receipt, descriptor.intent) ||
-      recorded.changes !== (isSiblingDescriptorAction(descriptor.intent.action) ?
-        siblingDescriptorChangeCount(receipt) :
-        Number(receipt.disposition === DISPOSITION.DELETED))) {
+      recorded.changes !== descriptorReceiptChangeCount(descriptor.intent, receipt)) {
     throw Object.assign(new Error(SPLIT_DESCRIPTOR_ERROR.RECEIPT),
       {code: SPLIT_DESCRIPTOR_ERROR.RECEIPT});
   }
   return {splitDescriptorReceipt: receipt, committed: true, term: recorded.term};
 }
 
-export {DISPOSITION as SPLIT_DESCRIPTOR_DISPOSITION, SPLIT_DESCRIPTOR_ERROR,
+export {SPLIT_DESCRIPTOR_DISPOSITION, SPLIT_DESCRIPTOR_ERROR,
   SPLIT_DESCRIPTOR_FINALIZE_SQL, carriesSplitDescriptorIntent, carriesSplitDescriptorReceipt,
-  decodeSplitDescriptorCommand, deriveParticipantEntryId,
+  claimedSplitDescriptorOf, decodeSplitDescriptorCommand, deriveParticipantEntryId,
   descriptorRefusal,
-  finalizeChildReceipt, isSplitDescriptorDigest, isSplitDescriptorReceiptFor,
-  retainedSplitDescriptorAnswer,
-  canonicalIntent as canonicalSplitDescriptorIntent, isSiblingDescriptorAction, splitDescriptorCommandDigest, splitDescriptorStatement, splitDescriptorWriteKey,
+  finalizeChildReceipt, isSplitDescriptorDigest, isSplitDescriptorDigestCollision,
+  isSplitDescriptorReceiptFor, retainedSplitDescriptorAnswer,
+  canonicalSplitDescriptorIntent, isSiblingDescriptorAction, splitDescriptorCommandDigest,
+  splitDescriptorStatement, splitDescriptorWriteKey,
   usesSplitDescriptorIdentity};

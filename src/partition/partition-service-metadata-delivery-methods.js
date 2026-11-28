@@ -19,6 +19,19 @@ const {
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
 
+// A leading control-plane replica re-asserts its durable leader row and role
+// whenever a cached row of its partitions names another leader.
+function reassertControlPlaneLeaderRow(service, record) {
+  if (
+    service.isLeader === true &&
+    CONTROL_PLANE_PARTITION_IDS.has(record?.[COLUMN.PARTITION_ID]) &&
+    service.persistedLeaderNodeId !== service.nodeId
+  ) {
+    service.reassertDurableLeaderNodeId();
+    service.reassertDurableRaftRole();
+  }
+}
+
 class PartitionServiceMetadataDeliveryMethods {
   /**
    * Queue a raft role update for persistence.
@@ -272,14 +285,7 @@ class PartitionServiceMetadataDeliveryMethods {
    * @return {boolean} Whether local evidence was re-projected.
    */
   handleCanonicalLeaderRowCacheChange(record) {
-    if (
-      this.isLeader === true &&
-      CONTROL_PLANE_PARTITION_IDS.has(record?.[COLUMN.PARTITION_ID]) &&
-      this.persistedLeaderNodeId !== this.nodeId
-    ) {
-      this.reassertDurableLeaderNodeId();
-      this.reassertDurableRaftRole();
-    }
+    reassertControlPlaneLeaderRow(this, record);
     const observation = this.localCanonicalLeaderObservation;
     if (
       !observation ||

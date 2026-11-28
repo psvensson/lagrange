@@ -28,6 +28,10 @@ import {hasLockingReadReservations} from './partition-locking-read-reservation.j
 import {hasDbTransactionReservations} from './partition-locking-read-store.js';
 import {extractStatementWriteFootprint} from './partition-write-footprint-contract.js';
 import {
+  applyHydratedGenerationRow, deleteCommittedRowKeysAtOrBelow, findLowestGeneration,
+  pruneEntriesBelowMinGen,
+} from './partition-row-key-generation-history.js';
+import {
   enqueueBoundedRowKeyWaiter, hasRowKeyWaitForCycle, notifyFifoRowKeyWaiters,
 } from './partition-row-key-waiters.js';
 
@@ -289,23 +293,10 @@ function resolveExactValidationBaseGeneration(service, validationText) {
   return decodeParticipantValidationForService(service, validationText)?.baseGeneration ?? null;
 }
 
-function applyHydratedGenerationRow(row, expectedGen, scopedGens, committedGenMap) {
-  const gen = Number(row.generation);
-  if (gen !== expectedGen || Number(row.scoped) !== 1) return false;
-  const keys = JSON.parse(row.row_keys_text);
-  if (!Array.isArray(keys) || keys.length === 0) return false;
-  scopedGens.add(gen);
-  for (const rk of keys) {
-    if ((committedGenMap.get(rk) ?? 0) < gen) committedGenMap.set(rk, gen);
-  }
-  return true;
-}
-
 function hydrateCommittedHistoryFromStore(service, minGen, currentGen) {
   const delta = currentGen - minGen;
   if (delta <= 0 || service?.db?.open !== true) return false;
-  const rows = readOrReconstructGenerationHistoryRange(service.db, minGen, currentGen,
-    (opsText) => extractOperationsRowKeyFootprint(service, operationsOf(opsText)));
+  const rows = committedGenerationRows(service, minGen, currentGen);
   if (rows.length !== delta) return false;
   const scopedGens = perServiceSet(SCOPED_COMMIT_GENERATIONS, service);
   const committedGenMap = perServiceMap(COMMITTED_ROW_KEY_GENERATIONS, service);
@@ -396,21 +387,6 @@ function advancePreparedValidationBeforeEviction(service, maxEvictedGen) {
   }
 }
 
-function deleteCommittedRowKeysAtOrBelow(committedGenMap, maxGen) {
-  if (!committedGenMap) return;
-  for (const [rk, gen] of [...committedGenMap.entries()]) {
-    if (gen <= maxGen) committedGenMap.delete(rk);
-  }
-}
-
-function findLowestGeneration(scopedGens) {
-  let lowestGen = Infinity;
-  for (const gen of scopedGens ?? []) {
-    if (gen < lowestGen) lowestGen = gen;
-  }
-  return lowestGen;
-}
-
 function evictExcessGenerations(service, scopedGens, committedGenMap) {
   if (!scopedGens || scopedGens.size <= MAX_RETAINED_COMMITTED_GENERATIONS) return;
   const sorted = [...scopedGens].sort((a, b) => a - b);
@@ -435,11 +411,6 @@ function evictExcessRowKeys(service, scopedGens, committedGenMap) {
       committedGenMap.delete(oldestKey);
     }
   }
-}
-
-function pruneEntriesBelowMinGen(scopedGens, committedGenMap, minGen) {
-  if (scopedGens) for (const gen of [...scopedGens]) if (gen <= minGen) scopedGens.delete(gen);
-  deleteCommittedRowKeysAtOrBelow(committedGenMap, minGen);
 }
 
 function pruneRetainedRowKeyHistory(service) {
@@ -800,7 +771,8 @@ export {
   canAdvanceRowKeySessionGeneration, canRebaseEmptyWaitingSession,
   checkAndRecordSessionRowKey, classifyPartitionPrepareReservation, clearPreparedParticipantRowKeys,
   discardParticipantSessions, endParticipantSession, extractOperationsRowKeyFootprint,
-  sessionReadDependenciesCurrent, findParticipantSession, getRetainedRowKeyHistoryStats, hasParticipantSession,
+  sessionReadDependenciesCurrent, findParticipantSession, getRetainedRowKeyHistoryStats,
+  hasParticipantSession,
   inspectRetainedPreparedObligations, isRowKeyConcurrencyEnabled,
   listActiveParticipantSessions, notifyRowKeySettlementWaiters, openParticipantSession,
   participantRoutingSessionCollision, participantTransactionActive,

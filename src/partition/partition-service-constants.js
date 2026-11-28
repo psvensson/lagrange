@@ -623,6 +623,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'rejected, never coerced',
   SPLIT_REPLICATION_STATE_REQUIRED:
     'Partition split transition metadata is required',
+  RECOVERED_MIRROR_CUSTODY_MISMATCH:
+    'Recovered mirror checkpoint lacks matching committed custody',
   MIRROR_DELTA_QUEUE_AT_CAPACITY:
     'Mirror delta queue at capacity — backpressure applied',
   STALE_PARTITION_EPOCH_WRITE:

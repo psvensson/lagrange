@@ -68,6 +68,12 @@ const SYSTEM_TABLE_NAME = {
 
 const SYSTEM_TABLE_NAMES = new Set(Object.values(SYSTEM_TABLE_NAME));
 const SYSTEM_TABLE_NAMESPACE_PREFIX = 'global.';
+// A NODES or PARTITIONS replica table whose image is not the current catalog
+// schema is refused with its code; the source names where the mismatch was
+// seen: the declared schema against the catalog, or the stored SQLite image.
+const NODES_SCHEMA_UNSUPPORTED = 'NODES_SCHEMA_UNSUPPORTED';
+const PARTITIONS_SCHEMA_UNSUPPORTED = 'PARTITIONS_SCHEMA_UNSUPPORTED';
+const SYSTEM_TABLE_SCHEMA_REFUSAL_SOURCE = Object.freeze({CATALOG: 'catalog', SQLITE: 'sqlite'});
 const LOCAL_STR_STRING = 'string';
 
 /**
@@ -105,7 +111,10 @@ function isSystemTableName(tableName) {
 
 export {
   COLUMN_TYPE,
+  NODES_SCHEMA_UNSUPPORTED,
+  PARTITIONS_SCHEMA_UNSUPPORTED,
   SYSTEM_TABLE_NAME,
+  SYSTEM_TABLE_SCHEMA_REFUSAL_SOURCE,
   isSystemTableName,
   resolveLogicalTableName,
   resolveSystemTableName,
