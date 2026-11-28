@@ -118,6 +118,18 @@ Owner decisions these would need: superseding the two sealed constraints named a
 accepting explicitly that a participant leader change before COMMIT aborts the transaction
 (already true in practice).
 
+**How the owner wants this done (2026-11-28).** Start implementing the directions that
+reverse no sealed constraint. For each sealed constraint a direction would replace: first
+research and prove that the replacement works, then the owner reverses the decision, and
+only then does anything that depends on it land. A proof package states why the constraint
+was sealed (quoted from the record that sealed it), the replacement mechanism, a table of
+crash points and interleavings with the cells where the two differ, executable witnesses
+with the real participant and recovery code, interleaving or model checking where the
+repository's apparatus allows it, and the latency it buys. Proof work lives on the
+experimental branch `perf/latency-stack-20261128` (main plus the telemetry export plus the
+ACTIVE-row removal), never on a branch that lands. An instruction to implement is not a
+reversal of a seal.
+
 ## What exists to build on
 
 - **ACTIVE-row removal** (quest `transaction-redundant-progress-writes`): implemented, at
