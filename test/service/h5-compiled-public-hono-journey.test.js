@@ -10,11 +10,9 @@ import {
   ARTIFACT_PAYLOAD_CHUNKS_SCHEMA,
   ARTIFACT_PAYLOADS_SCHEMA,
 } from '../../src/bootstrap/system-table-artifact-schema-definitions.js';
-import {
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
-  SYSTEM_TABLE_NAME,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateIndexSQL, generateCreateTableSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {
   runBuild,
   runDeploy,

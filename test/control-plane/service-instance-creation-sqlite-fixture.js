@@ -5,8 +5,8 @@
 // this single component database.
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_SCHEMAS} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';

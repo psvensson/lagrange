@@ -49,8 +49,8 @@ import {
   PARTITION_STATEMENT_KIND,
   PARTITION_STATEMENT_PATH,
 } from './partition-statement-admission-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL, pickTypedWriteAnswer} from
-  './partition-write-kernel.js';
+import {pickTypedWriteAnswer} from './partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-service-constants.js';
 import {checkPartitionWriteLockingReadConflict} from
   './partition-locking-read-write-check.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';

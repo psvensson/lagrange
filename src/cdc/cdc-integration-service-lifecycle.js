@@ -4,8 +4,7 @@ import {
   CDC_SHUT_DOWN_WRITE_OUTCOME,
 } from './cdc-constants.js';
 import {ERRORS} from '../constants/errors.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-service-constants.js';
 
 const {
   CDCEventHandler,

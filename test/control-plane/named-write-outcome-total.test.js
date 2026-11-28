@@ -27,10 +27,8 @@ import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
-import {PARTITION_COMMITTED_COMMAND_OUTCOME} from
+import {PARTITION_COMMITTED_COMMAND_OUTCOME, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-service-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
 import {deriveParticipantEntryId} from
   '../../src/query/distributed/distributed-write-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

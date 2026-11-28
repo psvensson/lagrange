@@ -46,6 +46,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-service-constants.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
@@ -429,8 +430,8 @@ test('F-aj: the query executor re-delivers an unknown outcome under the ' +
     assert.ok(!String(answered.error ?? '').includes(
       ERRORS.WRITE_OUTCOME_UNKNOWN), 'never the unknown outcome');
 
-    const {PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
-      isReroutableWriteFailureCode} = partitionWriteKernel;
+    const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
+    const {isReroutableWriteFailureCode} = partitionWriteKernel;
     assert.equal(held.failureCode, REFUSAL.OUTCOME_UNKNOWN,
       `setup: B was released with an unknown outcome (${JSON.stringify(held)})`);
     assert.equal(isReroutableWriteFailureCode(held.failureCode), false,

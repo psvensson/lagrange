@@ -19,6 +19,8 @@ import {
   compactRaftRsCommittedEntries,
 } from '../../src/raft/snapshot-compaction.js';
 import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
+import {pruneCompactedStatementOutcomeEffectsIn} from
+  '../../src/partition/partition-mirror-effect-retention.js';
 
 // S5 proof-gated compaction decision table for RaftRsDurableStore (quest
 // raft-snapshot-retention-compaction): the proofless call returns the
@@ -167,7 +169,7 @@ function assertRefusal(t, fixture, request, outcome, label) {
   const rowsBefore = logRowCount(fixture.db);
   const boundaryBefore = snapshotIndex(fixture.db);
   const result = compactRaftRsCommittedEntries(
-    fixture.db, PARTITION_ID, request);
+    fixture.db, PARTITION_ID, request, pruneCompactedStatementOutcomeEffectsIn);
   t.equal(result.outcome, outcome, `${label}: typed ${outcome}`);
   t.equal(result.changed, false, `${label}: reports no change`);
   t.equal(logRowCount(fixture.db), rowsBefore,
@@ -181,16 +183,44 @@ test('the proofless call returns the byte-identical frozen refusal',
     const fixture = await createCompactionFixture(
       {checkpointAt: COMPACT_AT});
     try {
-      const bare = compactRaftRsCommittedEntries(fixture.db, PARTITION_ID);
+      const bare = compactRaftRsCommittedEntries(fixture.db, PARTITION_ID,
+        undefined, pruneCompactedStatementOutcomeEffectsIn);
       t.equal(bare, unsupportedRaftCompactionResult(),
-        'no-argument call returns the shared frozen result by IDENTITY');
+        'no-request call returns the shared frozen result by IDENTITY');
       t.same(bare, UNSUPPORTED_LITERAL,
         'the result is byte-compatible with the two-field literal');
-      const empty = compactRaftRsCommittedEntries(fixture.db, PARTITION_ID, {});
+      const empty = compactRaftRsCommittedEntries(fixture.db, PARTITION_ID, {},
+        pruneCompactedStatementOutcomeEffectsIn);
       t.equal(empty, unsupportedRaftCompactionResult(),
         'a request naming neither toIndex nor proof draws the same identity');
       t.equal(logRowCount(fixture.db), ENTRY_COUNT,
         'the proofless refusals remove nothing');
+    } finally {
+      fixture.close();
+    }
+  });
+
+test('a compaction without the caller\'s prune is a programming error at entry',
+  async (t) => {
+    const fixture = await createCompactionFixture(
+      {checkpointAt: COMPACT_AT});
+    try {
+      const compacting = {
+        toIndex: COMPACT_AT,
+        proof: {checkpointDir: fixture.checkpointDir},
+      };
+      t.throws(() => compactRaftRsCommittedEntries(
+        fixture.db, PARTITION_ID, compacting), TypeError,
+      'the proof-gated entry refuses a missing prune before any decision');
+      t.throws(() => compactRaftRsCommittedEntries(fixture.db, PARTITION_ID),
+        TypeError, 'a proofless call without the prune is refused as well');
+      t.throws(() => new RaftRsDurableStore(fixture.db).compactCommittedPrefix(
+        PARTITION_ID, {toIndex: COMPACT_AT}), TypeError,
+      'the store entry refuses a missing prune');
+      t.equal(logRowCount(fixture.db), ENTRY_COUNT,
+        'no prefix row is removed without the prune');
+      t.equal(snapshotIndex(fixture.db), 0,
+        'the snapshot boundary never moves without the prune');
     } finally {
       fixture.close();
     }
@@ -292,7 +322,7 @@ test('a valid local proof compacts in one transaction and round-trips',
       const result = compactRaftRsCommittedEntries(db, PARTITION_ID, {
         toIndex: COMPACT_AT,
         proof: {checkpointDir: fixture.checkpointDir},
-      });
+      }, pruneCompactedStatementOutcomeEffectsIn);
       t.equal(result.outcome, RAFT_COMPACTION_OUTCOME.COMPACTED,
         'the proof-gated request compacts');
       t.equal(result.changed, true, 'the result reports the change');
@@ -358,7 +388,7 @@ test('red direction: without a valid proof no argument shape removes a row',
       ];
       for (const request of attacks) {
         const result = compactRaftRsCommittedEntries(
-          fixture.db, PARTITION_ID, request);
+          fixture.db, PARTITION_ID, request, pruneCompactedStatementOutcomeEffectsIn);
         t.not(result.outcome, RAFT_COMPACTION_OUTCOME.COMPACTED,
           `attack ${JSON.stringify(request) ?? 'undefined'} never compacts`);
         t.equal(logRowCount(fixture.db), ENTRY_COUNT,

@@ -15,6 +15,7 @@ import {
 } from './snapshot-checkpoint-constants.js';
 import {readCheckpoint} from './snapshot-checkpoint-store.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {requireCompactedEffectsPrune} from './raft-rs-snapshot-witness.js';
 
 const OUTCOME = RAFT_COMPACTION_OUTCOME;
 const COMPACTION_TYPEOF = Object.freeze({
@@ -112,9 +113,14 @@ function buildRaftRsCompactionSpec(descriptor, toIndex, retentionFloorIndex) {
  * @param {Object} db - Open better-sqlite3 database.
  * @param {string} groupId - Raft group identifier.
  * @param {Object} [request] - `{toIndex, proof: {checkpointDir}, retentionFloorIndex?}`.
+ * @param {Function} pruneCompactedEffectsIn - The caller's prune of its
+ *   retained effects through the compacted index, run inside the compaction
+ *   transaction (required).
  * @return {Object} Frozen typed compaction outcome.
  */
-function compactRaftRsCommittedEntries(db, groupId, request) {
+function compactRaftRsCommittedEntries(db, groupId, request,
+  pruneCompactedEffectsIn) {
+  requireCompactedEffectsPrune(pruneCompactedEffectsIn);
   if (!isCompactionProtocolRequest(request) ||
       !db?.open || db.memory ||
       !RaftRsDurableStore.hasDurableRecordIn(db, groupId)) {
@@ -138,6 +144,7 @@ function compactRaftRsCommittedEntries(db, groupId, request) {
     groupId,
     buildRaftRsCompactionSpec(
       validated.descriptor, toIndex, request.retentionFloorIndex),
+    pruneCompactedEffectsIn,
   );
 }
 

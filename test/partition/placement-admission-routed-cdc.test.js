@@ -17,8 +17,11 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {REPLICA_OPERATIONS_SCHEMA, SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_OPERATION} from
-  '../../src/partition/partition-service-constants.js';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+} from '../../src/partition/partition-service-constants.js';
 import {PLACEMENT_RESULT_FIELD} from
   '../../src/partition/partition-placement-admission-constants.js';
 import {requestPlacementAdmission, routePlacementAdmission} from
@@ -28,7 +31,6 @@ import {
   readPartitionServiceTableSchemaIn,
 } from '../../src/partition/partition-service-table-bootstrap.js';
 import {renderTableDefinitionSql} from '../../src/query/sql-table-definition.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';

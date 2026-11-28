@@ -8,9 +8,8 @@ import {
 import {
   markLocalReplicaExcludedFence,
 } from '../../src/partition/partition-membership-recovery.js';
-import {
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SQLParser} from '../../src/query/sql-parser.js';

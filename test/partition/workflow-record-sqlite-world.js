@@ -26,12 +26,9 @@ import {readCommittedStatementOutcome} from '../../src/partition/partition-commi
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {resumeFixtureParticipantGroupAdmission} from '../test-helpers/participant-transaction-fixture.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-import {
-  PARTITIONS_SCHEMA,
-  TABLES_SCHEMA,
-  generateCreateTableSQL,
-  getInitialPartitionId,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {PARTITIONS_SCHEMA, TABLES_SCHEMA, getInitialPartitionId} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 
 const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 const SELECT = 'SELECT';

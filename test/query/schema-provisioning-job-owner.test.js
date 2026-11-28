@@ -1,4 +1,4 @@
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-service-constants.js';
 import {
   createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
   createServeRefreshClock, serveRefreshPublication,

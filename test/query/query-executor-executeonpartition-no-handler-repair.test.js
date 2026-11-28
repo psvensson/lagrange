@@ -29,7 +29,7 @@ import {
 import {
 } from '../../src/query/canonical-leader-routing.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {
   assertNoHandlerRepairConverged,
   createStaleOverlayOwnerHandoffFixture,

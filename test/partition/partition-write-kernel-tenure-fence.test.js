@@ -22,12 +22,10 @@
 // been cleared.
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
-import {
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-} from '../../src/partition/partition-write-kernel.js';
 import {partitionWriteLeadershipRefusalOf} from
   '../../src/partition/partition-service-raft-write-commit.js';
-import {PARTITION_SERVICE_DEFAULT} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_SERVICE_DEFAULT, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {readParticipantReleaseFacts} from

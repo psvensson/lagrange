@@ -1,8 +1,8 @@
 import {isFreshSeedMembershipOutcome} from '../bootstrap/rejoin-hints-constants.js';
 import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
-import {CREATE_ADMISSION_ERROR_CODE, CREATE_ADMISSION_STATE} from
-  './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from './replica-create-admission-state.js';
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from

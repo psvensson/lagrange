@@ -39,6 +39,7 @@ documentClass: generated
 - [replica-create-admission-owner.js](replica-create-admission-owner.js) - Durable partition CREATE admission owner. (importers: hub)
 - [replica-create-admission-recovery-rearm-owner.js](replica-create-admission-recovery-rearm-owner.js) - Owns the one native timer that rearms retained CREATE admission recovery. (importers: one)
 - [replica-create-admission-retained-recovery.js](replica-create-admission-retained-recovery.js) - No leading comment; first export: reconcileCreateAdmissionProgress. (importers: few)
+- [replica-create-admission-state.js](replica-create-admission-state.js) - The states of a durable partition CREATE admission. (importers: hub)
 - [replica-create-lifecycle-close.js](replica-create-lifecycle-close.js) - No leading comment; first export: closeReplicaCreateAdmissionForLifecycle. (importers: one)
 - [replica-create-process-owner.js](replica-create-process-owner.js) - No leading comment; first export: NO_ADMISSION_BASIS. (importers: few)
 - [replica-handler-class.js](replica-handler-class.js) - ReplicaHandler - Handles replica operations on target node. (importers: many)

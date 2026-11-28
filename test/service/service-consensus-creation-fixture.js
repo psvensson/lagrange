@@ -1,8 +1,8 @@
 // Component journal adapter: real SQLite and metadata owner, not replicated SQL.
 import assert from 'node:assert/strict';
 import {ServiceLifecycleManager} from '../../src/service/service-lifecycle-manager.js';
-import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_SCHEMAS} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {createCreationSqliteFixture} from
   '../control-plane/service-instance-creation-sqlite-fixture.js';
 

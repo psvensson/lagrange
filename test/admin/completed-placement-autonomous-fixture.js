@@ -9,8 +9,9 @@ import {EventEmitter} from 'node:events';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL, INITIAL_PARTITION_IDS} from
+import {SYSTEM_TABLE_SCHEMAS, INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {TABLES} from '../../src/constants/index.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';

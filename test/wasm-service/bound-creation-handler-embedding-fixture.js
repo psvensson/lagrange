@@ -52,8 +52,8 @@ import {ExecutorOutcomeEmitter, OUTCOME_EVENT_NAME} from
   '../../src/rebalancer/executor-outcome-emitter.js';
 import {ReplicaOperationField, ReplicaOperationMessageType} from
   '../../src/rebalancer/replica-operation-constants.js';
-import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_SCHEMAS} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {serializeServiceDefinition} from '../../src/wasm-service/wasm-service-models.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';

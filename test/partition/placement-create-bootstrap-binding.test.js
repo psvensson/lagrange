@@ -8,7 +8,8 @@ import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js'
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
-import {CREATE_ADMISSION_STATE, ReplicaCreateAdmissionOwner} from '../../src/node/replica-create-admission-owner.js';
+import {ReplicaCreateAdmissionOwner} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {CONTROL_PLANE_MUTATION_OPERATION, ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';

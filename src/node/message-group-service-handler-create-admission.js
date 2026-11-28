@@ -27,10 +27,8 @@ import {observeMembershipOperation} from
 import {recordedLearnerCreateBasis} from
   '../rebalancer/replica-operation-message-group-membership-authorization.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {
-  CREATE_ADMISSION_ERROR_CODE,
-  CREATE_ADMISSION_STATE,
-} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from './replica-create-admission-state.js';
 import {buildMessageGroupCreateFailureOptions} from
   './message-group-create-activation.js';
 import {MESSAGE_GROUP_LEARNER_JOIN_OUTCOME as JOIN_OUTCOME} from

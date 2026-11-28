@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {classifySystemPartition} from '../../src/bootstrap/system-partition-classification.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';

@@ -14,10 +14,8 @@ import {CONTROL_PLANE_MUTATION_OUTCOME} from './control-plane-system-table-gatew
 import {ERRORS} from '../constants/errors.js';
 import {isControlPlaneWriterShutDown} from './control-plane-error-classification.js';
 import {OWNER_CONTRACT_NEXT_ACTION, OWNER_CONTRACT_STATE} from './owner-contract-outcome.js';
-import {
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-  isWriteOutcomeUnknown,
-} from '../partition/partition-write-kernel.js';
+import {isWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-service-constants.js';
 
 // The identity one logical control-plane write is delivered under, across
 // every attempt its callers make (R07: an unknown outcome is resolved only by

@@ -21,8 +21,7 @@ import {
   reservePartitionRaftPeerIdentity,
   retirePartitionRaftPeer,
 } from '../partition/partition-service-raft-membership-administration.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,

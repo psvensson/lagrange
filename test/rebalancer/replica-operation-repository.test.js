@@ -58,7 +58,7 @@ import {PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER} from
   '../../src/rebalancer/replica-operation-step-policy.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';

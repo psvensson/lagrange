@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {PARTITION_CDC_OBLIGATION_BOUND} from '../../src/partition/partition-cdc-obligation-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {commitOnAll, upsertOf} from './cdc-hydration-handoff-fixture.js';
 import {CDC_TABLE, track} from './participant-transaction-fixture.js';
 

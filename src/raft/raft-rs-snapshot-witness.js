@@ -1,4 +1,3 @@
-import {pruneCompactedStatementOutcomeEffectsIn} from '../partition/partition-mirror-effect-retention.js';
 // Durable snapshot witness and proof-gated committed-prefix compaction for
 // `RaftRsDurableStore` (SN1 / F5). Persists the folded `maxCommittedHlc`
 // witness inside `_raft_rs_snapshot.data` (canonical base64 JSON) and removes
@@ -26,8 +25,26 @@ const HLC_RADIX = 10;
 // connection's cache. putSnapshot, the one writer of that row (compaction, an
 // installed or staged snapshot, a Ready's snapshot), forgets it.
 const SNAPSHOT_INDEX_FACT = 'raft-rs-snapshot-index';
+const FUNCTION_TYPE = 'function';
+const COMPACTED_EFFECTS_PRUNE_REQUIRED =
+  'raft-rs compaction requires the caller\'s compacted-effects prune';
 function refusal(outcome) {
   return Object.freeze({outcome, changed: false});
+}
+
+/**
+ * The prune a compaction caller must supply: it removes the caller's retained
+ * effects at or below the compacted index inside the compaction transaction,
+ * so this store never loads the module that owns those effects. Missing, it
+ * is a programming error at entry, never a skipped prune.
+ * @param {Function} pruneCompactedEffectsIn - `(db, compactedIndex) => void`.
+ * @return {Function} The same function.
+ */
+function requireCompactedEffectsPrune(pruneCompactedEffectsIn) {
+  if (typeof pruneCompactedEffectsIn !== FUNCTION_TYPE) {
+    throw new TypeError(COMPACTED_EFFECTS_PRUNE_REQUIRED);
+  }
+  return pruneCompactedEffectsIn;
 }
 
 function parseCompactionTargetIndex(toIndex) {
@@ -245,9 +262,14 @@ function validateCompactionBounds(record, exactToIndex, options) {
  * @param {Object} store - `RaftRsDurableStore` instance.
  * @param {string} groupId - Raft group identifier.
  * @param {Object} [options] - Compaction parameters.
+ * @param {Function} pruneCompactedEffectsIn - The caller's prune of its
+ *   retained effects through the compacted index (required).
  * @return {Object} Frozen typed compaction outcome.
  */
-function compactRaftRsCommittedPrefix(store, groupId, options = {}) {
+function compactRaftRsCommittedPrefix(store, groupId, options = {},
+  pruneCompactedEffectsIn) {
+  const pruneCompactedEffects =
+    requireCompactedEffectsPrune(pruneCompactedEffectsIn);
   const exactToIndex = parseCompactionTargetIndex(options?.toIndex);
   if (exactToIndex === null) {
     return refusal(RAFT_COMPACTION_OUTCOME.INVALID_COMPACTION_INDEX);
@@ -286,7 +308,7 @@ function compactRaftRsCommittedPrefix(store, groupId, options = {}) {
     });
     const deleted = sqliteConnectionState(store.db)
       .runNonApplication(RAFT_RS_SQL.DELETE_LOG_UP_TO, groupId, exactToIndex);
-    pruneCompactedStatementOutcomeEffectsIn(store.db, exactToIndex);
+    pruneCompactedEffects(store.db, exactToIndex);
     return Object.freeze({
       outcome: RAFT_COMPACTION_OUTCOME.COMPACTED,
       changed: true,
@@ -306,4 +328,5 @@ export {
   forgetSnapshotIndexIn,
   readCompactedMaxHlcIn,
   readSnapshotIndexIn,
+  requireCompactedEffectsPrune,
 };

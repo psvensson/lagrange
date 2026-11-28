@@ -630,7 +630,6 @@ function buildPartitionWriteSideEffectPlan(entry, executionResult) {
 export {
   DURABLE_COMMIT_WITNESS_ERROR,
   PARTITION_WRITE_COMMIT_MODE,
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
   PARTITION_WRITE_RELEASE_CAUSE,
   buildDurableCommitWitness,
   buildPartitionWriteEntry,

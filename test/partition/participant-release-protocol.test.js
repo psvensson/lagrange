@@ -23,10 +23,7 @@ import {participantCutoverPauseOf, participantReleaseAdmissionOf,
 import {readPartitionWriteOrigin} from '../../src/partition/partition-participant-transaction-store.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
-import {PARTITION_SERVICE_EVENT} from
-  '../../src/partition/partition-service-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+import {PARTITION_SERVICE_EVENT, PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-service-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_EVENT, RAFT_OPERATION_OUTCOME} from

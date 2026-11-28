@@ -38,6 +38,8 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {pruneCompactedStatementOutcomeEffectsIn} from
+  '../../../src/partition/partition-mirror-effect-retention.js';
 
 const GROUP_ID = 'held-facts-group';
 const TERM = '2';
@@ -108,7 +110,7 @@ test('the snapshot index is read from storage once and follows compaction', (t) 
   // The snapshot cadence compacts through a store of its own on the same
   // connection (snapshot-compaction.js); the runtime's store sees it.
   const compacted = new RaftRsDurableStore(db).compactCommittedPrefix(GROUP_ID,
-    {toIndex: COMPACT_TO});
+    {toIndex: COMPACT_TO}, pruneCompactedStatementOutcomeEffectsIn);
   assert.equal(compacted.changed, true, JSON.stringify(compacted));
   assert.equal(store.readSnapshotIndex(GROUP_ID), BigInt(COMPACT_TO),
     'the compaction is observed by the next read');
@@ -149,7 +151,8 @@ test('a reopened connection reads the compacted index from storage', (t) => {
   const first = openCounted(t, file);
   const store = populatedStore(first.db);
   assert.equal(store.readSnapshotIndex(GROUP_ID), 0n);
-  store.compactCommittedPrefix(GROUP_ID, {toIndex: COMPACT_TO});
+  store.compactCommittedPrefix(GROUP_ID, {toIndex: COMPACT_TO},
+    pruneCompactedStatementOutcomeEffectsIn);
   first.db.close();
   assert.equal(RaftRsDurableStore.readSnapshotIndexIn(first.db, GROUP_ID), 0n,
     'a closed connection answers as it always has');

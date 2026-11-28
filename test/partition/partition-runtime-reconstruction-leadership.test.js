@@ -65,8 +65,6 @@ import {participantCutoverPauseOf} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import * as partitionConstants from
   '../../src/partition/partition-service-constants.js';
-import * as partitionWriteKernel from
-  '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   RAFT_EVENT,
@@ -413,7 +411,7 @@ async function loneLeaderCase(partitionId, extraOptions) {
       // AD: the entry may be in the log, so the answer is the unknown outcome
       // and the environmental failure is its cause.
       assert.equal(failed.failureCode,
-        partitionWriteKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL?.OUTCOME_UNKNOWN,
+        partitionConstants.PARTITION_WRITE_LEADERSHIP_REFUSAL?.OUTCOME_UNKNOWN,
         `the write's outcome is not known (${JSON.stringify(failed)})`);
       assert.ok(String(failed.cause?.error).startsWith(
         PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENVIRONMENT_FAILED),
@@ -431,7 +429,7 @@ async function loneLeaderCase(partitionId, extraOptions) {
       const entriesDuring = durableRecordOf(dbPath, partitionId).entries.length;
       const refused = await insert(partition, 'row-x', 'outage', 'entry-outage');
       assert.equal(refused.success, false, 'W-B6-4: the write is refused');
-      assert.equal(refused.failureCode, partitionWriteKernel
+      assert.equal(refused.failureCode, partitionConstants
         .PARTITION_WRITE_LEADERSHIP_REFUSAL?.CUTOVER_PAUSED,
       `W-B6-4: invalidated release is exact (${JSON.stringify(refused)})`);
       assert.equal(refused.deferRetry, true,
@@ -550,7 +548,7 @@ test('W-B6-1: a persistent host failure of one partition never touches its ' +
         'reads inside the window are typed deferrals');
       for (const [index, write] of writes.entries()) {
         assert.equal(write.success, false, `write ${index} is refused`);
-        assert.equal(write.failureCode, partitionWriteKernel
+        assert.equal(write.failureCode, partitionConstants
           .PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
         `write ${index} is stopped by invalidated release admission`);
         assert.equal(write.deferRetry, true,
@@ -952,7 +950,7 @@ test('F-aa: a lone leader whose store cannot append a proposal is ' +
     const reconstructions = countReconstructions('faa-lone');
     try {
       const {PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL = {}} =
-        partitionWriteKernel;
+        partitionConstants;
       const startedAt = Date.now();
       const first = await insert(partition, 'row-big',
         'x'.repeat(OVERSIZED_VALUE_BYTES), 'faa-lone-big');
@@ -1137,7 +1135,7 @@ test('F-z: a pending write released when its leader stops leading is ' +
   const toFollower = (address) => followerAddresses.some((followerAddress) =>
     String(address).includes(followerAddress));
   const {PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL = {}} =
-    partitionWriteKernel;
+    partitionConstants;
   let releaseOwners = null;
   try {
     releaseOwners = await attachPartitionReleaseOwners(services,

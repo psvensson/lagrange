@@ -16,11 +16,9 @@ import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from '../../src/rebalancer/replica-operation-update-disposition.js';
-import {
-  CREATE_ADMISSION_ERROR_CODE,
-  CREATE_ADMISSION_STATE,
-  ReplicaCreateAdmissionOwner,
-} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_ERROR_CODE, ReplicaCreateAdmissionOwner} from
+  '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,

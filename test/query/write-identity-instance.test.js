@@ -25,7 +25,8 @@ import {TABLES} from '../../src/constants/index.js';
 import {CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE} from
   '../../src/control-plane/control-plane-write-identity.js';
 import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
-import * as writeKernel from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {
   NODE_REGISTRATION_OUTCOME,
   createNodeRegistrationIssueRecord,
@@ -72,8 +73,8 @@ import {
 } from './unknown-outcome-surface-fixture.js';
 
 const OUTCOME_UNKNOWN =
-  writeKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
-const NOT_LEADER = writeKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER;
+  PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
+const NOT_LEADER = PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER;
 const TEST_TIMEOUT_MS = 60000;
 const BOOT_INCARNATION = 7;
 const RESERVATION_INSERT = `INSERT INTO ${TABLES.STORAGE_RESERVATIONS} ` +

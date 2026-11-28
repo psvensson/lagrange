@@ -36,6 +36,7 @@ import {
   PARTITION_COMMITTED_COMMAND_OUTCOME as OUTCOME,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_OPERATION as OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from './partition-service-constants.js';
 import {
   PARTITION_STATEMENT_REFUSAL_CODE,
@@ -48,7 +49,6 @@ import {
   recordCommittedStatementOutcome,
   statementEnvironmentFailure,
 } from './partition-committed-statement-outcome.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
 import {
   readmitReservedWrites,
   reparkReservedWrite,

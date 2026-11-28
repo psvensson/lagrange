@@ -21,7 +21,8 @@ import {
   LEDGER, admittedOperations, attemptOutcomeOf, holdNextAdmission, ownerOf, startLedgerOn,
   summarizeProbe, transferReport, waitUntil, withPlacementWorld,
 } from './placement-owner-authority-fixture.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {
   clearFixtureSingletons, resetFixtureSingletons,
 } from '../test-helpers/participant-transaction-fixture.js';

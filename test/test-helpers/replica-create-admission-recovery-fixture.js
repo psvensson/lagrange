@@ -8,9 +8,7 @@ import {SYSTEM_TABLE_NAME} from
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
-import {
-  CREATE_ADMISSION_STATE,
-} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {OperationType, ReplicaStatus} from
   '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationField} from

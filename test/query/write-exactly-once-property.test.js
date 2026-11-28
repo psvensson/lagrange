@@ -24,6 +24,8 @@ import {
   releaseControlPlaneWriteIdentities,
 } from '../../src/control-plane/control-plane-write-identity.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   NODE_ID,
@@ -44,7 +46,7 @@ const WRITE_BUDGET_MS = 1500;
 const MAX_REDRIVES = 12;
 const ROUTER_CONNECTION_CLOSED = 'ROUTER_CONNECTION_CLOSED';
 const OUTCOME_UNKNOWN =
-  writeKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
+  PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
 // A fault either ends inside the executor's budget (re-delivered there) or
 // outlasts it (the caller re-drives under the write's identity).
 const FAULTS = Object.freeze(['none', 'drop', 'duplicate', 'lost',

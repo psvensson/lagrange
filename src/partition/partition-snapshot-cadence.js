@@ -51,6 +51,7 @@ import {
 import {
   resolveActiveMirrorRetentionBarrierIndex,
 } from './partition-committed-statement-outcome.js';
+import {pruneCompactedStatementOutcomeEffectsIn} from './partition-mirror-effect-retention.js';
 import {resolveReplicaCheckpointsRoot} from '../raft/snapshot-install.js';
 import {
   gatherRetentionPins,
@@ -232,6 +233,7 @@ function compactToGeneration(service, creation) {
       proof: {checkpointDir: creation.checkpointDir},
       ...(retentionFloorIndex !== undefined ? {retentionFloorIndex} : {}),
     },
+    pruneCompactedStatementOutcomeEffectsIn,
   );
 }
 

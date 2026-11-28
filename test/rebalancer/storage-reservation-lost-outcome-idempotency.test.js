@@ -17,7 +17,7 @@ import {
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
 } from '../../src/rebalancer/operation-reservation-attempt-outcome.js';

@@ -21,7 +21,7 @@ import {
 } from '../../src/control-plane/control-plane-write-identity.js';
 import {deriveParticipantEntryId} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 
 const BOUND = 4096;
 const SCOPE = 'identity-bound-witness';

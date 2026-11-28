@@ -11,8 +11,8 @@ import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE} fro
   '../raft/raft-committed-membership-constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
-import {PARTITION_SERVICE_EVENT} from './partition-service-constants.js';
+import {PARTITION_SERVICE_EVENT, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  './partition-service-constants.js';
 import {participantConnectionStampOf} from './partition-participant-transaction-connection.js';
 import {participantReleaseGenerationValid, releaseCensusDefect,
   sameReplicaGeneration} from './partition-participant-release-contract.js';

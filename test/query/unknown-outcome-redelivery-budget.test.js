@@ -9,7 +9,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import * as writeKernel from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS} from
   '../../src/query/query-executor-unknown-outcome.js';
 import {
@@ -21,7 +22,7 @@ import {
 } from './unknown-outcome-surface-fixture.js';
 
 const OUTCOME_UNKNOWN =
-  writeKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
+  PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
 const TEST_TIMEOUT_MS = 60000;
 // The executor's production retry delay (QUERY_DEFAULTS.LEADER_RETRY_DELAY_MS).
 const PRODUCTION_RETRY_DELAY_MS = 50;

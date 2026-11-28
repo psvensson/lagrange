@@ -740,8 +740,8 @@ class RaftRsDurableStore {
   readSnapshotIndex(groupId) {
     return readSnapshotIndexIn(this.db, groupId);
   }
-  compactCommittedPrefix(groupId, options) {
-    return compactRaftRsCommittedPrefix(this, groupId, options);
+  compactCommittedPrefix(groupId, options, pruneCompactedEffectsIn) {
+    return compactRaftRsCommittedPrefix(this, groupId, options, pruneCompactedEffectsIn);
   }
 
   /**

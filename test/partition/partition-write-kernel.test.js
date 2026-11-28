@@ -10,6 +10,8 @@ import {
 } from '../../src/partition/partition-write-kernel.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import * as errorConstants from '../../src/constants/errors.js';
 import * as proposalQueueConstants from
   '../../src/partition/proposal-queue-constants.js';
@@ -227,8 +229,8 @@ test('partition write kernel separates commit/apply from replayable side effects
 test('partition write kernel names the state of every write it did not ' +
   'take, in a text the routers route again unless its outcome is unknown',
 async (t) => {
+  const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
   const {
-    PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
     buildPartitionWriteLeadershipRefusal,
     buildReleasedPendingWriteAnswer,
   } = partitionWriteKernel;
@@ -352,8 +354,8 @@ function assertCodeRouting(t, REFUSAL, owners) {
 test('partition write kernel types every release and proposal refusal, and ' +
   'its routable codes and texts agree but for the unknown outcome under its ' +
   'entryId', async (t) => {
+  const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
   const {
-    PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
     PARTITION_WRITE_RELEASE_CAUSE: CAUSE,
     buildPartitionWriteLeadershipRefusal,
     buildPartitionWriteProposalRefusal,

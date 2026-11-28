@@ -5,10 +5,6 @@
  */
 
 import {
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
-} from './system-table-schema-sql.js';
-import {
   COLUMN_TYPE,
   SYSTEM_TABLE_NAME,
 } from './system-table-schema-shared-constants.js';
@@ -360,8 +356,6 @@ export {
   INITIAL_REPLICA_IDS,
   INITIAL_MESSAGE_GROUP_ID,
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
-  generateCreateTableSQL,
-  generateCreateIndexSQL,
   getSchemaByTableName,
   getInitialPartitionId,
   getInitialReplicaIds,

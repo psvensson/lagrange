@@ -2,10 +2,8 @@ import {randomUUID} from 'node:crypto';
 import {ERRORS} from '../constants/errors.js';
 import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
-import {
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-  isWriteOutcomeUnknown,
-} from '../partition/partition-write-kernel.js';
+import {isWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-service-constants.js';
 import {PARTICIPANT_TRANSACTION_FAILURE_CODE} from
   '../partition/partition-participant-transaction-constants.js';
 import {QUERY_ERROR_CODE} from './query-constants.js';

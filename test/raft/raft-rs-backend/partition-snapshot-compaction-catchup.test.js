@@ -85,6 +85,8 @@ import {
   TEST_BOOT_INCARNATION,
 } from '../../test-helpers/boot-incarnation-fixture.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
+import {pruneCompactedStatementOutcomeEffectsIn} from
+  '../../../src/partition/partition-mirror-effect-retention.js';
 
 const TABLE = 'sn1_partition_rows';
 const PARTITION_ID = 'sn1_partition_rows-p1';
@@ -363,14 +365,14 @@ test('SN1/F5: proof-gated raft-rs log compaction, leader cadence, and HLC ' +
         compactRaftRsCommittedEntries(service.db, PARTITION_ID, {
           toIndex: 0,
           proof: {checkpointDir: path.join(checkpointsRoot, '0')},
-        }).outcome,
+        }, pruneCompactedStatementOutcomeEffectsIn).outcome,
         RAFT_COMPACTION_OUTCOME.INVALID_COMPACTION_INDEX,
         'toIndex 0 is rejected as invalid_compaction_index');
       t.equal(
         compactRaftRsCommittedEntries(service.db, PARTITION_ID, {
           toIndex: boundaryIndex,
           proof: {checkpointDir: path.join(checkpointsRoot, String(boundaryIndex))},
-        }).outcome,
+        }, pruneCompactedStatementOutcomeEffectsIn).outcome,
         RAFT_COMPACTION_OUTCOME.SNAPSHOT_PROOF_MISSING,
         'compaction without a sealed checkpoint is refused as proof missing');
 
@@ -420,7 +422,7 @@ test('SN1/F5: proof-gated raft-rs log compaction, leader cadence, and HLC ' +
         compactRaftRsCommittedEntries(service.db, PARTITION_ID, {
           toIndex: boundaryIndex,
           proof: {checkpointDir: path.join(checkpointsRoot, String(boundaryIndex))},
-        }).outcome,
+        }, pruneCompactedStatementOutcomeEffectsIn).outcome,
         RAFT_COMPACTION_OUTCOME.ALREADY_COMPACTED,
         'compacting again at boundaryIndex returns already_compacted');
 
@@ -459,6 +461,7 @@ test('SN1/F5: proof-gated raft-rs log compaction, leader cadence, and HLC ' +
           toIndex: secondCheckpoint.descriptor.lastIncludedIndex,
           proof: {checkpointDir: secondCheckpoint.checkpointDir},
         },
+        pruneCompactedStatementOutcomeEffectsIn,
       );
       t.equal(headCompacted.outcome, RAFT_COMPACTION_OUTCOME.COMPACTED,
         'head compaction empties _raft_rs_log');

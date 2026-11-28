@@ -10,9 +10,7 @@ import {
 import {
   ReplicaStatus,
 } from '../rebalancer/replica-status.js';
-import {
-  CREATE_ADMISSION_STATE,
-} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from './replica-create-admission-state.js';
 import {assignReplicaHandlerCreateAdmissionMethods} from
   './replica-handler-create-admission-methods.js';
 import {

@@ -2,10 +2,8 @@ import {hasSystemCacheChangeReader} from '../cache/system-cache-client.js';
 import {memoizedParseStepsHistoryString} from '../rebalancer/steps-history-parse-memo.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {CDC_OPERATION, SERVICE_TYPE, TABLES} from '../constants/index.js';
-import {
-  CREATE_ADMISSION_ERROR_CODE,
-  CREATE_ADMISSION_STATE,
-} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from './replica-create-admission-state.js';
 import {buildFailedCreateCleanupToken} from
   '../rebalancer/failed-create-cleanup-token.js';
 import {validateBootstrapMembershipStamp} from '../raft/raft-committed-membership-stamp.js';

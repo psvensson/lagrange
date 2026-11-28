@@ -4,10 +4,8 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {
-  generateCreateTableSQL,
-  getSchemaByTableName,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {getSchemaByTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {
   buildSystemTableMutationSqlParts,
 } from '../../src/cdc/cdc-system-table-mutation-sql-helpers.js';

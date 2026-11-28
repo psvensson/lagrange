@@ -40,8 +40,7 @@ import {
 } from '../../src/rebalancer/replica-create-admission-token.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
-import {CREATE_ADMISSION_STATE} from
-  '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {registerCompletedFreshCreateReleaseFixture} from

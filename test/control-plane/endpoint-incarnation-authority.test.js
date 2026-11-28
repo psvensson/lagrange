@@ -8,7 +8,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {releaseControlPlaneWriteIdentities, runControlPlaneWrite} from
   '../../src/control-plane/control-plane-write-identity.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {deriveParticipantEntryId} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';

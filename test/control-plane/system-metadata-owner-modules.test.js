@@ -5,7 +5,7 @@ import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,

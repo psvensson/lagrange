@@ -33,10 +33,8 @@ import {participantCutoverPauseOf} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
   '../../src/partition/partition-participant-transaction-store.js';
-import {PARTITION_SERVICE_OPERATION} from
+import {PARTITION_SERVICE_OPERATION, PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
   '../../src/partition/partition-service-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
 import {RAFT_EVENT, RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,

@@ -31,15 +31,8 @@ import {NO_ADMISSION_BASIS, claimReplicaCreateDurablePhysicalWorker,
   './replica-create-process-owner.js';
 import {closeReplicaCreateAdmissionForLifecycle} from
   './replica-create-lifecycle-close.js';
+import {CREATE_ADMISSION_STATE} from './replica-create-admission-state.js';
 
-const CREATE_ADMISSION_STATE = Object.freeze({
-  ADMITTED: 'ADMITTED',
-  MATERIALIZED: 'MATERIALIZED',
-  ROTATING: 'ROTATING',
-  ACTIVE: 'ACTIVE',
-  FAILED: 'FAILED',
-  CLOSED: 'CLOSED',
-});
 const CREATE_ADMISSION_ERROR_CODE = Object.freeze({
   DEFERRED: 'REPLICA_CREATE_ADMISSION_DEFERRED',
   REFUSED_TERMINAL: 'REPLICA_CREATE_ADMISSION_REFUSED_TERMINAL',
@@ -793,6 +786,5 @@ class ReplicaCreateAdmissionOwner {
 
 export {
   CREATE_ADMISSION_ERROR_CODE,
-  CREATE_ADMISSION_STATE,
   ReplicaCreateAdmissionOwner,
 };

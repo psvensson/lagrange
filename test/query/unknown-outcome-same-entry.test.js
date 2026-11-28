@@ -28,7 +28,8 @@ import {test} from 'node:test';
 
 import {TABLES} from '../../src/constants/index.js';
 import {ERRORS} from '../../src/constants/errors.js';
-import * as writeKernel from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../src/raft/raft-rs-ingress-constants.js';
 import {
@@ -77,7 +78,7 @@ import {
 } from './unknown-outcome-surface-fixture.js';
 
 const OUTCOME_UNKNOWN =
-  writeKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
+  PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
 const TEMP_PREFIX = 'unknown-outcome-same-entry-';
 const TEST_TIMEOUT_MS = 60000;
 // A CDC routed write's budget: room for several engine attempts (each gets

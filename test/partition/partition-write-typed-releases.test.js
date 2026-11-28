@@ -42,6 +42,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-service-constants.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
@@ -86,7 +87,7 @@ const CORE_REFUSAL = deepFreeze({
   recoveryRequired: false,
 });
 
-const REFUSAL = partitionWriteKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL;
+const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 const RELEASE_CAUSE = partitionWriteKernel.PARTITION_WRITE_RELEASE_CAUSE;
 
 function quietEnvironment(raft = {}) {

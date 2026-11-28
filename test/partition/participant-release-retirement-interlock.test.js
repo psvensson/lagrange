@@ -38,9 +38,8 @@ import {
 } from '../../src/partition/partition-membership-recovery.js';
 import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {
-  PARTITION_SERVICE_OPERATION as OP,
-} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_SERVICE_OPERATION as OP, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {
   readPartitionCommittedMembership,
   readPartitionReplicaMembership,
@@ -48,7 +47,6 @@ import {
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME, PARTICIPANT_RELEASE_ACTION as ACTION,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';

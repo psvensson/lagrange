@@ -20,9 +20,8 @@ import {PRESSURE_GOVERNOR_ACTION, PRESSURE_WORK_CLASS, PressureGovernor} from
   '../../src/control-plane/pressure-governor.js';
 import {PRESSURE_GOVERNOR_EVENT} from
   '../../src/control-plane/pressure-governor-release-watch.js';
-import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+import {PARTITION_SERVICE_EVENT, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {PLACEMENT_ADMISSION_ERROR} from
   '../../src/partition/partition-placement-admission-constants.js';

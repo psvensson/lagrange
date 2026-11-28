@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {createUnknownOutcomeRedelivery} from '../../src/query/query-executor-unknown-outcome.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {runRetryableControlPlaneWrite} from '../../src/bootstrap/shared/retryable-control-plane-write.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {countCdcObligations, readCdcObligationProgress, readOwedCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';

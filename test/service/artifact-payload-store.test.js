@@ -25,10 +25,8 @@ import {createHash} from 'node:crypto';
 import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateIndexSQL, generateCreateTableSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {
   ARTIFACT_PAYLOAD_CHUNKS_SCHEMA,
   ARTIFACT_PAYLOAD_STATE,

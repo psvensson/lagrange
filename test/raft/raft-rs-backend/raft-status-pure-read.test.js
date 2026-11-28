@@ -53,6 +53,8 @@ import {
   DELIVERED_TO_PEER,
   PartitionNodeCluster,
 } from './partition-node-cluster.js';
+import {pruneCompactedStatementOutcomeEffectsIn} from
+  '../../../src/partition/partition-mirror-effect-retention.js';
 
 const {CORE_FATAL, CORE_OK, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const OBSERVE = RAFT_OPERATION.OBSERVE_CURRENT_AUTHORITY;
@@ -609,7 +611,7 @@ test('progress, recovery, runtime replacement, and compaction sync continue ' +
     const progressBefore = storeA.readDurableProgress('pure-read-zero-polling');
     const compacted = storeA.compactCommittedPrefix('pure-read-zero-polling', {
       toIndex: Number(progressBefore.appliedIndex),
-    });
+    }, pruneCompactedStatementOutcomeEffectsIn);
     assert.equal(compacted.changed, true, JSON.stringify(compacted));
     const syncMark = cluster.coreEntries.length;
     const syncedTick = await turnChainValue(portA.tick());

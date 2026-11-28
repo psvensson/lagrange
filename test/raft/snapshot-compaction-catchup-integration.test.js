@@ -40,6 +40,8 @@ import {
 import {
   installSealedGeneration,
 } from './snapshot-catchup-fixture.js';
+import {pruneCompactedStatementOutcomeEffectsIn} from
+  '../../src/partition/partition-mirror-effect-retention.js';
 
 // S5 integration (quest raft-snapshot-retention-compaction): a replica that
 // PHYSICALLY compacted its committed prefix at K (with proof) still serves a
@@ -149,7 +151,7 @@ async function createCompactedLeaderContext() {
   const compacted = compactRaftRsCommittedEntries(db, PARTITION_ID, {
     toIndex: BOUNDARY_ENTRY_COUNT,
     proof: {checkpointDir: created.checkpointDir},
-  });
+  }, pruneCompactedStatementOutcomeEffectsIn);
   return {
     workDir,
     checkpointsRoot,

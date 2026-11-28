@@ -13,7 +13,7 @@ import {
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 
 const OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH =
   'refreshRowBeforeDispatch';

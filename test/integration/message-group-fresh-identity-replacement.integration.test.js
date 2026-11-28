@@ -40,10 +40,8 @@ import {
   createMessageGroupLearnerJoinCapability,
   produceMessageGroupLearnerJoinDescriptor,
 } from '../../src/message-group/message-group-learner-join.js';
-import {
-  CREATE_ADMISSION_STATE,
-  ReplicaCreateAdmissionOwner,
-} from '../../src/node/replica-create-admission-owner.js';
+import {ReplicaCreateAdmissionOwner} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   COMMITTED_MEMBERSHIP_READ_PURPOSE as PURPOSE,

@@ -8,7 +8,8 @@ import {fileURLToPath} from 'node:url';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {ERRORS} from '../../src/constants/errors.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {createMockSystemCache} from '../../test/query/query-executor-test-support.js';
 import {SCHEDULE_KIND} from '../../test/raft/raft-rs-backend/native-election-schedules.js';

@@ -25,9 +25,8 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-service-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
 import {
   COMMITTED, ENVELOPE, GENERATION_SQL, alterCommandOf, columnsOf, envelopeDiagnosticsOf,

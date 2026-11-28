@@ -11,7 +11,7 @@ import {SERVICE_TYPE, TABLES, WORKFLOW_STEP} from '../../src/constants/index.js'
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
-import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {REPLICA_HANDLER_EVENT} from '../../src/node/replica-handler-constants.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {PARTITION_SERVICE_EVENT, PARTITION_SERVICE_MESSAGE_TYPE} from

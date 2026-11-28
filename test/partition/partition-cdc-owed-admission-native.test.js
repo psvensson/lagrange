@@ -14,7 +14,8 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {PARTITION_CDC_OBLIGATION_BOUND} from '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations, readCdcObligationProgress} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {acknowledgingCdcSubscriber} from '../test-helpers/acknowledging-cdc-subscriber.js';

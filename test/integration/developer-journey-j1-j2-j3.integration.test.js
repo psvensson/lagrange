@@ -40,10 +40,8 @@ import {after, before, describe, it} from 'node:test';
 
 import Database from 'better-sqlite3';
 
-import {
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateIndexSQL, generateCreateTableSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {
   ARTIFACT_PAYLOAD_CHUNKS_SCHEMA,
   ARTIFACT_PAYLOADS_SCHEMA,

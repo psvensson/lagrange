@@ -22,10 +22,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {TABLES} from '../../src/constants/index.js';
-import {
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-  buildPartitionWriteLeadershipRefusal,
-} from '../../src/partition/partition-write-kernel.js';
+import {buildPartitionWriteLeadershipRefusal} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {CDC_ERROR_CODE} from '../../src/cdc/cdc-constants.js';
 import {isRetryableControlPlaneError} from
   '../../src/control-plane/control-plane-error-classification.js';

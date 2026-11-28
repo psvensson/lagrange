@@ -14,14 +14,10 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {TABLES} from '../../src/constants/tables.js';
-import {
-  SYSTEM_TABLE_NAME,
-  SYSTEM_TABLE_SCHEMAS,
-  INITIAL_PARTITION_IDS,
-  INITIAL_REPLICA_IDS,
-  generateCreateTableSQL,
-  generateCreateIndexSQL,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME, SYSTEM_TABLE_SCHEMAS, INITIAL_PARTITION_IDS, INITIAL_REPLICA_IDS} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL, generateCreateIndexSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {
   ARTIFACT_PAYLOAD_STATE,
   ARTIFACT_PAYLOADS_SCHEMA,

@@ -18,8 +18,8 @@ import {ServiceLifecycleManager} from '../../src/service/service-lifecycle-manag
 import {RuntimeServiceAdapter} from '../../src/service/adapters/runtime-service-adapter.js';
 import {ServiceRuntimeLifecycle} from '../../src/runtime/service-runtime-lifecycle.js';
 import {RuntimeDriverRegistry} from '../../src/runtime/runtime-driver-registry.js';
-import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_SCHEMAS} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {WasmComponentDriver} from '../../src/runtime/wasm-component-driver.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';

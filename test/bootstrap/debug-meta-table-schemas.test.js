@@ -13,10 +13,10 @@ import {
   DEBUG_SESSIONS_SCHEMA,
   DEBUG_BREAKPOINTS_SCHEMA,
   DEBUG_SNAPSHOTS_SCHEMA,
-  generateCreateTableSQL,
-  generateCreateIndexSQL,
   getSchemaByTableName,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL, generateCreateIndexSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {
   CACHE_SYSTEM_TABLES,
   CACHE_PRIMARY_KEY_FIELDS,

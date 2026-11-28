@@ -13,7 +13,7 @@ import {isCatchupLearnerRaftRole, isVoterRaftRole} from '../raft/replica-voter-r
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {buildFailedCreateCleanupToken} from '../rebalancer/failed-create-cleanup-token.js';
-import {CREATE_ADMISSION_STATE} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from './replica-create-admission-state.js';
 import {expiredCreateInitialStatusError, persistFailedCreateLifecycle} from
   './replica-handler-failed-create-publication.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';

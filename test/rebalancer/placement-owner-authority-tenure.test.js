@@ -51,7 +51,8 @@ import {
   holdNextLeadershipStartDrive, ownerOf, startThreeNodeLedger, transferReport, waitUntil,
   withPlacementWorld,
 } from './placement-owner-authority-fixture.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {
   PLACEMENT_ADMIT_TYPE, PLACEMENT_RESULT_FIELD,
 } from '../../src/partition/partition-placement-admission-constants.js';

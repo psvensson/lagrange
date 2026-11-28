@@ -8,7 +8,8 @@ import {ConnectionState} from '../../src/transport/message-router.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {createUnknownOutcomeRedelivery} from '../../src/query/query-executor-unknown-outcome.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE} from
   '../../src/transport/transport-semantic-outcome.js';

@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
-import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {OPERATION_METADATA_KEY, ReplicaStatus, WORKFLOW_STEP_TO_STATUS} from

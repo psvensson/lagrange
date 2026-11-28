@@ -27,6 +27,7 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-service-constants.js';
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -52,8 +53,6 @@ import {
   PARTICIPANT_RELEASE_TYPE,
 } from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
 import {COMMIT_MODE, PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
 import {TRANSACTION_CLASSIFIER_LIST_VERSION} from
   '../../src/partition/partition-transaction-determinism-constants.js';

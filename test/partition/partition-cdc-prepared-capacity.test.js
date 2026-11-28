@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {afterEach, beforeEach, test} from 'node:test';
 import {startPartitionRaftWriteCommit} from '../../src/partition/partition-service-raft-write-commit.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL, isRetryableWriteFailureCode} from
-  '../../src/partition/partition-write-kernel.js';
+import {isRetryableWriteFailureCode} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {readParticipantTransactionRow} from '../../src/partition/partition-participant-transaction-store.js';

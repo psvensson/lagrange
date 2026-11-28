@@ -19,6 +19,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import * as proposalQueueConstants from
   '../../src/partition/proposal-queue-constants.js';
 import {RAFT_OPERATION_OUTCOME} from
@@ -212,7 +214,7 @@ test('CDCIntegrationService - transient detection includes leader-transition que
         {
           error: ERRORS.WRITE_CUTOVER_PAUSED,
           failureCode:
-            partitionWriteKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL
+            PARTITION_WRITE_LEADERSHIP_REFUSAL
               .CUTOVER_PAUSED,
           deferRetry: true,
           retryAfterMs: 25,

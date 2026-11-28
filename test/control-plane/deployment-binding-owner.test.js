@@ -2,12 +2,9 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {describe, test} from 'node:test';
 
-import {
-  INITIAL_PARTITION_IDS,
-  INITIAL_REPLICA_IDS,
-  SYSTEM_TABLE_SCHEMAS,
-  generateCreateTableSQL,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {INITIAL_PARTITION_IDS, INITIAL_REPLICA_IDS, SYSTEM_TABLE_SCHEMAS} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {TABLES} from '../../src/constants/index.js';
 import {RUNTIME_KIND} from '../../src/constants/runtime.js';

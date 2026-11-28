@@ -4,7 +4,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {QUERY_RESPONSE_TYPE} from '../../src/query/query-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from

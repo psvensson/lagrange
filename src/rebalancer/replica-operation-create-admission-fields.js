@@ -1,5 +1,5 @@
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
-import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-state.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {OperationType} from './replica-operation-progress.js';
 

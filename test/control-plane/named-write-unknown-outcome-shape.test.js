@@ -41,7 +41,8 @@ import {OWNER_CONTRACT_NEXT_ACTION, OWNER_CONTRACT_STATE} from
   '../../src/control-plane/owner-contract-outcome.js';
 import {SystemMetadataOwnerBase} from
   '../../src/control-plane/owners/system-metadata-owner-base.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {deriveParticipantEntryId} from
   '../../src/query/distributed/distributed-write-coordinator.js';
 

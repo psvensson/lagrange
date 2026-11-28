@@ -1,11 +1,9 @@
 import {createHash} from 'node:crypto';
 import Database from 'better-sqlite3';
 
-import {
-  SYSTEM_TABLE_NAME,
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateIndexSQL, generateCreateTableSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {
   WASM_OPERATIONS_SCHEMA,
 } from '../../src/bootstrap/system-table-runtime-schema-definitions.js';

@@ -10,11 +10,11 @@ import {
   NODES_SCHEMA,
   LATENCY_GROUPS_SCHEMA,
   INTER_GROUP_LATENCIES_SCHEMA,
-  generateCreateTableSQL,
   getSchemaByTableName,
   getInitialPartitionId,
   getInitialReplicaIds,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {
   CACHE_HYDRATION_TABLES,
   CACHE_PRIMARY_KEY_FIELDS,

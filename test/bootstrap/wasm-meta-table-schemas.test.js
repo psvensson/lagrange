@@ -23,12 +23,12 @@ import {
   PACKAGE_REGISTRY_OVERRIDES_SCHEMA,
   MODULE_DEPENDENCY_LOCKS_SCHEMA,
   WASM_OPERATIONS_SCHEMA,
-  generateCreateTableSQL,
-  generateCreateIndexSQL,
   getSchemaByTableName,
   getInitialPartitionId,
   getInitialReplicaIds,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL, generateCreateIndexSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {
   CACHE_SYSTEM_TABLES,
   CACHE_PRIMARY_KEY_FIELDS,

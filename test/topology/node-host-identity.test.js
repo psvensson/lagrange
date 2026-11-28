@@ -19,12 +19,10 @@ import {
   readNodeHostIdentity,
   requireDeclaredNodeHostId,
 } from '../../src/topology/node-host-identity.js';
-import {
-  NODES_SCHEMA,
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
-  SYSTEM_TABLE_NAME,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {NODES_SCHEMA, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateIndexSQL, generateCreateTableSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {
   NODES_SCHEMA_UNSUPPORTED,
   PARTITION_TABLE_OBSERVATION,

@@ -21,10 +21,8 @@ import {
   buildSystemTableBatchUpsert,
   buildSystemTableMutationSqlParts,
 } from '../../src/cdc/cdc-system-table-mutation-sql-helpers.js';
-import {
-  generateCreateTableSQL,
-  getSchemaByTableName,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {getSchemaByTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 
 const COORDINATOR_TABLES = Object.freeze([
   TABLES.SQL_TRANSACTIONS,

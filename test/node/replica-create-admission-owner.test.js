@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 
-import {
-  CREATE_ADMISSION_ERROR_CODE,
-  CREATE_ADMISSION_STATE,
-  ReplicaCreateAdmissionOwner,
-} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_ERROR_CODE, ReplicaCreateAdmissionOwner} from
+  '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 
 const APPLIED = Object.freeze({success: true, outcome: 'applied'});

@@ -18,10 +18,8 @@ import {
 } from '../rebalancer/replica-status.js';
 import {buildFailedCreateCleanupToken} from
   '../rebalancer/failed-create-cleanup-token.js';
-import {
-  CREATE_ADMISSION_ERROR_CODE,
-  CREATE_ADMISSION_STATE,
-} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from './replica-create-admission-state.js';
 import {isReplicaCreateAdmissionEvidence} from
   './replica-create-admission-evidence.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from

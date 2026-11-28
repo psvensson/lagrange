@@ -1,11 +1,9 @@
 // Named writes settle only on the terminal receipt their delivery owner emits.
 import {CDC_ERROR_CODE, CDC_SHUT_DOWN_WRITE_OUTCOME} from '../cdc/cdc-constants.js';
-import {PARTITION_COMMITTED_COMMAND_OUTCOME} from '../partition/partition-service-constants.js';
-import {
-  isAppliedWithUnknownCount,
-  isPartitionWriteFailureCode,
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-} from '../partition/partition-write-kernel.js';
+import {PARTITION_COMMITTED_COMMAND_OUTCOME, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../partition/partition-service-constants.js';
+import {isAppliedWithUnknownCount, isPartitionWriteFailureCode} from
+  '../partition/partition-write-kernel.js';
 import {deriveParticipantEntryId} from '../query/distributed/distributed-write-coordinator.js';
 
 const NAMED_WRITE_ATTEMPT = Object.freeze({

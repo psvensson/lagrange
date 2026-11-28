@@ -20,7 +20,7 @@ import {retainedPlacementContentionDecision, retainedPlacementEntityDecision} fr
 import {ENTITY_ADMISSION_STATE} from '../partition/partition-placement-admission-decision.js';
 import {REPAIR_OBSERVATION as OBSERVATION, observationAllowsRetry, takeRepairObservations} from
   './replica-operation-retained-repair-observation.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-service-constants.js';
 import {REPAIR_ANSWER_STATE, REPAIR_REFUSAL_CLEARING as CLEARING, isCommittedRepairAnswer,
   custodyMatches, readRetainedRepairRefusal} from './replica-operation-retained-repair-answer.js';
 import {REPAIR_PREPARATION_STATE as PREPARATION, PLACEMENT_ADMISSION_ERROR} from

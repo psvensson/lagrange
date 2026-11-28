@@ -5,7 +5,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {NODES_SCHEMA, SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
-import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationField} from '../../src/rebalancer/replica-operation-constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION,

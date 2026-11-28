@@ -5,11 +5,11 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
   '../../src/partition/partition-participant-transaction-constants.js';
-import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_SERVICE_OPERATION, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest, readOwedCdcObligations} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
 import {proposeCdcAcknowledgement} from '../../src/partition/partition-cdc-obligation.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {
   CDC_INSERT_SQL, applyCommitted, awaitProposal, bindingOf, clearFixtureSingletons, commitMessage,
   generationOf, identityOf, operationOf, prepareCommandOf, resetFixtureSingletons,

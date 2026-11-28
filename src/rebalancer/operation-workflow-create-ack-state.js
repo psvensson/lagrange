@@ -1,6 +1,6 @@
 // A transport ACK answers the request. Reusing that answer also requires the
 // target's proof of physical worker custody and the current durable grant.
-import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-state.js';
 import {replicaCreateInstallAuthoritiesEqual} from '../node/replica-create-admission-evidence.js';
 import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../constants/index.js';
 import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from

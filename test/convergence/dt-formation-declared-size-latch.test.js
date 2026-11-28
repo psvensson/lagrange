@@ -81,9 +81,6 @@ import {
   PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
 } from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-} from '../../src/partition/partition-write-kernel.js';
-import {
   applyCommitted,
   awaitProposal,
   shutdownAll,
@@ -125,9 +122,8 @@ import {
 import {
   runCommittedPartitionStatement,
 } from '../../src/partition/partition-statement-admission.js';
-import {
-  PARTITION_SERVICE_OPERATION,
-} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_SERVICE_OPERATION, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {
   SQLParser,
 } from '../../src/query/sql-parser.js';

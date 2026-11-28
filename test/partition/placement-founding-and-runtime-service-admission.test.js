@@ -27,12 +27,8 @@ import {
   UNIFIED_SERVICE_TYPE,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {
-  PARTITION_SERVICE_MESSAGE_TYPE,
-} from '../../src/partition/partition-service-constants.js';
-import {
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_SERVICE_MESSAGE_TYPE, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {requestPlacementAdmission} from
   '../../src/partition/partition-placement-admission.js';
 import {

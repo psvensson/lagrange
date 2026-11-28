@@ -29,10 +29,9 @@ import {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-service-constants.js';
 import {ERRORS} from '../../src/constants/errors.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from

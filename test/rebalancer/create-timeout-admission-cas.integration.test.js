@@ -7,9 +7,9 @@ import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
-import {
-  CREATE_ADMISSION_ERROR_CODE, CREATE_ADMISSION_STATE, ReplicaCreateAdmissionOwner,
-} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_ERROR_CODE, ReplicaCreateAdmissionOwner} from
+  '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';

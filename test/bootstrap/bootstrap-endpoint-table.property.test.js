@@ -15,12 +15,12 @@ import {
   SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,
-  generateCreateTableSQL,
-  generateCreateIndexSQL,
   getSchemaByTableName,
   getInitialPartitionId,
   getInitialReplicaIds,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL, generateCreateIndexSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 import {TABLES, COLUMN, ENDPOINT_STATUS} from '../../src/constants/index.js';
 import {CACHE_SYSTEM_TABLES} from '../../src/cache/cache-constants.js';
 

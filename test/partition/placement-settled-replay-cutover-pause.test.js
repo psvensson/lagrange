@@ -21,7 +21,7 @@ import {requestPlacementAdmission} from
 import {pausedWriteAnswerOf, raiseParticipantCutoverPause} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {PLACEMENT_OUTCOME} from '../../src/rebalancer/replica-placement-owner-constants.js';
 import {applyCommitted, awaitProposal, clearFixtureSingletons, resetFixtureSingletons,
   settleTicks, track} from '../test-helpers/participant-transaction-fixture.js';

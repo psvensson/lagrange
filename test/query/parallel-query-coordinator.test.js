@@ -6,9 +6,9 @@ import {ParallelQueryCoordinator} from '../../src/query/distributed/parallel-que
 import {PartitionQueryMetrics, QueryExecutionMetrics} from '../../src/query/distributed/parallel-query-execution-metrics.js';
 import {DistributedWriteCoordinator} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {shutdownAll, startLeader} from '../test-helpers/participant-transaction-fixture.js';
-import {PARTITION_COMMITTED_COMMAND_OUTCOME} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_COMMITTED_COMMAND_OUTCOME, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
   '../../src/partition/partition-service-remote-query-methods.js';

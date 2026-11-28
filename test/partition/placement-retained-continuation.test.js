@@ -11,7 +11,7 @@ import {mintServiceRowCreatedAt} from '../../src/node/service-row-incarnation.js
 import {raiseParticipantCutoverPause} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PLACEMENT_CLEARING_TRIGGER, PLACEMENT_TRIGGER} from
   '../../src/rebalancer/replica-placement-owner-constants.js';

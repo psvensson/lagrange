@@ -14,7 +14,7 @@
 // leadership-start reconciliation and its drain. A pass captures the custody
 // at its start; it is current while the custody is the owner's and its token
 // is the ledger's live token. Nothing here grants authority.
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-service-constants.js';
 import {PLACEMENT_TRIGGER} from './replica-placement-owner-constants.js';
 import {
   recordLeadershipStartDriveFailure, recordLeadershipStartDriveJoined,

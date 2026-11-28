@@ -5,7 +5,7 @@ import {OperationType, ReplicaStatus, WORKFLOW_STEP_TO_STATUS} from
   '../../src/rebalancer/replica-operation-progress.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+  '../../src/partition/partition-service-constants.js';
 import {NODE, commitLedgerStatement, ledgerRows, onLedgerLeader} from
   './placement-admission-fixture.js';
 import {attachAutoCommitLoop, createCoordinatorWithLedger} from

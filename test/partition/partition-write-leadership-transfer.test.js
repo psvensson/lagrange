@@ -30,13 +30,12 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-service-constants.js';
 import {
   admitPartitionRaftPeer,
   reservePartitionRaftPeerIdentity,
 } from '../../src/partition/partition-service-raft-membership-administration.js';
-import * as partitionWriteKernel from
-  '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
@@ -63,7 +62,7 @@ const GROUP_TIMING = Object.freeze({
   electionTimeoutMinMs: 150,
   electionTimeoutMaxMs: 300,
 });
-const REFUSAL = partitionWriteKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL;
+const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
 function transferLeaderMessageType() {
   const match = /(\d+)\s*=>\s*MsgTransferLeader\b/u.exec(

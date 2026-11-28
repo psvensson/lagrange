@@ -24,8 +24,7 @@ import {
 import {requestPlacementRepairPreparation} from '../../src/partition/partition-placement-repair-preparation.js';
 import {LEDGER_PARTITION_ID} from '../../src/partition/partition-placement-admission-decision.js';
 import {applyPlacementCommand} from '../../src/partition/partition-placement-admission.js';
-import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_SERVICE_OPERATION, PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-service-constants.js';
 import {SchemaProvisioningJobOwner} from '../../src/query/schema-provisioning-job-owner.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';

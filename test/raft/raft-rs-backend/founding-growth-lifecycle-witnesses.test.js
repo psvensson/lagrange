@@ -19,6 +19,8 @@ import {
   snapshotAdmitsReplica, syncLeadershipTenure, turnChainValue,
   withdrawGroupPromotion,
 } from './founding-growth-test-support.js';
+import {pruneCompactedStatementOutcomeEffectsIn} from
+  '../../../src/partition/partition-mirror-effect-retention.js';
 
 const SEED = 'seed-s';
 const JOINER_1 = 'joiner-j1';
@@ -69,7 +71,7 @@ function installSnapshotFromLeader(cluster, leaderId, targetId, compact = false)
   if (compact) {
     leaderStore.compactCommittedPrefix(cluster.partitionId, {
       toIndex: Number(snapIdx),
-    });
+    }, pruneCompactedStatementOutcomeEffectsIn);
     cluster.isolated.delete(targetId);
     for (let round = 0; round < 20; round += 1) {
       cluster.node(leaderId).tick();

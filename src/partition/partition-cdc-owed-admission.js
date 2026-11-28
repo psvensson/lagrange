@@ -5,8 +5,11 @@ import {ERRORS} from '../constants/errors.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 import {PARTITION_SPLIT_MIRROR_ORIGIN} from './partition-constants.js';
 import {isCommittedSqlCommandType} from './partition-committed-command-admission.js';
-import {PARTITION_COMMITTED_COMMAND_OUTCOME as OUTCOME,
-  PARTITION_SERVICE_OPERATION} from './partition-service-constants.js';
+import {
+  PARTITION_COMMITTED_COMMAND_OUTCOME as OUTCOME,
+  PARTITION_SERVICE_OPERATION,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+} from './partition-service-constants.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND as BOUND} from
   './partition-cdc-obligation-constants.js';
 import {countOwedCdcObligations} from './partition-cdc-obligation-ledger.js';
@@ -14,7 +17,6 @@ import {PARTICIPANT_TRANSACTION_COMMAND, PARTICIPANT_TRANSACTION_STATE} from './
 import {decisionMatchesPreparedRow, operationsOf} from './partition-participant-transaction-bytes.js';
 import {readParticipantTransactionRow} from './partition-participant-transaction-store.js';
 import {PROPOSAL_QUEUE_ADMISSION_CLASS} from './proposal-queue-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
 import {placementCommandRowCount} from './partition-placement-admission-command.js';
 import {PLACEMENT_COMMAND_TYPES} from './partition-placement-admission-constants.js';
 

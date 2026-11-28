@@ -15,9 +15,9 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {getSystemCachePrimaryKeyField} from '../../src/cache/system-cache-key-descriptor.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service-constants.js';
-import {buildPartitionWriteEntry, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
+import {PARTITION_SERVICE_OPERATION, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
+import {buildPartitionWriteEntry} from '../../src/partition/partition-write-kernel.js';
 import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
 import {readCdcObligationCensusIn} from '../../src/partition/partition-cdc-obligation-ledger.js';

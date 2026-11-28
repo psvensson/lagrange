@@ -79,7 +79,7 @@ documentClass: generated
 - [raft-rs-runtime-owner-constants.js](raft-rs-runtime-owner-constants.js) - The raft-rs runtime owner's private vocabulary: runtime health and group usability, the leader and role names read... (importers: hub)
 - [raft-rs-runtime-owner.js](raft-rs-runtime-owner.js) - Test seam: a fault injected at the core boundary (see coreFaultInjector). (importers: hub)
 - [raft-rs-runtime-tuning.js](raft-rs-runtime-tuning.js) - Derives the tick-based tuning a raft-rs core is given from a group's millisecond timing: the tick length, the... (importers: hub)
-- [raft-rs-snapshot-witness.js](raft-rs-snapshot-witness.js) - Encode the compacted HLC witness as canonical base64 JSON for `_raft_rs_snapshot.data`. (importers: one)
+- [raft-rs-snapshot-witness.js](raft-rs-snapshot-witness.js) - Durable snapshot witness and proof-gated committed-prefix compaction for `RaftRsDurableStore` (SN1 / F5). (importers: few)
 - [raft-rs-status-observation.js](raft-rs-status-observation.js) - The semantic parts of an rs-raft status observation that need no core entry: the peers of a configuration and the... (importers: few)
 - [raft-rs-turn-answer.js](raft-rs-turn-answer.js) - The answer of one runtime turn, named once where the turn produced it (R07): SETTLED when the work completed within... (importers: hub)
 - [replica-election-timeouts.js](replica-election-timeouts.js) - Election-timeout jitter for a replica group: each replica's election window is offset by its position in the group,... (importers: many)

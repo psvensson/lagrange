@@ -14,7 +14,7 @@ import {test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
-import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-state.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {

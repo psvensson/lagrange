@@ -27,19 +27,11 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {
-  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
-  PARTITION_COMMITTED_COMMAND_OUTCOME,
-  PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_OPERATION,
-} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_COMMITTED_COMMAND_ERROR_CODE, PARTITION_COMMITTED_COMMAND_OUTCOME, PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_MESSAGE_TYPE, PARTITION_SERVICE_OPERATION, PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-service-constants.js';
 import {ENTITY_TYPE} from '../../src/constants/addresses.js';
 import {isConsensusInitRefusal} from '../../src/raft/raft-operation-port.js';
 import * as partitionConstants from
   '../../src/partition/partition-service-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {RUNTIME_PHASE} from

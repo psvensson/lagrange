@@ -11,8 +11,8 @@ import {describe, test} from 'node:test';
 import assert from 'node:assert/strict';
 import {isDeepStrictEqual} from 'node:util';
 import {createOriginFixture} from '../service/service-consensus-creation-fixture.js';
-import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_SCHEMAS} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {RuntimeDriver} from '../../src/runtime/runtime-driver.js';
 import {RuntimeDriverRegistry} from '../../src/runtime/runtime-driver-registry.js';
 import {ServiceRuntimeLifecycle} from '../../src/runtime/service-runtime-lifecycle.js';

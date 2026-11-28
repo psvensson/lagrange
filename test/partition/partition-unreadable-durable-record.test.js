@@ -47,12 +47,10 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {PARTITION_SERVICE_OPERATION} from
+import {PARTITION_SERVICE_OPERATION, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-service-constants.js';
 import {ENTITY_TYPE} from '../../src/constants/addresses.js';
 import {isConsensusInitRefusal} from '../../src/raft/raft-operation-port.js';
-import * as partitionWriteKernel from
-  '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
@@ -309,7 +307,7 @@ async function loneLeaderUnreadableCase(escapes) {
   await withLonePartitions(async ({open}) => {
     const {partition, dbPath} = await open('fah-lone');
     const sibling = await open('fah-lone-sibling');
-    const REFUSAL = partitionWriteKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL;
+    const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
     assert.equal((await insert(partition, 'row-0', 'setup', 'e-setup'))
       .success, true, 'setup: the lone leader serves a write');
     assert.equal((await insert(sibling.partition, 's-0', 'setup', 's-setup'))

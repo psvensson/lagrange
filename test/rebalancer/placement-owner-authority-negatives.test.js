@@ -13,7 +13,8 @@
 // rows plus PARTITIONS leader_node_id.
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-service-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
 import {buildPlacementAdmissionStatement} from
   '../../src/rebalancer/replica-placement-owner-admission-statement.js';

@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
-import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
+import {PARTITION_COMMITTED_COMMAND_ERROR_CODE, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-service-constants.js';
 import {PLACEMENT_ADMISSION_ERROR, PLACEMENT_RESULT_FIELD} from
   '../../src/partition/partition-placement-admission-constants.js';
@@ -23,8 +23,6 @@ import {PARTITION_CDC_OBLIGATION_BOUND} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest,
   countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
-  '../../src/partition/partition-write-kernel.js';
 import {isPartitionReserved} from
   '../../src/partition/partition-participant-transaction-store.js';
 import {readCommittedStatementOutcome} from
