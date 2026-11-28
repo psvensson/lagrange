@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 267,
     "storage-raft": 166,
-    "test-infrastructure": 174,
+    "test-infrastructure": 175,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2848,
-  "digest": "fnv1a32-d8231073",
+  "censusSize": 2849,
+  "digest": "fnv1a32-0f421d86",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cce2a3c2",
+  "observationDigest": "fnv1a32-9dee38fc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2549,6 +2549,7 @@
     "test/scripts/observation-census.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-contract-probe.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
+    "test/scripts/partition-write-phase-field-producer-census.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
     "test/scripts/pre-push-stage-manifest.test.js": "test-infrastructure",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "test-infrastructure",
@@ -29191,6 +29192,13 @@
         "scripts",
         "src",
         "test"
+      ]
+    },
+    "test/scripts/partition-write-phase-field-producer-census.test.js": {
+      "files": [
+        "scripts/checks/partition-write-phase-field-producer-census.js",
+        "src/partition/partition-service-shared.js",
+        "src/partition/partition-service-write-metrics-base.js"
       ]
     },
     "test/scripts/pre-push-hook-control-flow.test.js": {

@@ -15,8 +15,6 @@ describe('performance-diagnostics', () => {
           writePhaseTimingMs: {
             entryBuildMs: 2,
             forwardDeliverMs: 0,
-            logAppendMs: 4,
-            sqliteRunMs: 8,
             raftCommandDispatchMs: 3,
             applyWriteMs: 20,
             totalMs: 40,
@@ -33,8 +31,6 @@ describe('performance-diagnostics', () => {
           writePhaseTimingMs: {
             entryBuildMs: 3,
             forwardDeliverMs: 10,
-            logAppendMs: 5,
-            sqliteRunMs: 10,
             raftCommandDispatchMs: 2,
             applyWriteMs: 30,
             totalMs: 50,
@@ -100,8 +96,6 @@ describe('performance-diagnostics', () => {
           writePhaseTimingMs: {
             entryBuildMs: 1,
             forwardDeliverMs: 0,
-            logAppendMs: 1,
-            sqliteRunMs: 2,
             raftCommandDispatchMs: 1,
             applyWriteMs: 5,
             totalMs: 11,

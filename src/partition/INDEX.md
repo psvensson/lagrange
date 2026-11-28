@@ -164,7 +164,7 @@ documentClass: generated
 - [partition-service-split-mirror-queue-methods.js](partition-service-split-mirror-queue-methods.js) - Split mirror queue/flush methods for PartitionService. (importers: one)
 - [partition-service-split-replication-state.js](partition-service-split-replication-state.js) - Parse raw transition metadata into a plain object: accepts an already parsed object or a JSON string, returning null... (importers: few)
 - [partition-service-table-bootstrap.js](partition-service-table-bootstrap.js) - Partition state-table bootstrap: schema-driven CREATE TABLE and index creation, extracted verbatim from... (importers: many)
-- [partition-service-write-metrics-base.js](partition-service-write-metrics-base.js) - Execute a SQL query directly on the local SQLite database. (importers: one)
+- [partition-service-write-metrics-base.js](partition-service-write-metrics-base.js) - Execute a SQL query directly on the local SQLite database. (importers: few)
 - [partition-service-write-path-helpers.js](partition-service-write-path-helpers.js) - Pure helpers of the replica write path: the mutation a raw SQL entry performs, the SQL excerpt a CDC diagnostic... (importers: few)
 - [partition-service.js](partition-service.js) - No leading comment; first export: PartitionService. (importers: hub)
 - [partition-sibling-descriptor-effect.js](partition-sibling-descriptor-effect.js) - The two PARTITIONS effects of a sibling issued in the durable TABLES split plan. (importers: many)

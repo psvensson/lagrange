@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2822,
+    "ordinary": 2823,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2848,
-  "digest": "fnv1a32-589af9f3",
+  "censusSize": 2849,
+  "digest": "fnv1a32-437526cc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2529,6 +2529,7 @@
     "test/scripts/observation-census.test.js": "ordinary",
     "test/scripts/participant-release-completion-contract-probe.test.js": "ordinary",
     "test/scripts/participant-release-completion-owner.test.js": "ordinary",
+    "test/scripts/partition-write-phase-field-producer-census.test.js": "ordinary",
     "test/scripts/pre-push-hook-control-flow.test.js": "ordinary",
     "test/scripts/pre-push-stage-manifest.test.js": "ordinary",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "ordinary",
