@@ -25,6 +25,13 @@ import {
 } from '../../test/distributed/reference-client/tidb-oltp-adapter.js';
 
 const PASS_MESSAGE = 'oltp-scenario-a-retryable-conflict-case-guard: PASS';
+const SQL_COMMAND = Object.freeze({
+  BEGIN: 'BEGIN',
+  COMMIT: 'COMMIT',
+  ROLLBACK: 'ROLLBACK',
+});
+const STATEMENT_FAILURE_MESSAGE = 'statement failed';
+const ROLLBACK_UNAVAILABLE_MESSAGE = 'rollback unavailable';
 
 const runCaseGuard = async () => {
   const definition = buildScenarioARetryableConflictCase();
@@ -144,13 +151,13 @@ const runCaseGuard = async () => {
   async function assertLagrangeSessionCommitBoundaries() {
     {
       const commands = [];
-      const statementError = new Error('statement failed');
-      const cleanupError = new Error('rollback unavailable');
+      const statementError = new Error(STATEMENT_FAILURE_MESSAGE);
+      const cleanupError = new Error(ROLLBACK_UNAVAILABLE_MESSAGE);
       let available = false;
       let executions = 0;
       const session = createLagrangeSession({async query(sql) {
         commands.push(sql);
-        if (sql === 'ROLLBACK' && !available) throw cleanupError;
+        if (sql === SQL_COMMAND.ROLLBACK && !available) throw cleanupError;
       }});
       await assert.rejects(session.transaction(async () => {
         throw statementError;
@@ -166,11 +173,18 @@ const runCaseGuard = async () => {
         assert.equal(error.cause, cleanupError);
         return true;
       });
-      assert.deepEqual(commands, ['BEGIN', 'ROLLBACK', 'ROLLBACK']);
+      assert.deepEqual(commands, [SQL_COMMAND.BEGIN, SQL_COMMAND.ROLLBACK, SQL_COMMAND.ROLLBACK]);
       assert.equal(executions, 0);
       available = true;
       await session.transaction(work);
-      assert.deepEqual(commands, ['BEGIN', 'ROLLBACK', 'ROLLBACK', 'ROLLBACK', 'BEGIN', 'COMMIT']);
+      assert.deepEqual(commands, [
+        SQL_COMMAND.BEGIN,
+        SQL_COMMAND.ROLLBACK,
+        SQL_COMMAND.ROLLBACK,
+        SQL_COMMAND.ROLLBACK,
+        SQL_COMMAND.BEGIN,
+        SQL_COMMAND.COMMIT,
+      ]);
       assert.equal(executions, 1);
     }
 
@@ -189,7 +203,7 @@ const runCaseGuard = async () => {
         }),
         /callback before-commit failure/u,
       );
-      assert.deepEqual(executed, ['BEGIN', 'ROLLBACK']);
+      assert.deepEqual(executed, [SQL_COMMAND.BEGIN, SQL_COMMAND.ROLLBACK]);
     }
 
     {
@@ -197,7 +211,7 @@ const runCaseGuard = async () => {
       const client = {
         async query(sql) {
           executed.push(sql);
-          if (sql === 'COMMIT') {
+          if (sql === SQL_COMMAND.COMMIT) {
             const err = new Error('commit serialization conflict');
             err.code = '40001';
             throw err;
@@ -215,7 +229,7 @@ const runCaseGuard = async () => {
           return true;
         },
       );
-      assert.deepEqual(executed, ['BEGIN', 'COMMIT', 'ROLLBACK']);
+      assert.deepEqual(executed, [SQL_COMMAND.BEGIN, SQL_COMMAND.COMMIT, SQL_COMMAND.ROLLBACK]);
     }
 
     {
@@ -223,7 +237,7 @@ const runCaseGuard = async () => {
       const client = {
         async query(sql) {
           executed.push(sql);
-          if (sql === 'COMMIT') {
+          if (sql === SQL_COMMAND.COMMIT) {
             const err = new Error('connection reset during commit');
             err.code = 'ECONNRESET';
             throw err;
@@ -242,7 +256,7 @@ const runCaseGuard = async () => {
       );
       assert.deepEqual(
         executed,
-        ['BEGIN', 'COMMIT'],
+        [SQL_COMMAND.BEGIN, SQL_COMMAND.COMMIT],
         'ambiguous commit error must not issue ROLLBACK',
       );
     }
@@ -253,13 +267,13 @@ const runCaseGuard = async () => {
       const executed = [];
       const connection = {
         async beginTransaction() {
-          executed.push('BEGIN');
+          executed.push(SQL_COMMAND.BEGIN);
         },
         async commit() {
-          executed.push('COMMIT');
+          executed.push(SQL_COMMAND.COMMIT);
         },
         async rollback() {
-          executed.push('ROLLBACK');
+          executed.push(SQL_COMMAND.ROLLBACK);
         },
       };
       const session = createTiDbSession(connection);
@@ -269,23 +283,23 @@ const runCaseGuard = async () => {
         }),
         /callback before-commit failure/u,
       );
-      assert.deepEqual(executed, ['BEGIN', 'ROLLBACK']);
+      assert.deepEqual(executed, [SQL_COMMAND.BEGIN, SQL_COMMAND.ROLLBACK]);
     }
 
     {
       const executed = [];
       const connection = {
         async beginTransaction() {
-          executed.push('BEGIN');
+          executed.push(SQL_COMMAND.BEGIN);
         },
         async commit() {
-          executed.push('COMMIT');
+          executed.push(SQL_COMMAND.COMMIT);
           const err = new Error('commit serialization conflict');
           err.code = '40001';
           throw err;
         },
         async rollback() {
-          executed.push('ROLLBACK');
+          executed.push(SQL_COMMAND.ROLLBACK);
         },
       };
       const session = createTiDbSession(connection);
@@ -298,23 +312,23 @@ const runCaseGuard = async () => {
           return true;
         },
       );
-      assert.deepEqual(executed, ['BEGIN', 'COMMIT', 'ROLLBACK']);
+      assert.deepEqual(executed, [SQL_COMMAND.BEGIN, SQL_COMMAND.COMMIT, SQL_COMMAND.ROLLBACK]);
     }
 
     {
       const executed = [];
       const connection = {
         async beginTransaction() {
-          executed.push('BEGIN');
+          executed.push(SQL_COMMAND.BEGIN);
         },
         async commit() {
-          executed.push('COMMIT');
+          executed.push(SQL_COMMAND.COMMIT);
           const err = new Error('connection timeout during commit');
           err.code = 'ETIMEDOUT';
           throw err;
         },
         async rollback() {
-          executed.push('ROLLBACK');
+          executed.push(SQL_COMMAND.ROLLBACK);
         },
       };
       const session = createTiDbSession(connection);
@@ -328,7 +342,7 @@ const runCaseGuard = async () => {
       );
       assert.deepEqual(
         executed,
-        ['BEGIN', 'COMMIT'],
+        [SQL_COMMAND.BEGIN, SQL_COMMAND.COMMIT],
         'ambiguous commit error must not issue ROLLBACK',
       );
     }
