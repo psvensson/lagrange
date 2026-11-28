@@ -17,6 +17,10 @@ import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {
+  createCanonicalSystemCache,
+  tableRowFromDdl,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -40,8 +44,12 @@ function createCapturingSqlCore() {
  * Minimal system cache for SQLQueryEngine tests.
  */
 function createMinimalSystemCache() {
-  return {
-    tables: [{table_name: 'users', primaryKey: 'id'}],
+  return createCanonicalSystemCache({
+    tables: [tableRowFromDdl({
+      name: 'users',
+      primaryKey: 'id',
+      ddl: 'CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT)',
+    })],
     partitions: [
       {
         partition_id: 'p1',
@@ -50,23 +58,6 @@ function createMinimalSystemCache() {
         partition_key_end: null,
       },
     ],
-    get(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'partitions') return this.partitions.filter(predicate);
-      if (type === 'services') return this.services.filter(predicate);
-      return [];
-    },
-    getAll(type) {
-      if (type === 'partitions') return this.partitions;
-      if (type === 'tables') return this.tables;
-      if (type === 'services') return this.services;
-      return [];
-    },
     services: [
       {
         service_id: 'p1',
@@ -78,7 +69,7 @@ function createMinimalSystemCache() {
         status: 'active',
       },
     ],
-  };
+  });
 }
 
 function createMockRouter() {

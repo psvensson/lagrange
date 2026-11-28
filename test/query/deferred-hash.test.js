@@ -16,60 +16,42 @@ import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
 /**
- * Creates a minimal mock system cache with one table and one partition.
+ * A real system cache with one table and one partition.
  */
 function createTestCache() {
-  const tables = [
-    {table_name: 'users', primaryKey: 'id'},
-  ];
-  const partitions = [
-    {
-      partition_id: 'p1',
-      table_name: 'users',
-      leader_node_id: 'test-node',
-      partition_key_start: null,
-      partition_key_end: null,
-    },
-  ];
-  const services = [
-    {
-      service_id: 'p1',
-      service_type: 'partition',
-      partition_id: 'p1',
-      node_id: 'test-node',
-      raft_role: 'leader',
-      address: 'test-node/partition/p1',
-      status: 'active',
-    },
-  ];
-  return {
-    tables,
-    partitions,
-    services,
-    get(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'partitions') return this.partitions.filter(predicate);
-      if (type === 'services') return this.services.filter(predicate);
-      return [];
-    },
-    getAll(type) {
-      if (type === 'partitions') return this.partitions;
-      if (type === 'tables') return this.tables;
-      if (type === 'services') return this.services;
-      return [];
-    },
-  };
+  return createCanonicalSystemCache({
+    tables: [
+      {table_name: 'users', primaryKey: 'id'},
+    ],
+    partitions: [
+      {
+        partition_id: 'p1',
+        table_name: 'users',
+        leader_node_id: 'test-node',
+        partition_key_start: null,
+        partition_key_end: null,
+      },
+    ],
+    services: [
+      {
+        service_id: 'p1',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'test-node',
+        raft_role: 'leader',
+        address: 'test-node/partition/p1',
+        status: 'active',
+      },
+    ],
+  });
 }
 
 function createTestRouter() {

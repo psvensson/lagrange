@@ -39,6 +39,8 @@ import {
   resumeFixtureParticipantGroupAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
 import {driveNativeR2Election} from './unknown-outcome-surface-fixture.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {ERRORS} from '../../src/constants/errors.js';
@@ -110,7 +112,7 @@ function tableOptions() {
 
 // A system cache holding one partition, its leader and its services.
 function systemCacheOf({partitionId, leaderNodeId, services}) {
-  return {
+  return createCanonicalSystemCache({
     tables: [{table_name: TABLE_NAME, primaryKey: 'id'}],
     partitions: [{
       partition_id: partitionId,
@@ -120,38 +122,7 @@ function systemCacheOf({partitionId, leaderNodeId, services}) {
       partition_key_end: null,
     }],
     services,
-    get(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((table) => table.table_name === key);
-      }
-      if (type === 'partitions') {
-        return this.partitions.find((partition) =>
-          partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === 'partitions') {
-        return this.partitions;
-      }
-      if (type === 'tables') {
-        return this.tables;
-      }
-      if (type === 'services') {
-        return this.services;
-      }
-      return [];
-    },
-  };
+  });
 }
 
 function serviceRow({replicaId, nodeId, address, role}) {

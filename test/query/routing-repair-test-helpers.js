@@ -1,4 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 import {
   ERRORS,
   SERVICE_STATUS,
@@ -32,15 +34,15 @@ export function createStaleOverlayOwnerHandoffFixture(options = {}) {
   const deliveries = [];
   const routingOverlayState = new Map();
 
-  const systemCache = {
-    partitions: [
+  const systemCache = createCanonicalSystemCache({
+    [TABLES.PARTITIONS]: [
       {
         partition_id: partitionId,
         table_name: options.tableName || TABLES.REPLICA_OPERATIONS,
         leader_node_id: staleOwnerNodeId,
       },
     ],
-    services: [
+    [TABLES.SERVICES]: [
       {
         service_id: staleReplicaId,
         service_type: SERVICE_TYPE.PARTITION,
@@ -51,24 +53,7 @@ export function createStaleOverlayOwnerHandoffFixture(options = {}) {
         status: SERVICE_STATUS.ACTIVE,
       },
     ],
-    get(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) =>
-          partition.partition_id === key,
-        ) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
-  };
+  });
 
   const routingMetadataOverlay = {
     getPartitionById(partitionKey) {

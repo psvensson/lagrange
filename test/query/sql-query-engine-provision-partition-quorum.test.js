@@ -11,7 +11,6 @@ import {
 import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 import {
   ERRORS,
-  TABLES,
 } from '../../src/constants/index.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
@@ -46,6 +45,10 @@ import {
   uniqueNodeIds,
   withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
+import {
+  createCanonicalSystemCache,
+  seedCanonicalSystemMetadata,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 
 
 // Mock system cache with services for routing
@@ -74,57 +77,9 @@ async (t) => {
   const executedInlineStamps = [];
   let dispatchOperationCalls = 0;
 
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    has(type, key) {
-      if (type === TABLES.TABLES) {
-        return tables.some((row) => row.table_id === key);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.some((row) => row.partition_id === key);
-      }
-      return false;
-    },
-    get(type, key) {
-      if (type !== TABLES.TABLES) {
-        return null;
-      }
-      return tables.find((row) =>
-        row.table_id === key || row.table_name === key,
-      ) || null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.TABLES) {
-        return tables.filter(predicate);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.TABLES) {
-        return tables;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({
+    nodes, tables, partitions, services,
+  });
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -157,7 +112,7 @@ async (t) => {
           retryAfterMs: 1,
         };
       }
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
         service_id: operation.replicaId,
         replica_id: operation.replicaId,
         partition_id: operation.partitionId,
@@ -166,7 +121,7 @@ async (t) => {
         node_id: operation.targetNodeId || operation.nodeId,
         raft_role: 'leader',
         address: `${operation.targetNodeId || operation.nodeId}/partition/${operation.replicaId}`,
-      });
+      }]});
       return {success: true};
     },
     async dispatchOperation() {
@@ -244,55 +199,7 @@ test('SQLQueryEngine - provisionInitialTablePartition skips disconnected nodes',
     const partitions = [{partition_id: partitionId, table_id: tableId}];
     const services = [];
 
-    const cache = {
-      has(type, key) {
-        if (type === TABLES.TABLES) {
-          return tables.some((row) => row.table_id === key);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return partitions.some((row) => row.partition_id === key);
-        }
-        return false;
-      },
-      get(type, key) {
-        if (type !== TABLES.TABLES) {
-          return null;
-        }
-        return tables.find((row) =>
-          row.table_id === key || row.table_name === key,
-        ) || null;
-      },
-      filter(type, predicate) {
-        if (type === TABLES.NODES) {
-          return nodes.filter(predicate);
-        }
-        if (type === TABLES.TABLES) {
-          return tables.filter(predicate);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return partitions.filter(predicate);
-        }
-        if (type === TABLES.SERVICES) {
-          return services.filter(predicate);
-        }
-        return [];
-      },
-      getAll(type) {
-        if (type === TABLES.NODES) {
-          return nodes;
-        }
-        if (type === TABLES.TABLES) {
-          return tables;
-        }
-        if (type === TABLES.PARTITIONS) {
-          return partitions;
-        }
-        if (type === TABLES.SERVICES) {
-          return services;
-        }
-        return [];
-      },
-    };
+    const cache = createCanonicalSystemCache({nodes, tables, partitions, services});
 
     const rebalanceCoordinator = withBootstrapHoldRelease({
       async createOperation(move) {
@@ -304,14 +211,15 @@ test('SQLQueryEngine - provisionInitialTablePartition skips disconnected nodes',
       },
       async executeOperation(operation) {
         const targetNodeId = operation.targetNodeId || operation.nodeId;
-        services.push({
+        seedCanonicalSystemMetadata(cache, {services: [{
+          service_id: `${operation.partitionId}-${targetNodeId}`,
           partition_id: operation.partitionId,
           service_type: 'partition',
           status: 'active',
           node_id: targetNodeId,
           raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
           address: `${targetNodeId}/partition/${operation.partitionId}`,
-        });
+        }]});
         return {success: true};
       },
     });
@@ -355,26 +263,7 @@ test('SQLQueryEngine - provisionInitialTablePartition continues planning on ' +
   ];
   const services = [];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, services});
 
   const createAdmissionDeniedError = (nodeId) => {
     const error = new Error(`Provisioning admission denied on ${nodeId}`);
@@ -405,14 +294,15 @@ test('SQLQueryEngine - provisionInitialTablePartition continues planning on ' +
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
       executedTargetNodeIds.push(targetNodeId);
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: 'leader',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -456,20 +346,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails fast when ' +
     {node_id: 'node-b', status: 'active'},
   ];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -535,20 +412,7 @@ test('SQLQueryEngine - provisionInitialTablePartition probes admission ' +
     {node_id: 'node-b', status: 'active'},
   ];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
@@ -633,26 +497,7 @@ test('SQLQueryEngine - provisionInitialTablePartition refuses RF2 ' +
   ];
   const services = [];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, services});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
@@ -694,14 +539,15 @@ test('SQLQueryEngine - provisionInitialTablePartition refuses RF2 ' +
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
       executedTargetNodeIds.push(targetNodeId);
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: 'leader',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -756,22 +602,7 @@ async (t) => {
     {node_id: 'node-c', status: 'active'},
   ];
 
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
@@ -855,26 +686,7 @@ test('SQLQueryEngine - provisionInitialTablePartition completes RF3 ' +
   ];
   const services = [];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, services});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
@@ -919,7 +731,7 @@ test('SQLQueryEngine - provisionInitialTablePartition completes RF3 ' +
       const targetNodeId = operation.targetNodeId || operation.nodeId;
       executedTargetNodeIds.push(targetNodeId);
       dispatchedMemberships.push(operation.bootstrapMembership);
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
         service_id: operation.replicaId,
         partition_id: operation.partitionId,
         service_type: 'partition',
@@ -927,7 +739,7 @@ test('SQLQueryEngine - provisionInitialTablePartition completes RF3 ' +
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.replicaId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -997,20 +809,7 @@ test('SQLQueryEngine - provisionInitialTablePartition rejects RF3 ' +
     {node_id: 'node-c', status: 'active'},
   ];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
@@ -1101,20 +900,7 @@ test('SQLQueryEngine - provisionInitialTablePartition aborts provisional ' +
     {node_id: 'node-b', status: 'active'},
   ];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
@@ -1212,18 +998,7 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
   const dispatchedOperationIds = [];
   let refuseRemainingTargets = true;
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) return nodes.filter(predicate);
-      if (type === TABLES.SERVICES) return services.filter(predicate);
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) return nodes;
-      if (type === TABLES.SERVICES) return services;
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, services});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
@@ -1287,7 +1062,8 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
     },
     async executeOperation(operation) {
       dispatchedOperationIds.push(operation.operationId);
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: operation.replicaId,
         partition_id: partitionId,
         service_type: 'partition',
         status: 'active',
@@ -1295,7 +1071,7 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
         replica_id: operation.replicaId,
         raft_role: operation.targetNodeId === localNodeId ?
           'leader' : 'follower',
-      });
+      }]});
       return {success: true};
     },
     async dispatchOperation() {

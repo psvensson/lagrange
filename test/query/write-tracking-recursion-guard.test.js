@@ -19,6 +19,8 @@ import {
 } from '../../src/query/query-constants.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -45,26 +47,7 @@ function createCacheForTable(tableName) {
     address: `test-node/partition/${tableName}-p1`,
     status: 'active',
   }];
-  return {
-    tables, partitions, services,
-    get(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'partitions') return this.partitions.filter(predicate);
-      if (type === 'services') return this.services.filter(predicate);
-      return [];
-    },
-    getAll(type) {
-      if (type === 'partitions') return this.partitions;
-      if (type === 'tables') return this.tables;
-      if (type === 'services') return this.services;
-      return [];
-    },
-  };
+  return createCanonicalSystemCache({tables, partitions, services});
 }
 
 function createTestRouter() {

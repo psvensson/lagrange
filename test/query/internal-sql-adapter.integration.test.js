@@ -31,6 +31,8 @@ import {
 } from '../../src/query/query-constants.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 // Initialize configuration for tests
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -95,25 +97,11 @@ function createMockSystemCache(tables, partitions) {
     status: 'active',
   }));
 
-  return {
-    get(type, key) {
-      if (type === 'tables') {
-        return normalizedTables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'partitions') return normalizedPartitions.filter(predicate);
-      if (type === 'services') return services.filter(predicate);
-      return [];
-    },
-    getAll(type) {
-      if (type === 'partitions') return normalizedPartitions;
-      if (type === 'tables') return normalizedTables;
-      if (type === 'services') return services;
-      return [];
-    },
-  };
+  return createCanonicalSystemCache({
+    tables: normalizedTables,
+    partitions: normalizedPartitions,
+    services,
+  });
 }
 
 /**

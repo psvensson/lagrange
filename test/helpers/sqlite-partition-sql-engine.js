@@ -11,20 +11,17 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import Database from 'better-sqlite3';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
+import {TABLES} from '../../src/constants/index.js';
 import {
   resolveDeclaredPartitionKeyType,
 } from '../../src/partition/partition-boundary-representation.js';
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
-import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
-import {SQLParser} from '../../src/query/sql-parser.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
-  buildSchemaDefinition,
-  derivePartitionKey,
-} from '../../src/query/table-creation-service-schema-derivation.js';
+  createCanonicalSystemCache,
+  tableRowFromDdl,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
 import {createTransactionPersistenceGateway} from
@@ -44,59 +41,25 @@ function ensureConfiguration() {
 }
 
 function createSystemCache(table, partitions) {
-  const parsedDdl = new SQLParser(
-    table.ddl,
-    {dialect: PARSER_DIALECT.POSTGRESQL},
-  ).parse();
   const primaryKeyList = Array.isArray(table.primaryKey) ?
     table.primaryKey :
     [table.primaryKey];
-  const canonicalSchema = buildSchemaDefinition(
-    parsedDdl.columns || [],
-    parsedDdl,
-    primaryKeyList,
-  );
-  const partitionKey = derivePartitionKey(primaryKeyList);
-  const schemaDefinition = JSON.stringify({
-    ...canonicalSchema,
-    tableName: table.name,
-    columns: canonicalSchema.columns.map((col, idx) => ({
-      ...col,
-      ...(parsedDdl.columns?.[idx]?.dataType ?
-        {dataType: parsedDdl.columns[idx].dataType} :
-        {}),
-    })),
-    primaryKey: table.primaryKey,
-  });
-  const tableRow = {
-    table_id: table.name,
-    table_name: table.name,
-    primary_key: partitionKey,
-    primaryKey: table.primaryKey,
-    partition_key: partitionKey,
-    active_partition_version: 1,
-    schema_definition: schemaDefinition,
-  };
+  const tableRow = tableRowFromDdl(table);
   const defaultPartitionKeyType =
     resolveDeclaredPartitionKeyType(tableRow, primaryKeyList) || 'TEXT';
-  const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.TABLES, CDC_OPERATION.INSERT, tableRow);
-  for (const partition of partitions) {
-    const partitionRow = {
-      partition_version: 1,
-      state: 'NORMAL',
-      partition_key_type: defaultPartitionKeyType,
-      ...partition,
-      table_id: table.name,
-      table_name: table.name,
-      leader_node_id: FIXTURE_NODE,
-    };
-    cache.applySystemTableChange(
-      TABLES.PARTITIONS,
-      CDC_OPERATION.INSERT,
-      partitionRow,
-    );
-    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+  const partitionRows = partitions.map((partition) => ({
+    partition_version: 1,
+    state: 'NORMAL',
+    partition_key_type: defaultPartitionKeyType,
+    ...partition,
+    table_id: table.name,
+    table_name: table.name,
+    leader_node_id: FIXTURE_NODE,
+  }));
+  return createCanonicalSystemCache({
+    [TABLES.TABLES]: [tableRow],
+    [TABLES.PARTITIONS]: partitionRows,
+    [TABLES.SERVICES]: partitionRows.map((partitionRow) => ({
       service_id: partitionRow.partition_id,
       service_type: 'partition',
       partition_id: partitionRow.partition_id,
@@ -104,9 +67,8 @@ function createSystemCache(table, partitions) {
       raft_role: 'leader',
       address: `${FIXTURE_NODE}/partition/${partitionRow.partition_id}`,
       status: 'active',
-    });
-  }
-  return cache;
+    })),
+  });
 }
 
 function createPartitionRouter(databases, uncountedPartitions) {

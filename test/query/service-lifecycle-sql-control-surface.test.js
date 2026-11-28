@@ -33,6 +33,8 @@ import {
 } from '../../src/service/service-lifecycle-command-owner.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 const DIGEST_A = `sha256:${'a'.repeat(64)}`;
 const DIGEST_B = `sha256:${'b'.repeat(64)}`;
 const CONTAINER_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v1+json';
@@ -263,17 +265,7 @@ function createFixturePayloadStore() {
 }
 
 function createSystemCache() {
-  return {
-    filter() {
-      return [];
-    },
-    get() {
-      return null;
-    },
-    getAll() {
-      return [];
-    },
-  };
+  return createCanonicalSystemCache();
 }
 
 function createEngineFixture(options = {}) {

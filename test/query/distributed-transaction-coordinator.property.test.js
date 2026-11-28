@@ -19,6 +19,8 @@ import {
 } from '../../src/constants/index.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -391,11 +393,7 @@ test(
           const deliveredMessages = [];
           const engine = new SQLQueryEngine({
             controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-            systemCache: {
-              get: () => null,
-              getAll: () => [],
-              filter: () => [],
-            },
+            systemCache: createCanonicalSystemCache(),
             messageRouter: {
               deliver: async (_address, payload) => {
                 deliveredMessages.push(payload);

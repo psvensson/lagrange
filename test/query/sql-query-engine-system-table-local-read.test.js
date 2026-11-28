@@ -10,6 +10,8 @@ import {
 } from '../../src/cdc/cdc-integration-service-authoritative-read-flow.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 function createMockSystemCache(tableName = SYSTEM_TABLE_NAME.SERVICES) {
   const primaryKey = tableName === SYSTEM_TABLE_NAME.LOGS ?
     'log_id' :
@@ -39,35 +41,7 @@ function createMockSystemCache(tableName = SYSTEM_TABLE_NAME.SERVICES) {
     status: 'active',
   }];
 
-  return {
-    get(type, key) {
-      if (type === 'tables') {
-        return tables.find((table) => table.table_name === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'partitions') {
-        return partitions.filter(predicate);
-      }
-      if (type === 'services') {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === 'tables') {
-        return tables;
-      }
-      if (type === 'partitions') {
-        return partitions;
-      }
-      if (type === 'services') {
-        return services;
-      }
-      return [];
-    },
-  };
+  return createCanonicalSystemCache({tables, partitions, services});
 }
 
 test('SQLQueryEngine - single-table system selects prefer local authoritative reads',
@@ -417,6 +391,9 @@ test('SQLQueryEngine - real executeAuthoritativeSystemTableRead local-leader pat
     },
     replicaId: 'services-p1-r1',
     role: 'leader',
+    getRole() {
+      return 'leader';
+    },
     buildRemoteReadAuthorityWitness() {
       return {
         appliedIndex: 31,

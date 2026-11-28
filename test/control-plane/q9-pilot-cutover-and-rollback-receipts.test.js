@@ -45,6 +45,10 @@ import {
 } from '../../src/cli/cutover-router.js';
 
 import {createCommittedServeEligibilityOwner} from './serve-eligibility-test-support.js';
+import {
+  createCanonicalSystemCache,
+  tableRowFromDdl,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 const HOST = '127.0.0.1';
 const DB_NAME = 'pilot_cutover_db';
 const DB_USER = 'pilot_operator';
@@ -220,7 +224,7 @@ function buildClusterEngine() {
   };
 
   for (const spec of tableSpecs) {
-    const tableRecord = {table_name: spec.name, primaryKey: spec.primaryKey};
+    const tableRecord = tableRowFromDdl(spec);
     tableMetadata.set(spec.name, tableRecord);
     catalogEntries.tables.push(tableRecord);
     for (const part of spec.partitions) {
@@ -243,12 +247,7 @@ function buildClusterEngine() {
     }
   }
 
-  const systemCache = {
-    filter: (kind, fn) => (catalogEntries[kind] ?? []).filter(fn),
-    get: (kind, key) =>
-      kind === 'tables' ? (tableMetadata.get(key) ?? null) : null,
-    getAll: (kind) => catalogEntries[kind] ?? [],
-  };
+  const systemCache = createCanonicalSystemCache(catalogEntries);
 
   function handlePartitionSql(conn, sqlText, boundParams) {
     const stmt = conn.prepare(sqlText);

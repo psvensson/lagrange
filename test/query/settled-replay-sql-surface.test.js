@@ -49,6 +49,8 @@ import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 const {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} = outcomeConstants;
 const REPLAY = outcomeConstants.PARTITION_SETTLED_REPLAY ?? {};
 const TEMP_PREFIX = 'settled-replay-sql-surface-';
@@ -93,24 +95,7 @@ function systemCacheOf({partitionId, replicaId, address}) {
   const services = [{service_id: replicaId, service_type: 'partition',
     partition_id: partitionId, node_id: NODE_ID, raft_role: 'leader',
     address, status: 'active'}];
-  const byType = {tables, partitions, services};
-  return {
-    get(type, key) {
-      if (type === 'tables') {
-        return tables.find((table) => table.table_name === key);
-      }
-      if (type === 'partitions') {
-        return partitions.find((row) => row.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      return (byType[type] || []).filter(predicate);
-    },
-    getAll(type) {
-      return byType[type] || [];
-    },
-  };
+  return createCanonicalSystemCache({tables, partitions, services});
 }
 
 function rowsOf(dbPath) {

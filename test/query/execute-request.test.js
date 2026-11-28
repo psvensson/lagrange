@@ -43,6 +43,8 @@ import {ModuleMirror} from '../../src/wasm-service/module-mirror.js';
 import {WasmExecutor} from '../../src/wasm-service/wasm-executor.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -80,27 +82,12 @@ function createMockSystemCache() {
     status: SERVICE_STATUS.ACTIVE,
     service: {isLeader: true},
   })];
-  return {
-    get: function(type, _key) {
-      if (type === 'tables') {
-        if (_key === 'users') {
-          return {table_id: 'users', table_name: 'users', primary_key: 'id',
-            active_partition_version: 1};
-        }
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'partitions') return partitions.filter(predicate);
-      if (type === 'services') return services.filter(predicate);
-      return [];
-    },
-    getAll: function(type) {
-      if (type === 'partitions') return partitions;
-      if (type === 'services') return services;
-      return [];
-    },
-  };
+  return createCanonicalSystemCache({
+    tables: [{table_id: 'users', table_name: 'users', primary_key: 'id',
+      active_partition_version: 1}],
+    partitions,
+    services,
+  });
 }
 
 function createEngine() {

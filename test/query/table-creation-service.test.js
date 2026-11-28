@@ -1493,3 +1493,25 @@ test('TableCreationService - pure schema derivation, result projection, and ' +
   );
   await unpersistedService.shutdown();
 });
+
+test('TableCreationService - refuses a system cache that cannot find()', (t) => {
+  // The service reads table rows through SystemTableCache.find(); a cache
+  // without it is refused at construction with the product's message.
+  const cacheWithoutFind = {
+    get: () => null,
+    filter: () => [],
+    getAll: () => [],
+  };
+  t.throws(
+    () => new TableCreationService({systemCache: cacheWithoutFind}),
+    {
+      name: 'TypeError',
+      message: 'TableCreationService systemCache must implement find()',
+    },
+  );
+  t.throws(
+    () => new TableCreationService({}).setSystemCache(cacheWithoutFind),
+    {message: 'TableCreationService systemCache must implement find()'},
+  );
+  t.end();
+});

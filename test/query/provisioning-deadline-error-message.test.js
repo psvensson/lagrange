@@ -20,6 +20,8 @@ import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
 import {createProvisioningReadyService} from './sql-query-engine-test-support.js';
 import {assertChildProvisioningAttempt} from
   '../../src/partition/managed-split-workflow-state-methods.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 
 ConfigurationManager.getInstance().initialize();
 
@@ -52,10 +54,7 @@ test('CREATE TABLE provisioning past its deadline rejects with the typed, non-em
     const localNodeId = 'node-a';
     const nodes = ['node-a', 'node-b', 'node-c'].map((nodeId) => ({node_id: nodeId,
       status: 'active', connection_state: 'ready'}));
-    const cache = {
-      filter: (type, predicate) => (type === TABLES.NODES ? nodes.filter(predicate) : []),
-      getAll: (type) => (type === TABLES.NODES ? nodes : []),
-    };
+    const cache = createCanonicalSystemCache({[TABLES.NODES]: nodes});
     const admissionChecks = [];
     const engine = new SQLQueryEngine({
       nodeId: localNodeId,

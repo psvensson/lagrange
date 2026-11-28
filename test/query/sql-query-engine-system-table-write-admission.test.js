@@ -30,6 +30,8 @@ import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
   '../../src/partition/partition-service-remote-query-methods.js';
 import {resolveFailureSqlState} from '../../src/runtime/pgwire-result-mapper.js';
 import {createTestPostgresWireAdapter} from '../helpers/pgwire-auth-handler.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
@@ -104,24 +106,7 @@ function createSystemCache() {
     address: `test-node/partition/${p.partition_id}`,
     status: 'active',
   }));
-  return {
-    get(type, key) {
-      return type === 'tables' ?
-        tables.find((t) => t.table_name === key) || null :
-        null;
-    },
-    filter(type, predicate) {
-      if (type === 'partitions') return partitions.filter(predicate);
-      if (type === 'services') return services.filter(predicate);
-      return [];
-    },
-    getAll(type) {
-      if (type === 'partitions') return partitions;
-      if (type === 'tables') return tables;
-      if (type === 'services') return services;
-      return [];
-    },
-  };
+  return createCanonicalSystemCache({tables, partitions, services});
 }
 
 function createEngine(queryHandler = null) {

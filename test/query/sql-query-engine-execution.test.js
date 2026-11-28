@@ -58,6 +58,8 @@ import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 
 test('SQLQueryEngine preserves canonical result and deadline budgets for ' +
   'SELECT execution', async (t) => {
@@ -529,35 +531,11 @@ test('SQLQueryEngine - resolves partitions when table metadata is only available
     status: 'active',
   }];
 
-  const cache = {
-    get(type, key) {
-      if (type === TABLES.TABLES && key === tableRecord.table_id) {
-        return tableRecord;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.PARTITIONS) {
-        return partitionRecords.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return serviceRecords.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.TABLES) {
-        return [tableRecord];
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitionRecords;
-      }
-      if (type === TABLES.SERVICES) {
-        return serviceRecords;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({
+    tables: [tableRecord],
+    partitions: partitionRecords,
+    services: serviceRecords,
+  });
 
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),

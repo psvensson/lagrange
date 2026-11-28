@@ -41,6 +41,8 @@ import {
   applyCommitted, clearFixtureSingletons, resetFixtureSingletons, settleTicks,
   shutdownAll, startLeader, statementState, temporaryDbPath, track,
 } from '../test-helpers/participant-transaction-fixture.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -730,11 +732,7 @@ function createNamedSqlWriter(executeOnPartitions) {
     [TABLES.PARTITIONS]: [{partition_id: PARTITION_ID, table_id: TABLE,
       table_name: TABLE, leader_node_id: NODES[0], status: 'active'}],
   };
-  const systemCache = {
-    get: (name, id) => name === TABLES.TABLES && id === TABLE ? table : null,
-    getAll: (name) => catalog[name] || [],
-    filter: (name, predicate) => (catalog[name] || []).filter(predicate),
-  };
+  const systemCache = createCanonicalSystemCache(catalog);
   const engine = new SQLQueryEngine({nodeId: NODES[0], systemCache});
   engine.queryExecutor.executeOnPartitions = executeOnPartitions;
   return {engine, gateway: new ControlPlaneSystemTableGateway({

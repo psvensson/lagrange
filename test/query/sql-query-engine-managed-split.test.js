@@ -32,6 +32,10 @@ import {
 } from './sql-query-engine-test-support.js';
 import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
+import {
+  createCanonicalSystemCache,
+  seedCanonicalSystemMetadata,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 
 
 test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' +
@@ -55,55 +59,9 @@ test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' 
     address: 'node-c/message-group/mg-1-r3',
   }];
 
-  const cache = {
-    has(type, key) {
-      if (type === TABLES.TABLES) {
-        return tables.some((row) => row.table_id === key);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.some((row) => row.partition_id === key);
-      }
-      return false;
-    },
-    get(type, key) {
-      if (type !== TABLES.TABLES) {
-        return null;
-      }
-      return tables.find((row) =>
-        row.table_id === key || row.table_name === key,
-      ) || null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.TABLES) {
-        return tables.filter(predicate);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.TABLES) {
-        return tables;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({
+    nodes, tables, partitions, services,
+  });
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -115,14 +73,15 @@ test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' 
     },
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -199,55 +158,9 @@ test('SQLQueryEngine - provisionInitialTablePartition excludes active-service ' 
     address: 'node-c/message-group/mg-1-r3',
   }];
 
-  const cache = {
-    has(type, key) {
-      if (type === TABLES.TABLES) {
-        return tables.some((row) => row.table_id === key);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.some((row) => row.partition_id === key);
-      }
-      return false;
-    },
-    get(type, key) {
-      if (type !== TABLES.TABLES) {
-        return null;
-      }
-      return tables.find((row) =>
-        row.table_id === key || row.table_name === key,
-      ) || null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.TABLES) {
-        return tables.filter(predicate);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.TABLES) {
-        return tables;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({
+    nodes, tables, partitions, services,
+  });
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -259,14 +172,15 @@ test('SQLQueryEngine - provisionInitialTablePartition excludes active-service ' 
     },
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -348,55 +262,9 @@ test('SQLQueryEngine - provisionInitialTablePartition falls back to active ' +
     },
   ];
 
-  const cache = {
-    has(type, key) {
-      if (type === TABLES.TABLES) {
-        return tables.some((row) => row.table_id === key);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.some((row) => row.partition_id === key);
-      }
-      return false;
-    },
-    get(type, key) {
-      if (type !== TABLES.TABLES) {
-        return null;
-      }
-      return tables.find((row) =>
-        row.table_id === key || row.table_name === key,
-      ) || null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.TABLES) {
-        return tables.filter(predicate);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.TABLES) {
-        return tables;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({
+    nodes, tables, partitions, services,
+  });
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -408,14 +276,15 @@ test('SQLQueryEngine - provisionInitialTablePartition falls back to active ' +
     },
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -454,32 +323,7 @@ test('SQLQueryEngine - provisionInitialTablePartition does not block on stale ' 
   ];
   const services = [];
 
-  const cache = {
-    has() {
-      return false;
-    },
-    get() {
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, services});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -491,14 +335,15 @@ test('SQLQueryEngine - provisionInitialTablePartition does not block on stale ' 
     },
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -542,32 +387,7 @@ test('SQLQueryEngine - provisionInitialTablePartition honors explicit ' +
   ];
   const services = [];
 
-  const cache = {
-    has() {
-      return false;
-    },
-    get() {
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, services});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -579,14 +399,15 @@ test('SQLQueryEngine - provisionInitialTablePartition honors explicit ' +
     },
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -808,7 +629,7 @@ function metadataPollEngine(nowMs, options = {}) {
   const sleeps = [];
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-    systemCache: {onCacheChange() {}},
+    systemCache: createCanonicalSystemCache(),
     cdcIntegrationService: new Proxy({}, {
       get(_target, name) {
         return (...args) => {

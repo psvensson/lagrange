@@ -11,6 +11,8 @@ import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../../src/control-plane/control-plane-readiness-constants.js';
 
 import {createCommittedServeEligibilityOwner} from '../../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../../test-helpers/canonical-system-metadata-seed.js';
 const STARTUP_SQL_RUNTIME_HANDOFF_SUITE = 'startup-sql-runtime-handoff';
 const STARTUP_SQL_RUNTIME_HANDOFF_TEST = Object.freeze({
   runtimeAccessPolicy:
@@ -90,11 +92,7 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
 
   it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.lifecycleOwner,
     async () => {
-      const systemTableCache = {
-        filter: () => [],
-        get: () => null,
-        getAll: () => [],
-      };
+      const systemTableCache = createCanonicalSystemCache();
       const gatewayBindings = [];
       const gateway = {
         sqlQueryEngine: null,
@@ -174,11 +172,7 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
 
   it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.absentLifecycleOwner,
     async () => {
-      const systemTableCache = {
-        filter: () => [],
-        get: () => null,
-        getAll: () => [],
-      };
+      const systemTableCache = createCanonicalSystemCache();
       const finalEngine = new SQLQueryEngine({
         controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         autoStartDistributedTransactionRecovery: false,

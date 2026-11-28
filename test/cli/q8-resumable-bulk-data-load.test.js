@@ -38,6 +38,10 @@ import {
 } from '../../src/cli/bulk-load-router.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {
+  createCanonicalSystemCache,
+  tableRowFromDdl,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 const HOST = '127.0.0.1';
 const DB_NAME = 'pilot_bulk_load';
 const DB_USER = 'pilot_loader';
@@ -150,7 +154,7 @@ function createMultiTablePartitionCluster(existingDatabases = null) {
   const services = [];
 
   for (const spec of tableSpecs) {
-    tables.push({table_name: spec.name, primaryKey: spec.primaryKey});
+    tables.push(tableRowFromDdl(spec));
     for (const part of spec.partitions) {
       if (!databases.has(part.partition_id)) {
         const db = new Database(':memory:');
@@ -174,20 +178,11 @@ function createMultiTablePartitionCluster(existingDatabases = null) {
     }
   }
 
-  const byType = {partitions: partitionRows, services, tables};
-  const systemCache = {
-    get(type, key) {
-      return type === 'tables' ?
-        tables.find((entry) => entry.table_name === key) :
-        null;
-    },
-    filter(type, predicate) {
-      return (byType[type] || []).filter(predicate);
-    },
-    getAll(type) {
-      return byType[type] || [];
-    },
-  };
+  const systemCache = createCanonicalSystemCache({
+    tables,
+    partitions: partitionRows,
+    services,
+  });
 
   const messageRouter = {
     async deliver(address, message) {

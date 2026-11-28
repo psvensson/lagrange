@@ -13,6 +13,8 @@ import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -58,44 +60,11 @@ function createSystemCache({tables, partitions, services}) {
       ...partition,
     };
   });
-  return {
+  return createCanonicalSystemCache({
     tables: normalizedTables,
     partitions: normalizedPartitions,
     services: services || [],
-    get(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((row) => row.table_name === key) || null;
-      }
-      if (type === 'partitions') {
-        return this.partitions.find((row) => row.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'tables') {
-        return this.tables.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === 'tables') {
-        return this.tables;
-      }
-      if (type === 'partitions') {
-        return this.partitions;
-      }
-      if (type === 'services') {
-        return this.services;
-      }
-      return [];
-    },
-  };
+  });
 }
 
 function createJoinDataRouter(dataByPartition) {

@@ -26,6 +26,8 @@ import {
 import {serveEligibilityFromFixture} from './serve-eligibility-test-support.js';
 import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 
 const FIXTURE_NODE_ID = 'node-readiness-1';
 const FIXTURE_PARTITION_ID = 'partition-readiness-1';
@@ -106,69 +108,20 @@ function createControlledReadinessService(readinessMap, calls = null) {
 
 function createMinimalCache(nodes = []) {
   const now = Date.now();
-  const nodeMap = new Map(nodes.map((n) => [n.node_id, {
-    ready_lease_expires_at: now + FIXTURE_LEASE_FUTURE_MS,
-    status: SERVICE_STATUS.ACTIVE,
-    ...n,
-  }]));
-  return {
-    get: (table, key) => {
-      if (table === SYSTEM_TABLE_NAME.NODES) {
-        return nodeMap.get(key) || null;
-      }
-      return null;
-    },
-    filter: (table, predicate) => {
-      if (table === SYSTEM_TABLE_NAME.NODES) {
-        return Array.from(nodeMap.values()).filter(predicate);
-      }
-      return [];
-    },
-    getAll: (table) => {
-      if (table === SYSTEM_TABLE_NAME.NODES) {
-        return Array.from(nodeMap.values());
-      }
-      return [];
-    },
-  };
+  return createCanonicalSystemCache({
+    [SYSTEM_TABLE_NAME.NODES]: nodes.map((n) => ({
+      ready_lease_expires_at: now + FIXTURE_LEASE_FUTURE_MS,
+      status: SERVICE_STATUS.ACTIVE,
+      ...n,
+    })),
+  });
 }
 
 function createQueryRoutingCache({services = [], partitions = []} = {}) {
-  const serviceRows = services.map((service) => ({...service}));
-  const partitionRows = partitions.map((partition) => ({...partition}));
-  return {
-    get: (table, key) => {
-      if (table === SYSTEM_TABLE_NAME.PARTITIONS) {
-        return partitionRows.find((partition) =>
-          partition.partition_id === key,
-        ) || null;
-      }
-      if (table === SYSTEM_TABLE_NAME.SERVICES) {
-        return serviceRows.find((service) =>
-          service.service_id === key || service.replica_id === key,
-        ) || null;
-      }
-      return null;
-    },
-    filter: (table, predicate) => {
-      if (table === SYSTEM_TABLE_NAME.PARTITIONS) {
-        return partitionRows.filter(predicate);
-      }
-      if (table === SYSTEM_TABLE_NAME.SERVICES) {
-        return serviceRows.filter(predicate);
-      }
-      return [];
-    },
-    getAll: (table) => {
-      if (table === SYSTEM_TABLE_NAME.PARTITIONS) {
-        return partitionRows;
-      }
-      if (table === SYSTEM_TABLE_NAME.SERVICES) {
-        return serviceRows;
-      }
-      return [];
-    },
-  };
+  return createCanonicalSystemCache({
+    [SYSTEM_TABLE_NAME.SERVICES]: services,
+    [SYSTEM_TABLE_NAME.PARTITIONS]: partitions,
+  });
 }
 
 function createPublicationOwner() {

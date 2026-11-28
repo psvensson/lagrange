@@ -12,7 +12,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {TABLES} from '../../src/constants/index.js';
 import {
   ManagedSplitTopologyAdapter,
 } from '../../src/partition/managed-split-topology-adapter.js';
@@ -26,6 +25,8 @@ import {
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -37,7 +38,7 @@ config.initialize();
  * @return {Object} Mock system cache.
  */
 function createMockSystemCache(tables, partitions, services) {
-  return {
+  return createCanonicalSystemCache({
     tables,
     partitions,
     services: services || partitions.map((p) => ({
@@ -49,29 +50,7 @@ function createMockSystemCache(tables, partitions, services) {
       address: `test-node/partition/${p.partition_id}`,
       status: 'active',
     })),
-    get(type, key) {
-      if (type === TABLES.TABLES) {
-        return this.tables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.PARTITIONS) return this.partitions;
-      if (type === TABLES.TABLES) return this.tables;
-      if (type === TABLES.SERVICES) return this.services;
-      return [];
-    },
-    onCacheChange() {},
-  };
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -37,6 +37,10 @@ import {
   createProvisioningReadyService,
   withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
+import {
+  createCanonicalSystemCache,
+  seedCanonicalSystemMetadata,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 
 const LEDGER_HOLD_REJECTION = Object.freeze({
   allowed: false,
@@ -50,36 +54,15 @@ const LEDGER_HOLD_REJECTION = Object.freeze({
 
 function createClusterFixture({nodeIds}) {
   const nodes = nodeIds.map((nodeId) => ({node_id: nodeId, status: 'active'}));
-  const services = [];
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
-  return {nodes, services, cache};
+  const cache = createCanonicalSystemCache({[TABLES.NODES]: nodes});
+  return {nodes, cache};
 }
 
 function createHoldingRebalanceCoordinator({
   isHoldEngaged,
   createdTargetNodeIds,
-  services,
+  dispatchedNodeIds = [],
+  cache,
   localNodeId,
   rejection = LEDGER_HOLD_REJECTION,
 }) {
@@ -100,7 +83,8 @@ function createHoldingRebalanceCoordinator({
     },
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      dispatchedNodeIds.push(targetNodeId);
+      seedCanonicalSystemMetadata(cache, {[TABLES.SERVICES]: [{
         service_id:
           operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
         replica_id:
@@ -111,7 +95,7 @@ function createHoldingRebalanceCoordinator({
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -146,7 +130,8 @@ test('run-24 (R09 F10/C6): whole-cluster transient operation-ledger hold ' +
   const localNodeId = 'node-a';
   const holdUntilMs = 40;
   const createdTargetNodeIds = [];
-  const {services, cache} = createClusterFixture({
+  const dispatchedNodeIds = [];
+  const {cache} = createClusterFixture({
     nodeIds: ['node-a', 'node-b', 'node-c'],
   });
 
@@ -155,7 +140,8 @@ test('run-24 (R09 F10/C6): whole-cluster transient operation-ledger hold ' +
   const rebalanceCoordinator = createHoldingRebalanceCoordinator({
     isHoldEngaged: () => clockRef.nowMs < holdUntilMs,
     createdTargetNodeIds,
-    services,
+    dispatchedNodeIds,
+    cache,
     localNodeId,
   });
   const {clock, engine} = createEngineFixture(t, {
@@ -203,7 +189,7 @@ test('run-24 (R09 F10/C6): whole-cluster transient operation-ledger hold ' +
     'all three target nodes planned on retry',
   );
   t.same(
-    services.map((service) => service.node_id).sort(),
+    dispatchedNodeIds.slice().sort(),
     ['node-a', 'node-b', 'node-c'],
     'all three replicas dispatched once the ledger hold cleared',
   );
@@ -214,13 +200,13 @@ test('control: a transient hold that NEVER clears still fails within the ' +
   const partitionId = 'tbl-run24-hold-never-clears-p1';
   const localNodeId = 'node-a';
   const createdTargetNodeIds = [];
-  const {services, cache} = createClusterFixture({
+  const {cache} = createClusterFixture({
     nodeIds: ['node-a', 'node-b', 'node-c'],
   });
   const rebalanceCoordinator = createHoldingRebalanceCoordinator({
     isHoldEngaged: () => true,
     createdTargetNodeIds,
-    services,
+    cache,
     localNodeId,
   });
   const {engine} = createEngineFixture(t, {
@@ -247,14 +233,14 @@ test('control: a NON-transient whole-cluster rejection fails fast without ' +
   const partitionId = 'tbl-run24-hard-rejection-p1';
   const localNodeId = 'node-a';
   const createdTargetNodeIds = [];
-  const {services, cache} = createClusterFixture({
+  const {cache} = createClusterFixture({
     nodeIds: ['node-a', 'node-b', 'node-c'],
   });
   let sleepCalls = 0;
   const rebalanceCoordinator = createHoldingRebalanceCoordinator({
     isHoldEngaged: () => true,
     createdTargetNodeIds,
-    services,
+    cache,
     localNodeId,
     rejection: {
       allowed: false,

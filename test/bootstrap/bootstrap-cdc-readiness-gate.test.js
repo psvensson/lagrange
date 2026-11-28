@@ -15,6 +15,10 @@ import {CDCPipelineReadinessGate} from
   '../../src/cdc/cdc-pipeline-readiness-gate.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
+import {createCanonicalSystemCache} from
+  '../test-helpers/canonical-system-metadata-seed.js';
 
 const NODE_ID = 'readiness-gate-test-node';
 const NODE_ADDRESS = 'ws://127.0.0.1:19091';
@@ -41,31 +45,24 @@ const createCompleteHydrationResult = () => {
 };
 
 /**
- * Build a minimal system table cache stub that satisfies the
- * leader-readiness gate and cache-hydration verification.
+ * Build a real system table cache holding one row in every hydrated table
+ * (the leader-readiness gate and cache-hydration verification read them),
+ * with the services and nodes rows the gate needs.
  */
 const createFullyHydratedCache = () => {
-  const listeners = [];
-  return {
-    getAll: (tableName) => {
-      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
-        return [{
-          service_id: 'p1', service_type: 'partition',
-          status: 'ACTIVE', raft_role: 'leader',
-          node_id: NODE_ID, address: `${NODE_ID}/partition/p1`,
-        }];
-      }
-      if (tableName === SYSTEM_TABLE_NAME.NODES) {
-        return [{node_id: NODE_ID}];
-      }
-      return [{id: '1'}];
-    },
-    onCacheChange: (fn) => listeners.push(fn),
-    offCacheChange: () => {},
-    _fireChange: () => {
-      for (const fn of listeners) fn();
-    },
-  };
+  const rowsByTable = {};
+  for (const tableName of CACHE_HYDRATION_TABLES) {
+    rowsByTable[tableName] = [
+      {[getSystemCachePrimaryKeyField(tableName)]: '1'},
+    ];
+  }
+  rowsByTable[SYSTEM_TABLE_NAME.SERVICES] = [{
+    service_id: 'p1', service_type: 'partition',
+    status: 'ACTIVE', raft_role: 'leader',
+    node_id: NODE_ID, address: `${NODE_ID}/partition/p1`,
+  }];
+  rowsByTable[SYSTEM_TABLE_NAME.NODES] = [{node_id: NODE_ID}];
+  return createCanonicalSystemCache(rowsByTable);
 };
 
 /**

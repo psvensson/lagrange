@@ -48,6 +48,11 @@ import {
   createProvisioningReadyService,
   withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
+import {
+  createCanonicalSystemCache,
+  seedCanonicalSystemMetadata,
+  updateCanonicalSystemMetadata,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 
 test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' +
   'routes before continuing', async (t) => {
@@ -69,55 +74,9 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' 
   }];
   const services = [];
 
-  const cache = {
-    has(type, key) {
-      if (type === TABLES.TABLES) {
-        return tables.some((row) => row.table_id === key);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.some((row) => row.partition_id === key);
-      }
-      return false;
-    },
-    get(type, key) {
-      if (type !== TABLES.TABLES) {
-        return null;
-      }
-      return tables.find((row) =>
-        row.table_id === key || row.table_name === key,
-      ) || null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.TABLES) {
-        return tables.filter(predicate);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.TABLES) {
-        return tables;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({
+    nodes, tables, partitions, services,
+  });
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -129,14 +88,15 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' 
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
       if (targetNodeId !== 'node-c') {
-        services.push({
+        seedCanonicalSystemMetadata(cache, {services: [{
+          service_id: `${operation.partitionId}-${targetNodeId}`,
           partition_id: operation.partitionId,
           service_type: 'partition',
           status: 'creating',
           node_id: targetNodeId,
           raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
           address: `${targetNodeId}/partition/${operation.partitionId}`,
-        });
+        }]});
       }
       return {success: true};
     },
@@ -170,9 +130,12 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' 
     'creating split replicas must not be treated as an active leader cohort',
   );
 
-  for (const service of services) {
-    service.status = 'active';
-  }
+  updateCanonicalSystemMetadata(cache, {
+    [TABLES.SERVICES]: cache.getAll(TABLES.SERVICES).map((service) => ({
+      service_id: service.service_id,
+      status: 'active',
+    })),
+  });
 
   await provisionPromise;
 
@@ -200,58 +163,9 @@ test('SQLQueryEngine - provisionInitialTablePartition accepts canonical ' +
   }];
   const services = [];
 
-  const cache = {
-    has(type, key) {
-      if (type === TABLES.TABLES) {
-        return tables.some((row) => row.table_id === key);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.some((row) => row.partition_id === key);
-      }
-      return false;
-    },
-    get(type, key) {
-      if (type === TABLES.TABLES) {
-        return tables.find((row) =>
-          row.table_id === key || row.table_name === key,
-        ) || null;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.find((row) => row.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.TABLES) {
-        return tables.filter(predicate);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.TABLES) {
-        return tables;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({
+    nodes, tables, partitions, services,
+  });
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -262,7 +176,7 @@ test('SQLQueryEngine - provisionInitialTablePartition accepts canonical ' +
     },
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
         partition_id: operation.partitionId,
         service_type: 'partition',
         service_id: `${operation.partitionId}-${targetNodeId}`,
@@ -270,7 +184,7 @@ test('SQLQueryEngine - provisionInitialTablePartition accepts canonical ' +
         node_id: targetNodeId,
         raft_role: null,
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -301,7 +215,7 @@ test('SQLQueryEngine - provisionInitialTablePartition accepts canonical ' +
 test('SQLQueryEngine - waitForPartitionLeaderService accepts a fresh ' +
   'bootstrap leader fallback before leader_node_id converges', async (t) => {
   const partitionId = 'tbl-bootstrap-leader-gap-p1';
-  const cache = {
+  const cache = createCanonicalSystemCache({
     partitions: [
       {
         partition_id: partitionId,
@@ -340,31 +254,7 @@ test('SQLQueryEngine - waitForPartitionLeaderService accepts a fresh ' +
         address: 'node-c/partition/tbl-bootstrap-leader-gap-p1-r3',
       },
     ],
-    get(type, key) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.find((row) => row.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.PARTITIONS) {
-        return this.partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return this.services;
-      }
-      return [];
-    },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),

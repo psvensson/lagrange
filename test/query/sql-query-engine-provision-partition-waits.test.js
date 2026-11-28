@@ -58,6 +58,11 @@ import {
   createCommittedServeEligibilityOwner,
   serveEligibilityAnswer,
 } from '../control-plane/serve-eligibility-test-support.js';
+import {
+  createCanonicalSystemCache,
+  deleteCanonicalSystemMetadata,
+  seedCanonicalSystemMetadata,
+} from '../test-helpers/canonical-system-metadata-seed.js';
 // Mock system cache with services for routing
 
 
@@ -88,57 +93,9 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
   }];
   const services = [];
 
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    has(type, key) {
-      if (type === TABLES.TABLES) {
-        return tables.some((row) => row.table_id === key);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.some((row) => row.partition_id === key);
-      }
-      return false;
-    },
-    get(type, key) {
-      if (type !== TABLES.TABLES) {
-        return null;
-      }
-      return tables.find((row) =>
-        row.table_id === key || row.table_name === key,
-      ) || null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.TABLES) {
-        return tables.filter(predicate);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.TABLES) {
-        return tables;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({
+    nodes, tables, partitions, services,
+  });
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
@@ -173,14 +130,15 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
     async executeOperation(operation, options = {}) {
       executionOwnerTurnPolicies.push(options.ownerTurnPolicy);
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -261,20 +219,7 @@ test('SQLQueryEngine - waitForProvisionTargetNodeIds exposes the shared ' +
     {node_id: 'node-b', status: 'active'},
   ];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return [];
-      }
-      return [];
-    },
-    getAll() {
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes});
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -305,20 +250,7 @@ test('SQLQueryEngine - waitForProvisionTargetNodeIds exposes the shared ' +
     {node_id: localNodeId, status: 'active'},
   ];
 
-  const cache = {
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return [];
-      }
-      return [];
-    },
-    getAll() {
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes});
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -376,44 +308,7 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
     updated_at: 100,
   };
 
-  const cache = {
-    has() {
-      return false;
-    },
-    get() {
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.TABLES) {
-        return tables.filter(predicate);
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.TABLES) {
-        return tables;
-      }
-      if (type === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, tables, partitions, services});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -425,14 +320,15 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
     async executeOperation(operation) {
       executedOperations.push(operation);
       const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
+      seedCanonicalSystemMetadata(cache, {services: [{
+        service_id: `${operation.partitionId}-${targetNodeId}`,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
         address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
+      }]});
       return {success: true};
     },
   });
@@ -477,7 +373,7 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
 // in which the projection applies the rows the polls asked for. Whether this
 // routing-readiness read becomes awaitProjectionAt or a commit read is Group
 // A's decision (C5); these witness what exists.
-function serviceRowPollSeam(engine, services, rowFor, options = {}) {
+function serviceRowPollSeam(engine, rowFor, options = {}) {
   const polled = new Set();
   const sleeps = [];
   const cache = engine.systemCache;
@@ -491,8 +387,8 @@ function serviceRowPollSeam(engine, services, rowFor, options = {}) {
     sleeps.push(ms);
     if (options.beforeApply) await options.beforeApply([...polled]);
     for (const key of polled) {
-      if (!services.some((row) => row.service_id === key)) {
-        services.push(rowFor(key));
+      if (!cache.has(TABLES.SERVICES, key)) {
+        seedCanonicalSystemMetadata(cache, {[TABLES.SERVICES]: [rowFor(key)]});
       }
     }
   };
@@ -510,33 +406,7 @@ async (t) => {
   ];
   const services = [];
 
-  const cache = {
-    onCacheChange() {},
-    get(type, key) {
-      if (type === TABLES.SERVICES) {
-        return services.find((row) => row.service_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, services});
 
   let replicaOrdinal = 0;
   const rebalanceCoordinator = withBootstrapHoldRelease({
@@ -562,7 +432,7 @@ async (t) => {
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
-  const seam = serviceRowPollSeam(engine, services, (key) => ({
+  const seam = serviceRowPollSeam(engine, (key) => ({
     service_id: key,
     replica_id: key,
     partition_id: partitionId,
@@ -583,7 +453,7 @@ async (t) => {
   t.ok(seam.sleeps.length > 0 &&
     seam.sleeps.every((ms) => ms > 0 && ms <= 30000),
   'the polls sleep inside the remaining 30s provisioning budget');
-  t.same(services.map((row) => row.service_id).sort(),
+  t.same(cache.getAll(TABLES.SERVICES).map((row) => row.service_id).sort(),
     [`${partitionId}-r1`, `${partitionId}-r2`]);
 });
 
@@ -604,28 +474,7 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
     ),
   );
 
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    get(type, key) {
-      if (type === TABLES.SERVICES) {
-        return services.find((row) => row.service_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({services});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -666,7 +515,7 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
     return waitForCondition(predicate, timeoutMs, intervalMs, timeoutError,
       timeoutOptions);
   };
-  const seam = serviceRowPollSeam(engine, services, (key) => ({
+  const seam = serviceRowPollSeam(engine, (key) => ({
     service_id: key,
     replica_id: key,
     partition_id: partitionId,
@@ -752,34 +601,7 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
     bothWaitsPending = resolve;
   });
 
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    get(type, key) {
-      if (type === TABLES.SERVICES) {
-        return services.find((row) => row.service_id === key) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
+  const cache = createCanonicalSystemCache({nodes, services});
 
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
@@ -810,7 +632,7 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
   // Each replica's metadata wait polls once, then blocks in its sleep on a
   // barrier the test releases, recording what had already been dispatched
   // at the instant the wait began.
-  serviceRowPollSeam(engine, services, (key) => ({
+  serviceRowPollSeam(engine, (key) => ({
     service_id: key,
     replica_id: key,
     partition_id: partitionId,
@@ -870,14 +692,7 @@ test('SQLQueryEngine - attempt 2: RF3 with 2 eligible nodes completes under_repl
     {node_id: 'node-b', status: 'active'},
     {node_id: 'node-c', status: 'active'},
   ];
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    has: () => true,
-    get: () => null,
-    filter: (type, predicate) => (type === TABLES.NODES ? nodes.filter(predicate) : []),
-    getAll: (type) => (type === TABLES.NODES ? nodes : []),
-  };
+  const cache = createCanonicalSystemCache({nodes: nodes});
   const readiness = createCommittedServeEligibilityOwner({
     answers: {
       'node-a': serveEligibilityAnswer(true),
@@ -945,14 +760,7 @@ test('SQLQueryEngine - attempt 2: cohort below quorum fails with PROVISIONING_UN
     {node_id: 'node-b', status: 'active'},
     {node_id: 'node-c', status: 'active'},
   ];
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    has: () => true,
-    get: () => null,
-    filter: (type, predicate) => (type === TABLES.NODES ? nodes.filter(predicate) : []),
-    getAll: (type) => (type === TABLES.NODES ? nodes : []),
-  };
+  const cache = createCanonicalSystemCache({nodes: nodes});
   const readiness = createCommittedServeEligibilityOwner({
     answers: {
       'node-a': serveEligibilityAnswer(true),
@@ -995,14 +803,7 @@ test('SQLQueryEngine - RF3 with sealed quorum minimum (2) never lowers minimumRo
     {node_id: 'node-b', status: 'active'},
     {node_id: 'node-c', status: 'active'},
   ];
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    has: () => true,
-    get: () => null,
-    filter: (type, predicate) => (type === TABLES.NODES ? nodes.filter(predicate) : []),
-    getAll: (type) => (type === TABLES.NODES ? nodes : []),
-  };
+  const cache = createCanonicalSystemCache({nodes: nodes});
   const readiness = createCommittedServeEligibilityOwner({
     answers: {
       'node-a': serveEligibilityAnswer(true),
@@ -1061,14 +862,7 @@ test('SQLQueryEngine - RF3 with sealed quorum minimum (2) never lowers minimumRo
   // Observed-singleton RF3 negative control: even if the local node cache and cohort
   // transiently observe only 1 node (node-a), RF3 must NOT downgrade quorum from 2 to 1.
   const singletonNodes = [{node_id: localNodeId, status: 'active'}];
-  const singletonCache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    has: () => true,
-    get: () => null,
-    filter: (type, predicate) => (type === TABLES.NODES ? singletonNodes.filter(predicate) : []),
-    getAll: (type) => (type === TABLES.NODES ? singletonNodes : []),
-  };
+  const singletonCache = createCanonicalSystemCache({nodes: singletonNodes});
   const singletonReadiness = createCommittedServeEligibilityOwner({
     answers: {
       'node-a': serveEligibilityAnswer(true),
@@ -1126,25 +920,27 @@ test('QueryExecutor - awaitPostOverlayRoutingRepair passes positional routingRea
   const remoteNodeId = 'node-b';
   const partitionId = 'tbl-overlay-chain-p1';
 
-  const cachedServices = [];
+  const systemCache = createCanonicalSystemCache({
+    [TABLES.PARTITIONS]: [
+      {partition_id: partitionId, table_id: 'tbl-overlay-chain', table_name: 'user_orders'},
+    ],
+  });
+  const serviceRow = {
+    service_id: `${partitionId}-r1`,
+    replica_id: `${partitionId}-r1`,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: remoteNodeId,
+    address: '127.0.0.1:9102',
+  };
   let serveEligibilityRefreshed = false;
   let readServeEligibilityCount = 0;
   let getNodeReadinessCount = 0;
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
-    systemCache: {
-      onCacheChange() {},
-      offCacheChange() {},
-      has: () => false,
-      get: (table, id) =>
-        table === TABLES.PARTITIONS && id === partitionId ?
-          {partition_id: partitionId, table_id: 'tbl-overlay-chain', table_name: 'user_orders'} :
-          null,
-      filter: (table, predicate) =>
-        table === TABLES.SERVICES ? cachedServices.filter(predicate) : [],
-      getAll: (table) => (table === TABLES.SERVICES ? [...cachedServices] : []),
-    },
+    systemCache,
     messageRouter: createMockMessageRouter(),
     controlPlaneReadinessService: {
       // Projection readiness says eligible so if getPartitionRoutingSnapshot
@@ -1198,15 +994,7 @@ test('QueryExecutor - awaitPostOverlayRoutingRepair passes positional routingRea
   // Negative control: passing wrapped {routingReadinessDimension} object to
   // getPartitionRoutingSnapshot after service row arrives bypasses
   // evaluateServeEligibilityRoutability and falsely reports 0 denied nodes.
-  cachedServices.push({
-    service_id: `${partitionId}-r1`,
-    replica_id: `${partitionId}-r1`,
-    partition_id: partitionId,
-    service_type: 'partition',
-    status: 'active',
-    node_id: remoteNodeId,
-    address: '127.0.0.1:9102',
-  });
+  seedCanonicalSystemMetadata(systemCache, {[TABLES.SERVICES]: [serviceRow]});
   const buggyObjectDimensionSnapshot = executor.getPartitionRoutingSnapshot(
     partitionId,
     {routingReadinessDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE},
@@ -1216,21 +1004,13 @@ test('QueryExecutor - awaitPostOverlayRoutingRepair passes positional routingRea
     [],
     'negative control: object dimension argument bypasses SERVE_ELIGIBLE evaluation and misses denied node',
   );
-  cachedServices.length = 0;
+  deleteCanonicalSystemMetadata(systemCache, {[TABLES.SERVICES]: [serviceRow]});
 
   // Positive end-to-end chain: overlay refresh populates the active service row,
   // awaitPostOverlayRoutingRepair calls getPartitionRoutingSnapshot with positional
   // SERVE_ELIGIBLE dimension, discovers node-b is serve-denied, and awaits readServeEligibility().
   executor.refreshRoutingMetadataOverlay = async () => {
-    cachedServices.push({
-      service_id: `${partitionId}-r1`,
-      replica_id: `${partitionId}-r1`,
-      partition_id: partitionId,
-      service_type: 'partition',
-      status: 'active',
-      node_id: remoteNodeId,
-      address: '127.0.0.1:9102',
-    });
+    seedCanonicalSystemMetadata(systemCache, {[TABLES.SERVICES]: [serviceRow]});
     return true;
   };
 
@@ -1372,36 +1152,28 @@ test('SQLQueryEngine - waitForPartitionLeaderService awaits partition routing re
   let serveEligibilityRefreshed = false;
   let readServeEligibilityCount = 0;
 
-  const cachedServices = [{
-    service_id: `${partitionId}-r1`,
-    replica_id: `${partitionId}-r1`,
-    partition_id: partitionId,
-    service_type: 'partition',
-    status: 'active',
-    raft_role: 'leader',
-    node_id: remoteNodeId,
-    address: '127.0.0.1:9102',
-  }];
+  const systemCache = createCanonicalSystemCache({
+    [TABLES.PARTITIONS]: [{
+      partition_id: partitionId,
+      table_id: 'tbl-leader-wait-repair',
+      table_name: 'user_orders',
+      leader_node_id: remoteNodeId,
+    }],
+    [TABLES.SERVICES]: [{
+      service_id: `${partitionId}-r1`,
+      replica_id: `${partitionId}-r1`,
+      partition_id: partitionId,
+      service_type: 'partition',
+      status: 'active',
+      raft_role: 'leader',
+      node_id: remoteNodeId,
+      address: '127.0.0.1:9102',
+    }],
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
-    systemCache: {
-      onCacheChange() {},
-      offCacheChange() {},
-      has: () => false,
-      get: (table, id) =>
-        table === TABLES.PARTITIONS && id === partitionId ?
-          {
-            partition_id: partitionId,
-            table_id: 'tbl-leader-wait-repair',
-            table_name: 'user_orders',
-            leader_node_id: remoteNodeId,
-          } :
-          null,
-      filter: (table, predicate) =>
-        table === TABLES.SERVICES ? cachedServices.filter(predicate) : [],
-      getAll: (table) => (table === TABLES.SERVICES ? [...cachedServices] : []),
-    },
+    systemCache,
     messageRouter: createMockMessageRouter(),
     controlPlaneReadinessService: {
       answerServeEligibility(nodeId) {
